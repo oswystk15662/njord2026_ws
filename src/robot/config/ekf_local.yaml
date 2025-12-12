@@ -1,0 +1,29 @@
+### Local EKF (odom -> base_link) ###
+ekf_filter_node_local:
+  ros__parameters:
+    frequency: 30.0
+    two_d_mode: false
+    publish_tf: true
+    map_frame: map
+    odom_frame: odom
+    base_link_frame: base_link
+    world_frame: odom  # Localはodom座標系が基準
+
+    # LiDAR Odometry
+    odom0: /odom
+    odom0_config: [true,  true,  true,
+                   true,  true,  true,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    odom0_differential: false
+
+    # IMU (WitMotion)
+    imu0: /wit/imu
+    imu0_config: [false, false, false,
+                  true,  true,  true,
+                  false, false, false,
+                  true,  true,  true,
+                  true,  true,  true]
+    imu0_differential: false
+    imu0_relative: true  # Localでは相対変化のみ使うのが一般的

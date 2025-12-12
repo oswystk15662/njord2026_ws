@@ -1,0 +1,2 @@
+MJPG Streamer、または、Gstreamerを用いてusbカメラの情報をsensor_msgs/msg/Imageとしてpubするためのpkgです。
+MJPG経由は安定して動きますが、Gstreamer経由はなんか動かない場合があります。

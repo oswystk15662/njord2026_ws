@@ -1,0 +1,2 @@
+File Discriptorを用いることで、usb・socket通信でも何でも通信できるようになっているはずのやつ。
+ros2 socketcanとかmrosがうまく行かなかったら作り始める。

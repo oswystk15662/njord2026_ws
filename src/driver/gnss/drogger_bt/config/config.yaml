@@ -1,0 +1,13 @@
+/**:
+  ros__parameters:
+    # DroggerのMACアドレス (bluetoothctlなどで確認した値)
+    bt_mac_address: "00:11:22:33:44:55"
+    
+    # 作成する仮想シリアルポート番号 (0 -> /dev/rfcomm0)
+    rfcomm_channel: 1  # 基本は1ですが、デバイスにより異なります
+    rfcomm_id: 0
+    
+    # ドライバが読みに行くポート名
+    port_name: "/dev/rfcomm0"
+    baudrate: 115200 # Bluetoothではあまり意味を持ちませんが形式上必要
+    frame_id: "gnss_link"

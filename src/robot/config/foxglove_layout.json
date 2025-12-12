@@ -1,0 +1,175 @@
+{
+  "configById": {
+    "3D!yc1fkc": {
+      "topics": {
+        "/initial_map": {
+          "visible": false,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 2,
+          "stixelsEnabled": false,
+          "pointShape": "square"
+        },
+        "/path": {
+          "visible": false
+        },
+        "/livox/lidar": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        },
+        "/initialpose": {
+          "visible": false
+        },
+        "/map": {
+          "visible": true
+        },
+        "/pcl_pose": {
+          "visible": true
+        },
+        "/cloud_pcd": {
+          "visible": false,
+          "colorField": "rgb",
+          "colorMode": "rgb",
+          "colorMap": "turbo"
+        },
+        "/map_points": {
+          "visible": true,
+          "colorField": "rgb",
+          "colorMode": "rgb",
+          "colorMap": "turbo"
+        },
+        "/scan_match_pose": {
+          "visible": true
+        },
+        "/pointcloud": {
+          "visible": true,
+          "colorField": "z",
+          "colorMode": "flat",
+          "colorMap": "turbo"
+        }
+      },
+      "layers": {
+        "5fe572bc-981f-413f-8946-ac0aa97577e6": {
+          "layerId": "foxglove.Grid",
+          "instanceId": "5fe572bc-981f-413f-8946-ac0aa97577e6",
+          "visible": false
+        }
+      },
+      "cameraState": {
+        "perspective": true,
+        "distance": 5.547791462357241,
+        "phi": 161.0883483176921,
+        "thetaOffset": -174.71580096476953,
+        "targetOffset": [
+          0.0763143871485853,
+          0.9426891338076002,
+          9.703188786669497e-16
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "imageMode": {},
+      "followTf": "base_link"
+    },
+    "Plot!1xxm2at": {
+      "paths": [
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/scan_match_pose.pose.position.x",
+          "enabled": true,
+          "color": "#4e98e2"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/scan_match_pose.pose.position.y",
+          "enabled": true,
+          "color": "#f5774d"
+        },
+        {
+          "timestampMethod": "receiveTime",
+          "value": "/scan_match_pose.pose.position.z",
+          "enabled": true,
+          "color": "#f7df71"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "RawMessages!339jhik": {
+      "topicPath": "/goal_pose",
+      "diffEnabled": false,
+      "diffMethod": "custom",
+      "diffTopicPath": "",
+      "showFullMessageForDiff": false,
+      "fontSize": 12
+    },
+    "Tab!w8e7ra": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Overview",
+          "layout": {
+            "direction": "column",
+            "first": {
+              "first": "3D!yc1fkc",
+              "second": {
+                "first": "Plot!1xxm2at",
+                "second": "DiagnosticSummary!45y25e3",
+                "direction": "column"
+              },
+              "direction": "row"
+            },
+            "second": "RawMessages!339jhik",
+            "splitPercentage": 80
+          }
+        }
+      ]
+    },
+    "DiagnosticSummary!45y25e3": {
+      "minLevel": 0,
+      "pinnedIds": [],
+      "hardwareIdFilter": "",
+      "topicToRender": "/diagnostics",
+      "sortByLevel": true
+    }
+  },
+  "layout": "Tab!w8e7ra",
+  "globalVariables": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "userNodes": {}
+}

@@ -1,0 +1,6 @@
+[submodule "src/driver/imu/wit_node_ros2"]
+	path = src/driver/imu/wit_node_ros2
+	url = git@github.com:fateshelled/wit_node_ros2.git
+[submodule "src/driver/camera/zed-ros2-wrapper"]
+	path = src/driver/camera/zed-ros2-wrapper
+	url = git@github.com:stereolabs/zed-ros2-wrapper.git
