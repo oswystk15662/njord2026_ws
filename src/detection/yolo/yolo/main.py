@@ -24,6 +24,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter('model_path', default_model_path)
         self.declare_parameter('device', 'cpu')
         self.declare_parameter('camera_topic', '/camera/image_raw')
+        self.declare_parameter('enable_virtual_wall', False)
         
         # 4. パラメータ取得
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
@@ -56,6 +57,10 @@ class YoloDetectorNode(Node):
         self.get_logger().info('YoloDetectorNode Initialized.')
 
     def image_callback(self, msg):
+        if not self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value:
+            # デバッグ画像だけ出してリターン、あるいは何もしない
+            return
+
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:

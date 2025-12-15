@@ -85,6 +85,10 @@ colcon buildによって生まれた、build・installl・logディレクトリ�
 中見ればわかりますが、非常に大量のファイルが生まれ、変更差分が分かりづらくなるため、無視するのが一般的です。
 bag_filesの中身も同様に追跡しないようになっています。
 
+**重要**
+カスタムメッセージをむやみに生やさないでください。
+基本的にros側で適するものが用意されています。
+
 ## visualizerについて
 fox gloveを推奨します。
 https://foxglove.dev/download
@@ -160,6 +164,9 @@ for localization
 for navigation
 * ros-humble-navigation2
 * ros-humble-nav2-bringup
+
+for simulation
+* ros-humble-tf-transformations
 
 about topic network
 

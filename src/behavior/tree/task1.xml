@@ -1,0 +1,33 @@
+<root main_tree_to_execute="Task1">
+  <BehaviorTree ID="Task1">
+    <Sequence name="Task1_Mission">
+      
+      <ConfigureSystem parameter="avoidance" value="false" />
+      <ConfigureSystem parameter="virtual_wall" value="false" />
+      
+      <RecoveryNode number_of_retries="3" name="ManeuveringRecovery">
+        <Sequence>
+          <NavigateThroughPoses goals="{gps_waypoints}" />
+        </Sequence>
+        
+        <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
+      </RecoveryNode>
+
+      <ConfigureSystem parameter="avoidance" value="true" />
+      <ConfigureSystem parameter="virtual_wall" value="true" />
+
+      <RecoveryNode number_of_retries="5" name="PathFindingRecovery">
+        <Sequence>
+          <NavigateToPose goal="{final_goal}" />
+        </Sequence>
+
+        <RoundRobin name="StuckRecovery">
+          <Spin spin_dist="1.57"/>
+          <BackUp backup_dist="1.0" backup_speed="0.5"/>
+          <Wait wait_duration="2.0"/>
+        </RoundRobin>
+      </RecoveryNode>
+
+    </Sequence>
+  </BehaviorTree>
+</root>

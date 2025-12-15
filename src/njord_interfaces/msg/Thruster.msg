@@ -1,0 +1,1 @@
+float32[] duty_ratio

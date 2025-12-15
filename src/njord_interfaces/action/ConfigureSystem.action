@@ -1,0 +1,10 @@
+# Request
+string parameter   # 変えたい設定項目 (例: "avoidance", "speed_limit", "virtual_wall")
+string value       # 設定値 (例: "true", "false", "0.5")
+---
+# Result
+bool success
+string message
+---
+# Feedback
+string status
