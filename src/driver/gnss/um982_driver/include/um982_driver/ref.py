@@ -629,7 +629,7 @@ class UM982Driver(Node):
 
         if b"ICY 200 OK" not in response:
             raise Exception("Failed to connect to Ntrip server")
-        position_request = f"$GNGGA,020330.00,3503.07556378,N,13853.74305596,E,5,42,0.5,2.0067,M,40.4042,M,5.0,165*60\n"  # TODO(horimoto)ここはなにか方法を考えたい
+        position_request = f"$GNGGA,020330.00,3503.07556378,N,13853.74305596,E,5,42,0.5,2.0067,M,40.4042,M,5.0,165*60\n"  # TODO(osw)ここはなにか方法を考えたい
         self._last_gpgga = position_request
         self._sock_RTK.sendall(
             position_request.encode("utf-8")

@@ -100,11 +100,39 @@ sudo apt install ros-humble-foxglove-bridge
 をしてください。
 
 ## YOLOについて
-以下の記事のvenvでなんとかする方法をもとにhumbleですが、仮想環境にして端末の環境をpipから守るようにしています。
+以下の記事のvenvでなんとかする方法をもとに、開発環境はみなさんhumbleだと思いますが、仮想環境にして端末の環境をpipから守るようにしています。
 https://zenn.dev/kimushun1101/articles/ros2-jazzy-pip
-この記事にも書かれていますが、むやみにrosdepすると破壊されるので注意が必要です（大澤はまだやってないはずです、たぶん、、、）
+この記事にも書かれていますが、むやみにrosdepすると破壊されるので注意が必要です
 
-でactivateした後に
+---
+追記：2026/01/31
+
+njord2026_wsでvenvをつけて、PYTHONPATHを通す方法をちゃんと書いてなかったので追記です。
+以下を実行してください。
+
+```shell
+# cloneしてなかったら
+git clone git@github.com:oswystk15662/njord2026_ws.git
+
+# venvが入ってなかったら
+sudo apt update
+sudp apt install python3-venv
+
+# 仮想環境を用意する
+python3 -m venv --prompt njord2026_ws ~/njord2026_ws/.venv
+
+# 仮想化する
+cd njord2026_ws
+source ./.venv/bin/activate
+
+# 仮想環境のpythonのpathを通す
+source ./export_python_path.sh
+```
+
+---
+
+仮想化したら
+
 ```shell
 pip install -r requirements.txt
 ```

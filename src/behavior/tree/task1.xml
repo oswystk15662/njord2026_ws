@@ -30,4 +30,11 @@
 
     </Sequence>
   </BehaviorTree>
+
+  <TreeNodesModel>
+      <Action ID="ConfigureSystem">
+          <input_port name="parameter" type="std::string">Parameter name (e.g., avoidance)</input_port>
+          <input_port name="value" type="std::string">Value (e.g., true, false)</input_port>
+      </Action>
+  </TreeNodesModel>
 </root>

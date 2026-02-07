@@ -1,10 +1,10 @@
 amcl:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
     global_frame: odom
     robot_base_frame: base_link
     odom_topic: /odom
@@ -53,7 +53,7 @@ bt_navigator:
 
 controller_server:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -84,7 +84,7 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: odom
       robot_base_frame: base_link
-      use_sim_time: true
+      use_sim_time: false
       rolling_window: true
       width: 10
       height: 10
@@ -104,10 +104,10 @@ local_costmap:
 # まずはController単体の動作確認を目指します
 planner_server:
   ros__parameters:
-    use_sim_time: true
+    use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
+      plugin: "nav2_smac_planner/SmacPlanner2D"
       tolerance: 0.5
       use_astar: false
       allow_unknown: true
@@ -119,7 +119,7 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: odom
       robot_base_frame: base_link
-      use_sim_time: true
+      use_sim_time: false
 
       # 1. ロボットを中心にマップを動かす設定
       rolling_window: true
