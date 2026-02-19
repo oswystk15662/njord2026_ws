@@ -27,6 +27,8 @@ setup(
             'simple_sim_node = simple_sim.simple_sim_node:main',
             'simple_purepursuit = simple_sim.simple_purepursuit:main',
             'square_path = simple_sim.square_path:main',
+            'send_square_goal = simple_sim.send_square_goal:main',
+            'send_square_goal_v2 = simple_sim.send_square_goal_v2:main',
         ],
     },
 )

@@ -5,8 +5,8 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
-    global_frame: odom
-    robot_base_frame: base_link
+    global_frame: "odom"
+    robot_base_frame: "base_link"
     odom_topic: /odom
     bt_loop_duration: 10
     default_server_timeout: 20
@@ -82,8 +82,8 @@ local_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 2.0
-      global_frame: odom
-      robot_base_frame: base_link
+      global_frame: "odom"
+      robot_base_frame: "base_link"
       use_sim_time: false
       rolling_window: true
       width: 10
@@ -117,8 +117,8 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: odom
-      robot_base_frame: base_link
+      global_frame: "odom"
+      robot_base_frame: "base_link"
       use_sim_time: false
 
       # 1. ロボットを中心にマップを動かす設定
@@ -141,3 +141,18 @@ global_costmap:
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
+
+velocity_smoother:
+  ros__parameters:
+    use_sim_time: false
+    smoothing_frequency: 20.0
+    scale_velocities: false
+    feedback: "OPEN_LOOP" 
+    max_velocity: [0.5, 0.0, 1.0] # [x, y, theta]
+    min_velocity: [-0.5, 0.0, -1.0]
+    max_accel: [2.5, 0.0, 3.2]
+    max_decel: [-2.5, 0.0, -3.2]
+    odom_topic: "odom"
+    robot_base_frame: "base_link"
+    deadband_velocity: [0.0, 0.0, 0.0]
+    velocity_timeout: 1.0
