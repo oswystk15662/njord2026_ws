@@ -4,3 +4,9 @@
 [submodule "src/driver/camera/zed-ros2-wrapper"]
 	path = src/driver/camera/zed-ros2-wrapper
 	url = git@github.com:stereolabs/zed-ros2-wrapper.git
+[submodule "src/driver/lidar/Livox-SDK2"]
+	path = src/driver/lidar/Livox-SDK2
+	url = git@github.com:KeioRoboticsAssociation/Livox-SDK2.git
+[submodule "src/driver/lidar/livox_ros_driver2"]
+	path = src/driver/lidar/livox_ros_driver2
+	url = git@github.com:KeioRoboticsAssociation/livox_ros_driver2.git
