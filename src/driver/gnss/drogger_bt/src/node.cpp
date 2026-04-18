@@ -2,6 +2,8 @@
 #include <sstream>
 #include <iomanip>
 #include <chrono>
+#include <algorithm>
+#include <cctype>
 
 using namespace std::chrono_literals;
 
@@ -11,12 +13,14 @@ namespace drogger_bt
 DroggerDriver::DroggerDriver(const rclcpp::NodeOptions & options)
 : Node("drogger_driver", options)
 , keep_running_(true)
+, retry_timer_(io_context_)
 {
     RCLCPP_INFO(this->get_logger(), "Initializing Drogger Driver...");
     
     init_parameters();
     
-    fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("gnss/fix", 10);
+    fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>(params_.fix_topic, 10);
+    RCLCPP_INFO(this->get_logger(), "Publishing NavSatFix on topic: %s", params_.fix_topic.c_str());
 
     // Start IO Thread
     io_thread_ = std::thread([this]() {
@@ -42,6 +46,7 @@ DroggerDriver::DroggerDriver(const rclcpp::NodeOptions & options)
 DroggerDriver::~DroggerDriver()
 {
     keep_running_ = false;
+    retry_timer_.cancel();
     io_context_.stop();
     if (serial_port_ && serial_port_->is_open()) {
         serial_port_->close();
@@ -56,6 +61,8 @@ void DroggerDriver::init_parameters()
     this->declare_parameter("port_name", "/dev/rfcomm0");
     this->declare_parameter("baudrate", 115200);
     this->declare_parameter("frame_id", "gnss_link");
+    this->declare_parameter("fix_topic", "gnss/fix");
+    this->declare_parameter("log_raw_nmea", true);
     this->declare_parameter("bt_mac_address", ""); 
     this->declare_parameter("rfcomm_channel", 1);
     this->declare_parameter("rfcomm_id", 0);
@@ -63,6 +70,8 @@ void DroggerDriver::init_parameters()
     params_.port_name = this->get_parameter("port_name").as_string();
     params_.baudrate = this->get_parameter("baudrate").as_int();
     params_.frame_id = this->get_parameter("frame_id").as_string();
+    params_.fix_topic = this->get_parameter("fix_topic").as_string();
+    params_.log_raw_nmea = this->get_parameter("log_raw_nmea").as_bool();
 }
 
 void DroggerDriver::connect()
@@ -85,23 +94,23 @@ void DroggerDriver::connect()
 
 void DroggerDriver::start_async_read()
 {
-    boost::asio::async_read_until(*serial_port_, read_buf_, "\n",
+    serial_port_->async_read_some(boost::asio::buffer(read_chunk_),
         std::bind(&DroggerDriver::on_read, this, std::placeholders::_1, std::placeholders::_2));
 }
 
 void DroggerDriver::on_read(const boost::system::error_code& error, std::size_t bytes_transferred)
 {
+    if (bytes_transferred > 0) {
+        process_received_bytes(read_chunk_.data(), bytes_transferred, false);
+    }
+
     if (!error) {
-        std::istream is(&read_buf_);
-        std::string line;
-        std::getline(is, line);
-        
-        // Trim whitespace
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-
-        process_data(line);
-
         start_async_read();
+    } else if (error == boost::asio::error::eof) {
+        // Some devices close the stream intermittently; flush pending bytes and keep retrying.
+        process_received_bytes(nullptr, 0, true);
+        RCLCPP_WARN(this->get_logger(), "Read EOF detected; parsed pending data and retrying.");
+        schedule_read_retry();
     } else {
         if (error != boost::asio::error::operation_aborted) {
             RCLCPP_ERROR(this->get_logger(), "Read Error: %s", error.message().c_str());
@@ -110,8 +119,72 @@ void DroggerDriver::on_read(const boost::system::error_code& error, std::size_t 
     }
 }
 
+void DroggerDriver::process_received_bytes(const char * data, std::size_t size, bool flush_partial)
+{
+    if (data != nullptr && size > 0) {
+        line_buffer_.append(data, size);
+    }
+
+    while (true) {
+        const std::size_t line_end = line_buffer_.find_first_of("\r\n");
+        if (line_end == std::string::npos) {
+            break;
+        }
+
+        std::string line = line_buffer_.substr(0, line_end);
+        line_buffer_.erase(0, line_end + 1);
+
+        // Consume paired line endings (e.g. CRLF)
+        while (!line_buffer_.empty() && (line_buffer_.front() == '\r' || line_buffer_.front() == '\n')) {
+            line_buffer_.erase(0, 1);
+        }
+
+        if (!line.empty()) {
+            process_data(line);
+        }
+    }
+
+    if (flush_partial && !line_buffer_.empty()) {
+        process_data(line_buffer_);
+        line_buffer_.clear();
+    }
+}
+
+void DroggerDriver::schedule_read_retry()
+{
+    if (!keep_running_) {
+        return;
+    }
+
+    retry_timer_.expires_after(std::chrono::seconds(1));
+    retry_timer_.async_wait([this](const boost::system::error_code & timer_error) {
+        if (timer_error || !keep_running_) {
+            return;
+        }
+
+        if (serial_port_ && serial_port_->is_open()) {
+            start_async_read();
+        }
+    });
+}
+
 void DroggerDriver::process_data(std::string line)
 {
+    if (line.empty()) {
+        return;
+    }
+
+    const std::size_t dollar_pos = line.find('$');
+    if (dollar_pos == std::string::npos) {
+        return;
+    }
+
+    line = line.substr(dollar_pos);
+
+    if (params_.log_raw_nmea) {
+        RCLCPP_INFO_THROTTLE(this->get_logger(), *this->get_clock(), 1000, "RX NMEA: %s", line.c_str());
+    }
+
     // Simple check for GNGGA or GPGGA
     if (line.find("GGA") != std::string::npos) {
         if (!validate_checksum(line)) {
@@ -120,7 +193,12 @@ void DroggerDriver::process_data(std::string line)
         }
         
         // Remove checksum part for splitting
-        std::string payload = line.substr(0, line.find('*'));
+        const std::size_t star_pos = line.find('*');
+        if (star_pos == std::string::npos) {
+            return;
+        }
+
+        std::string payload = line.substr(0, star_pos);
         std::vector<std::string> tokens = split(payload, ',');
         
         parse_gga(tokens);
@@ -162,6 +240,10 @@ void DroggerDriver::parse_gga(const std::vector<std::string>& tokens)
         msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
 
         fix_pub_->publish(msg);
+        RCLCPP_INFO_THROTTLE(
+            this->get_logger(), *this->get_clock(), 1000,
+            "Published fix lat=%.8f lon=%.8f alt=%.2f quality=%d",
+            msg.latitude, msg.longitude, msg.altitude, quality);
 
     } catch (const std::exception& e) {
         RCLCPP_WARN(this->get_logger(), "Parse error: %s", e.what());
@@ -199,21 +281,27 @@ double DroggerDriver::convert_nmea_to_latlon(const std::string & value, const st
 bool DroggerDriver::validate_checksum(const std::string & sentence)
 {
     size_t star_pos = sentence.find('*');
-    if (star_pos == std::string::npos) return false;
+    if (star_pos == std::string::npos || sentence.empty() || sentence.front() != '$') return false;
     
     // Calculate XOR sum between $ and *
-    int sum = 0;
+    std::uint8_t sum = 0;
     for (size_t i = 1; i < star_pos; ++i) {
-        sum ^= sentence[i];
+        sum ^= static_cast<std::uint8_t>(sentence[i]);
     }
-    
-    // Parse hex
-    try {
-        int provided = std::stoi(sentence.substr(star_pos + 1), nullptr, 16);
-        return sum == provided;
-    } catch (...) {
+
+    if (star_pos + 2 >= sentence.size()) {
         return false;
     }
+
+    const char h0 = sentence[star_pos + 1];
+    const char h1 = sentence[star_pos + 2];
+    if (!std::isxdigit(static_cast<unsigned char>(h0)) || !std::isxdigit(static_cast<unsigned char>(h1))) {
+        return false;
+    }
+
+    const std::string hex = sentence.substr(star_pos + 1, 2);
+    const int provided = std::stoi(hex, nullptr, 16);
+    return sum == static_cast<std::uint8_t>(provided);
 }
 
 } // namespace drogger_bt

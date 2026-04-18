@@ -54,4 +54,8 @@ install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
 
+install(FILES src/connect.sh
+  DESTINATION share/${PROJECT_NAME}/scripts
+)
+
 ament_package()

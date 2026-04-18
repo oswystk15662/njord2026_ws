@@ -4,10 +4,13 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <boost/asio.hpp>
+#include <boost/asio/steady_timer.hpp>
+#include <array>
 #include <thread>
 #include <atomic>
 #include <vector>
 #include <string>
+#include <cstdint>
 
 namespace drogger_bt
 {
@@ -26,6 +29,8 @@ private:
     void connect();
     void start_async_read();
     void on_read(const boost::system::error_code& error, std::size_t bytes_transferred);
+    void schedule_read_retry();
+    void process_received_bytes(const char * data, std::size_t size, bool flush_partial = false);
     
     // Parsing
     void process_data(std::string line);
@@ -39,9 +44,11 @@ private:
     // Members
     boost::asio::io_context io_context_;
     std::unique_ptr<boost::asio::serial_port> serial_port_;
-    boost::asio::streambuf read_buf_;
+    std::array<char, 1024> read_chunk_{};
+    std::string line_buffer_;
     std::thread io_thread_;
     std::atomic<bool> keep_running_;
+    boost::asio::steady_timer retry_timer_;
 
     // ROS
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
@@ -50,6 +57,8 @@ private:
         std::string port_name;
         int baudrate;
         std::string frame_id;
+        std::string fix_topic;
+        bool log_raw_nmea;
     } params_;
 };
 

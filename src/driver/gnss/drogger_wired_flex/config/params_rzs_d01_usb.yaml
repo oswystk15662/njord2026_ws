@@ -1,0 +1,19 @@
+/**:
+  ros__parameters:
+    transport: "serial"
+
+    serial_port: "/dev/ttyUSB0"
+    serial_baudrate: 115200
+
+    tcp_host: "192.168.1.10"
+    tcp_bind_host: "0.0.0.0"
+    tcp_port: 5000
+
+    udp_bind_host: "0.0.0.0"
+    udp_port: 5000
+
+    frame_id: "gnss_link"
+    fix_topic: "/gnss/fix"
+
+    read_timeout_ms: 1000
+    reconnect_sec: 1.0

@@ -1,0 +1,23 @@
+/**:
+  ros__parameters:
+    # "serial", "tcp", "tcp_server", "udp"
+    transport: "serial"
+
+    # serial mode (RZS D01 over USB)
+    serial_port: "/dev/ttyUSB0"
+    serial_baudrate: 115200
+
+    # tcp mode (DG-PRO1RWS Ethernet)
+    tcp_host: "192.168.1.10"
+    tcp_bind_host: "0.0.0.0"
+    tcp_port: 5000
+
+    # udp mode (if DG-PRO1RWS is configured to UDP output)
+    udp_bind_host: "0.0.0.0"
+    udp_port: 5000
+
+    frame_id: "gnss_link"
+    fix_topic: "/sensor/vehicle_gnss/fix/raw"
+
+    read_timeout_ms: 1000
+    reconnect_sec: 1.0

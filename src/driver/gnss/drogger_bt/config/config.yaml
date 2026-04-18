@@ -1,7 +1,7 @@
 /**:
   ros__parameters:
     # DroggerのMACアドレス (bluetoothctlなどで確認した値)
-    bt_mac_address: "00:11:22:33:44:55"
+    bt_mac_address: "C4:D8:D5:91:ED:E5"
     
     # 作成する仮想シリアルポート番号 (0 -> /dev/rfcomm0)
     rfcomm_channel: 1  # 基本は1ですが、デバイスにより異なります
