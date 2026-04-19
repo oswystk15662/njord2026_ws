@@ -15,6 +15,16 @@ source "${VENV_DIR}/bin/activate"
 # shellcheck disable=SC1091
 source "${WS_DIR}/export_python_path.sh"
 
+if [[ -n "${ROS_DISTRO:-}" && -f "/opt/ros/${ROS_DISTRO}/setup.bash" ]]; then
+    # shellcheck disable=SC1091
+    source "/opt/ros/${ROS_DISTRO}/setup.bash"
+fi
+
+if [[ -f "${WS_DIR}/install/setup.bash" ]]; then
+    # shellcheck disable=SC1091
+    source "${WS_DIR}/install/setup.bash"
+fi
+
 python3 - <<'PY'
 import sys
 import numpy as np
@@ -32,4 +42,4 @@ if int(np.__version__.split('.')[0]) >= 2:
 print(f"[INFO] Python={sys.version.split()[0]} numpy={np.__version__}")
 PY
 
-exec ros2 run yolo yolo_node "$@"
+exec ros2 launch yolo yolo.launch.py "$@"

@@ -140,6 +140,14 @@ YOLOノード起動は以下のラッパーを使うと安全です。
 ./run_yolo_jetson.sh
 ```
 
+launchファイルを直接使う場合も、必ず `.venv` を有効化してから実行してください。
+
+```shell
+source .venv/bin/activate
+source ./export_python_path.sh
+ros2 launch yolo yolo.launch.py
+```
+
 ### よくあるNG
 
 * Jetsonで `pip install -r requirements.txt` を実行する
@@ -170,6 +178,7 @@ for usb camera
 for zed 2i
 * cuda 12.1(もしくはdockerでやる)
 * zed sdk
+* ROS2 Foxyなら [setup_foxy_image_transport.sh](setup_foxy_image_transport.sh) で image_transport v3 系を source から固定する
 
 for localization
 * ros-humble-robot-localization

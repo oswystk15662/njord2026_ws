@@ -6,7 +6,13 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    pkg_name = 'njord_perception'
+    if not os.environ.get('VIRTUAL_ENV'):
+        raise RuntimeError(
+            'YOLO launch requires the Jetson venv. Activate .venv and source export_python_path.sh '
+            'before running ros2 launch.'
+        )
+
+    pkg_name = 'yolo'
     pkg_share = get_package_share_directory(pkg_name)
 
     # デフォルトのモデルパス

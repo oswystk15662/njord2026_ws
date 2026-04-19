@@ -5,4 +5,4 @@ if [ -z "$VIRTUAL_ENV" ]; then
 fi
 
 PYVER=$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
-export PYTHONPATH="$VIRTUAL_ENV/lib/python${PYVER}/site-packages:$PYTHONPATH"
+export PYTHONPATH="$VIRTUAL_ENV/lib/python${PYVER}/site-packages:/usr/local/lib/python${PYVER}/dist-packages:/usr/lib/python${PYVER}/dist-packages:$PYTHONPATH"

@@ -33,6 +33,13 @@ To install the working version from the sources:
 
 Close the console and re-open it to apply the modifications.
 
+If you are setting this up on Jetson Nano with ROS2 Foxy, you can use the workspace helper script:
+
+```bash
+$ cd <colcon_workspace>
+$ ./setup_foxy_image_transport.sh
+```
+
 ### [ROS2 Foxy] Image Transport Plugins and compressed topics
 
 The `image_transport_plugins` package is not correctly working with ROS2 Foxy (see [here](https://github.com/stereolabs/zed-ros2-wrapper/issues/31), [here](https://github.com/ros-perception/image_common/issues/184), [here](https://github.com/stereolabs/zed-ros2-wrapper/issues/31), and [here](https://github.com/ros-perception/image_transport_plugins/pull/58)). We suggest you remove it to avoid many annoying warning messages until the ROS2 developers do not fix it or we find a workaround:
