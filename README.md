@@ -100,68 +100,53 @@ sudo apt install ros-humble-foxglove-bridge
 をしてください。
 
 ## YOLOについて
-以下の記事のvenvでなんとかする方法をもとに、開発環境はみなさんhumbleだと思いますが、仮想環境にして端末の環境をpipから守るようにしています。
-https://zenn.dev/kimushun1101/articles/ros2-jazzy-pip
-この記事にも書かれていますが、むやみにrosdepすると破壊されるので注意が必要です
+Jetson Nano + Ubuntu 20.04 + ROS2 Foxy では、ZED/ROS系とYOLO系を同じPython環境に混ぜないでください。
+`numpy` の競合で `cv_bridge` が壊れることがあります。
 
----
-追記：2026/01/31
+運用ルール:
+* ROS2/ZED ノードはシステム環境（apt + colcon）で実行する
+* YOLOノードは `.venv` で実行する
+* Jetson では `torch` / `torchvision` を `pip` で上書きしない
 
-njord2026_wsでvenvをつけて、PYTHONPATHを通す方法をちゃんと書いてなかったので追記です。
-以下を実行してください。
+### Jetson用セットアップ
 
 ```shell
-# cloneしてなかったら
-git clone git@github.com:oswystk15662/njord2026_ws.git
+cd ~/njord2026_ws
 
-# venvが入ってなかったら
+# venvが未導入の場合
 sudo apt update
-sudp apt install python3-venv
+sudo apt install -y python3-venv
 
-# 仮想環境を用意する
-python3 -m venv --prompt njord2026_ws ~/njord2026_ws/.venv
-
-# 仮想化する
-cd njord2026_ws
-source ./.venv/bin/activate
-
-# 仮想環境のpythonのpathを通す
+# YOLO専用venv
+python3 -m venv --prompt njord2026_ws .venv
+source .venv/bin/activate
 source ./export_python_path.sh
+
+# Jetson専用requirementsのみ使う
+python3 -m pip install --upgrade pip setuptools wheel
+python3 -m pip install -r requirements_jetson_nano_yolo.txt
 ```
 
----
-
-仮想化したら
+### スモークテスト
 
 ```shell
-pip install -r requirements.txt
+python3 -c "import numpy, cv2, ultralytics; print('numpy=', numpy.__version__, 'opencv=', cv2.__version__, 'ultralytics=', ultralytics.__version__)"
+python3 -c "import cv_bridge; print('cv_bridge import OK')"
 ```
-だけで大丈夫です。
 
-↓いらないけどログ
-```shell
-pip install ultralystics
-```
-すると1GByte以上のダウンロードが始まります。
-**注意**
-* numpy 2.0以上のものが入る可能性があるので、これが終わったら以下のコマンドを打って下さい
-* rosのpythonライブラリはnumpy 1.0系列を前提としているそうです。
-* もし、YOLOとrosで相性が悪かったらがんばるしかないので、どうしましょ感はあります
+YOLOノード起動は以下のラッパーを使うと安全です。
 
 ```shell
-pip install "numpy<2.0" "opencv-python<=4.10.0.84"
-python3 -c "import numpy; import cv2; import cv_bridge; import ultralytics; print(f'Numpy: {numpy.__version__}, OpenCV: {cv2.__version__}, OK')"
+./run_yolo_jetson.sh
 ```
 
-もし ultralysticsのinstallで
-```shell
-ERROR: pip's dependency resolver does not currently take into account all the packages that are installed. This behaviour is the source of the following dependency conflicts.
-generate-parameter-library-py 0.5.0 requires typeguard, which is not installed.
-```
-というerrorが出たら```pip install typeguard```をうってください。
-↑いらないけどログ
+### よくあるNG
 
-そういえばultralysticsの激ヤバ利用規約ってどうなったんですかね
+* Jetsonで `pip install -r requirements.txt` を実行する
+* Jetsonで `pip install torch torchvision` を実行する
+* `numpy>=2.0` に上がった状態で ROS Python ノードを起動する
+
+Foxy + ZED 既知の注意点として、`image_transport` は `v3.0.0` 系を使ってください（`zed_wrapper` の README 参照）。
 
 
 #　座標系について

@@ -1,24 +1,36 @@
+import os
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2, PointField
-from cv_bridge import CvBridge
-from ultralytics import YOLO
 import cv2
 import numpy as np
 import struct
 import math
 from ament_index_python.packages import get_package_share_directory # パス解決用
 
+try:
+    from cv_bridge import CvBridge
+    _cv_bridge_import_error = None
+except Exception as exc:
+    CvBridge = None
+    _cv_bridge_import_error = exc
+
+try:
+    from ultralytics import YOLO
+    _ultralytics_import_error = None
+except Exception as exc:
+    YOLO = None
+    _ultralytics_import_error = exc
+
 class YoloDetectorNode(Node):
     def __init__(self):
         super().__init__('yolo_detector')
 
+        self._validate_runtime_dependencies()
+
         # --- パス解決ロジック ---
-        # 1. パッケージのインストール先ディレクトリを取得
-        pkg_share = get_package_share_directory('njord_perception')
-        
-        # 2. デフォルトのモデルパスを作成 (install/share/njord_perception/config/best.pt)
-        default_model_path = os.path.join(pkg_share, 'config', 'best.pt')
+        # 1. デフォルトのモデルパスを解決
+        default_model_path = self._resolve_default_model_path()
 
         # 3. パラメータ宣言 (デフォルト値を設定)
         self.declare_parameter('model_path', default_model_path)
@@ -55,6 +67,49 @@ class YoloDetectorNode(Node):
 
         self.bridge = CvBridge()
         self.get_logger().info('YoloDetectorNode Initialized.')
+
+    def _validate_runtime_dependencies(self):
+        if _cv_bridge_import_error is not None:
+            raise RuntimeError(
+                f'Failed to import cv_bridge: {_cv_bridge_import_error}. '
+                'Use system ROS environment for cv_bridge and keep numpy<2.0.'
+            )
+
+        if _ultralytics_import_error is not None:
+            raise RuntimeError(
+                f'Failed to import ultralytics: {_ultralytics_import_error}. '
+                'Activate YOLO venv before launching this node.'
+            )
+
+        self.get_logger().info(
+            f'Runtime versions: numpy={np.__version__}, opencv={cv2.__version__}'
+        )
+
+        try:
+            np_major = int(np.__version__.split('.')[0])
+        except Exception:
+            np_major = 0
+
+        if np_major >= 2:
+            self.get_logger().warn(
+                'Detected numpy>=2.0. cv_bridge and ROS Python packages may break. '
+                'Use Jetson YOLO venv with pinned numpy 1.x.'
+            )
+
+    def _resolve_default_model_path(self):
+        try:
+            pkg_share = get_package_share_directory('yolo')
+            model_path = os.path.join(pkg_share, 'config', 'best.pt')
+            if os.path.exists(model_path):
+                return model_path
+        except Exception:
+            pass
+
+        self.get_logger().warn(
+            'Could not resolve installed model path from package share. '
+            'Falling back to yolov8n.pt.'
+        )
+        return 'yolov8n.pt'
 
     def image_callback(self, msg):
         if not self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value:

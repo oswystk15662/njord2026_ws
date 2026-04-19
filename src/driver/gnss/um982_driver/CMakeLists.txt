@@ -18,6 +18,27 @@ find_package(tf2_geometry_msgs REQUIRED)
 # Boost (Asioなどのため)
 find_package(Boost REQUIRED COMPONENTS system)
 
+if(NOT DEFINED ENV{ROS_DISTRO})
+  message(FATAL_ERROR "ROS_DISTRO is not set. Please build inside a ROS 2 environment.")
+endif()
+
+string(TOLOWER "$ENV{ROS_DISTRO}" UM982_ROS_DISTRO)
+if(UM982_ROS_DISTRO STREQUAL "foxy")
+  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs.h")
+elseif(UM982_ROS_DISTRO STREQUAL "humble" OR UM982_ROS_DISTRO STREQUAL "jazzy")
+  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs.hpp")
+else()
+  message(FATAL_ERROR "Unsupported ROS_DISTRO: $ENV{ROS_DISTRO}. Expected one of: foxy, humble, jazzy.")
+endif()
+
+message(STATUS "um982_driver: ROS_DISTRO=${UM982_ROS_DISTRO}, tf2_geometry_msgs header=${UM982_TF2_GEOMETRY_MSGS_HEADER}")
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tf2_geometry_msgs_include.hpp.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/um982_driver/tf2_geometry_msgs_include.hpp
+  @ONLY
+)
+
 include_directories(include)
 
 # 2. ライブラリ（コンポーネント）の作成
@@ -28,6 +49,7 @@ add_library(um982_driver_component SHARED
 
 target_include_directories(um982_driver_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 
@@ -52,6 +74,7 @@ target_link_libraries(um982_driver_component
 add_executable(um982_driver_node src/main.cpp)
 target_include_directories(um982_driver_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
 

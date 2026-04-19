@@ -1,6 +1,6 @@
 #include "um982_driver/node.hpp"
 #include <tf2/LinearMath/Quaternion.h>
-#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 
 using namespace std::chrono_literals;

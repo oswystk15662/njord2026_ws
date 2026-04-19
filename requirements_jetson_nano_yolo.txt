@@ -1,0 +1,29 @@
+# Jetson Nano (Ubuntu 20.04 / Python 3.8) YOLO requirements
+#
+# Assumptions:
+# - NVIDIA-provided torch/torchvision are already installed.
+# - Do NOT upgrade torch from pip on Jetson Nano.
+#
+# Usage:
+#   python3 -m pip install --upgrade pip setuptools wheel
+#   python3 -m pip install -r requirements_jetson_nano_yolo.txt
+
+# Keep ultralytics in a conservative range for torch 1.13.x on Jetson.
+ultralytics==8.0.0
+
+# Common runtime dependencies for ultralytics/YOLO on Python 3.8.
+numpy==1.24.4
+opencv-python==4.8.1.78
+PyYAML==6.0.1
+requests==2.31.0
+scipy==1.10.1
+tqdm==4.66.4
+psutil==5.9.8
+pillow==10.4.0
+matplotlib==3.7.5
+seaborn==0.13.2
+pandas==2.0.3
+
+# Export helpers (optional but commonly used).
+onnx==1.14.1
+onnxsim==0.4.36
