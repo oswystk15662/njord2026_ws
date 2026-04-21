@@ -1,0 +1,10 @@
+task1_orchestrator:
+  ros__parameters:
+    frame_id: "map"
+    buoy_xy: [10.0, 0.0]
+    wall_radius: 2.5
+    wall_points: 24
+    goal_xy: [25.0, 0.0]
+    goal_radius: 2.0
+    seed: 2026
+    publish_rate_hz: 2.0
