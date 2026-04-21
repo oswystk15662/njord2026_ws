@@ -1,0 +1,343 @@
+/*
+To change this license header, choose License Headers in Project Properties.
+To change this template file, choose Tools | Templates
+and open the template in the editor.
+*/
+/*
+	Created on : May 15, 2018, 4:13:21 PM
+	Author     : Codup
+*/
+#wqbo-order-form .row {
+	display: table;
+	width: 100%;
+}
+
+#wqbo-order-form .row > div {
+	border: 1px solid #ccc;
+	padding: 10px;
+}
+
+#wqbo-order-form .row > div input[type="number"], #wqbo-order-form .row > div input[type="text"] {
+	width: 100%;
+}
+
+#wqbo-order-form .row > .col {
+	display: table-cell;
+	vertical-align: top;
+	width: 40%;
+}
+
+#wqbo-order-form .row > .col-2 {
+	display: table-cell;
+	vertical-align: top;
+	width: 20%;
+}
+
+.wqbo-add-to-cart-button{
+	margin-top: 10px;
+}
+
+.wqbo-button{
+	cursor: pointer;
+}
+
+/* QUICK ORDER - TABLE STYLING */
+.wqbo-tbl-responsive {
+	display: block;
+	width: 100%;
+	overflow-x: auto;
+	-webkit-overflow-scrolling: touch;
+	-ms-overflow-style: -ms-autohiding-scrollbar;
+}
+#wqbo-order-form table {
+	border-spacing: 0;
+	width: 100%;
+	border-collapse: separate;
+	border: 0px solid #d1d1d1;
+	table-layout: auto;
+}
+#wqbo-order-form table thead th {
+	vertical-align: bottom;
+	border-bottom: 2px solid #dee2e6;
+	text-align: left;
+	background-color: #f8f8f8;
+	font-weight: 600;
+	width: 20%;
+	border-width: 0;
+	font-size: 17px;
+	color: #6d6d6d;
+}
+#wqbo-order-form table tbody td {
+	background-color: #ffffff;
+	font-size: 15px;
+	border-width: 0;
+	width: 20%;
+}
+
+#wqbo-order-form table td,
+#wqbo-order-form table th {
+	padding: 10px 8px;
+	border-top: 1px solid #dee2e6 !important;
+}
+#wqbo-order-form table td {
+	vertical-align: middle;
+}
+
+#wqbo-order-form table tbody td img {
+	max-width: 65px;
+	height: 65px;
+	object-fit: cover;
+	border-radius: 3px;
+}
+
+.font-bold {
+	font-weight: 600 !important;
+}
+
+.font-md {
+	font-size: 15px !important;
+}
+
+#wqbo-order-form .form-control {
+	-webkit-border-radius: 2px;
+	border-radius: 2px;
+	padding: 0.2em 0.5em;
+	font-size: 14px;
+	background-color: transparent;
+	box-shadow: none;
+	width: 100%;
+	border: 1px solid rgba(51, 51, 51, 0.1);
+	color: rgba(51, 51, 51, 0.7);
+}
+
+#wqbo-order-form table span.woocommerce-Price-currencySymbol {
+	padding-right: 2px;
+}
+
+#wqbo-order-form table tbody tr.wqbo-row-total td {
+	background-color: #f8f8f8;
+}
+#wqbo-order-form table a.wqbo-remove{
+	color: #007acc;
+	text-decoration: none;
+	box-shadow: 0 1px 0 0 #007acc;
+}
+#wqbo-order-form table a.wqbo-remove:hover {
+	color: #f00;
+	text-decoration: none;
+	box-shadow: 0 1px 0 0 #f00;
+}
+
+#wqbo-order-form table tr td, .wqbo-bucket table tr td{
+	vertical-align: middle;
+}
+
+#wqbo-order-form table tr td img, .wqbo-bucket table tr td img {
+	width: 70px;
+}
+
+input#csv_file {
+	width: 0.1px;
+	height: 0.1px;
+	opacity: 0;
+	overflow: hidden;
+	position: absolute;
+	z-index: -1;
+}
+
+.inputfile-6 + label {
+	border: 1px solid #eeeeee;
+	background-color: #eeeeee;
+	padding: 0;
+}
+.inputfile-6 + label {
+	color: #d3394c;
+}
+.inputfile + label {
+	max-width: 100%;
+	font-size: 1.25rem;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	display: inline-block;
+	overflow: hidden;
+	padding: 0;
+	margin-top: 7px;
+}
+
+.inputfile-6 + label span {
+	width: 250px;
+	min-height: 2em;
+	display: inline-block;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	vertical-align: top;
+	font-size: 16px;
+	color: black;
+}
+
+.inputfile-6 + label span, .inputfile-6 + label strong {
+	padding: 0.625rem 1.25rem;
+}
+
+.inputfile-6 + label strong {
+	height: 100%;
+	color: #000;
+	background-color: #e2e0e0;
+	display: inline-block;
+	font-size: 16px;
+}
+.inputfile-6 + label span, .inputfile-6 + label strong {
+	padding: 0.625rem 1.25rem;
+}
+
+.x-cl {
+	background: none;
+	font-size: 20px;
+	position: absolute;
+	top: -10px;
+	left: 87%;
+}
+
+.x-cl:hover {
+	background: none;
+	border: none;
+}
+
+.x-cl:focus {
+	border: none;
+	outline: none;
+}
+
+@media (max-width:770px){
+	.inputfile + label {
+	max-width: 100%;
+	font-size: 1.25rem;
+	font-weight: 700;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+	display: inline-block;
+	overflow: hidden;
+	padding: 0;
+	margin-top: 7px;
+	}
+}
+
+@media (max-width:455px){
+	.inputfile-6 + label strong {
+	height: 100%;
+	color: #000;
+	background-color: #e2e0e0;
+	display: inline-block;
+	font-size: 14px;
+	}
+}
+
+@media (max-width:445px){
+	.inputfile-6 + label span {
+	width: 200px;
+	min-height: 2em;
+	display: inline-block;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	vertical-align: top;
+	}
+}
+
+@media (max-width:393px){
+	.inputfile-6 + label span {
+	width: 180px;
+	min-height: 2em;
+	display: inline-block;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	vertical-align: top;
+	}
+}
+
+@media (max-width:373px){
+	.inputfile-6 + label span {
+	width: 150px;
+	min-height: 2em;
+	display: inline-block;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	vertical-align: top;
+	}
+}
+
+@media (max-width:343px){
+	.inputfile-6 + label span {
+	width: 125px;
+	min-height: 2em;
+	display: inline-block;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	overflow: hidden;
+	vertical-align: top;
+	}
+}
+
+
+div#TB_window div#TB_ajaxContent {
+	margin: 0 auto;
+	width: auto !important;
+	padding: 10px !important;
+}
+
+div#TB_ajaxContent ul {
+	margin: 10px 0 10px 0;
+	text-align: left;
+}
+
+div#TB_ajaxContent ul li {
+	list-style: disc;
+}
+
+div#TB_ajaxContent  .place-image {
+	margin-bottom: 20px;
+	margin-top: 20px;
+}
+
+div#TB_ajaxContent  .place-image img {
+	margin:0 auto;
+}
+
+#TB_ajaxContent.TB_modal {
+	padding: 30px 20px !important;
+	text-align: center;
+}
+
+
+form#wqbo-csv-order-form {
+	background: #f8f8f8;
+	padding: 20px 20px;
+}
+
+form#wqbo-csv-order-form h3 {
+	font-size: 30px;
+	font-weight: 400;
+}
+
+a:focus, button:focus, .button.alt:focus, input:focus, textarea:focus, input[type="button"]:focus, input[type="reset"]:focus, input[type="submit"]:focus, input[type="email"]:focus, input[type="tel"]:focus, input[type="url"]:focus, input[type="password"]:focus, input[type="search"]:focus {
+	outline-color: transparent !important;
+}
+
+.wqbo-csv-error {
+	margin-top: 10px;
+	color: red;
+}
+
+
+@media (max-width: 495px){
+	form#wqbo-csv-order-form {
+	background: #f8f8f8;
+	padding: 20px 0px;
+	}
+}

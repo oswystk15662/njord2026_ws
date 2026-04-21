@@ -1,0 +1,228 @@
+/* Style for Blue Robotics Guide Plugin */
+
+/*.affix {
+	top: 75px;
+} */
+
+.affix {
+    position: static;
+    width:370px;
+    display: none;
+}
+
+.affix-top,
+.affix-bottom {
+	width:370px;
+}
+.affix-bottom {
+	bottom: 0;
+	position: absolute;
+}
+@media (min-width: 768px) {
+  .affix {
+    position: fixed;
+    top:156px;
+    display: inherit;
+  }
+
+  
+}
+
+@media (min-width: 992px) {
+  .affix {
+    position: fixed;
+    top:156px;
+    display: inherit;
+  }
+}
+
+.nav>li>a {
+    position: relative;
+    display: block;
+    padding: 2px 15px;
+}
+
+.guides .list-group {
+    margin-bottom: 20px !important;
+    padding-left: 0;
+}
+
+.list-group a:link, 
+.list-group a:visited, 
+.list-group a:hover, 
+.list-group a:active {
+	color: #2699D0;
+}
+
+.list-group strong {
+	color: #666;
+}
+
+.listnav .list-group-item.nav-link {
+	padding-left: 0.25rem;
+	padding-right: 0px;
+	padding-top: 0px;
+	padding-bottom: 0px;
+}
+
+.listnav .active,
+.listnav .active:hover {
+	background: #2699d0;
+	color: white;
+}
+
+.listnav .active a,
+.listnav .active a:hover {
+	color: white;
+}
+
+.listnav .anchor {
+	font-size:0.6em;
+	color:#aaa;
+}
+
+.nav-link:hover {
+	background: #eee;
+}
+
+.guides h1 {
+	font-size: 40px;
+}
+.guides h2 {
+	font-size: 30px;
+}
+.guides h3 {
+	font-size: 25px;
+}
+.guides h4 {
+	font-size: 20px;
+}
+.guides h5 {
+	font-size: 15px;
+}
+
+h1 .anchor,
+h2 .anchor {
+	font-size:0.6em;
+	color:rgba(0,0,0,0);
+}
+
+h1:hover .anchor,
+h2:hover .anchor {
+	color:#2699d0;
+}
+
+h1.anchor-heading {
+	padding-top: 140px;
+    margin-top: -80px;
+}
+
+.guide-image-wrapper {
+	padding-top:10px;
+	padding-bottom:20px;
+}
+
+.img-guide {
+	max-width: 90% !important;
+	max-height: 35em; 
+}
+
+.img-guide-archive {
+	width: 100%;
+	height: 100%;
+	/*border: #ddd solid 1px;*/
+}
+
+.guide-image-caption,
+.blog-container p.guide-image-caption {
+	font-family: inherit !important;
+	font-size: 0.9em !important;
+	color: #999;
+	padding-top: 5px;
+}
+
+.guide-product-featured {
+	max-width:350px;
+	text-align:center;
+	margin-left: auto;
+    margin-right: auto;
+}
+
+.guide-product-featured ul.products li.product {
+	margin: 0 1em 1em 0 !important;
+}
+
+.guide-product ul.products li.product {
+	margin: 0 1em 1em 0 !important;
+}
+
+.guide-card-wrapper {
+	height: 600px;
+	margin-bottom: 40px;
+}
+
+.guide-card-wrapper h5 {
+	margin-top: 35px;
+    margin-bottom: 20px;
+}
+
+.guide-card-thumbnail-wrapper {
+	border: #ddd solid 1px;
+	/*height: 200px;*/
+}
+
+.guide-card-row {
+	margin-right: 4px !important;
+	margin-top:15px;
+}
+
+.list-group-item.tags {
+	padding-bottom: 5px;
+}
+
+.guide-tag .label {
+	display: inline-block;
+	margin-bottom:5px;
+	line-height: inherit;
+	background-color: #2699d0;
+	border: none;
+    padding: .2em .6em .3em;
+    font-size: 85%;
+    font-weight: bold;
+    color: #fff;
+    text-align: center;
+    white-space: nowrap;
+    vertical-align: baseline;
+    border-radius: .25em;
+}
+
+.guide-tag .label:hover {
+	background: #2A6496;
+}
+
+.guide-tag .label-primary a {
+	color: white;
+	font-weight: 600;
+	text-decoration: none;
+}
+
+.btn-guide {
+	font-weight: 600 !important;
+}
+
+.btn-guide:visited {
+	color:white !important;
+}
+
+pre.guide-code {
+	margin-top: 15px;
+	margin-bottom: 15px;
+	background-color: rgba(38,153,208,0.2);
+}
+
+@media (max-width: 991.98px) {
+	h1.anchor-heading {
+		padding-top: 100px;
+		margin-top: -40px;
+	}
+}

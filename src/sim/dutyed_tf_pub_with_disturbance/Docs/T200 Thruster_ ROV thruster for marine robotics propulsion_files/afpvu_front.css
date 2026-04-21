@@ -1,0 +1,14 @@
+.afpvu-custom-message {
+    padding: 10px;
+    background-color: #ffeb3b;
+    color: #000;
+    text-align: center;
+    font-weight: bold;
+    margin: 20px 0;
+}
+
+
+.pro_visib_msg {
+    width: 100%;
+    min-height: 500px;
+}

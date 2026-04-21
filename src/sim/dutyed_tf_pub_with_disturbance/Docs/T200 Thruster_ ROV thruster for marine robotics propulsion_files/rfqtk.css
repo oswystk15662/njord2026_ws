@@ -1,0 +1,121 @@
+.submit-container{
+    visibility:collapse;
+}
+.gpls_hidden{
+    display:none;
+}
+.gpls_submit{
+    visibility: collapse;
+}
+
+.gpls_woo_rfq_plus_customer_bid{
+    font-weight: 700;
+    width:200px !important;
+
+}
+.make_an_offer_div{
+    margin-top:10px;margin-bottom: 10px;display: block
+}
+.customer_bid_rfq_page {
+}
+
+.add_to_quote_sc{
+    text-align: center;
+}
+.add_to_quote_sc .attachment-thumbnail{
+    margin-left:auto;
+    margin-right:auto;
+}
+
+.add_to_quote_sc h2{
+    font-size: 1rem;
+    font-weight: 400;
+    margin-bottom: .5407911001em;
+}
+
+.make_an_offer_div_rfq_page {
+    float:right
+}
+.gpls_woo_rfq_cart_actions{
+    float:right
+}
+.gpls_woo_rfq_cart_actions_customer_bid{
+    float:right;
+    min-width: 50%;
+}
+.gpls_woo_rfq_cart_actions_rfq_file_upload{
+    float:left;
+    min-width: 50%;
+}
+.gpls_woo_rfq_cart_actions_ninja{
+    float:right;
+    min-width: 50%;
+}
+
+.ninja_custom_form{
+    width:auto
+
+}
+
+.hp-wrap {
+    display: none;
+}
+
+
+#gpls_woo_rfq_Plus_upload_file_form #gpls_woo_rfq_Plus_file_caption{
+    width:500px;
+}
+#woo_rfq_user_files{
+    font-size:12px;
+}
+#woo_rfq_user_files th{
+    text-align:left;
+}
+#woo_rfq_user_files td{
+    vertical-align:middle;
+}
+#woo_rfq_user_files td input{
+    margin:0px;
+}
+
+
+#captchasubmit {
+    display: none;
+}
+
+
+
+
+.cart_actions_ninja tr td {
+    display: block;
+    text-align: left;
+    clear: both;
+}
+
+
+.wc-item-meta-label {
+    vertical-align: top;
+}
+
+
+.woo_rfq_recapcha_html_desc{
+
+text-align: center;
+}
+
+.normal-captcha-div{
+    margin:10px;
+}
+
+.rfq_proceed-to-checkout-min {
+    clear: both  ;
+}
+
+
+.quantity{
+   /* display:inline;*/
+}
+
+.smaller{
+    font-size:smaller;
+    }

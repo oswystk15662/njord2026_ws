@@ -1,0 +1,43 @@
+.woocommerce-OrderUpdates{
+    visibility: collapse;
+}
+
+
+ul.order_notes {
+    padding: 2px 0 0;
+    width: 70%;
+}
+
+ul.order_notes li {
+    padding: 0 10px;
+}
+
+ul.order_notes li.system-note .note_content {
+    background: #d7cad2;
+}
+
+ul.order_notes li .note_content {
+    padding: 10px;
+    background: #efefef;
+    position: relative;
+}
+
+
+ul.order_notes li p.meta {padding: 10px;color: #999;margin: 0;font-size: 11px;}
+
+ul.order_notes li.system-note .note_content {
+    background: #d7cad2;
+}
+
+ul.order_notes li .note_content::after {
+    content: "";
+    display: block;
+    position: absolute;
+    bottom: -10px;
+    left: 20px;
+    width: 0;
+    height: 0;
+    border-width: 10px 10px 0 0;
+    border-style: solid;
+    border-color: #efefef transparent;
+}

@@ -1,0 +1,61 @@
+/* Admin styles */
+.tariff-variation-fields {
+    display: inline-block;
+    width: 100%;
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+    margin-top: 5px;
+}
+
+/* Frontend styles */
+.tariff-notice {
+    padding: 10px;
+    margin: 10px 0;
+    background-color: #f8f8f8;
+    border-left: 3px solid #e2401c;
+    display: inline-block;
+    width: 100%;
+}
+
+.tariff-price-info {
+    display: inline-block;
+    font-size: 0.85em;
+    color: #e2401c;
+    margin-left: 5px;
+}
+
+.tariff-notice ~ .quantity {
+    float: unset;
+}
+
+/* Cart item tariff styles */
+.cart-item-tariff {
+    font-size: 0.85em !important;
+    color: #e2401c;
+    margin-top: 5px;
+    display: block;
+}
+
+/* Admin product list tariff column styles */
+.column-tariff {
+    width: auto;
+}
+
+.column-tariff .tariff-percent,
+.column-tariff .tariff-fixed,
+.column-tariff .tariff-range,
+.column-tariff .tariff-single {
+    font-weight: 500;
+}
+
+.column-tariff .tariff-calc {
+    /* - */
+}
+
+.column-tariff .na {
+    color: #999;
+}
+
+*[data-title="Tariff Surcharge"] {
+    color: #e2401c;
+}
