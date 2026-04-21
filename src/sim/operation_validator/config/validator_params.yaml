@@ -1,0 +1,6 @@
+operation_validator_node:
+  ros__parameters:
+    cte_threshold: 1.5
+    output_dir: "/tmp/njord_sim_eval"
+    summary_csv: "summary.csv"
+    timeseries_csv: "timeseries.csv"
