@@ -1,0 +1,42 @@
+dutyed_tf_pub_with_disturbance_node:
+  ros__parameters:
+    update_rate_hz: 50.0
+    duty_resolution: 1000.0
+    topic_thruster_command: "/thruster_command"
+    topic_odom: "/odom"
+
+    frame_world: "world"
+    frame_map: "map"
+    frame_odom: "odom"
+    frame_base_link: "base_link"
+
+    map_offset_xyyaw: [0.0, 0.0, 0.0]
+    odom_offset_xyyaw: [0.0, 0.0, 0.0]
+
+    thruster:
+      max_forward_newton: 50.0
+      max_reverse_newton: 40.0
+      half_beam_meter: 0.35
+      left_reverse: false
+      right_reverse: false
+
+    mmg:
+      mass_kg: 55.0
+      inertia_z: 18.0
+      lin_drag_u: 38.0
+      lin_drag_v: 80.0
+      lin_drag_r: 32.0
+      quad_drag_u: 16.0
+      quad_drag_v: 130.0
+      quad_drag_r: 40.0
+      cross_uv: 0.0
+      cross_ur: 3.0
+      cross_vr: 2.0
+
+    disturbance:
+      natural_frequency_hz: 0.18
+      damping_ratio: 0.8
+      sigma_u: 0.12
+      sigma_v: 0.12
+      sigma_r: 0.04
+      seed: 2026
