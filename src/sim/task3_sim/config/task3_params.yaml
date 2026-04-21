@@ -1,0 +1,12 @@
+task3_orchestrator:
+  ros__parameters:
+    frame_id: "map"
+    red_center: [18.0, 2.0]
+    green_center: [18.0, -2.0]
+    motion_amp: 0.5
+    motion_freq_hz: 0.1
+    dock_pose: [35.0, 0.0, 0.0]
+    dock_size_xy: [5.0, 2.0]
+    goal_xy: [35.0, 0.0]
+    goal_radius: 1.5
+    publish_rate_hz: 10.0
