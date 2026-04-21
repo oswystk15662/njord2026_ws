@@ -1,0 +1,31 @@
+thruster_driver_node:
+  ros__parameters:
+    input_mode: "duty_array"      # cmd_vel or duty_array
+    transport_mode: "both"        # mros_usb or can or both
+
+    max_linear_x: 1.0
+    max_angular_z: 1.0
+    angular_coeff: 0.5
+
+    duty_resolution: 1000
+
+    left_reverse: false
+    right_reverse: false
+
+    # ESP32 expects one UInt16 command per ESC.
+    # command = u16_neutral + normalized[-1,1] * u16_span
+    u16_neutral: 1000
+    u16_span: 1000
+
+    left_can_id: 769   # 0x301
+    right_can_id: 770  # 0x302
+
+    topics:
+      cmd_vel: "cmd_vel"
+      duty_array: "thruster_command"
+
+      left_mros_cmd: "left_esp32/cmd_duty_u16"
+      right_mros_cmd: "right_esp32/cmd_duty_u16"
+
+      left_can_tx: "left_esp32/can_tx"
+      right_can_tx: "right_esp32/can_tx"
