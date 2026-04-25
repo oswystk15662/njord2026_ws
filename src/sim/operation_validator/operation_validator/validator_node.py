@@ -36,7 +36,7 @@ class OperationValidatorNode(Node):
         summary_name = self.get_parameter("summary_csv").get_parameter_value().string_value
         ts_name = self.get_parameter("timeseries_csv").get_parameter_value().string_value
 
-        self.output_dir = Path(out_dir)
+        self.output_dir = Path(out_dir).expanduser()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.summary_csv = self.output_dir / summary_name
         self.timeseries_csv = self.output_dir / ts_name
