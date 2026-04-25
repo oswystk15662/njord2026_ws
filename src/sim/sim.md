@@ -1,0 +1,12 @@
+src/simについて、workspace全体や各pkgのreadmeを見て、適宜仕様を補完しながら実装してください。
+
+必要であれば、sim dir以外のpkgも変更して構いません。
+ただし、かなり細かくcommitしてください。
+
+テストはcolconと実際に動かして理想の値が出ているかの比較です。
+テスト時には毎回ちゃんとnodeが落ちるようにtimeoutをつけて実行するなど工夫してください。
+
+toolはros2標準の機能だけで間に合うはずです。
+
+nav2の標準BTで対応できずカスタムBT・カスタムBT clientを書く場合はbehavior dirを使ってください。
+今のsystem_managerは練習用なので、新しくpkgを作ってください。

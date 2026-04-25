@@ -7,6 +7,7 @@ tf treeは
 * base_link（tf static publisherで各センサなどへの変換を発行）
 となります。
 ただし、simulationではworld→map・map→odomは固定です。
+nav2・thruster driverの性能を考えるためのものなので、gnssの誤差などは入れなくて問題ありません。
 
 simulationのためのモデルとしては、
 * T200の公称duty・thrustモデル
@@ -17,4 +18,6 @@ simulationのためのモデルとしては、
 
 MMG modelに必要な定数はRobotXの定数を参照するか、njord challengeで一般的っぽそうな値を適当に決めてください。
 node_config.yamlにまとめてください。
+
+MMG modelの記述はできれば標準的なMMG modelの記法ではなく、個人的に慣れているドイル記法を用いた状態空間表現にしてください。
 
