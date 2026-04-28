@@ -21,17 +21,21 @@ dutyed_tf_pub_with_disturbance_node:
       right_reverse: false
 
     mmg:
-      mass_kg: 55.0
-      inertia_z: 18.0
-      lin_drag_u: 38.0
-      lin_drag_v: 80.0
-      lin_drag_r: 32.0
-      quad_drag_u: 16.0
-      quad_drag_v: 130.0
-      quad_drag_r: 40.0
-      cross_uv: 0.0
-      cross_ur: 3.0
-      cross_vr: 2.0
+      Lpp: 1.0
+      D: 0.25
+      mass_kg: 10.0
+      I_zG: 1.5
+      x_G: 0.0
+      m_x: 1.0
+      m_y: 10.0
+      J_z: 1.5
+      R_0: -0.2
+      Y_0: 0.001
+      Y_v: -0.2
+      Y_r: 0.02
+      N_0: 0.001
+      N_v: -0.2
+      N_r: -0.02
 
     disturbance:
       natural_frequency_hz: 0.18

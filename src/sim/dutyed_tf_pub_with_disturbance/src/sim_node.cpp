@@ -52,18 +52,22 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   left_reverse_ = this->declare_parameter<bool>("thruster.left_reverse", false);
   right_reverse_ = this->declare_parameter<bool>("thruster.right_reverse", false);
 
-  DoyleParams mmg;
-  mmg.mass_kg = this->declare_parameter<double>("mmg.mass_kg", 55.0);
-  mmg.inertia_z = this->declare_parameter<double>("mmg.inertia_z", 18.0);
-  mmg.lin_drag_u = this->declare_parameter<double>("mmg.lin_drag_u", 38.0);
-  mmg.lin_drag_v = this->declare_parameter<double>("mmg.lin_drag_v", 80.0);
-  mmg.lin_drag_r = this->declare_parameter<double>("mmg.lin_drag_r", 32.0);
-  mmg.quad_drag_u = this->declare_parameter<double>("mmg.quad_drag_u", 16.0);
-  mmg.quad_drag_v = this->declare_parameter<double>("mmg.quad_drag_v", 130.0);
-  mmg.quad_drag_r = this->declare_parameter<double>("mmg.quad_drag_r", 40.0);
-  mmg.cross_uv = this->declare_parameter<double>("mmg.cross_uv", 0.0);
-  mmg.cross_ur = this->declare_parameter<double>("mmg.cross_ur", 3.0);
-  mmg.cross_vr = this->declare_parameter<double>("mmg.cross_vr", 2.0);
+DoyleParams mmg;
+mmg.Lpp = this->declare_parameter<double>("mmg.Lpp", 1.0);
+mmg.D = this->declare_parameter<double>("mmg.D", 0.25);
+  mmg.mass_kg = this->declare_parameter<double>("mmg.mass_kg", 10.0);
+  mmg.I_zG = this->declare_parameter<double>("mmg.I_zG", 1.5);
+  mmg.x_G = this->declare_parameter<double>("mmg.x_G", 0.0);
+  mmg.m_x = this->declare_parameter<double>("mmg.m_x", 1.0);
+  mmg.m_y = this->declare_parameter<double>("mmg.m_y", 10.0);
+  mmg.J_z = this->declare_parameter<double>("mmg.J_z", 1.5);
+  mmg.R_0 = this->declare_parameter<double>("mmg.R_0", -0.2);
+  mmg.Y_0 = this->declare_parameter<double>("mmg.Y_0", 0.001);
+  mmg.Y_v = this->declare_parameter<double>("mmg.Y_v", -0.2);
+  mmg.Y_r = this->declare_parameter<double>("mmg.Y_r", 0.02);
+  mmg.N_0 = this->declare_parameter<double>("mmg.N_0", 0.001);
+  mmg.N_v = this->declare_parameter<double>("mmg.N_v", -0.2);
+  mmg.N_r = this->declare_parameter<double>("mmg.N_r", -0.02);
 
   const double disturbance_hz = this->declare_parameter<double>("disturbance.natural_frequency_hz", 0.18);
   const double disturbance_zeta = this->declare_parameter<double>("disturbance.damping_ratio", 0.8);
@@ -175,6 +179,7 @@ void SimNode::onTimer()
 
   PlanarInput input;
   input.surge_force = left_force + right_force;
+  input.sway_force = 0.0; // 左右方向のスラスターがない場合は0
   input.yaw_moment = (right_force - left_force) * half_beam_meter_;
 
   PlanarAccel accel = mmg_model_->computeAccel(state_, input);
