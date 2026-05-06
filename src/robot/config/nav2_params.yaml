@@ -74,8 +74,18 @@ local_costmap:
       resolution: 0.1
       # ロボットの半径 (円形近似) または footprint (矩形)
       robot_radius: 0.8 
-      plugins: ["obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "virtual_wall_layer", "obstacle_layer", "inflation_layer"]
       
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+
+      virtual_wall_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+        map_topic: "/virtual_costmap"
+        subscribe_to_updates: True
+
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -115,7 +125,14 @@ global_costmap:
       origin_x: -100.0
       origin_y: -100.0
       
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "virtual_wall_layer", "obstacle_layer", "inflation_layer"]
+      
+      virtual_wall_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+        map_topic: "/virtual_costmap"
+        subscribe_to_updates: True
+
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
@@ -128,15 +145,6 @@ global_costmap:
           data_type: "LaserScan"
           raytrace_max_range: 3.0
           obstacle_max_range: 2.5
-        # 新しく追加: YOLOが生成した仮想壁
-        virtual_wall:
-          topic: /virtual_obstacles
-          max_obstacle_height: 2.0
-          clearing: True  # trueにすると、点群が消えたら壁も消える
-          marking: True
-          data_type: "PointCloud2"
-          raytrace_max_range: 10.0
-          obstacle_max_range: 9.0
       static_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True

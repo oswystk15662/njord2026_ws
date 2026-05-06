@@ -7,3 +7,14 @@
 [submodule "src/driver/lidar/livox_ros_driver2"]
 	path = src/driver/lidar/livox_ros_driver2
 	url = git@github.com:KeioRoboticsAssociation/livox_ros_driver2.git
+[submodule "src/driver/gnss/ntripcaster"]
+	path = src/driver/gnss/ntripcaster
+	url = git@github.com:nunojpg/ntripcaster.git
+[submodule "src/driver/gnss/ntrip_client"]
+	path = src/driver/gnss/ntrip_client
+	url = git@github.com:LORD-MicroStrain/ntrip_client.git
+	branch = ros2
+[submodule "src/driver/micon/micro_ros_setup"]
+	path = src/driver/micon/micro_ros_setup
+	url = git@github.com:micro-ROS/micro_ros_setup.git
+	branch = humble

@@ -63,7 +63,7 @@
     <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="0 0 0"/>
   </joint>
 
-  <link name="imu_link">
+  <link name="wit_imu_frame">
     <visual>
       <geometry>
         <box size="0.05 0.05 0.02"/>
@@ -74,9 +74,9 @@
     </visual>
   </link>
 
-  <joint name="imu_joint" type="fixed">
+  <joint name="wit_imu_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="imu_link"/>
+    <child link="wit_imu_frame"/>
     <origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="0 0 0"/>
   </joint>
 
@@ -97,18 +97,20 @@
     <origin xyz="${gnss1_x} ${gnss1_y} ${gnss1_z}" rpy="0 0 0"/>
   </joint>
 
-  <link name="gnss_sub_link">
-     <visual>
+  <link name="rzs_frame">
+    <visual>
       <geometry>
         <cylinder radius="0.08" length="0.05"/>
       </geometry>
-      <material name="white"/>
+      <material name="white">
+        <color rgba="1.0 1.0 1.0 1.0"/>
+      </material>
     </visual>
   </link>
 
-  <joint name="gnss_sub_joint" type="fixed">
+  <joint name="rzs_joint" type="fixed">
     <parent link="base_link"/>
-    <child link="gnss_sub_link"/>
+    <child link="rzs_frame"/>
     <origin xyz="${gnss2_x} ${gnss2_y} ${gnss2_z}" rpy="0 0 0"/>
   </joint>
 

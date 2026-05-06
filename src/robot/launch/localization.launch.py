@@ -4,6 +4,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 import os
+from ament_index_python.packages import get_package_share_directory
 
 def generate_launch_description():
     
@@ -24,6 +25,58 @@ def generate_launch_description():
         }.items()
     )
 
+    um982_static_tf_pub_node = Node(
+        package='tf2_ros',
+        executable='static_transform_publisher',
+        name='um982_static_tf_pub',
+        output='screen',
+        parameters=[{
+            'x': 0.0,
+            'y': 0.0,
+            'z': 0.0,
+            'roll': 0.0,
+            'pitch': 0.0,
+            'yaw': 0.0,
+            'frame_id': 'base_link',
+            'child_frame_id': 'um982_link'
+        }]
+    )
+
+    drogger_launch = os.path.join(
+        FindPackageShare('drogger_wired_flex').find('drogger_wired_flex'),
+        'launch',
+        'driver.launch.py'
+    )
+    drogger_driver = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(drogger_launch),
+    )
+
+    mid360_launch = os.path.join(
+        FindPackageShare('livox_ros_driver2').find('livox_ros_driver2'),
+        'launch',
+        'rviz_MID360.launch.py'
+    )
+    mid360_driver = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(mid360_launch),
+    )
+
+    glim_config_path = os.path.join(
+        FindPackageShare('robot').find('robot'),
+        'config',
+        'glim_config'
+    )
+
+    glim_node = Node(
+        package='glim_ros',
+        executable='glim_node',
+        name='glim_node',
+        output='screen',
+        parameters=[{
+            'config_path': glim_config_path,
+            'use_sim_time': False
+        }]
+    )
+
     local_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -32,7 +85,7 @@ def generate_launch_description():
         parameters=[os.path.join(
             FindPackageShare('robot').find('robot'),
             'config',
-            'ekf.yaml'
+            'ekf_local.yaml'
         )],
         remappings=[('odometry/filtered', 'odometry/filtered/local')]
     )
@@ -45,7 +98,7 @@ def generate_launch_description():
         parameters=[os.path.join(
             FindPackageShare('robot').find('robot'),
             'config',
-            'ekf.yaml'
+            'ekf_global.yaml'
         )],
         remappings=[('odometry/filtered', 'odometry/filtered/global')]
     )
@@ -57,8 +110,8 @@ def generate_launch_description():
         output='screen',
         parameters=[{
             'frequency': 10.0,
-            'magnetic_declination_radians': 0.0, # 地域の磁気偏角を設定
-            'yaw_offset': 0.0,                   # IMUが真東を向いて0なら0。真北なら1.57(pi/2)
+            'magnetic_declination_radians': 0.0,
+            'yaw_offset': 0.0,
             'zero_altitude': True,
             'broadcast_utm_transform': True,
             'publish_filtered_gps': True,
@@ -66,33 +119,40 @@ def generate_launch_description():
             'wait_for_datum': False,
         }],
         remappings=[
-            ('imu/data', '/wit/imu'),          # 方位基準に使うIMU (またはDual AntennaのHeading)
-            ('gps/fix', '/gps/fix'),           # GNSSドライバのトピック
-            ('odometry/filtered', 'odometry/filtered/local') # 初期位置計算用にLocal EKFの結果が必要
+            ('imu/data', '/wit/imu'),
+            ('gps/fix', '/gps/fix'),
+            ('odometry/filtered', 'odometry/filtered/local')
         ]
     )
 
-    static_transform_publisher_launch_file = os.path.join(
-        FindPackageShare('robot').find('robot'),
-        'launch',
-        'static_transform_publisher.launch.py'
+    # robot_state_publisher: URDF経由でbase_link -> sensors のTFを配信
+    robot_description_file = os.path.join(
+        get_package_share_directory('robot'),
+        'urdf',
+        'robot.urdf.xacro'
     )
-    static_transform_publisher = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            static_transform_publisher_launch_file
-        ),
-        launch_arguments={
-            'x': '0.0',
-            'y': '0.0',
-            'z': '0.0',
-            'roll': '0.0',
-            'pitch': '0.0',
-            'yaw': '0.0',
-            'frame_id': 'base_link',
-            'child_frame_id': 'um982_link'
-        }.items()
+    
+    robot_state_pub_node = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[{
+            'robot_description': open(robot_description_file, 'r').read(),
+            'use_sim_time': False
+        }]
     )
 
     return LaunchDescription([
-        um982_driver
+        # TF publisher: base_link -> sensors (URDF経由)
+        robot_state_pub_node,
+        # Localization nodes
+        um982_static_tf_pub_node,
+        drogger_driver,
+        mid360_driver,
+        glim_node,
+        local_ekf_node,
+        global_ekf_node,
+        # GPS integration
+        navsat_transform_node,
     ])

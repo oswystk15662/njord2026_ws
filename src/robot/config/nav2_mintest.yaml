@@ -89,11 +89,16 @@ local_costmap:
       width: 10
       height: 10
       resolution: 0.05
-      plugins: ["obstacle_layer", "inflation_layer"]
+      plugins: ["static_layer", "virtual_wall_layer", "inflation_layer"]
       # まだセンサが無いので、障害物レイヤーは空でOK
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      virtual_wall_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+        map_topic: "/virtual_costmap"
+        subscribe_to_updates: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true
@@ -134,10 +139,15 @@ global_costmap:
       # Globalは粗くていいので、処理負荷を下げるためにLocalより粗くします
       resolution: 0.1
 
-      plugins: ["obstacle_layer", "inflation_layer"]
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
+      plugins: ["static_layer", "virtual_wall_layer", "inflation_layer"]
+      static_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+      virtual_wall_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: True
+        map_topic: "/virtual_costmap"
+        subscribe_to_updates: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         enabled: true

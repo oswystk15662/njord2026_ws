@@ -54,12 +54,12 @@
     "points_time_offset": 0.0,
     "acc_scale": 9.81,
     // TF config
-    "imu_frame_id": "imu",
-    "lidar_frame_id": "lidar",
-    "base_frame_id": "",
+    "imu_frame_id": "livox_frame",
+    "lidar_frame_id": "livox_frame",
+    "base_frame_id": "base_link",
     "odom_frame_id": "odom",
     "map_frame_id": "map",
-    "publish_imu2lidar": true,
+    "publish_imu2lidar": false,
     "tf_time_offset": 1e-6,
     // Extension modules
     "extension_modules": [
