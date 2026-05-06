@@ -33,7 +33,7 @@ private:
     if (msg->axes.size() > 1) axes1 = msg->axes[1];
 
     const float Fx = 0.2f * axes1;
-    const float Fy = -0.2f * axes0;
+    const float Fy = 0.2f * axes0;
 
     geometry_msgs::msg::Accel a;
     a.linear.x = Fx;
@@ -45,16 +45,16 @@ private:
     // torque from buttons: button index 6 = cw, 7 = ccw. Total magnitude 0.2 N*m
     bool b6 = (msg->buttons.size() > 6) ? (msg->buttons[6] != 0) : false;
     bool b7 = (msg->buttons.size() > 7) ? (msg->buttons[7] != 0) : false;
-    const float torque = 0.2f * (static_cast<float>(b7) - static_cast<float>(b6));
+    const float torque = 0.2f * (static_cast<float>(b6) - static_cast<float>(b7));
     a.angular.z = torque;
 
     pub_accel_->publish(a);
 
     // publish emg and LEDs
-    std_msgs::msg::Bool emg_msg; emg_msg.data = (msg->buttons.size() > 0) ? (msg->buttons[0] != 0) : false;
-    std_msgs::msg::Bool green_msg; green_msg.data = (msg->buttons.size() > 2) ? (msg->buttons[2] != 0) : false;
-    std_msgs::msg::Bool yellow_msg; yellow_msg.data = (msg->buttons.size() > 3) ? (msg->buttons[3] != 0) : false;
-    std_msgs::msg::Bool red_msg; red_msg.data = (msg->buttons.size() > 4) ? (msg->buttons[4] != 0) : false;
+    std_msgs::msg::Bool emg_msg; emg_msg.data = (msg->buttons.size() > 0) ? (msg->buttons[0] != 1) : true;
+    std_msgs::msg::Bool green_msg; green_msg.data = (msg->buttons.size() > 1) ? (msg->buttons[1] != 0) : false;
+    std_msgs::msg::Bool yellow_msg; yellow_msg.data = (msg->buttons.size() > 2) ? (msg->buttons[2] != 0) : false;
+    std_msgs::msg::Bool red_msg; red_msg.data = (msg->buttons.size() > 3) ? (msg->buttons[3] != 0) : false;
 
     pub_emg_->publish(emg_msg);
     pub_green_->publish(green_msg);
