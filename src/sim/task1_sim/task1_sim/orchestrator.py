@@ -1,34 +1,16 @@
+import json
 import math
 import random
 import struct
 
 import rclpy
-from geometry_msgs.msg import PoseStamped
-from nav_msgs.msg import Odometry
+from geometry_msgs.msg import Point, PoseStamped
+from nav_msgs.msg import Odometry, OccupancyGrid
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
-from sensor_msgs.msg import PointCloud2, PointField
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, ColorRGBA, String
 from std_srvs.srv import Trigger
-
-
-def make_pointcloud2(frame_id: str, points: list[list[float]], stamp):
-    msg = PointCloud2()
-    msg.header.frame_id = frame_id
-    msg.header.stamp = stamp
-    msg.height = 1
-    msg.width = len(points)
-    msg.fields = [
-        PointField(name="x", offset=0, datatype=PointField.FLOAT32, count=1),
-        PointField(name="y", offset=4, datatype=PointField.FLOAT32, count=1),
-        PointField(name="z", offset=8, datatype=PointField.FLOAT32, count=1),
-    ]
-    msg.is_bigendian = False
-    msg.point_step = 12
-    msg.row_step = 12 * len(points)
-    msg.is_dense = True
-    msg.data = b"".join(struct.pack("fff", p[0], p[1], p[2]) for p in points)
-    return msg
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class Task1Orchestrator(Node):
@@ -37,13 +19,14 @@ class Task1Orchestrator(Node):
 
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("buoy_xy", [10.0, 0.0])
-        self.declare_parameter("buoy_position_xy", [10.0, 0.0])
-        self.declare_parameter("bouy_position_xy", [10.0, 0.0])
+        self.declare_parameter("buoy_position_xy", "[[10.0, 0.0]]")
+        self.declare_parameter("bouy_position_xy", "[[10.0, 0.0]]")
+        self.declare_parameter("stop_for_perception_xy", "[[10.0, 0.0]]")
         self.declare_parameter("wall_radius", 2.5)
         self.declare_parameter("wall_points", 24)
-        self.declare_parameter("gps_checkpoint_xy", [0.0, 0.0, 50.0, 0.0, 50.0, -25.0, 0.0, -25.0])
-        self.declare_parameter("waypoint1_xy", [10.0, 5.0, 40.0, 0.0])
-        self.declare_parameter("waypoint2_xy", [24.0, -35.0, 8.0, -35.0])
+        self.declare_parameter("gps_checkpoint_xy", "[[0.0, 0.0], [25.0, 0.0]]")
+        self.declare_parameter("waypoint1_xy", "[[10.0, 5.0], [40.0, 0.0]]")
+        self.declare_parameter("waypoint2_xy", "[[24.0, -35.0], [8.0, -35.0]]")
         self.declare_parameter("goal_radius", 2.0)
         self.declare_parameter("waypoint_reach_radius", 2.0)
         self.declare_parameter("avoidance_eval_radius", 8.0)
@@ -51,21 +34,27 @@ class Task1Orchestrator(Node):
         self.declare_parameter("forced_mark", "")
         self.declare_parameter("seed", 2026)
         self.declare_parameter("publish_rate_hz", 2.0)
+        self.declare_parameter("course_bounds", [0.0, 50.0, -35.0, 10.0])
+        self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
+        self.declare_parameter("pre_inference_block", [0.0, 28.0, -35.0, -10.0])
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
+        self.course_bounds = self.get_parameter("course_bounds").get_parameter_value().double_array_value
+        self.center_line = self.get_parameter("center_line").get_parameter_value().double_array_value
+        self.pre_inference_block = self.get_parameter("pre_inference_block").get_parameter_value().double_array_value
         self.buoy_xy = list(self.get_parameter("buoy_xy").get_parameter_value().double_array_value)
         self.wall_radius = self.get_parameter("wall_radius").get_parameter_value().double_value
         self.wall_points = max(6, self.get_parameter("wall_points").get_parameter_value().integer_value)
-        self.gps_checkpoint_xy = self._parse_xy_list(
-            self.get_parameter("gps_checkpoint_xy").get_parameter_value().double_array_value
+        self.gps_checkpoint_xy = self._parse_xy_json(
+            self.get_parameter("gps_checkpoint_xy").get_parameter_value().string_value
         )
         if len(self.gps_checkpoint_xy) == 0:
             self.gps_checkpoint_xy = [[0.0, 0.0], [25.0, 0.0]]
-        self.waypoint1_xy = self._parse_xy_list(
-            self.get_parameter("waypoint1_xy").get_parameter_value().double_array_value
+        self.waypoint1_xy = self._parse_xy_json(
+            self.get_parameter("waypoint1_xy").get_parameter_value().string_value
         )
-        self.waypoint2_xy = self._parse_xy_list(
-            self.get_parameter("waypoint2_xy").get_parameter_value().double_array_value
+        self.waypoint2_xy = self._parse_xy_json(
+            self.get_parameter("waypoint2_xy").get_parameter_value().string_value
         )
         self.goal_radius = self.get_parameter("goal_radius").get_parameter_value().double_value
         self.waypoint_reach_radius = self.get_parameter("waypoint_reach_radius").get_parameter_value().double_value
@@ -76,16 +65,14 @@ class Task1Orchestrator(Node):
         self.publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
 
         raw_buoy_positions = []
-        buoy_position_xy = self.get_parameter("buoy_position_xy").get_parameter_value().double_array_value
-        bouy_position_xy = self.get_parameter("bouy_position_xy").get_parameter_value().double_array_value
-        if len(buoy_position_xy) > 0:
-            raw_buoy_positions = buoy_position_xy
-        elif len(bouy_position_xy) > 0:
-            raw_buoy_positions = bouy_position_xy
-        if len(raw_buoy_positions) >= 2 and len(raw_buoy_positions) % 2 == 0:
-            self.buoy_positions = []
-            for i in range(0, len(raw_buoy_positions), 2):
-                self.buoy_positions.append([float(raw_buoy_positions[i]), float(raw_buoy_positions[i + 1])])
+        buoy_position_xy_str = self.get_parameter("buoy_position_xy").get_parameter_value().string_value
+        bouy_position_xy_str = self.get_parameter("bouy_position_xy").get_parameter_value().string_value
+        parsed_buoy = self._parse_xy_json(buoy_position_xy_str)
+        parsed_bouy = self._parse_xy_json(bouy_position_xy_str)
+        if len(parsed_buoy) > 0:
+            self.buoy_positions = parsed_buoy
+        elif len(parsed_bouy) > 0:
+            self.buoy_positions = parsed_bouy
         else:
             self.buoy_positions = [[self.buoy_xy[0], self.buoy_xy[1]]]
 
@@ -100,6 +87,7 @@ class Task1Orchestrator(Node):
 
         self.random = random.Random(seed)
         self.current_mark = "N"
+        self.inference_done = False
         self.goal_announced = False
         self.avoidance_failed = False
         self.avoidance_results = []
@@ -111,14 +99,16 @@ class Task1Orchestrator(Node):
         self.pub_goal_pose = self.create_publisher(PoseStamped, "/goal_pose", transient_qos)
 
         self.pub_cardinal = self.create_publisher(String, "/sim/cardinal_mark", 10)
-        self.pub_virtual_obstacles = self.create_publisher(PointCloud2, "/virtual_obstacles", 10)
+        self.pub_virtual_obstacles = self.create_publisher(OccupancyGrid, "/virtual_costmap", transient_qos)
         self.pub_status = self.create_publisher(String, "/sim/task1_status", 10)
+        self.pub_boundary_markers = self.create_publisher(MarkerArray, "/sim/boundary_markers", transient_qos)
 
         self.sub_odom = self.create_subscription(Odometry, "/odom", self.on_odom, 10)
         self.srv_infer = self.create_service(Trigger, "/yolo/start_inference", self.on_start_inference)
 
         self.publish_start_and_goal()
         self.publish_virtual_wall()
+        self.publish_boundary_markers()
 
         period = 1.0 / max(0.2, self.publish_rate_hz)
         self.timer = self.create_timer(period, self.on_timer)
@@ -135,7 +125,19 @@ class Task1Orchestrator(Node):
             })
 
     @staticmethod
+    def _parse_xy_json(json_str: str) -> list:
+        """JSON形式の文字列になっている [[x, y], ...] をリストにパースする"""
+        if not json_str:
+            return []
+        try:
+            parsed = json.loads(json_str)
+            return [[float(p[0]), float(p[1])] for p in parsed if len(p) >= 2]
+        except (json.JSONDecodeError, TypeError, IndexError) as e:
+            return []
+
+    @staticmethod
     def _parse_xy_list(param_value):
+        """(後方互換) フラットな double配列 [x0, y0, x1, y1, ...] を [[x, y], ...] に変換"""
         if len(param_value) % 2 != 0:
             return []
         out = []
@@ -178,6 +180,7 @@ class Task1Orchestrator(Node):
             self.current_mark = self.forced_mark
         else:
             self.current_mark = self.random.choice(["N", "E", "W", "S"])
+        self.inference_done = True
         self._init_buoy_states()
         self.avoidance_failed = False
         self.avoidance_results = []
@@ -188,37 +191,135 @@ class Task1Orchestrator(Node):
         self._publish_status(f"mark={self.current_mark}")
         return response
 
-    def build_wall_points_for_buoy(self, bx, by):
-        points = []
+    def build_occupancy_grid(self):
+        """
+        動的な仮想壁のみを OccupancyGrid として配信する。
+        - 障害物セル: 100
+        - それ以外: -1 (unknown) ← StaticLayer が static map を上書きしないよう
+        グリッドの物理範囲は course_bounds に揃える（map と端点一致）。
+        """
+        msg = OccupancyGrid()
+        msg.header.frame_id = self.frame_id
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.info.resolution = 0.1
 
-        if self.current_mark == "N":
-            start, end = math.pi, 2.0 * math.pi
-        elif self.current_mark == "S":
-            start, end = 0.0, math.pi
-        elif self.current_mark == "E":
-            start, end = math.pi / 2.0, 3.0 * math.pi / 2.0
-        else:  # W
-            start, end = -math.pi / 2.0, math.pi / 2.0
+        cb = self.course_bounds   # [min_x, max_x, min_y, max_y]
+        pb = self.pre_inference_block  # [min_x, max_x, min_y, max_y]
+        min_x, max_x = cb[0], cb[1]
+        min_y, max_y = cb[2], cb[3]
 
-        for i in range(self.wall_points + 1):
-            t = i / float(self.wall_points)
-            angle = start + (end - start) * t
-            points.append([
-                bx + self.wall_radius * math.cos(angle),
-                by + self.wall_radius * math.sin(angle),
-                0.0,
-            ])
-        return points
+        width  = round((max_x - min_x) / msg.info.resolution)
+        height = round((max_y - min_y) / msg.info.resolution)
+        msg.info.width  = width
+        msg.info.height = height
+        msg.info.origin.position.x = float(min_x)
+        msg.info.origin.position.y = float(min_y)
 
-    def build_wall_points(self):
-        all_points = []
-        for buoy in self.buoy_positions:
-            all_points.extend(self.build_wall_points_for_buoy(buoy[0], buoy[1]))
-        return all_points
+        # -1 = unknown: Nav2 StaticLayer は unknown セルを無視するので
+        # static map の壁コストを上書きしない
+        data = [-1] * (width * height)
+
+        for iy in range(height):
+            y = min_y + iy * msg.info.resolution
+            idx_base = iy * width
+            for ix in range(width):
+                x = min_x + ix * msg.info.resolution
+
+                # 認識前: ブイ奥の矩形エリアを全面ブロック
+                if not self.inference_done and pb[0] <= x <= pb[1] and pb[2] <= y <= pb[3]:
+                    data[idx_base + ix] = 100
+                # 認識後: 各ブイ周囲の半円壁
+                elif self.inference_done:
+                    for bx, by in self.buoy_positions:
+                        if math.hypot(x - bx, y - by) <= self.wall_radius:
+                            hit = False
+                            if self.current_mark == "N" and y <= by:
+                                hit = True
+                            elif self.current_mark == "S" and y >= by:
+                                hit = True
+                            elif self.current_mark == "E" and x <= bx:
+                                hit = True
+                            elif self.current_mark == "W" and x >= bx:
+                                hit = True
+                            if hit:
+                                data[idx_base + ix] = 100
+
+        msg.data = data
+        return msg
 
     def publish_virtual_wall(self):
-        msg = make_pointcloud2(self.frame_id, self.build_wall_points(), self.get_clock().now().to_msg())
+        msg = self.build_occupancy_grid()
         self.pub_virtual_obstacles.publish(msg)
+
+    def publish_boundary_markers(self):
+        """コース境界の各辺に5mおきにポールマーカーを立てる"""
+        cb = self.course_bounds  # [min_x, max_x, min_y, max_y]
+        min_x, max_x, min_y, max_y = cb[0], cb[1], cb[2], cb[3]
+        STEP = 5.0
+        POLE_HEIGHT = 3.0
+        POLE_R = 0.25
+
+        marker_array = MarkerArray()
+        mid = 0
+        stamp = self.get_clock().now().to_msg()
+
+        def add_pole(x, y, color_rgba):
+            nonlocal mid
+            m = Marker()
+            m.header.frame_id = self.frame_id
+            m.header.stamp = stamp
+            m.ns = "boundary"
+            m.id = mid
+            mid += 1
+            m.type = Marker.CYLINDER
+            m.action = Marker.ADD
+            m.pose.position.x = float(x)
+            m.pose.position.y = float(y)
+            m.pose.position.z = POLE_HEIGHT / 2.0
+            m.pose.orientation.w = 1.0
+            m.scale.x = POLE_R * 2
+            m.scale.y = POLE_R * 2
+            m.scale.z = POLE_HEIGHT
+            m.color = color_rgba
+            m.lifetime.sec = 0  # 永続
+            marker_array.markers.append(m)
+
+        # 色の定義 (辺ごとに色を変える)
+        def rgba(r, g, b, a=1.0):
+            c = ColorRGBA()
+            c.r, c.g, c.b, c.a = r, g, b, a
+            return c
+
+        # 上辺 (y=max_y, x方向に5m刻み) - 赤
+        x = min_x
+        while x <= max_x + 1e-6:
+            add_pole(x, max_y, rgba(1.0, 0.1, 0.1))
+            x += STEP
+
+        # 下辺 (y=min_y, x方向) - 青
+        x = min_x
+        while x <= max_x + 1e-6:
+            add_pole(x, min_y, rgba(0.1, 0.3, 1.0))
+            x += STEP
+
+        # 左辺 (x=min_x, y方向) - 緑
+        y = min_y + STEP  # 角は上下辺と重複するためスキップ
+        while y < max_y - 1e-6:
+            add_pole(min_x, y, rgba(0.1, 0.9, 0.2))
+            y += STEP
+
+        # 右辺 (x=max_x, y方向) - 黄
+        y = min_y + STEP
+        while y < max_y - 1e-6:
+            add_pole(max_x, y, rgba(1.0, 0.85, 0.0))
+            y += STEP
+
+        # 中央線の端点マーカー - シアン
+        cl = self.center_line  # [start_x, end_x, y, half_w]
+        add_pole(cl[0], cl[2], rgba(0.0, 0.9, 0.9))
+        add_pole(cl[1], cl[2], rgba(0.0, 0.9, 0.9))
+
+        self.pub_boundary_markers.publish(marker_array)
 
     def on_odom(self, msg: Odometry):
         if self.goal_announced:
@@ -275,6 +376,7 @@ class Task1Orchestrator(Node):
         cardinal.data = self.current_mark
         self.pub_cardinal.publish(cardinal)
         self.publish_virtual_wall()
+        self.publish_boundary_markers()
 
 
 def main(args=None):

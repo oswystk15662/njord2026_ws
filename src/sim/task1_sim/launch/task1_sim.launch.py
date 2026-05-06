@@ -32,4 +32,39 @@ def generate_launch_description():
         output="screen",
     )
 
-    return LaunchDescription([use_dynamics, params_arg, dynamics, node])
+    robot_share = get_package_share_directory("robot")
+    nav2_launch = os.path.join(robot_share, "launch", "nav2_mintest.launch.py")
+    use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
+    nav2 = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(nav2_launch),
+        condition=IfCondition(LaunchConfiguration("use_nav2")),
+    )
+
+    static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        arguments=["0", "0", "0", "0", "0", "0", "map", "odom"],
+        output="screen",
+    )
+
+    map_yaml_file = os.path.join(pkg_share, "maps", "task1_map.yaml")
+
+    map_server = Node(
+        package='nav2_map_server',
+        executable='map_server',
+        name='map_server',
+        output='screen',
+        parameters=[{'yaml_filename': map_yaml_file}]
+    )
+
+    lifecycle_manager_map = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_map',
+        output='screen',
+        parameters=[{'use_sim_time': False},
+                    {'autostart': True},
+                    {'node_names': ['map_server']}]
+    )
+
+    return LaunchDescription([use_dynamics, params_arg, use_nav2, dynamics, nav2, static_tf, map_server, lifecycle_manager_map, node])

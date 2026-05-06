@@ -1,10 +1,11 @@
 // serial writer main.cpp
 // Subscribes to /thrust_newton (Float32MultiArray) and booleans (/emg,/red,/yellow,/green)
-// Packs 4 floats followed by 4 uint8 booleans (emg, r, y, g) and writes to serial port for ESP32
+// Packs 4 floats followed by 1 uint8 setting byte (bit3=emg, bit2=green, bit1=yellow, bit0=red) and writes to serial port for ESP32
 
 #include <memory>
 #include <vector>
 #include <mutex>
+#include <array>
 #include <cstring>
 #include <fcntl.h>
 #include <termios.h>
@@ -68,7 +69,7 @@ private:
 	{
 		if (fd_ < 0) return;
 		std::vector<uint8_t> buf;
-		buf.resize(4 * sizeof(float) + 4);
+		buf.resize(4 * sizeof(float) + 1);
 		{
 			std::lock_guard<std::mutex> lk(mutex_);
 			// pack floats (little-endian)
@@ -77,12 +78,13 @@ private:
 				float v = thrust_[i];
 				std::memcpy(p + i * sizeof(float), &v, sizeof(float));
 			}
-			// booleans: emg, red, yellow, green in that order as uint8
-			size_t off = 4 * sizeof(float);
-			buf[off + 0] = flags_.emg ? 1 : 0;
-			buf[off + 1] = flags_.red ? 1 : 0;
-			buf[off + 2] = flags_.yellow ? 1 : 0;
-			buf[off + 3] = flags_.green ? 1 : 0;
+			// setting byte: bit3=emg, bit2=green, bit1=yellow, bit0=red
+			uint8_t setting = 0;
+			if (flags_.emg) setting |= (1u << 3);
+			if (flags_.green) setting |= (1u << 2);
+			if (flags_.yellow) setting |= (1u << 1);
+			if (flags_.red) setting |= (1u << 0);
+			buf[4 * sizeof(float)] = setting;
 		}
 
 		ssize_t res = write(fd_, buf.data(), buf.size());

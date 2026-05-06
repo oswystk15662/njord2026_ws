@@ -1,0 +1,26 @@
+/**
+ * micon_esp32_config.yaml
+ * Configuration file for Micon ESP32 Agent
+ */
+
+micon_esp32_agent:
+  ros__parameters:
+    # Serial port configuration
+    port: '/dev/ttyUSB0'
+    baudrate: 115200
+    timeout: 1.0
+
+    # Feature flags
+    enable_imu: false
+    enable_sensors: true
+
+    # Publishing rate (Hz)
+    publish_rate: 10
+
+    # Topic names (can be customized)
+    topics:
+      status: '/micon/status'
+      imu: '/micon/imu'
+      sensors: '/micon/sensors'
+      command: '/micon/command'
+      debug: '/micon/debug'

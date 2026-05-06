@@ -23,8 +23,8 @@ except Exception as exc:
     _ultralytics_import_error = exc
 
 class YoloDetectorNode(Node):
-    def __init__(self):
-        super().__init__('yolo_detector')
+    def __init__(self, node_name='yolo_detector', device_default='cpu'):
+        super().__init__(node_name)
 
         self._validate_runtime_dependencies()
 
@@ -34,7 +34,7 @@ class YoloDetectorNode(Node):
 
         # 3. パラメータ宣言 (デフォルト値を設定)
         self.declare_parameter('model_path', default_model_path)
-        self.declare_parameter('device', 'cpu')
+        self.declare_parameter('device', device_default)
         self.declare_parameter('camera_topic', '/camera/image_raw')
         self.declare_parameter('enable_virtual_wall', False)
         
@@ -238,11 +238,20 @@ class YoloDetectorNode(Node):
         msg.data = b''.join(buffer)
         return msg
 
-def main(args=None):
+def run_node(args=None, node_name='yolo_detector', device_default='cpu'):
     rclpy.init(args=args)
-    node = YoloDetectorNode()
+    node = YoloDetectorNode(node_name=node_name, device_default=device_default)
     rclpy.spin(node)
     node.destroy_node()
     rclpy.shutdown()
+
+
+def main(args=None):
+    run_node(args=args, node_name='yolo_detector', device_default='cpu')
+
+
+def cuda_main(args=None):
+    run_node(args=args, node_name='yolo_detector_cuda', device_default='cuda:0')
+
 if __name__ == '__main__':
     main()

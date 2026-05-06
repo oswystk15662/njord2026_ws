@@ -1,0 +1,32 @@
+/**
+ * micon_esp32_imu_config.yaml
+ * Configuration for IMU-enabled Micon ESP32 Agent
+ */
+
+micon_esp32_agent:
+  ros__parameters:
+    # Serial port configuration
+    port: '/dev/ttyUSB0'
+    baudrate: 115200
+    timeout: 1.0
+
+    # Enable IMU and sensor publishing
+    enable_imu: true
+    enable_sensors: true
+
+    # Publishing rate (Hz)
+    publish_rate: 50
+
+    # Topic names
+    topics:
+      status: '/micon/status'
+      imu: '/micon/imu'
+      sensors: '/micon/sensors'
+      command: '/micon/command'
+      debug: '/micon/debug'
+
+    # IMU Configuration
+    imu:
+      frame_id: 'esp32_imu'
+      accel_range: 16  # ±16g
+      gyro_range: 2000  # ±2000 deg/s

@@ -11,6 +11,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", ["launch/task1_sim.launch.py"]),
         ("share/" + package_name + "/config", ["config/task1_params.yaml"]),
+        ("share/" + package_name + "/maps", ["maps/task1_map.pgm", "maps/task1_map.yaml"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
