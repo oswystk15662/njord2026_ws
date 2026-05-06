@@ -45,8 +45,7 @@ target_link_libraries(usb_camera_driver_component
 # Register as a composable node
 rclcpp_components_register_nodes(
   usb_camera_driver_component
-  PLUGIN "RPiCameraDriverNode"
-  EXECUTABLE usb_camera_driver
+  "USBCameraDriverNode"
 )
 
 # add for composable
@@ -79,8 +78,7 @@ ament_target_dependencies(usb_camera_driver_mjpg_component
 
 rclcpp_components_register_nodes(
   usb_camera_driver_mjpg_component
-  PLUGIN "RPiCameraDriverMJPGNode"
-  EXECUTABLE usb_camera_driver_mjpg
+  "USBCameraDriverMJPGNode"
 )
 
 ament_export_targets(export_usb_camera_driver_mjpg_component)

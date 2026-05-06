@@ -433,8 +433,7 @@ void DroggerWiredFlexNode::parse_gga(const std::vector<std::string> & tokens)
     msg.altitude = altitude_msl + geoid_sep;
 
     const int quality = q.empty() ? 0 : std::stoi(q);
-    msg.status.status =
-      (quality > 0) ? sensor_msgs::msg::NavSatStatus::STATUS_FIX : sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+    msg.status.status = static_cast<decltype(msg.status.status)>(quality);
     msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS |
       sensor_msgs::msg::NavSatStatus::SERVICE_GLONASS |
       sensor_msgs::msg::NavSatStatus::SERVICE_COMPASS |

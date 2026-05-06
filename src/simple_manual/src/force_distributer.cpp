@@ -44,8 +44,8 @@ private:
 		if (msg->axes.size() > 0) axes0 = msg->axes[0];
 		if (msg->axes.size() > 1) axes1 = msg->axes[1];
 
-		const float Fx = 0.2f * axes1;    // forward/back -> x
-		const float Fy = -0.2f * axes0;   // left/right inverted -> y
+		const float Fx = 10.0f * axes1;    // forward/back -> x
+		const float Fy = 10.0f * axes0;   // left/right inverted -> y
 
 		std::array<float, 4> f_raw{{0,0,0,0}};
 		float Rx = 0.0f, Ry = 0.0f;

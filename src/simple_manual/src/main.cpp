@@ -20,7 +20,7 @@ public:
 	SerialWriter()
 	: Node("serial_writer")
 	{
-		this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
+		this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB1");
 		this->declare_parameter<int>("baud", 115200);
 		serial_port_ = this->get_parameter("serial_port").as_string();
 		baud_ = this->get_parameter("baud").as_int();
@@ -51,13 +51,17 @@ private:
 	void thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
 	{
 		std::lock_guard<std::mutex> lk(mutex_);
-		for (size_t i = 0; i < 4; ++i) {
-			thrust_[i] = (i < msg->data.size()) ? msg->data[i] : 0.0f;
-		}
+		thrust_[0] = (0 < msg->data.size()) ? -msg->data[0] : 0.0f;
+		thrust_[1] = (1 < msg->data.size()) ? msg->data[1] : 0.0f;
+		thrust_[2] = (2 < msg->data.size()) ? -msg->data[2] : 0.0f;
+		thrust_[3] = (3 < msg->data.size()) ? msg->data[3] : 0.0f;
+
+		// Debug log for thrust values
+		RCLCPP_INFO(this->get_logger(), "Thrust values: [%f, %f, %f, %f]", thrust_[0], thrust_[1], thrust_[2], thrust_[3]);
 	}
 
 	void emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
-	{ std::lock_guard<std::mutex> lk(mutex_); flags_.emg = msg->data; }
+	{ std::lock_guard<std::mutex> lk(mutex_); flags_.emg = !msg->data; }
 	void red_cb(const std_msgs::msg::Bool::SharedPtr msg)
 	{ std::lock_guard<std::mutex> lk(mutex_); flags_.red = msg->data; }
 	void yellow_cb(const std_msgs::msg::Bool::SharedPtr msg)
