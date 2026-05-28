@@ -96,7 +96,8 @@ class Task1Orchestrator(Node):
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
-        self.pub_goal_pose = self.create_publisher(PoseStamped, "/goal_pose", transient_qos)
+        # NOTE: /goal_pose publishing is now delegated to waypoint_publisher node
+        # self.pub_goal_pose = self.create_publisher(PoseStamped, "/goal_pose", transient_qos)
 
         self.pub_cardinal = self.create_publisher(String, "/sim/cardinal_mark", 10)
         self.pub_virtual_obstacles = self.create_publisher(OccupancyGrid, "/virtual_costmap", transient_qos)
@@ -166,13 +167,14 @@ class Task1Orchestrator(Node):
         self.pub_start.publish(start_msg)
 
         final_goal = self.gps_checkpoint_xy[-1]
-        goal = PoseStamped()
-        goal.header.frame_id = self.frame_id
-        goal.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.position.x = final_goal[0]
-        goal.pose.position.y = final_goal[1]
-        goal.pose.orientation.w = 1.0
-        self.pub_goal_pose.publish(goal)
+        # NOTE: /goal_pose publishing is now delegated to waypoint_publisher node
+        # goal = PoseStamped()
+        # goal.header.frame_id = self.frame_id
+        # goal.header.stamp = self.get_clock().now().to_msg()
+        # goal.pose.position.x = final_goal[0]
+        # goal.pose.position.y = final_goal[1]
+        # goal.pose.orientation.w = 1.0
+        # self.pub_goal_pose.publish(goal)
         self._publish_status("start_published")
 
     def on_start_inference(self, _request, response):

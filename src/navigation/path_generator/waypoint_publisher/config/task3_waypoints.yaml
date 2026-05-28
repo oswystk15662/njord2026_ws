@@ -1,0 +1,106 @@
+# Task 3: Docking Scenarios
+# Waypoint configuration for NJORD competition Task 3
+# Supports both normal docking (3.1) and parallel docking (3.2)
+
+task3_1_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  scenario: "normal_docking"
+  
+  waypoints:
+    - id: 7
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "start"
+      name: "Approach Point"
+      distance_from_dock_m: 10
+      tolerance_m: 2.0
+      
+    - id: 8
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "dock"
+      name: "Docking Point"
+      tolerance_m: 1.0
+      dock_type: "normal"
+      berth_id: "unassigned"
+      
+    - id: 9
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "goal"
+      name: "Exit/Undocking Point"
+      tolerance_m: 2.0
+      
+  constraints:
+    dock_identification: "ar_tag_detection"
+    impact_minimization: true
+    wait_time_s: 10
+    wait_condition: "after_docking_stationary"
+    reversal_requirement: true
+    timer_stop_condition: "arrival_at_dock"
+    attempts: 2
+
+task3_2_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  scenario: "parallel_docking"
+  
+  waypoints:
+    - id: 9
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "start"
+      name: "Approach Point"
+      distance_from_barge_m: 10
+      tolerance_m: 2.0
+      
+    - id: "dock_berth"
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "dock"
+      name: "Parallel Docking Point"
+      tolerance_m: 1.0
+      dock_type: "parallel"
+      
+    - id: 10
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "goal"
+      name: "Exit Point"
+      tolerance_m: 2.0
+      movement_type: "forward"
+      
+  constraints:
+    dock_type: "barge"
+    impact_minimization: true
+    wait_time_s: 5
+    wait_condition: "after_parallel_docking_stationary"
+    exit_movement: "forward_not_reverse"
+    attempts: 2
+
+# Multi-stage async flow configuration for task3
+# The waypoint_publisher will handle state transitions
+async_flow:
+  # Stage 1: Publish approach + docking waypoint
+  stage_1:
+    name: "Approach and Dock"
+    waypoints: ["approach", "dock"]
+    next_trigger: "goal_reached"
+    
+  # Stage 2: Wait for stationary state, then publish undocking waypoint
+  stage_2:
+    name: "Stationary Wait"
+    duration_s: [10, 5]  # [task3.1, task3.2]
+    next_trigger: "timer_complete"
+    
+  # Stage 3: Publish undocking/exit waypoint
+  stage_3:
+    name: "Undock and Exit"
+    waypoint: ["undocking", "exit"]

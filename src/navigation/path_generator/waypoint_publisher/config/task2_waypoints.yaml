@@ -1,0 +1,51 @@
+# Task 2: Collision Avoidance
+# Waypoint configuration for NJORD competition Task 2
+
+task2_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  
+  waypoints:
+    - id: 5
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "start"
+      name: "Start"
+      tolerance_m: 5.0
+      
+    - id: "gate_1"
+      x: 20.0
+      y: 0.0
+      yaw: 0.0
+      type: "gate"
+      name: "Entry Gate"
+      gate_pair: ["red", "green"]
+      spacing_m: 50.0
+      tolerance_m: 5.0
+      
+    - id: "gate_2"
+      x: 40.0
+      y: 0.0
+      yaw: 0.0
+      type: "gate"
+      name: "Exit Gate"
+      gate_pair: ["red", "green"]
+      spacing_m: 50.0
+      tolerance_m: 5.0
+      
+    - id: 6
+      x: 60.0
+      y: 0.0
+      yaw: 0.0
+      type: "goal"
+      name: "Goal"
+      tolerance_m: 5.0
+      
+  constraints:
+    speed_knots: 2.0
+    speed_requirement: "accelerate_immediately"
+    obstacle_avoidance: true
+    colreg_compliance: true
+    collision_angles_deg: [-100, 100]
+    attempts_per_scenario: 2
