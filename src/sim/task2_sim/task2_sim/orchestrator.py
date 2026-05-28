@@ -1,7 +1,7 @@
 import math
 
 import rclpy
-from geometry_msgs.msg import Point32, PolygonStamped, PoseStamped, TransformStamped
+from geometry_msgs.msg import Point32, PolygonStamped, TransformStamped
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
@@ -36,7 +36,6 @@ class Task2Orchestrator(Node):
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
-        self.pub_goal_pose = self.create_publisher(PoseStamped, "/goal_pose", transient_qos)
         self.pub_projection = self.create_publisher(PolygonStamped, "/sim/marker_vessel_projection", 10)
 
         self.sub_odom = self.create_subscription(Odometry, "/odom", self.on_odom, 10)
@@ -52,14 +51,6 @@ class Task2Orchestrator(Node):
         start_msg = Bool()
         start_msg.data = True
         self.pub_start.publish(start_msg)
-
-        goal = PoseStamped()
-        goal.header.frame_id = self.frame_id
-        goal.header.stamp = self.get_clock().now().to_msg()
-        goal.pose.position.x = self.goal_xy[0]
-        goal.pose.position.y = self.goal_xy[1]
-        goal.pose.orientation.w = 1.0
-        self.pub_goal_pose.publish(goal)
 
     def publish_buoy_tf(self, name: str, x: float, y: float):
         tf = TransformStamped()

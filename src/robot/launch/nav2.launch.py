@@ -11,7 +11,7 @@ def generate_launch_description():
     params_file = os.path.join(
         get_package_share_directory('robot'), 
         'config', 
-        'nav2_param.yaml'
+        'nav2_params.yaml'
     )
 
     return LaunchDescription([

@@ -36,7 +36,7 @@ def generate_launch_description():
     # Create node
     waypoint_publisher_node = Node(
         package='waypoint_publisher',
-        executable='waypoint_publisher_node.py',
+        executable='waypoint_publisher_node',
         name='waypoint_publisher',
         parameters=[
             {

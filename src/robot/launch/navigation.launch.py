@@ -7,7 +7,7 @@ from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 def generate_launch_description():
-    pkg_share = get_package_share_directory('your_package_name')
+    pkg_share = get_package_share_directory('robot')
     nav2_bringup_dir = get_package_share_directory('nav2_bringup')
     
     # さっき作ったパラメータファイルのパス
