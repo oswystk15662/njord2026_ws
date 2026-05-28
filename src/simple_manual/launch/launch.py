@@ -12,6 +12,11 @@ def generate_launch_description():
         composable_node_descriptions=[
             ComposableNode(
                 package='simple_manual',
+                plugin='simple_manual::ForceDistributer',
+                name='force_distributer'
+            ),
+            ComposableNode(
+                package='simple_manual',
                 plugin='simple_manual::JoyConverter',
                 name='joy_converter'
             ),
