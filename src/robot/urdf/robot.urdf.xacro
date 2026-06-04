@@ -22,13 +22,7 @@
   <xacro:property name="gnss2_z" value="1.0" />
 
 
-  <link name="base_footprint"/>
 
-  <joint name="base_joint" type="fixed">
-    <parent link="base_footprint"/>
-    <child link="base_link"/>
-    <origin xyz="0 0 ${base_height/2}" rpy="0 0 0"/>
-  </joint>
 
   <link name="base_link">
     <visual>

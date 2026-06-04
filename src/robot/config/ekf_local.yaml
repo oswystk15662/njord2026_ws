@@ -30,3 +30,4 @@ ekf_filter_node_local:
                   true,  true,  true]
     imu0_differential: false
     imu0_relative: true  # Localでは相対変化のみ使うのが一般的
+    imu0_remove_gravitational_acceleration: true

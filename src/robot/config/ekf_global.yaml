@@ -31,6 +31,7 @@ ekf_filter_node_global:
                   true,  true,  true]    # Acceleration (重力補正用)
     imu0_differential: false
     imu0_relative: false  # Global では絶対方位 (Heading) を信じる
+    imu0_remove_gravitational_acceleration: true
 
     # GPS (navsat_transform_node からの出力)
     odom1: /odometry/gps

@@ -119,7 +119,7 @@ def generate_launch_description():
             'wait_for_datum': False,
         }],
         remappings=[
-            ('imu/data', '/wit/imu'),
+            ('imu', '/wit/imu'),
             ('gps/fix', '/gps/fix'),
             ('odometry/filtered', 'odometry/filtered/local')
         ]
@@ -148,8 +148,8 @@ def generate_launch_description():
         robot_state_pub_node,
         # Localization nodes
         um982_static_tf_pub_node,
-        drogger_driver,
-        mid360_driver,
+        # drogger_driver,
+        # mid360_driver,
         glim_node,
         local_ekf_node,
         global_ekf_node,
