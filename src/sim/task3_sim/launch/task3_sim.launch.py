@@ -9,7 +9,6 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     pkg_task3_sim  = get_package_share_directory("task3_sim")
-    pkg_task1_sim  = get_package_share_directory("task1_sim")
     pkg_robot      = get_package_share_directory("robot")
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
@@ -17,29 +16,48 @@ def generate_launch_description():
     pkg_buoy_pub   = get_package_share_directory("buoy_obstacle_publisher")
 
     # ── Launch arguments ──────────────────────────────────────────────────────
+    # Startup timing rationale:
+    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, orchestrator, EKF, navsat
+    #   t=5.0  NAV2 layer:   Nav2 bringup (needs map→odom TF from global EKF + GPS)
+    #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
+    #
+    # Why 5s for Nav2?
+    #   navsat_transform initializes on first GPS fix (~0.5s), publishes /odometry/gps.
+    #   global_ekf fuses it into map→odom TF (~1-2 cycles = 0.1s).
+    #   But lifecycle_manager configure+activate for all Nav2 nodes takes 2-5s.
+    #   Total margin: 5s should be safe for sim where GPS is synthetic and instant.
+    #
+    # Why 8s for waypoint_publisher?
+    #   NavigateThroughPoses action server is the LAST thing to come up in Nav2.
+    #   bt_navigator depends on planner + controller being active first.
+    #   3s extra beyond Nav2 start is sufficient.
     driver_delay_arg = DeclareLaunchArgument(
         'driver_delay', default_value='0.0',
-        description='Delay before launching driver layer')
-    navigation_delay_arg = DeclareLaunchArgument(
-        'navigation_delay', default_value='3.0',
-        description='Delay before launching navigation layer')
+        description='Delay before launching sensor/EKF layer')
+    nav2_delay_arg = DeclareLaunchArgument(
+        'nav2_delay', default_value='5.0',
+        description='Delay before launching Nav2 (needs map→odom TF from global EKF)')
+    goal_delay_arg = DeclareLaunchArgument(
+        'goal_delay', default_value='8.0',
+        description='Delay before launching waypoint_publisher (needs Nav2 action servers up)')
     task_type_arg = DeclareLaunchArgument(
         'task_type', default_value='task3_1',
         description='Task type: task3_1 or task3_2')
 
-    driver_delay    = LaunchConfiguration('driver_delay')
-    navigation_delay = LaunchConfiguration('navigation_delay')
-    task_type       = LaunchConfiguration('task_type')
+    driver_delay = LaunchConfiguration('driver_delay')
+    nav2_delay   = LaunchConfiguration('nav2_delay')
+    goal_delay   = LaunchConfiguration('goal_delay')
+    task_type    = LaunchConfiguration('task_type')
 
-    # ── DRIVER LAYER ──────────────────────────────────────────────────────────
-    # Physics simulation (odom ground truth, TF disabled — EKF handles odom→base_link)
+    # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
+    # Physics simulation (odom ground truth, publish_tf=False → EKF handles odom→base_link)
     sim_dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
         executable="dutyed_tf_pub_with_disturbance_node",
         name="dutyed_tf_pub_with_disturbance_node",
         parameters=[
             os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {"publish_tf": False}   # EKF publishes odom→base_link
+            {"publish_tf": False}
         ],
         output="screen"
     )
@@ -50,7 +68,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")))
 
-    # Task3 orchestrator: buoys (3.1 + 3.2), dock geometry, PointCloud2, TFs
+    # Task3 orchestrator: buoys (b31_* + b32_*), dock geometry, PointCloud2, TFs
     config = os.path.join(pkg_task3_sim, "config", "task3_params.yaml")
     task3_orchestrator = Node(
         package="task3_sim",
@@ -69,8 +87,7 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Robot state publisher: publishes base_link→{imu_link, livox_frame, gnss_link, …} TFs from URDF
-    # NOTE: uses .urdf.xacro — must be pre-processed. task3_sim uses the pre-generated .urdf
+    # Robot state publisher: URDF → base_link→{imu_link, livox_frame, gnss_link, …}
     robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
     robot_state_pub_node = Node(
         package='robot_state_publisher',
@@ -114,7 +131,7 @@ def generate_launch_description():
             'magnetic_declination_radians': 0.0,
             'yaw_offset': 0.0,
             'zero_altitude': True,
-            'broadcast_utm_transform': False,  # Disable: UTM coords fly millions of meters in RViz
+            'broadcast_utm_transform': False,  # Disabled: UTM coords appear millions of m away
             'publish_filtered_gps': True,
             'use_odometry_yaw': False,
             'wait_for_datum': False,
@@ -126,7 +143,7 @@ def generate_launch_description():
         ]
     )
 
-    # Field boundary costmap: latched OccupancyGrid — outside 40m×40m square = LETHAL
+    # Field boundary costmap: latched — outside 40m×40m square = LETHAL
     field_boundary_node = Node(
         package='buoy_obstacle_publisher',
         executable='field_boundary_publisher',
@@ -143,7 +160,7 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Buoy obstacle publisher: buoy TFs → /buoy_costmap (OccupancyGrid)
+    # Buoy obstacle publisher: buoy TFs → /buoy_costmap (OccupancyGrid, 5 Hz)
     buoy_obstacle_node = Node(
         package='buoy_obstacle_publisher',
         executable='buoy_obstacle_publisher',
@@ -152,7 +169,7 @@ def generate_launch_description():
         output='screen',
     )
 
-    driver_layer_timer = TimerAction(
+    sensor_layer_timer = TimerAction(
         period=driver_delay,
         actions=[
             sim_dynamics,
@@ -168,17 +185,27 @@ def generate_launch_description():
         ]
     )
 
-    # ── NAVIGATION LAYER ─────────────────────────────────────────────────────
-    # nav2.launch.py parametrized with task3-specific nav2 params
+    # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
+    # Start Nav2 after EKF + navsat_transform have had time to produce map→odom TF.
+    # lifecycle_manager will configure+activate: controller, smoother, planner,
+    # behavior, bt_navigator, waypoint_follower, velocity_smoother (~3-5s).
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_robot, "launch", "nav2.launch.py")
-        ),
+            os.path.join(pkg_robot, "launch", "nav2.launch.py")),
         launch_arguments={
             'params_file': os.path.join(pkg_robot, 'config', 'nav2_params_task3.yaml'),
         }.items()
     )
 
+    nav2_layer_timer = TimerAction(
+        period=nav2_delay,
+        actions=[nav2_launch]
+    )
+
+    # ── GOAL LAYER (t=8s) ────────────────────────────────────────────────────
+    # Start waypoint_publisher after Nav2 action servers are active.
+    # The node itself polls for NavigateThroughPoses to be ready, so extra
+    # margin here prevents spurious "server not ready" log spam.
     waypoint_publisher = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_waypoint, "launch", "waypoint_publisher.launch.py")),
@@ -189,9 +216,9 @@ def generate_launch_description():
         }.items()
     )
 
-    navigation_layer_timer = TimerAction(
-        period=navigation_delay,
-        actions=[nav2_launch, waypoint_publisher]
+    goal_layer_timer = TimerAction(
+        period=goal_delay,
+        actions=[waypoint_publisher]
     )
 
     startup_message = LogInfo(msg='========== Task3 Sim Bringup Started ==========')
@@ -199,8 +226,10 @@ def generate_launch_description():
     return LaunchDescription([
         startup_message,
         driver_delay_arg,
-        navigation_delay_arg,
+        nav2_delay_arg,
+        goal_delay_arg,
         task_type_arg,
-        driver_layer_timer,
-        navigation_layer_timer,
+        sensor_layer_timer,
+        nav2_layer_timer,
+        goal_layer_timer,
     ])
