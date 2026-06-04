@@ -1,9 +1,9 @@
 <?xml version="1.0"?>
 <robot name="njord_asv" xmlns:xacro="http://ros.org/wiki/xacro">
 
-  <xacro:property name="base_width" value="1.0" />
-  <xacro:property name="base_length" value="1.5" />
-  <xacro:property name="base_height" value="0.5" />
+  <xacro:property name="base_width" value="1.85" />
+  <xacro:property name="base_length" value="2.0" />
+  <xacro:property name="base_height" value="1.2" />
 
   <xacro:property name="lidar_x" value="0.5" />
   <xacro:property name="lidar_y" value="0.0" />
@@ -72,6 +72,14 @@
     <parent link="base_link"/>
     <child link="wit_imu_frame"/>
     <origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="0 0 0"/>
+  </joint>
+
+  <!-- imu_link: alias used by sensor_noise_simulator and EKF -->
+  <link name="imu_link"/>
+  <joint name="imu_link_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="imu_link"/>
+    <origin xyz="0.0 0.0 0.2" rpy="0 0 0"/>
   </joint>
 
   <link name="gnss_link">

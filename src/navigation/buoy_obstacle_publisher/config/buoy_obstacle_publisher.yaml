@@ -1,0 +1,12 @@
+buoy_obstacle_publisher:
+  ros__parameters:
+    map_frame: "map"
+    resolution: 0.1          # m/cell — matches Nav2 costmap resolution
+    grid_size_m: 60.0        # 60m square grid centered at map origin
+    buoy_radius_m: 0.45      # physical buoy radius [m]
+    inflation_radius_m: 1.2  # extra inflation beyond physical radius [m]
+    publish_rate_hz: 5.0
+    buoy_prefixes:
+      - "red_buoy_"
+      - "green_buoy_"
+    max_buoys: 32

@@ -1,17 +1,24 @@
-# nav2_params.yaml (ASV Minimal Template)
+# nav2_params_task3.yaml
+# Nav2 parameters tuned for Task 3 (docking) simulation
+# Key differences from default nav2_params.yaml:
+#   - global_costmap: fixed 80x80m static map centered at origin
+#     + field boundary layer (/field_boundary_costmap) → outside is LETHAL
+#     + buoy costmap layer (/buoy_costmap) → buoy obstacles
+#   - local_costmap: rolling 20x20m window, buoy costmap layer added
+#   - obstacle_layer: /pointcloud from orchestrator (PointCloud2)
+
 amcl:
   ros__parameters:
-    enabled: false # GPS走行なのでAMCLは無効化
+    enabled: false
 
 bt_navigator:
   ros__parameters:
     use_sim_time: false
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odometry/filtered/global # EKFの出力トピック
+    odom_topic: /odometry/filtered/global
     bt_loop_duration: 10
     default_server_timeout: 20
-    # カスタマイズしたパス平滑化付きBT XMLを指定
     default_nav_to_pose_bt_xml: "/home/osw/njord2026_ws/install/robot/share/robot/config/navigate_to_pose_w_replanning_and_recovery.xml"
     default_nav_through_poses_bt_xml: "/home/osw/njord2026_ws/install/robot/share/robot/config/navigate_through_poses_w_replanning_and_recovery.xml"
 
@@ -25,28 +32,26 @@ controller_server:
     goal_checker_plugins: ["general_goal_checker"]
     controller_plugins: ["FollowPath"]
 
-    # --- Pure Pursuit Controllerの設定 (ASVに最適) ---
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 1.0     # 目標速度 [m/s]
-      lookahead_dist: 1.5         # 参照点までの距離 [m]
+      desired_linear_vel: 0.8
+      lookahead_dist: 1.5
       min_lookahead_dist: 0.5
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
       rotate_to_heading_min_angle: 0.785
-      transform_tolerance: 0.1
+      transform_tolerance: 0.2
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
-      approach_velocity_scaling_dist: 1.0
-      # 船のサイズに合わせて調整
-      max_angular_accel: 2.0
-      max_linear_accel: 2.0
+      approach_velocity_scaling_dist: 1.5
+      max_angular_accel: 1.5
+      max_linear_accel: 1.5
 
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.5   # ゴール判定の誤差許容範囲 [m] (船なので広めに)
-      yaw_goal_tolerance: 0.5  # 向きの許容範囲 [rad]
+      xy_goal_tolerance: 0.8
+      yaw_goal_tolerance: 0.5
 
 planner_server:
   ros__parameters:
@@ -61,10 +66,10 @@ planner_server:
       allow_unknown: true
       max_iterations: 1000000
       max_on_approach_iterations: 1000
-      max_planning_time: 2.0
+      max_planning_time: 5.0
       motion_model_for_search: "DUBIN"
       angle_quantization_bins: 72
-      minimum_turning_radius: 2.0
+      minimum_turning_radius: 2.5
       reverse_penalty: 2.0
       change_penalty: 0.0
       non_straight_penalty: 1.2
@@ -72,7 +77,7 @@ planner_server:
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0
 
-# --- Costmap (障害物地図) の設定 ---
+# ─── LOCAL COSTMAP ───────────────────────────────────────────────────────────
 local_costmap:
   local_costmap:
     ros__parameters:
@@ -82,42 +87,39 @@ local_costmap:
       robot_base_frame: base_link
       use_sim_time: false
       rolling_window: true
-      width: 10
-      height: 10
+      width: 20
+      height: 20
       resolution: 0.1
-      # ロボットの半径 (円形近似) または footprint (矩形)
       robot_radius: 1.4
-      plugins: ["static_layer", "virtual_wall_layer", "obstacle_layer", "inflation_layer"]
-      
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
-
-      virtual_wall_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
-        map_topic: "/virtual_costmap"
-        subscribe_to_updates: True
+      # obstacle_layer uses /pointcloud (PointCloud2 from orchestrator)
+      # buoy_costmap_layer injects pre-inflated buoy obstacles from BuoyObstaclePublisher
+      plugins: ["obstacle_layer", "buoy_costmap_layer", "inflation_layer"]
 
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        # LiDARの設定
-        observation_sources: scan
-        scan:
-          topic: /scan # または /livox/lidar (PointCloud2の場合設定が変わります)
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /pointcloud
           max_obstacle_height: 2.0
           clearing: True
           marking: True
-          data_type: "LaserScan" # PointCloud2の場合はここを変更
-          raytrace_max_range: 3.0
-          obstacle_max_range: 2.5
-      
+          data_type: "PointCloud2"
+          raytrace_max_range: 20.0
+          obstacle_max_range: 18.0
+
+      buoy_costmap_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: False
+        map_topic: "/buoy_costmap"
+        subscribe_to_updates: True
+
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 3.0
-        inflation_radius: 1.5 # 障害物の周りに危険エリアを広げる半径
+        inflation_radius: 1.0
 
+# ─── GLOBAL COSTMAP ──────────────────────────────────────────────────────────
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -127,61 +129,55 @@ global_costmap:
       robot_base_frame: base_link
       use_sim_time: false
       robot_radius: 1.4
-      resolution: 0.1
-      track_unknown_space: true
-      
-      # Map Serverを使わないための設定 (Rolling Window)
-      # GPS走行の場合、巨大なローカルマップのように扱う
-      rolling_window: true 
-      width: 200 # m
-      height: 200 # m
-      origin_x: -100.0
-      origin_y: -100.0
-      
-      plugins: ["static_layer", "virtual_wall_layer", "obstacle_layer", "inflation_layer"]
-      
-      virtual_wall_layer:
+      resolution: 0.2          # coarser for large static global map
+      rolling_window: false    # fixed map — field boundary defines valid area
+      width: 400               # 80 m / 0.2 m = 400 cells
+      height: 400
+      origin_x: -40.0          # centered at (0, 0)
+      origin_y: -40.0
+      track_unknown_space: false
+
+      # Layers:
+      #   field_boundary_layer  → outside 40m×40m square = LETHAL
+      #   buoy_costmap_layer    → buoy obstacle circles
+      #   inflation_layer       → smooth gradient around obstacles
+      plugins: ["field_boundary_layer", "buoy_costmap_layer", "inflation_layer"]
+
+      field_boundary_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
         map_subscribe_transient_local: True
-        map_topic: "/virtual_costmap"
+        map_topic: "/field_boundary_costmap"
+        subscribe_to_updates: False
+
+      buoy_costmap_layer:
+        plugin: "nav2_costmap_2d::StaticLayer"
+        map_subscribe_transient_local: False
+        map_topic: "/buoy_costmap"
         subscribe_to_updates: True
 
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: True
-        observation_sources: scan
-        scan:
-          topic: /scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          obstacle_max_range: 2.5
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 3.0
+        cost_scaling_factor: 2.0
         inflation_radius: 1.5
 
+# ─── MISC ────────────────────────────────────────────────────────────────────
 map_server:
   ros__parameters:
     use_sim_time: false
-    yaml_filename: "" # マップファイルなし
+    yaml_filename: ""
 
 lifecycle_manager:
   ros__parameters:
     use_sim_time: false
     autostart: true
-    node_names: ['controller_server',
-                 'smoother_server',
-                 'planner_server',
-                 'behavior_server',
-                 'bt_navigator',
-                 'waypoint_follower',
-                 'velocity_smoother']
+    node_names:
+      - controller_server
+      - smoother_server
+      - planner_server
+      - behavior_server
+      - bt_navigator
+      - waypoint_follower
+      - velocity_smoother
 
 behavior_server:
   ros__parameters:
@@ -199,7 +195,7 @@ behavior_server:
       plugin: "nav2_behaviors/DriveOnHeading"
     global_frame: odom
     robot_base_frame: base_link
-    transform_tolerance: 0.1
+    transform_tolerance: 0.2
     use_sim_time: false
 
 velocity_smoother:

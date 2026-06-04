@@ -1,12 +1,28 @@
 task3_orchestrator:
   ros__parameters:
     frame_id: "map"
-    red_center: [18.0, 2.0]
-    green_center: [18.0, -2.0]
-    motion_amp: 0.5
+    red_center: [0.0, 2.0]
+    green_center: [0.0, -2.0]
+    motion_amp: 0.3
     motion_freq_hz: 0.1
-    dock_pose: [35.0, 0.0, 0.0]
-    dock_size_xy: [5.0, 2.0]
-    goal_xy: [35.0, 0.0]
+    dock_pose: [15.0, 0.0, 0.0]
+    dock_size_xy: [2.0, 4.13]
+    goal_xy: [13.0, 11.0]
     goal_radius: 1.5
     publish_rate_hz: 10.0
+
+sensor_noise_simulator:
+  ros__parameters:
+    gps_origin_lat: 35.652832
+    gps_origin_lon: 139.839478
+    gps_origin_alt: 0.0
+    gps_pos_noise_std: 0.02
+    gps_heading_noise_std_deg: 2.5
+    imu_orientation_noise_std: 0.0346
+    imu_angular_vel_noise_std: 0.00346
+    imu_linear_accel_noise_std: 0.1095
+    publish_rate_hz: 20.0
+    frame_id_imu: "imu_link"
+    frame_id_gps: "base_link"
+    frame_id_compass: "base_link"
+
