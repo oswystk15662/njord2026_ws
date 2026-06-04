@@ -114,7 +114,7 @@ def generate_launch_description():
             'magnetic_declination_radians': 0.0,
             'yaw_offset': 0.0,
             'zero_altitude': True,
-            'broadcast_utm_transform': True,
+            'broadcast_utm_transform': False,  # Disable: UTM coords fly millions of meters in RViz
             'publish_filtered_gps': True,
             'use_odometry_yaw': False,
             'wait_for_datum': False,
