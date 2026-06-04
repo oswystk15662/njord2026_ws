@@ -1,89 +1,141 @@
 # Task 3: Docking Scenarios
 # Waypoint configuration for NJORD competition Task 3
 # Supports both normal docking (3.1) and parallel docking (3.2)
+#
+# Full competition sequence (task3_1 → task3_2):
+#   gps7(start) → gps8(gate) → berth1(normal dock) → gps8(exit) → gps9(gate2) → berth2(parallel dock) → gps10(finish)
+#
+# Field geometry (point-symmetric about origin):
+#   Normal dock (3.1):   x=14~16, y=±2.0  (boat enters from west, heading=0)
+#   Parallel dock (3.2): x=-14~-16, y=±2.0 (boat enters from east, heading=π)
+#   Gate buoys 3.1:      x≈12, y=±4  (red/green)
+#   Gate buoys 3.2:      x≈-12, y=±4  (red/green)
 
 task3_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  scenario: "normal_docking"
-  
+  scenario: "normal_docking_full"
+
   waypoints:
+    # GPS 7: start (origin)
     - id: 7
       x: 0.0
       y: 0.0
       yaw: 0.0
       type: "start"
-      name: "Approach Point"
+      name: "GPS 7 - Start"
       tolerance_m: 2.0
-      
+
+    # GPS 8: gate approach to normal dock field, come from south heading north
     - id: 8
       x: 13.0
       y: 11.0
-      yaw: 1.5708
-      type: "approach"
-      name: "Approach Point 2"
+      yaw: 1.5708        # heading north (π/2)
+      type: "gate"
+      name: "GPS 8 - Normal Dock Gate"
       tolerance_m: 1.5
-      
+
+    # Berth 1: normal docking (center berth, heading east into dock)
     - id: "berth1"
       x: 15.0
       y: 1.065
-      yaw: 0.0
+      yaw: 0.0           # heading east (into normal dock)
       type: "dock"
-      name: "Docking Point"
-      tolerance_m: 1.0
+      name: "Berth 1 - Normal Dock"
+      tolerance_m: 0.8
       dock_type: "normal"
-      berth_id: "unassigned"
-      
-    - id: 8
+
+    # GPS 8 again: undock and return to gate
+    - id: "8_exit"
       x: 13.0
       y: 11.0
-      yaw: 1.5708
-      type: "goal"
-      name: "Exit/Undocking Point"
-      tolerance_m: 2.0
-      
-  constraints:
-    dock_identification: "ar_tag_detection"
-    impact_minimization: true
-    wait_time_s: 10
-    wait_condition: "after_docking_stationary"
-    reversal_requirement: true
-    timer_stop_condition: "arrival_at_dock"
-    attempts: 2
+      yaw: -1.5708       # heading south (back out)
+      type: "undock_exit"
+      name: "GPS 8 - Exit Normal Dock"
+      tolerance_m: 1.5
 
-task3_2_config:
-  frame_id: "map"
-  publish_rate_hz: 2.0
-  scenario: "parallel_docking"
-  
-  waypoints:
+    # GPS 9: gate approach to parallel dock field (point-symmetric side)
     - id: 9
-      x: 0.0
-      y: 0.0
-      yaw: 3.14159
-      type: "start"
-      name: "Approach Point"
-      distance_from_barge_m: 10
-      tolerance_m: 2.0
-      
+      x: -13.0
+      y: 11.0
+      yaw: -1.5708       # heading south toward parallel dock gate
+      type: "gate"
+      name: "GPS 9 - Parallel Dock Gate"
+      tolerance_m: 1.5
+
+    # Berth 2: parallel docking (heading west into parallel dock)
     - id: "berth2"
       x: -15.0
       y: 0.0
-      yaw: -1.5708
+      yaw: 3.14159       # heading west (into parallel dock, π)
       type: "dock"
-      name: "Parallel Docking Point"
-      tolerance_m: 1.0
+      name: "Berth 2 - Parallel Dock"
+      tolerance_m: 0.8
       dock_type: "parallel"
-      
+
+    # GPS 10: finish point (exit parallel dock, go south)
+    - id: 10
+      x: -13.0
+      y: -11.0
+      yaw: -1.5708       # heading south
+      type: "goal"
+      name: "GPS 10 - Finish"
+      tolerance_m: 2.0
+
+  constraints:
+    dock_identification: "ar_tag_detection"
+    impact_minimization: true
+    wait_time_s: 10           # wait at berth before undocking
+    wait_condition: "after_docking_stationary"
+    reversal_requirement: true
+    attempts: 2
+    goal_tolerance: 1.0
+
+
+# Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
+task3_2_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  scenario: "parallel_docking_standalone"
+
+  waypoints:
+    # Start at origin
+    - id: 9
+      x: 0.0
+      y: 0.0
+      yaw: 3.14159       # heading west
+      type: "start"
+      name: "GPS 9 - Start (standalone)"
+      tolerance_m: 2.0
+
+    # Gate for parallel dock
+    - id: "9_gate"
+      x: -13.0
+      y: 11.0
+      yaw: -1.5708
+      type: "gate"
+      name: "GPS 9 - Parallel Dock Gate"
+      tolerance_m: 1.5
+
+    # Berth 2: parallel docking
+    - id: "berth2"
+      x: -15.0
+      y: 0.0
+      yaw: 3.14159
+      type: "dock"
+      name: "Berth 2 - Parallel Dock"
+      tolerance_m: 0.8
+      dock_type: "parallel"
+
+    # GPS 10: finish
     - id: 10
       x: -13.0
       y: -11.0
       yaw: -1.5708
       type: "goal"
-      name: "Exit Point"
+      name: "GPS 10 - Finish"
       tolerance_m: 2.0
-      movement_type: "forward"
-      
+
   constraints:
     dock_type: "barge"
     impact_minimization: true
@@ -91,23 +143,36 @@ task3_2_config:
     wait_condition: "after_parallel_docking_stationary"
     exit_movement: "forward_not_reverse"
     attempts: 2
+    goal_tolerance: 1.0
 
-# Multi-stage async flow configuration for task3
-# The waypoint_publisher will handle state transitions
+
+# Multi-stage async flow for task3 (handled by waypoint_publisher_node.py state machine)
+# Stage 1: 7 → 8 → berth1       (approach + normal dock)
+# Wait:    stationary at berth1 for wait_time_s
+# Stage 2: 8_exit → 9 → berth2  (undock + gate + parallel dock)
+# Wait:    stationary at berth2 for wait_time_s
+# Stage 3: 10                    (exit + finish)
 async_flow:
-  # Stage 1: Publish approach + docking waypoint
   stage_1:
-    name: "Approach and Dock"
-    waypoints: ["approach", "dock"]
+    name: "Approach Normal Dock"
+    waypoints: [7, 8, "berth1"]
     next_trigger: "goal_reached"
-    
-  # Stage 2: Wait for stationary state, then publish undocking waypoint
+
   stage_2:
-    name: "Stationary Wait"
-    duration_s: [10, 5]  # [task3.1, task3.2]
+    name: "Stationary Wait at Berth 1"
+    duration_s: 10
     next_trigger: "timer_complete"
-    
-  # Stage 3: Publish undocking/exit waypoint
+
   stage_3:
-    name: "Undock and Exit"
-    waypoint: ["undocking", "exit"]
+    name: "Undock and Approach Parallel Dock"
+    waypoints: ["8_exit", 9, "berth2"]
+    next_trigger: "goal_reached"
+
+  stage_4:
+    name: "Stationary Wait at Berth 2"
+    duration_s: 5
+    next_trigger: "timer_complete"
+
+  stage_5:
+    name: "Exit to Finish"
+    waypoints: [10]

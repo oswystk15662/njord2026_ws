@@ -31,13 +31,13 @@ class TaskType(Enum):
     TASK3_2 = "task3_2"
 
 class DockingState(Enum):
-    """State machine for task3 multi-stage docking"""
+    """State machine for task3 multi-stage docking (two berths)"""
     IDLE = 0
-    APPROACHING = 1
-    DOCKING = 2
-    DOCKED_WAIT = 3
-    UNDOCKING = 4
-    EXITING = 5
+    STAGE1_APPROACH = 1   # 7 -> 8 -> berth1
+    STAGE1_WAIT = 2       # stationary at berth1
+    STAGE2_APPROACH = 3   # 8_exit -> 9 -> berth2
+    STAGE2_WAIT = 4       # stationary at berth2
+    STAGE3_EXIT = 5       # 10
     COMPLETE = 6
 
 class WaypointPublisher(Node):
@@ -145,17 +145,14 @@ class WaypointPublisher(Node):
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
     
     def _publish_task3_first_stage(self):
-        """Publish first stage waypoints for task3 (approach + dock)"""
-        # Get waypoints for approach and docking
+        """Stage 1: gps7 -> gps8 -> berth1"""
         waypoints = self._build_poses_from_config()
-        
-        # For task3, publish all waypoints except the last one (exit) for stage 1
-        # The undocking waypoint will be published after wait timer
-        if len(waypoints) >= 2:
-            stage1_waypoints = waypoints[:-1]
-            self._send_navigate_through_poses_goal(stage1_waypoints)
-            self.docking_state = DockingState.APPROACHING
-            self.get_logger().info(f"Task3: Published stage 1 waypoints (approach + dock)")
+        # task3_1: indices 0=gps7, 1=gps8, 2=berth1, 3=8_exit, 4=gps9, 5=berth2, 6=gps10
+        if len(waypoints) >= 3:
+            stage1 = waypoints[:3]  # gps7, gps8, berth1
+            self._send_navigate_through_poses_goal(stage1)
+            self.docking_state = DockingState.STAGE1_APPROACH
+            self.get_logger().info("Task3: Stage 1 sent [gps7 -> gps8 -> berth1]")
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 1")
     
@@ -236,42 +233,67 @@ class WaypointPublisher(Node):
             self.goal_handle.get_result_async().add_done_callback(self._task3_goal_result_callback)
     
     def _task3_goal_result_callback(self, future):
-        """Callback for task3 goal result"""
+        """Dispatch to correct handler based on current docking state"""
         result = future.result()
-        
-        if result:
-            self.get_logger().info("Task3: Stage 1 waypoints (approach + dock) reached")
-            self.docking_state = DockingState.DOCKED_WAIT
-            
-            # Start wait timer
-            wait_time = self.config.get('constraints', {}).get('wait_time_s', 10)
-            self.dock_wait_timer = self.create_timer(float(wait_time), self._task3_wait_complete)
-            self.get_logger().info(f"Task3: Waiting {wait_time} seconds before undocking...")
-        else:
-            self.get_logger().error("Task3: Stage 1 goal failed")
-    
-    def _task3_wait_complete(self):
-        """Called when dock wait timer completes"""
+        if not result:
+            self.get_logger().error(f"Task3: Goal failed at state {self.docking_state}")
+            return
+
+        if self.docking_state == DockingState.STAGE1_APPROACH:
+            # Arrived at berth1 -> start wait
+            self.docking_state = DockingState.STAGE1_WAIT
+            wait_time = float(self.config.get('constraints', {}).get('wait_time_s', 10))
+            self.get_logger().info(f"Task3: Berth 1 reached, waiting {wait_time:.0f}s...")
+            self.dock_wait_timer = self.create_timer(wait_time, self._stage1_wait_complete)
+
+        elif self.docking_state == DockingState.STAGE2_APPROACH:
+            # Arrived at berth2 -> start wait
+            self.docking_state = DockingState.STAGE2_WAIT
+            wait_time = float(self.config.get('constraints', {}).get('wait_time_s', 10))
+            self.get_logger().info(f"Task3: Berth 2 reached, waiting {wait_time:.0f}s...")
+            self.dock_wait_timer = self.create_timer(wait_time, self._stage2_wait_complete)
+
+        elif self.docking_state == DockingState.STAGE3_EXIT:
+            self.docking_state = DockingState.COMPLETE
+            self.get_logger().info("Task3: Complete! Reached gps10.")
+
+    def _stage1_wait_complete(self):
+        """After berth1 wait: undock and head to berth2"""
         if self.dock_wait_timer:
             self.destroy_timer(self.dock_wait_timer)
             self.dock_wait_timer = None
-        
-        self.docking_state = DockingState.UNDOCKING
+        self.docking_state = DockingState.STAGE2_APPROACH
         self._publish_task3_second_stage()
-    
+
     def _publish_task3_second_stage(self):
-        """Publish second stage waypoints for task3 (undocking + exit)"""
+        """Stage 2: gps8_exit -> gps9 -> berth2"""
         waypoints = self._build_poses_from_config()
-        
-        # For task3, publish only last waypoint (exit)
-        # The undocking waypoint is implicit - we just move to exit point
-        if len(waypoints) > 0:
-            # Send the last waypoint (goal/exit point)
-            exit_waypoint = [waypoints[-1]]
-            self._send_navigate_through_poses_goal(exit_waypoint)
-            self.get_logger().info(f"Task3: Published stage 2 waypoint (exit)")
+        # indices 3=8_exit, 4=gps9, 5=berth2
+        if len(waypoints) >= 6:
+            stage2 = waypoints[3:6]  # 8_exit, gps9, berth2
+            self._send_navigate_through_poses_goal(stage2)
+            self.get_logger().info("Task3: Stage 2 sent [gps8_exit -> gps9 -> berth2]")
         else:
-            self.get_logger().warn("Task3: No exit waypoint found")
+            self.get_logger().warn("Task3: Insufficient waypoints for stage 2")
+
+    def _stage2_wait_complete(self):
+        """After berth2 wait: exit to gps10"""
+        if self.dock_wait_timer:
+            self.destroy_timer(self.dock_wait_timer)
+            self.dock_wait_timer = None
+        self.docking_state = DockingState.STAGE3_EXIT
+        self._publish_task3_third_stage()
+
+    def _publish_task3_third_stage(self):
+        """Stage 3: gps10 (finish)"""
+        waypoints = self._build_poses_from_config()
+        # index 6 = gps10
+        if len(waypoints) >= 7:
+            stage3 = [waypoints[6]]  # gps10
+            self._send_navigate_through_poses_goal(stage3)
+            self.get_logger().info("Task3: Stage 3 sent [gps10 - finish]")
+        else:
+            self.get_logger().warn("Task3: Insufficient waypoints for stage 3")
 
 def main(args=None):
     rclpy.init(args=args)
