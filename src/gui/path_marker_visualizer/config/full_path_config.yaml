@@ -1,0 +1,12 @@
+full_path_publisher:
+  ros__parameters:
+    odom_frame: "odom"
+    base_frame: "base_link"
+    twist_topic: "/cmd_vel"
+    use_velocity_color: true
+    min_velocity: 0.0
+    max_velocity: 2.0
+    color_transition_type: 0 # 0: LINEAR, 1: LOGARITHMIC
+    log_scale_factor: 9.0
+    line_width: 0.05
+    twist_timeout_sec: 0.5
