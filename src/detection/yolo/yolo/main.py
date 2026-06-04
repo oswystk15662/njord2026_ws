@@ -2,6 +2,7 @@ import os
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image, PointCloud2, PointField
+from njord_interfaces.msg import BuoyRoi
 import cv2
 import numpy as np
 import struct
@@ -37,11 +38,26 @@ class YoloDetectorNode(Node):
         self.declare_parameter('device', device_default)
         self.declare_parameter('camera_topic', '/camera/image_raw')
         self.declare_parameter('enable_virtual_wall', False)
+        self.declare_parameter('enable_roi', True)
+        self.declare_parameter('roi_topic', '/buoy_roi')
+        self.declare_parameter('roi_frame_id', 'base_link')
+        self.declare_parameter('roi_range_predict', 5.0)
+        self.declare_parameter('roi_range_half', 2.0)
+        self.declare_parameter('camera_fov_deg', 90.0)
+        self.declare_parameter('roi_theta_min_deg', 2.0)
         
         # 4. パラメータ取得
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         device = self.get_parameter('device').get_parameter_value().string_value
         cam_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
+        self.enable_virtual_wall = self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value
+        self.enable_roi = self.get_parameter('enable_roi').get_parameter_value().bool_value
+        self.roi_topic = self.get_parameter('roi_topic').get_parameter_value().string_value
+        self.roi_frame_id = self.get_parameter('roi_frame_id').get_parameter_value().string_value
+        self.roi_range_predict = self.get_parameter('roi_range_predict').get_parameter_value().double_value
+        self.roi_range_half = self.get_parameter('roi_range_half').get_parameter_value().double_value
+        self.camera_fov_deg = self.get_parameter('camera_fov_deg').get_parameter_value().double_value
+        self.roi_theta_min_deg = self.get_parameter('roi_theta_min_deg').get_parameter_value().double_value
 
         self.get_logger().info(f'Loading YOLO model from: {model_path}')
 
@@ -64,6 +80,8 @@ class YoloDetectorNode(Node):
         
         # Step 3: Nav2のCostmapに反映させるための仮想障害物（点群）
         self.pub_virtual_wall = self.create_publisher(PointCloud2, '/virtual_obstacles', 10)
+
+        self.pub_roi = self.create_publisher(BuoyRoi, self.roi_topic, 10)
 
         self.bridge = CvBridge()
         self.get_logger().info('YoloDetectorNode Initialized.')
@@ -112,8 +130,7 @@ class YoloDetectorNode(Node):
         return 'yolov8n.pt'
 
     def image_callback(self, msg):
-        if not self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value:
-            # デバッグ画像だけ出してリターン、あるいは何もしない
+        if not self.enable_virtual_wall and not self.enable_roi:
             return
 
         try:
@@ -127,6 +144,10 @@ class YoloDetectorNode(Node):
         result = results[0]
         
         virtual_obstacles = [] # 生成する点のリスト [[x, y, z], ...]
+        best_roi = None
+        best_conf = 0.0
+        fov_rad = math.radians(self.camera_fov_deg)
+        min_theta_rad = math.radians(self.roi_theta_min_deg)
 
         # 検出結果のループ
         for box in result.boxes:
@@ -142,8 +163,11 @@ class YoloDetectorNode(Node):
             # --- 距離・位置推定ロジック (簡易版) ---
             # 本来はここで main_yolo.py のようなステレオ/LiDARフュージョンを行う
             # 一旦、仮の距離として「バウンディングボックスの大きさ」や「Y座標」から推定
-            estimated_dist = 5.0 # [m] (仮置き)
-            estimated_angle = -math.atan2(cx - msg.width/2, (msg.width/2) / math.tan(math.radians(45))) # [rad] (FOV90度仮定)
+            estimated_dist = self.roi_range_predict # [m] (仮置き)
+            estimated_angle = -math.atan2(
+                cx - msg.width / 2,
+                (msg.width / 2) / math.tan(fov_rad / 2)
+            )
 
             # ロボット座標系(base_link)でのブイの位置 (x:前, y:左)
             buoy_x = estimated_dist * math.cos(estimated_angle)
@@ -151,12 +175,28 @@ class YoloDetectorNode(Node):
 
             # --- Step 3: 方位標識ロジック ---
             # 方位標識の種類に応じて「通ってはいけない側」に壁を作る
-            wall_points = self.generate_virtual_wall(label, buoy_x, buoy_y)
-            if wall_points:
-                virtual_obstacles.extend(wall_points)
-                
-                # デバッグ描画: 壁の方向へ線を引く
-                cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
+            if self.enable_virtual_wall:
+                wall_points = self.generate_virtual_wall(label, buoy_x, buoy_y)
+                if wall_points:
+                    virtual_obstacles.extend(wall_points)
+
+                    # デバッグ描画: 壁の方向へ線を引く
+                    cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
+
+            if self.enable_roi and conf > best_conf:
+                bbox_width = max(1.0, float(xyxy[2] - xyxy[0]))
+                theta_range = max(
+                    min_theta_rad,
+                    (bbox_width / msg.width) * fov_rad * 0.5
+                )
+                best_roi = BuoyRoi()
+                best_roi.header.stamp = msg.header.stamp
+                best_roi.header.frame_id = self.roi_frame_id
+                best_roi.r_predict = float(estimated_dist)
+                best_roi.r_range = float(self.roi_range_half)
+                best_roi.theta_predict = float(estimated_angle)
+                best_roi.theta_range = float(theta_range)
+                best_conf = conf
 
             # デバッグ描画: BBox
             cv2.rectangle(cv_image, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
@@ -164,13 +204,17 @@ class YoloDetectorNode(Node):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
         # 仮想壁（点群）のPublish
-        if virtual_obstacles:
-            pc_msg = self.create_pointcloud2(virtual_obstacles)
-            self.pub_virtual_wall.publish(pc_msg)
-        else:
-            # 障害物がない時は空のデータを送る（前の壁を消すため）
-            pc_msg = self.create_pointcloud2([])
-            self.pub_virtual_wall.publish(pc_msg)
+        if self.enable_virtual_wall:
+            if virtual_obstacles:
+                pc_msg = self.create_pointcloud2(virtual_obstacles)
+                self.pub_virtual_wall.publish(pc_msg)
+            else:
+                # 障害物がない時は空のデータを送る（前の壁を消すため）
+                pc_msg = self.create_pointcloud2([])
+                self.pub_virtual_wall.publish(pc_msg)
+
+        if self.enable_roi and best_roi is not None:
+            self.pub_roi.publish(best_roi)
 
         # デバッグ画像のPublish
         self.pub_debug_img.publish(self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8'))

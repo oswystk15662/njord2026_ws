@@ -26,6 +26,12 @@ def generate_launch_description():
         default_value='/buoy_detections',
         description='Output Point2D (PointStamped) topic'
     )
+
+    roi_topic_arg = DeclareLaunchArgument(
+        'roi_topic',
+        default_value='/buoy_roi',
+        description='Input ROI topic from YOLO'
+    )
     
     frame_id_arg = DeclareLaunchArgument(
         'frame_id',
@@ -56,6 +62,12 @@ def generate_launch_description():
         default_value='5',
         description='Minimum points per cluster'
     )
+
+    roi_timeout_arg = DeclareLaunchArgument(
+        'roi_timeout_sec',
+        default_value='0.5',
+        description='ROI timeout in seconds'
+    )
     
     # Create node
     pcl_bouy_det_node = Node(
@@ -65,12 +77,14 @@ def generate_launch_description():
         parameters=[
             {
                 'input_topic': LaunchConfiguration('input_topic'),
+                'roi_topic': LaunchConfiguration('roi_topic'),
                 'output_topic': LaunchConfiguration('output_topic'),
                 'frame_id': LaunchConfiguration('frame_id'),
                 'height_min': LaunchConfiguration('height_min'),
                 'height_max': LaunchConfiguration('height_max'),
                 'distance_threshold': LaunchConfiguration('distance_threshold'),
                 'min_points_per_cluster': LaunchConfiguration('min_points_per_cluster'),
+                'roi_timeout_sec': LaunchConfiguration('roi_timeout_sec'),
             }
         ],
         output='screen',
@@ -80,10 +94,12 @@ def generate_launch_description():
     return LaunchDescription([
         input_topic_arg,
         output_topic_arg,
+        roi_topic_arg,
         frame_id_arg,
         height_min_arg,
         height_max_arg,
         distance_threshold_arg,
         min_points_arg,
+        roi_timeout_arg,
         pcl_bouy_det_node,
     ])
