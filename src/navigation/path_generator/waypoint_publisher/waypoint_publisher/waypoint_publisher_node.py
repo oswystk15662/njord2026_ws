@@ -125,6 +125,10 @@ class WaypointPublisher(Node):
         if not self.first_publish:
             return
         
+        if not self.nav_client.server_is_ready():
+            self.get_logger().warn("NavigateThroughPoses action server not ready, waiting...")
+            return
+        
         self.first_publish = False
         
         if self.task_type in [TaskType.TASK1, TaskType.TASK2]:
@@ -145,10 +149,10 @@ class WaypointPublisher(Node):
         # Get waypoints for approach and docking
         waypoints = self._build_poses_from_config()
         
-        # For task3, publish only first two waypoints (approach + dock)
+        # For task3, publish all waypoints except the last one (exit) for stage 1
         # The undocking waypoint will be published after wait timer
         if len(waypoints) >= 2:
-            stage1_waypoints = waypoints[:2]
+            stage1_waypoints = waypoints[:-1]
             self._send_navigate_through_poses_goal(stage1_waypoints)
             self.docking_state = DockingState.APPROACHING
             self.get_logger().info(f"Task3: Published stage 1 waypoints (approach + dock)")
@@ -211,7 +215,6 @@ class WaypointPublisher(Node):
         
         # Set goal tolerance
         tolerance = self.config.get('constraints', {}).get('goal_tolerance', 0.5)
-        goal_msg.goal_checker_id = 'goal_checker'
         
         self.get_logger().debug(f"Sending goal with {len(poses)} poses")
         
@@ -223,6 +226,7 @@ class WaypointPublisher(Node):
         
         if not self.goal_handle.accepted:
             self.get_logger().warn("Goal rejected by NavigateThroughPoses action server")
+            self.first_publish = True
             return
         
         self.get_logger().info("Goal accepted by NavigateThroughPoses action server")

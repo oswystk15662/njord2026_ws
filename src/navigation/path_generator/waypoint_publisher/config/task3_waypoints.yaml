@@ -14,12 +14,19 @@ task3_1_config:
       yaw: 0.0
       type: "start"
       name: "Approach Point"
-      distance_from_dock_m: 10
       tolerance_m: 2.0
       
     - id: 8
-      x: 0.0
-      y: 0.0
+      x: 13.0
+      y: 11.0
+      yaw: 1.5708
+      type: "approach"
+      name: "Approach Point 2"
+      tolerance_m: 1.5
+      
+    - id: "berth1"
+      x: 15.0
+      y: 1.065
       yaw: 0.0
       type: "dock"
       name: "Docking Point"
@@ -27,10 +34,10 @@ task3_1_config:
       dock_type: "normal"
       berth_id: "unassigned"
       
-    - id: 9
-      x: 0.0
-      y: 0.0
-      yaw: 0.0
+    - id: 8
+      x: 13.0
+      y: 11.0
+      yaw: 1.5708
       type: "goal"
       name: "Exit/Undocking Point"
       tolerance_m: 2.0
@@ -53,25 +60,25 @@ task3_2_config:
     - id: 9
       x: 0.0
       y: 0.0
-      yaw: 0.0
+      yaw: 3.14159
       type: "start"
       name: "Approach Point"
       distance_from_barge_m: 10
       tolerance_m: 2.0
       
-    - id: "dock_berth"
-      x: 0.0
+    - id: "berth2"
+      x: -15.0
       y: 0.0
-      yaw: 0.0
+      yaw: -1.5708
       type: "dock"
       name: "Parallel Docking Point"
       tolerance_m: 1.0
       dock_type: "parallel"
       
     - id: 10
-      x: 0.0
-      y: 0.0
-      yaw: 0.0
+      x: -13.0
+      y: -11.0
+      yaw: -1.5708
       type: "goal"
       name: "Exit Point"
       tolerance_m: 2.0
