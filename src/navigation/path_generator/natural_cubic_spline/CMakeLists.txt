@@ -21,6 +21,15 @@ add_library(natural_cubic_spline SHARED
   src/natural_cubic_spline_smoother.cpp
 )
 
+# IMPORTANT: Disable LTO for pluginlib plugins.
+# LTO (Link Time Optimization) breaks RTTI across shared library boundaries
+# when used with pluginlib::ClassLoader, causing SIGSEGV at plugin load time.
+# The colcon defaults.yaml may globally enable LTO via
+# -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON, so we override it per-target.
+set_target_properties(natural_cubic_spline PROPERTIES
+  INTERPROCEDURAL_OPTIMIZATION OFF
+)
+
 target_link_libraries(natural_cubic_spline Eigen3::Eigen)
 
 ament_target_dependencies(natural_cubic_spline

@@ -304,8 +304,14 @@ def main(args=None):
     except KeyboardInterrupt:
         node.get_logger().info("Shutting down...")
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 if __name__ == '__main__':
     main()

@@ -1,6 +1,6 @@
 dutyed_tf_pub_with_disturbance_node:
   ros__parameters:
-    update_rate_hz: 50.0
+    update_rate_hz: 2000.0
     duty_resolution: 1000.0
     topic_thruster_command: "/thruster_command"
     topic_odom: "/odom"

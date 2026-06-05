@@ -42,7 +42,7 @@ class SmootherTestNode(Node):
         self.map_msg = self.create_test_map()
         
         # Start state machine / sequence
-        self.create_timer(1.0, self.run_test_sequence)
+        self.create_timer(5.0, self.run_test_sequence)
         self.test_started = False
 
     def create_test_map(self):
@@ -162,7 +162,7 @@ class SmootherTestNode(Node):
 
     def smoother_result_callback(self, future):
         result = future.result().result
-        smoothed_path = result.smoothed_path
+        smoothed_path = result.path
         
         self.get_logger().info(f'Smoother successfully smoothed path to {len(smoothed_path.poses)} poses!')
         
