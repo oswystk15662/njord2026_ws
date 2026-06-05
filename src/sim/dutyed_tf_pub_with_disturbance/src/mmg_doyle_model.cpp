@@ -31,7 +31,7 @@ PlanarAccel MMGDoyleModel::computeAccel(const PlanarState & state, const PlanarI
 
   PlanarAccel out;
   out.du = (input.surge_force - xu + coupling_u) / params_.mass_kg;
-  out.dv = (0.0 - yv + coupling_v) / params_.mass_kg;
+  out.dv = (input.sway_force - yv + coupling_v) / params_.mass_kg;
   out.dr = (input.yaw_moment - nr + coupling_r) / params_.inertia_z;
   return out;
 }

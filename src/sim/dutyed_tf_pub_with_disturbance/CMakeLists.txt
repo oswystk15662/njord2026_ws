@@ -44,6 +44,7 @@ add_executable(${PROJECT_NAME}_node src/main.cpp)
 target_link_libraries(${PROJECT_NAME}_node ${PROJECT_NAME}_node_component)
 ament_target_dependencies(${PROJECT_NAME}_node rclcpp)
 
+
 install(
   TARGETS
     ${PROJECT_NAME}_models

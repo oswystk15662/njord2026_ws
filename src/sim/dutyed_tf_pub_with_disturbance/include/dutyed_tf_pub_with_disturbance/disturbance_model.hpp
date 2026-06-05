@@ -31,6 +31,13 @@ public:
 
   DisturbanceAccel step(double dt_sec);
 
+  void setMaxMagnitude(double max_u, double max_v, double max_r)
+  {
+    max_u_ = max_u;
+    max_v_ = max_v;
+    max_r_ = max_r;
+  }
+
 private:
   struct AxisState
   {
@@ -44,6 +51,9 @@ private:
   AxisState u_;
   AxisState v_;
   AxisState r_;
+  double max_u_{-1.0};
+  double max_v_{-1.0};
+  double max_r_{-1.0};
 
   class Impl;
   std::unique_ptr<Impl> impl_;

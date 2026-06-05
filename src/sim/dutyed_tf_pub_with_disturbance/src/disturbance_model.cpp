@@ -55,6 +55,17 @@ DisturbanceAccel DisturbanceModel::step(double dt_sec)
   out.du = stepAxis(dt, u_);
   out.dv = stepAxis(dt, v_);
   out.dr = stepAxis(dt, r_);
+
+  if (max_u_ >= 0.0) {
+    out.du = std::clamp(out.du, -max_u_, max_u_);
+  }
+  if (max_v_ >= 0.0) {
+    out.dv = std::clamp(out.dv, -max_v_, max_v_);
+  }
+  if (max_r_ >= 0.0) {
+    out.dr = std::clamp(out.dr, -max_r_, max_r_);
+  }
+
   return out;
 }
 

@@ -32,6 +32,7 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   frame_map_ = this->declare_parameter<std::string>("frame_map", "map");
   frame_odom_ = this->declare_parameter<std::string>("frame_odom", "odom");
   frame_base_link_ = this->declare_parameter<std::string>("frame_base_link", "base_link");
+  publish_tf_ = this->declare_parameter<bool>("publish_tf", true);
 
   auto map_offset = this->declare_parameter<std::vector<double>>("map_offset_xyyaw", {0.0, 0.0, 0.0});
   auto odom_offset = this->declare_parameter<std::vector<double>>("odom_offset_xyyaw", {0.0, 0.0, 0.0});
@@ -70,6 +71,9 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   const double disturbance_sigma_u = this->declare_parameter<double>("disturbance.sigma_u", 0.12);
   const double disturbance_sigma_v = this->declare_parameter<double>("disturbance.sigma_v", 0.12);
   const double disturbance_sigma_r = this->declare_parameter<double>("disturbance.sigma_r", 0.04);
+  const double disturbance_max_u = this->declare_parameter<double>("disturbance.max_u", -1.0);
+  const double disturbance_max_v = this->declare_parameter<double>("disturbance.max_v", -1.0);
+  const double disturbance_max_r = this->declare_parameter<double>("disturbance.max_r", -1.0);
   const int disturbance_seed = this->declare_parameter<int>("disturbance.seed", 2026);
 
   t200_model_ = std::make_unique<T200Model>(max_forward, max_reverse);
@@ -81,6 +85,7 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
     disturbance_sigma_v,
     disturbance_sigma_r,
     static_cast<std::uint32_t>(std::max(0, disturbance_seed)));
+  disturbance_model_->setMaxMagnitude(disturbance_max_u, disturbance_max_v, disturbance_max_r);
 
   pub_odom_ = this->create_publisher<nav_msgs::msg::Odometry>(topic_odom_, 10);
   sub_command_ = this->create_subscription<std_msgs::msg::Int16MultiArray>(
@@ -102,29 +107,27 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
 
 void SimNode::commandCallback(const std_msgs::msg::Int16MultiArray::SharedPtr msg)
 {
-  if (msg->data.size() < 2U) {
+  if (msg->data.size() < 4U) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(),
       *this->get_clock(),
       2000,
-      "thruster_command requires at least 2 values [left, right]");
+      "thruster_command requires at least 4 values [FR, FL, RR, RL] for X-Omni");
     return;
   }
 
   const double res = std::max(1.0, duty_resolution_);
-  latest_left_duty_ = clamp(static_cast<double>(msg->data[0]) / res, -1.0, 1.0);
-  latest_right_duty_ = clamp(static_cast<double>(msg->data[1]) / res, -1.0, 1.0);
-
-  if (left_reverse_) {
-    latest_left_duty_ *= -1.0;
-  }
-  if (right_reverse_) {
-    latest_right_duty_ *= -1.0;
+  latest_duties_.resize(msg->data.size());
+  for (size_t i = 0; i < msg->data.size(); ++i) {
+    latest_duties_[i] = clamp(static_cast<double>(msg->data[i]) / res, -1.0, 1.0);
   }
 }
 
 void SimNode::publishStaticTransforms()
 {
+  if (!publish_tf_) {
+    return;
+  }
   geometry_msgs::msg::TransformStamped world_to_map;
   world_to_map.header.stamp = this->now();
   world_to_map.header.frame_id = frame_world_;
@@ -170,12 +173,51 @@ void SimNode::onTimer()
   const double dt = clamp((now - last_stamp_).seconds(), 1e-4, 0.1);
   last_stamp_ = now;
 
-  const double left_force = t200_model_->forceFromDuty(latest_left_duty_);
-  const double right_force = t200_model_->forceFromDuty(latest_right_duty_);
+  if (latest_duties_.size() < 4) {
+    latest_duties_.assign(4, 0.0);
+  }
 
+  // スラスタの推力（T200モデルから算出）
+  const double f_FR = t200_model_->forceFromDuty(latest_duties_[0]);
+  const double f_FL = t200_model_->forceFromDuty(latest_duties_[1]);
+  const double f_RR = t200_model_->forceFromDuty(latest_duties_[2]);
+  const double f_RL = t200_model_->forceFromDuty(latest_duties_[3]);
+
+  // 各スラスタの幾何学的向き（theta）
+  const double theta_FR = 0.785398;   //  45 deg
+  const double theta_FL = -0.785398;  // -45 deg
+  const double theta_RR = 2.35619;    //  135 deg
+  const double theta_RL = -2.35619;   // -135 deg
+
+  // 船体座標系における各推力のX, Y成分
+  const double fx_FR = f_FR * std::cos(theta_FR);
+  const double fy_FR = f_FR * std::sin(theta_FR);
+
+  const double fx_FL = f_FL * std::cos(theta_FL);
+  const double fy_FL = f_FL * std::sin(theta_FL);
+
+  const double fx_RR = f_RR * std::cos(theta_RR);
+  const double fy_RR = f_RR * std::sin(theta_RR);
+
+  const double fx_RL = f_RL * std::cos(theta_RL);
+  const double fy_RL = f_RL * std::sin(theta_RL);
+
+  // 合力を単純に足し合わせる
   PlanarInput input;
-  input.surge_force = left_force + right_force;
-  input.yaw_moment = (right_force - left_force) * half_beam_meter_;
+  input.surge_force = fx_FR + fx_FL + fx_RR + fx_RL;
+  input.sway_force  = fy_FR + fy_FL + fy_RR + fy_RL;
+
+  // モーメント (r x F): Torque = x * Fy - y * Fx
+  // レバーアーム（ベースリンク重心からの相対位置 x, y）
+  const double x_FR = 0.353553;  const double y_FR = -0.353553;
+  const double x_FL = 0.353553;  const double y_FL = 0.353553;
+  const double x_RR = -0.353553; const double y_RR = -0.353553;
+  const double x_RL = -0.353553; const double y_RL = 0.353553;
+
+  input.yaw_moment = (x_FR * fy_FR - y_FR * fx_FR) +
+                     (x_FL * fy_FL - y_FL * fx_FL) +
+                     (x_RR * fy_RR - y_RR * fx_RR) +
+                     (x_RL * fy_RL - y_RL * fx_RL);
 
   PlanarAccel accel = mmg_model_->computeAccel(state_, input);
   const DisturbanceAccel disturbance = disturbance_model_->step(dt);
@@ -201,18 +243,20 @@ void SimNode::publishDynamicTfAndOdom(const rclcpp::Time & stamp)
   tf2::Quaternion q;
   q.setRPY(0.0, 0.0, yaw_);
 
-  geometry_msgs::msg::TransformStamped tf;
-  tf.header.stamp = stamp;
-  tf.header.frame_id = frame_odom_;
-  tf.child_frame_id = frame_base_link_;
-  tf.transform.translation.x = x_;
-  tf.transform.translation.y = y_;
-  tf.transform.translation.z = 0.0;
-  tf.transform.rotation.x = q.x();
-  tf.transform.rotation.y = q.y();
-  tf.transform.rotation.z = q.z();
-  tf.transform.rotation.w = q.w();
-  tf_broadcaster_->sendTransform(tf);
+  if (publish_tf_) {
+    geometry_msgs::msg::TransformStamped tf;
+    tf.header.stamp = stamp;
+    tf.header.frame_id = frame_odom_;
+    tf.child_frame_id = frame_base_link_;
+    tf.transform.translation.x = x_;
+    tf.transform.translation.y = y_;
+    tf.transform.translation.z = 0.0;
+    tf.transform.rotation.x = q.x();
+    tf.transform.rotation.y = q.y();
+    tf.transform.rotation.z = q.z();
+    tf.transform.rotation.w = q.w();
+    tf_broadcaster_->sendTransform(tf);
+  }
 
   nav_msgs::msg::Odometry odom;
   odom.header.stamp = stamp;

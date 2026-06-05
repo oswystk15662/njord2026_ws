@@ -14,24 +14,24 @@ dutyed_tf_pub_with_disturbance_node:
     odom_offset_xyyaw: [0.0, 0.0, 0.0]
 
     thruster:
-      max_forward_newton: 50.0
-      max_reverse_newton: 40.0
+      max_forward_newton: 51.5
+      max_reverse_newton: 40.2
       half_beam_meter: 0.35
       left_reverse: false
       right_reverse: false
 
     mmg:
-      mass_kg: 55.0
-      inertia_z: 18.0
-      lin_drag_u: 38.0
-      lin_drag_v: 80.0
-      lin_drag_r: 32.0
-      quad_drag_u: 16.0
-      quad_drag_v: 130.0
-      quad_drag_r: 40.0
+      mass_kg: 8.0
+      inertia_z: 2.0
+      lin_drag_u: 0.5
+      lin_drag_v: 0.5
+      lin_drag_r: 0.5
+      quad_drag_u: 0.25
+      quad_drag_v: 0.25
+      quad_drag_r: 0.25
       cross_uv: 0.0
-      cross_ur: 3.0
-      cross_vr: 2.0
+      cross_ur: 0.0
+      cross_vr: 0.0
 
     disturbance:
       natural_frequency_hz: 0.18
@@ -39,4 +39,7 @@ dutyed_tf_pub_with_disturbance_node:
       sigma_u: 0.12
       sigma_v: 0.12
       sigma_r: 0.04
+      max_u: 0.0
+      max_v: 0.0
+      max_r: 0.0
       seed: 2026

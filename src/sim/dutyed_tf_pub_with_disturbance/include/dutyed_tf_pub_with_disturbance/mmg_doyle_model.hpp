@@ -16,6 +16,7 @@ struct PlanarState
 struct PlanarInput
 {
   double surge_force{0.0};
+  double sway_force{0.0};
   double yaw_moment{0.0};
 };
 

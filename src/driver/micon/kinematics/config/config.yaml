@@ -48,7 +48,7 @@ kinematics_node:
 
       FL:
         pose: [0.353553, 0.353553, -0.1, 0.0, 0.0, -0.785398]
-        reverse: false
+        reverse: true
 
       RR:
         pose: [-0.353553, -0.353553, -0.1, 0.0, 0.0, 2.35619]  # 135度前向き
@@ -56,5 +56,5 @@ kinematics_node:
 
       RL:
         pose: [-0.353553, 0.353553, -0.1, 0.0, 0.0, -2.35619]
-        reverse: false
+        reverse: true
     
