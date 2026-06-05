@@ -104,23 +104,23 @@ ModelOutput MmgOmniModel::step(const ModelInput & input)
   }
 
   const std::vector<double> b = {x_force, y_force, n_moment};
-  std::vector<double> duties = solve_regularized_least_squares(a, b, regularization_lambda_);
+  std::vector<double> forces = solve_regularized_least_squares(a, b, regularization_lambda_);
 
   double max_abs = 0.0;
-  for (double d : duties) {
+  for (double d : forces) {
     max_abs = std::max(max_abs, std::abs(d));
   }
   if (max_abs > 1.0) {
-    for (double & d : duties) {
+    for (double & d : forces) {
       d /= max_abs;
     }
   }
-  for (double & d : duties) {
+  for (double & d : forces) {
     d = clamp(d, -1.0, 1.0);
   }
 
   ModelOutput out;
-  out.wheel_duties = duties;
+  out.wheel_forces = forces;
   out.state = state_;
   return out;
 }

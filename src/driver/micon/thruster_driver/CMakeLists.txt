@@ -37,21 +37,21 @@ target_link_libraries(thruster_driver_node thruster_driver_component)
 ament_target_dependencies(thruster_driver_node rclcpp)
 
 if(GPIOD_FOUND)
-  add_executable(thruster_pid_node
-    src/main_pid.cpp
-    src/node_pid.cpp
+  add_executable(node_dif2wheel
+    src/main_dif2wheel.cpp
+    src/node_dif2wheel.cpp
     src/hardware_pwm.cpp
     src/velocity_controller.cpp
     src/mmg_dynamics.cpp
     src/thrust_allocator.cpp
   )
-  ament_target_dependencies(thruster_pid_node
+  ament_target_dependencies(node_dif2wheel
     rclcpp
     geometry_msgs
     nav_msgs
     std_msgs
   )
-  target_link_libraries(thruster_pid_node
+  target_link_libraries(node_dif2wheel
     ${GPIOD_LIBRARIES}
   )
 
@@ -71,7 +71,7 @@ if(GPIOD_FOUND)
     ${GPIOD_LIBRARIES}
   )
 else()
-  message(WARNING "libgpiodcxx not found: skipping thruster_pid_node and thruster_4xomni_node")
+  message(WARNING "libgpiodcxx not found: skipping node_dif2wheel and thruster_4xomni_node")
 endif()
 
 add_executable(force_distributer_node
@@ -90,7 +90,7 @@ set(thruster_driver_targets
 
 if(GPIOD_FOUND)
   list(APPEND thruster_driver_targets
-    thruster_pid_node
+    node_dif2wheel
     thruster_4xomni_node)
 endif()
 

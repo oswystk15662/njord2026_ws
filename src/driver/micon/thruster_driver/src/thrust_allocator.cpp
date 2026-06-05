@@ -17,7 +17,7 @@ ThrustAllocator::ThrustAllocator(rclcpp::Node & node)
 {
   config_.thruster_spacing = node.declare_parameter("control.mmg_2wheeled.thruster_spacing", 0.5);
   config_.thrust_coeff = node.declare_parameter("control.mmg_2wheeled.thrust_coeff", 1.0);
-  config_.max_duty = node.declare_parameter("control.safety.max_duty", 1.0);
+  config_.max_force = node.declare_parameter("control.safety.max_force", 1.0);
 }
 
 std::vector<double> ThrustAllocator::allocate(const std::vector<double> & tau_cmd)
@@ -33,22 +33,13 @@ std::vector<double> ThrustAllocator::allocate(const std::vector<double> & tau_cm
   const double f_left = x_cmd - n_cmd * 2.0 / spacing_inv;
   const double f_right = x_cmd + n_cmd * 2.0 / spacing_inv;
 
-  auto force_to_duty = [this](double force) -> double {
-    if (std::abs(force) < 1e-6) {
-      return 0.0;
-    }
-    const double sign = force > 0.0 ? 1.0 : -1.0;
-    const double abs_force = std::abs(force);
-    const double abs_duty = std::sqrt(abs_force / std::max(1e-6, config_.thrust_coeff));
-    return clamp(abs_duty * sign, -config_.max_duty, config_.max_duty);
-  };
-
-  return {force_to_duty(f_left), force_to_duty(f_right)};
+  return {clamp(f_left, -config_.max_force, config_.max_force),
+    clamp(f_right, -config_.max_force, config_.max_force)};
 }
 
-std::vector<double> ThrustAllocator::clamp_duty(const std::vector<double> & duty)
+std::vector<double> ThrustAllocator::clamp_force(const std::vector<double> & force)
 {
-  std::vector<double> clamped = duty;
+  std::vector<double> clamped = force;
   for (auto & d : clamped) {
     d = std::max(-1.0, std::min(d, 1.0));
   }

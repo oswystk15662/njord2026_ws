@@ -17,11 +17,11 @@ namespace njord
 namespace thruster_driver
 {
 
-class ThrusterPidNode : public rclcpp::Node
+class ThrusterDif2WheelNode : public rclcpp::Node
 {
 public:
-  ThrusterPidNode();
-  ~ThrusterPidNode() override;
+  ThrusterDif2WheelNode();
+  ~ThrusterDif2WheelNode() override;
 
 private:
   void cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg);
@@ -39,7 +39,7 @@ private:
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_cmd_vel_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_feedback_odometry_;
-  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_duty_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_force_;
   rclcpp::TimerBase::SharedPtr control_timer_;
 
   rclcpp::Time last_cmd_time_;

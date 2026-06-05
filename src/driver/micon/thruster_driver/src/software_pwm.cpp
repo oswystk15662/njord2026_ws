@@ -12,8 +12,9 @@ SoftPwmMotor::SoftPwmMotor(
   const std::string & chip_path,
   int dir_pin,
   int pwm_pin,
-  double frequency_hz)
-: stop_thread_(false)
+  double frequency_hz,
+  const std::vector<double> & force_per_duty)
+: stop_thread_(false), force_duty_converter_(force_per_duty)
 {
   period_us_ = 1000000.0 / std::max(1.0, frequency_hz);
 
@@ -50,6 +51,11 @@ void SoftPwmMotor::set_speed(double value)
   const double clamped = std::max(-1.0, std::min(value, 1.0));
   line_dir_.set_value(clamped >= 0.0 ? 0 : 1);
   duty_cycle_.store(std::abs(clamped));
+}
+
+void SoftPwmMotor::set_force(double force)
+{
+  set_speed(force_duty_converter_.forceToDuty(force));
 }
 
 void SoftPwmMotor::pwm_loop()

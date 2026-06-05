@@ -29,7 +29,7 @@ struct ModelInput
 
 struct ModelOutput
 {
-  std::vector<double> wheel_duties{};
+  std::vector<double> wheel_forces{};
   VesselState state{};
 };
 

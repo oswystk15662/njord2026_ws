@@ -1,31 +1,111 @@
-thruster_driver_node:
+thruster_driver_4xomni_node:
   ros__parameters:
-    input_mode: "duty_array"      # cmd_vel or duty_array
-    transport_mode: "both"        # mros_usb or can or both
+    # ─── HARDWARE ───────────────────────────────────────────────────────────
+    # SoftPwmMotor per thruster (FR, FL, RR, RL)
+    # GPIO chip and pins must match the actual hardware wiring.
+    hardware:
+      gpio_chip: "/dev/gpiochip4"
+      pwm_frequency: 10000.0
+      wheels:
+        # dir_pins / pwm_pins order must match wheel allocation order: FR, FL, RR, RL
+        dir_pins: [26, 16, 20, 21]
+        pwm_pins: [13, 12, 19, 18]
 
-    max_linear_x: 1.0
-    max_angular_z: 1.0
-    angular_coeff: 0.5
+    # ─── INPUT SCALING ──────────────────────────────────────────────────────
+    # cmd_vel linear.x/y and angular.z are normalised to [-1, 1] by dividing
+    # by these values before being fed into the dynamics model.
+    # Set to the expected maximum cmd_vel magnitude.
+    input_scaling:
+      max_linear_x: 1.5    # [m/s]
+      max_linear_y: 1.5    # [m/s]
+      max_angular_z: 2.0   # [rad/s]
 
-    duty_resolution: 1000
+    # ─── CONTROL ────────────────────────────────────────────────────────────
+    control:
+      rate_hz: 1000.0
+      use_feedback: false               # set true to enable velocity feedback (requires odometry)
+      feedback_use_odometry: true
+      stop_on_feedback_timeout: true
+      feedback_timeout_sec: 0.5
 
-    left_reverse: false
-    right_reverse: false
+      # Outer-loop velocity P-gains (only used when use_feedback=true)
+      # These were previously set very high (14, 12, 7); reduced to ~1/100
+      # to prevent overshoot/oscillation while the actual gains in the
+      # dynamics model are also scaled down.
+      feedback_kp:
+        surge: 0.14   # was 14.0 → 1/100
+        sway:  0.12   # was 12.0 → 1/100
+        yaw:   0.07   # was  7.0 → 1/100
 
-    # ESP32 expects one UInt16 command per ESC.
-    # command = u16_neutral + normalized[-1,1] * u16_span
-    u16_neutral: 1000
-    u16_span: 1000
+      # ── MMG omni-directional dynamics model ──────────────────────────────
+      omni:
+        # Vessel inertia
+        mass: 8.0    # [kg]
+        iz:    2.0    # [kg·m²]
 
-    left_can_id: 769   # 0x301
-    right_can_id: 770  # 0x302
+        # Linear & quadratic damping coefficients
+        damping:
+          linear:
+            surge: 0.0
+            sway:  0.0
+            yaw:   0.0
+          quadratic:
+            surge: 0.0
+            sway:  0.0
+            yaw:   0.5
 
+        # Reference velocity scale factors (normalised cmd → target velocity)
+        # ref_velocity = cmd_normalised * ref_gain
+        # Example: surge_ref_gain=1.2 means duty=1.0 → target 1.2 m/s
+        reference:
+          surge_gain: 1.2   # [m/s per normalised unit]
+          sway_gain:  1.2
+          yaw_gain:   1.5   # [rad/s per normalised unit]
+
+        # Inner P-gains: force = p * (v_ref - v_measured)
+        # Previously 14/12/7 → reduced to ~1/100 as requested
+        control:
+          surge_p: 0.14   # was 14.0
+          sway_p:  0.12   # was 12.0
+          yaw_p:   0.07   # was  7.0
+
+        # Thrust allocation regularisation (prevents singular allocation matrix)
+        allocation:
+          regularization_lambda: 1.0e-4
+
+        # ── Wheel geometry (X-configuration, 4 thrusters) ─────────────────
+        # Order: FR, FL, RR, RL  (must match dir_pins/pwm_pins order above)
+        # pos_x/pos_y: position of thruster in base_link frame [m]
+        # angle_rad: direction the thruster pushes in base_link frame [rad]
+        #   FR: front-right, pushes at  +45° (π/4)
+        #   FL: front-left,  pushes at  -45° (-π/4)
+        #   RR: rear-right,  pushes at +135° (3π/4)
+        #   RL: rear-left,   pushes at -135° (-3π/4)
+        wheels:
+          pos_x:         [ 0.353553,  0.353553, -0.353553, -0.353553]
+          pos_y:         [-0.353553,  0.353553, -0.353553,  0.353553]
+          angle_rad:     [ 0.785398, -0.785398,  2.356194, -2.356194]
+          force_per_duty: [1.0,       1.0,        1.0,       1.0]
+
+    # ─── SAFETY ─────────────────────────────────────────────────────────────
+    safety:
+      watchdog_timeout_sec: 0.5
+      # Maximum change in normalised wheel force per second (slew-rate limiter).
+      # Prevents sudden step changes from overwhelming the physical ESCs.
+      max_force_delta_per_sec: 2.0
+
+    # ─── STATIC MAP (deadzone + per-wheel gain/offset compensation) ─────────
+    static_map:
+      deadzone_pos: 0.04    # normalised forward deadzone per wheel
+      deadzone_neg: 0.04    # normalised reverse deadzone per wheel
+      wheels:
+        # Per-wheel gain multipliers (adjust for prop/ESC imbalance)
+        forward_gain: [1.0, 1.0, 1.0, 1.0]
+        reverse_gain: [1.0, 1.0, 1.0, 1.0]
+        offset:       [0.0, 0.0, 0.0, 0.0]
+
+    # ─── TOPICS ─────────────────────────────────────────────────────────────
     topics:
-      cmd_vel: "cmd_vel"
-      duty_array: "thruster_command"
-
-      left_mros_cmd: "left_esp32/cmd_duty_u16"
-      right_mros_cmd: "right_esp32/cmd_duty_u16"
-
-      left_can_tx: "left_esp32/can_tx"
-      right_can_tx: "right_esp32/can_tx"
+      cmd_vel:            "cmd_vel"
+      feedback_twist:     "feedback_twist"
+      feedback_odometry:  "/odometry/filtered/local"

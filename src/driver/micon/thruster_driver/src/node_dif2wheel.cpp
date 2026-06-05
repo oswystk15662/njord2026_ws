@@ -1,4 +1,4 @@
-#include "thruster_driver/node_pid.hpp"
+#include "thruster_driver/node_dif2wheel.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -8,8 +8,8 @@ namespace njord
 namespace thruster_driver
 {
 
-ThrusterPidNode::ThrusterPidNode()
-: Node("thruster_pid_node"),
+ThrusterDif2WheelNode::ThrusterDif2WheelNode()
+: Node("node_dif2wheel"),
   last_cmd_time_(this->now()),
   last_feedback_time_(this->now()),
   last_control_time_(this->now())
@@ -74,7 +74,7 @@ ThrusterPidNode::ThrusterPidNode()
     this->get_parameter("control.mmg_2wheeled.thruster_spacing").as_double();
   thrust_config.thrust_coeff =
     this->get_parameter("control.mmg_2wheeled.thrust_coeff").as_double();
-  thrust_config.max_duty = this->declare_parameter("control.safety.max_duty", 1.0);
+  thrust_config.max_force = this->declare_parameter("control.safety.max_force", 1.0);
   thrust_allocator_ = std::make_unique<ThrustAllocator>(thrust_config);
 
   sub_cmd_vel_ = this->create_subscription<geometry_msgs::msg::Twist>(
@@ -89,8 +89,8 @@ ThrusterPidNode::ThrusterPidNode()
       });
   }
 
-  pub_current_duty_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
-    "/debug/current_duty", 10);
+  pub_current_force_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(
+    "/debug/current_force", 10);
 
   const auto period = std::chrono::duration<double>(1.0 / std::max(1.0, control_rate_hz_));
   control_timer_ = this->create_wall_timer(
@@ -99,11 +99,11 @@ ThrusterPidNode::ThrusterPidNode()
 
   RCLCPP_INFO(
     this->get_logger(),
-    "ThrusterPidNode initialized: rate=%.1fHz, use_feedback=%s, watchdog=%.2fs",
+    "ThrusterDif2WheelNode initialized: rate=%.1fHz, use_feedback=%s, watchdog=%.2fs",
     control_rate_hz_, use_feedback_ ? "true" : "false", watchdog_timeout_sec_);
 }
 
-ThrusterPidNode::~ThrusterPidNode()
+ThrusterDif2WheelNode::~ThrusterDif2WheelNode()
 {
   if (left_motor_) {
     left_motor_->emergency_stop();
@@ -113,21 +113,21 @@ ThrusterPidNode::~ThrusterPidNode()
   }
 }
 
-void ThrusterPidNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
+void ThrusterDif2WheelNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
   ref_linear_x_ = msg->linear.x;
   ref_angular_z_ = msg->angular.z;
   last_cmd_time_ = this->now();
 }
 
-void ThrusterPidNode::feedback_odometry_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
+void ThrusterDif2WheelNode::feedback_odometry_callback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
   meas_linear_x_ = msg->twist.twist.linear.x;
   meas_angular_z_ = msg->twist.twist.angular.z;
   last_feedback_time_ = this->now();
 }
 
-void ThrusterPidNode::control_timer_callback()
+void ThrusterDif2WheelNode::control_timer_callback()
 {
   const auto now = this->now();
   const double dt = (now - last_control_time_).seconds();
@@ -164,22 +164,22 @@ void ThrusterPidNode::control_timer_callback()
 
   const auto tau_cmd = velocity_controller_->compute(ref_surge, ref_yaw, meas_surge, meas_yaw, dt);
 
-  auto duty_cmd = thrust_allocator_->allocate(tau_cmd);
-  duty_cmd = ThrustAllocator::clamp_duty(duty_cmd);
+  auto force_cmd = thrust_allocator_->allocate(tau_cmd);
+  force_cmd = ThrustAllocator::clamp_force(force_cmd);
 
-  if (duty_cmd.size() >= 2) {
-    left_motor_->set_speed(duty_cmd[0]);
-    right_motor_->set_speed(duty_cmd[1]);
+  if (force_cmd.size() >= 2) {
+    left_motor_->set_force(force_cmd[0]);
+    right_motor_->set_force(force_cmd[1]);
 
-    mmg_model_->step(duty_cmd[0], duty_cmd[1], dt);
+    mmg_model_->step(force_cmd[0], force_cmd[1], dt);
 
-    std_msgs::msg::Float32MultiArray duty_msg;
-    duty_msg.data = {static_cast<float>(duty_cmd[0]), static_cast<float>(duty_cmd[1])};
-    pub_current_duty_->publish(duty_msg);
+    std_msgs::msg::Float32MultiArray force_msg;
+    force_msg.data = {static_cast<float>(force_cmd[0]), static_cast<float>(force_cmd[1])};
+    pub_current_force_->publish(force_msg);
   }
 }
 
-double ThrusterPidNode::clamp(double value, double min_val, double max_val) const
+double ThrusterDif2WheelNode::clamp(double value, double min_val, double max_val) const
 {
   return std::max(min_val, std::min(value, max_val));
 }

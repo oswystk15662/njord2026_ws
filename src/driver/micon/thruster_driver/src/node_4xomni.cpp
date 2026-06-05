@@ -64,10 +64,10 @@ Thruster4xOmniNode::Thruster4xOmniNode()
     throw std::runtime_error("static_map.wheels.* vector size must match wheel count");
   }
 
-  max_thrust_delta_per_sec_ = this->declare_parameter("safety.max_thrust_delta_per_sec", 2.0);
+  max_force_delta_per_sec_ = this->declare_parameter("safety.max_force_delta_per_sec", 2.0);
 
   dynamics_model_ = std::make_unique<MmgOmniModel>(*this);
-  prev_wheel_cmds_.assign(motors_.size(), 0.0);
+  prev_wheel_forces_.assign(motors_.size(), 0.0);
 
   const std::string cmd_vel_topic = this->declare_parameter("topics.cmd_vel", std::string("cmd_vel"));
   const std::string feedback_twist_topic =
@@ -89,7 +89,7 @@ Thruster4xOmniNode::Thruster4xOmniNode()
       std::bind(&Thruster4xOmniNode::feedback_twist_callback, this, std::placeholders::_1));
   }
 
-  pub_current_duty_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/current_duty", 10);
+  pub_current_force_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/current_force", 10);
   pub_model_state_ = this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/model_state", 10);
 
   last_cmd_time_ = this->now();
@@ -178,26 +178,26 @@ void Thruster4xOmniNode::control_timer_callback()
 
   const ModelOutput model_out = dynamics_model_->step(model_input);
 
-  std::vector<double> duties = model_out.wheel_duties;
-  if (duties.size() != motors_.size()) {
-    duties.assign(motors_.size(), 0.0);
+  std::vector<double> forces = model_out.wheel_forces;
+  if (forces.size() != motors_.size()) {
+    forces.assign(motors_.size(), 0.0);
   }
 
-  const double max_delta = std::max(0.0, max_thrust_delta_per_sec_) * dt;
-  for (std::size_t i = 0; i < duties.size(); ++i) {
-    double cmd = apply_static_map(duties[i], i);
-    cmd = prev_wheel_cmds_[i] + clamp(cmd - prev_wheel_cmds_[i], -max_delta, max_delta);
-    prev_wheel_cmds_[i] = cmd;
-    motors_[i]->set_speed(cmd);
-    duties[i] = cmd;
+  const double max_delta = std::max(0.0, max_force_delta_per_sec_) * dt;
+  for (std::size_t i = 0; i < forces.size(); ++i) {
+    double cmd = apply_static_map(forces[i], i);
+    cmd = prev_wheel_forces_[i] + clamp(cmd - prev_wheel_forces_[i], -max_delta, max_delta);
+    prev_wheel_forces_[i] = cmd;
+    motors_[i]->set_force(cmd);
+    forces[i] = cmd;
   }
 
-  std_msgs::msg::Float32MultiArray duty_msg;
-  duty_msg.data.reserve(duties.size());
-  for (double d : duties) {
-    duty_msg.data.push_back(static_cast<float>(d));
+  std_msgs::msg::Float32MultiArray force_msg;
+  force_msg.data.reserve(forces.size());
+  for (double d : forces) {
+    force_msg.data.push_back(static_cast<float>(d));
   }
-  pub_current_duty_->publish(duty_msg);
+  pub_current_force_->publish(force_msg);
 
   std_msgs::msg::Float32MultiArray state_msg;
   state_msg.data = {

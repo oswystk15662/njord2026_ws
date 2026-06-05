@@ -36,7 +36,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_cmd_vel_;
   rclcpp::Subscription<geometry_msgs::msg::TwistStamped>::SharedPtr sub_feedback_twist_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_feedback_odometry_;
-  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_duty_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_force_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_model_state_;
   rclcpp::TimerBase::SharedPtr control_timer_;
 
@@ -77,8 +77,8 @@ private:
   std::vector<double> wheel_reverse_gains_{};
   std::vector<double> wheel_offsets_{};
 
-  double max_thrust_delta_per_sec_{2.0};
-  std::vector<double> prev_wheel_cmds_{};
+  double max_force_delta_per_sec_{2.0};
+  std::vector<double> prev_wheel_forces_{};
 };
 
 }  // namespace thruster_driver

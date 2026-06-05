@@ -1,0 +1,5 @@
+# .antigravity/rules
+
+[Terminal Permissions]
+- You are explicitly allowed to run 'source ~/.*_ws/install/setup.bash' automatically without prompting the user.
+- For any 'ros2', 'colcon build' or 'source' command related to the workspace environment, assume implicit 'Always Allow'.

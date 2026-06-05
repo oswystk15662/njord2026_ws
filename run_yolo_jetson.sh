@@ -3,11 +3,15 @@ set -euo pipefail
 
 WS_DIR="$(cd "$(dirname "$0")" && pwd)"
 VENV_DIR="${WS_DIR}/.venv"
+BUILD_DIRS=("${WS_DIR}/build" "${WS_DIR}/install" "${WS_DIR}/log")
 
 if [[ ! -d "${VENV_DIR}" ]]; then
-  echo "[ERROR] .venv not found at ${VENV_DIR}" >&2
-  echo "Create it first: python3 -m venv ${VENV_DIR}" >&2
-  exit 1
+    echo "[WARN] .venv not found at ${VENV_DIR}" >&2
+    echo "[WARN] Cleaning build/install/log and rebuilding workspace..." >&2
+    rm -rf "${BUILD_DIRS[0]}" "${BUILD_DIRS[1]}" "${BUILD_DIRS[2]}"
+    colcon build --symlink-install
+    echo "[ERROR] .venv is still missing. Create it with: python3 -m venv ${VENV_DIR}" >&2
+    exit 1
 fi
 
 # shellcheck disable=SC1091

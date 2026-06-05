@@ -16,14 +16,14 @@ public:
   {
     double thruster_spacing{0.5};
     double thrust_coeff{1.0};
-    double max_duty{1.0};
+    double max_force{1.0};
   };
 
   explicit ThrustAllocator(const Config & config);
   explicit ThrustAllocator(rclcpp::Node & node);
 
   std::vector<double> allocate(const std::vector<double> & tau_cmd);
-  static std::vector<double> clamp_duty(const std::vector<double> & duty);
+  static std::vector<double> clamp_force(const std::vector<double> & force);
 
 private:
   Config config_;

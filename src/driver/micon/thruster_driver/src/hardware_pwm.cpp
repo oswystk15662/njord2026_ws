@@ -8,8 +8,13 @@ namespace njord
 namespace thruster_driver
 {
 
-HardwarePWM::HardwarePWM(const std::string & chip_path, int dir_pin, int pwm_pin, double freq_hz)
-: stop_flag_(false)
+HardwarePWM::HardwarePWM(
+  const std::string & chip_path,
+  int dir_pin,
+  int pwm_pin,
+  double freq_hz,
+  const std::vector<double> & force_per_duty)
+: stop_flag_(false), force_duty_converter_(force_per_duty)
 {
   period_us_ = 1000000.0 / std::max(1.0, freq_hz);
 
@@ -53,6 +58,11 @@ void HardwarePWM::set_speed(double value)
 
   line_dir_.set_value(direction_ < 0 ? 1 : 0);
   duty_cycle_ = std::abs(value);
+}
+
+void HardwarePWM::set_force(double force)
+{
+  set_speed(force_duty_converter_.forceToDuty(force));
 }
 
 void HardwarePWM::emergency_stop()
