@@ -74,13 +74,13 @@ planner_server:
       max_planning_time: 5.0
       motion_model_for_search: "DUBIN"
       angle_quantization_bins: 72
-      minimum_turning_radius: 2.5
+      minimum_turning_radius: 1.5    # ASV hull 2.0m: realistic turning radius
       reverse_penalty: 2.0
       change_penalty: 0.0
       non_straight_penalty: 1.2
       cost_penalty: 2.0
       analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
+      analytic_expansion_max_length: 6.0  # larger → finds goal with fewer expansions
 
 # ─── LOCAL COSTMAP ───────────────────────────────────────────────────────────
 local_costmap:
@@ -125,6 +125,10 @@ local_costmap:
         inflation_radius: 1.0
 
 # ─── GLOBAL COSTMAP ──────────────────────────────────────────────────────────
+# Rolling window: follows the robot, keeps search space manageable.
+# Buoy obstacles come from /buoy_costmap (StaticLayer, updated at 5 Hz).
+# Field boundary is NOT enforced here — the 40m field constraint is
+# handled by the waypoint sequence staying within the field.
 global_costmap:
   global_costmap:
     ros__parameters:
@@ -134,25 +138,13 @@ global_costmap:
       robot_base_frame: base_link
       use_sim_time: false
       robot_radius: 1.4
-      resolution: 0.2          # coarser for large static global map
-      rolling_window: false    # fixed map — field boundary defines valid area
-      width: 400               # 80 m / 0.2 m = 400 cells
-      height: 400
-      origin_x: -40.0          # centered at (0, 0)
-      origin_y: -40.0
+      resolution: 0.1
+      rolling_window: true
+      width: 50           # 50 m rolling window — covers the full 40 m task3 field
+      height: 50
       track_unknown_space: false
 
-      # Layers:
-      #   field_boundary_layer  → outside 40m×40m square = LETHAL
-      #   buoy_costmap_layer    → buoy obstacle circles
-      #   inflation_layer       → smooth gradient around obstacles
-      plugins: ["field_boundary_layer", "buoy_costmap_layer", "inflation_layer"]
-
-      field_boundary_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: True
-        map_topic: "/field_boundary_costmap"
-        subscribe_to_updates: False
+      plugins: ["buoy_costmap_layer", "inflation_layer"]
 
       buoy_costmap_layer:
         plugin: "nav2_costmap_2d::StaticLayer"

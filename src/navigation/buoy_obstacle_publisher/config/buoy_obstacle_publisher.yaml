@@ -4,7 +4,7 @@ buoy_obstacle_publisher:
     resolution: 0.1           # m/cell — matches local costmap resolution
     grid_size_m: 60.0         # 60 m square grid centered at map origin (covers 40m field)
     buoy_radius_m: 0.45       # physical buoy radius [m]
-    inflation_radius_m: 1.2   # extra inflation around buoy [m] → total 1.65 m obstacle radius
+    inflation_radius_m: 0.5   # LETHAL ring beyond buoy edge (costmap inflation_layer adds more)
     publish_rate_hz: 5.0
     # Explicit TF frame names (b31_ = task3.1, b32_ = task3.2)
     buoy_frame_names:
