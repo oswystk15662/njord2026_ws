@@ -19,6 +19,71 @@
       </geometry>
     </collision>
   </link>
+
+  <link name="thruster_FR_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.113"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.0 1.0 0.8"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="thruster_FR_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="thruster_FR_link"/>
+    <origin rpy="0 0 0.785398" xyz="0.353553 -0.353553 0.0"/>
+  </joint>
+
+  <link name="thruster_FL_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.113"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.0 1.0 0.8"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="thruster_FL_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="thruster_FL_link"/>
+    <origin rpy="0 0 -0.785398" xyz="0.353553 0.353553 0.0"/>
+  </joint>
+
+  <link name="thruster_RL_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.113"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.0 1.0 0.8"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="thruster_RL_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="thruster_RL_link"/>
+    <origin rpy="0 0 -2.35619" xyz="-0.353553 0.353553 0.0"/>
+  </joint>
+
+  <link name="thruster_RR_link">
+    <visual>
+      <geometry>
+        <cylinder radius="0.1" length="0.113"/>
+      </geometry>
+      <material name="blue">
+        <color rgba="0.0 0.0 1.0 0.8"/>
+      </material>
+    </visual>
+  </link>
+  <joint name="thruster_RR_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="thruster_RR_link"/>
+    <origin rpy="0 0 2.35619" xyz="-0.353553 -0.353553 0.0"/>
+  </joint>
+
   <link name="livox_frame">
     <visual>
       <geometry>
