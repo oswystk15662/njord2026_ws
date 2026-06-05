@@ -5,7 +5,7 @@ ekf_filter_node_local:
   ros__parameters:
     frequency: 30.0
     two_d_mode: true
-    publish_tf: true
+    publish_tf: false  # SimNode publishes odom→base_link; EKF only outputs odometry topic
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link

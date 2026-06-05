@@ -57,7 +57,8 @@ def generate_launch_description():
         name="dutyed_tf_pub_with_disturbance_node",
         parameters=[
             os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {"publish_tf": False}
+            {"publish_tf": True}    # SimNode is sole TF authority (odom→base_link, map→odom, world→map)
+            # EKF nodes have publish_tf=false — they only produce odometry topics
         ],
         output="screen"
     )
