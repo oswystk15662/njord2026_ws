@@ -148,7 +148,7 @@ double TopicHeartbeatMonitor::measuredFrequency() const
   return static_cast<double>(samples_.size() - 1U) / span;
 }
 
-double TopicHeartbeatMonitor::lastMessageAgeSec() const
+double TopicHeartbeatMonitor::lastMessageAgeSec()
 {
   if (!has_message_) {
     return std::numeric_limits<double>::infinity();

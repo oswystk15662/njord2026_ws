@@ -35,7 +35,7 @@ private:
   Mode parseMode(const std::string & value) const;
   rclcpp::QoS makeQos() const;
   double measuredFrequency() const;
-  double lastMessageAgeSec() const;
+  double lastMessageAgeSec();
   void pruneSamples();
 
   diagnostic_updater::Updater updater_;
