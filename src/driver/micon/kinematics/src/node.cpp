@@ -31,6 +31,7 @@ void KinematicsNode::init_parameters()
     this->declare_parameter("max_linear_velocity", 2.0);
     this->declare_parameter("max_angular_velocity", 2.0);
     this->declare_parameter("linear_gain", 500.0);
+    this->declare_parameter("sway_gain", 500.0);
     this->declare_parameter("angular_gain", 500.0);
     this->declare_parameter("thruster_ids", std::vector<std::string>({}));
 
@@ -38,6 +39,7 @@ void KinematicsNode::init_parameters()
     max_linear_vel_ = this->get_parameter("max_linear_velocity").as_double();
     max_angular_vel_ = this->get_parameter("max_angular_velocity").as_double();
     linear_gain_ = this->get_parameter("linear_gain").as_double();
+    sway_gain_ = this->get_parameter("sway_gain").as_double();
     angular_gain_ = this->get_parameter("angular_gain").as_double();
     thruster_ids_ = this->get_parameter("thruster_ids").as_string_array();
 
@@ -66,8 +68,9 @@ void KinematicsNode::init_parameters()
             thrusters_.push_back(t);
             
             RCLCPP_INFO(this->get_logger(), 
-                "Loaded Thruster [%s]: xyz(%.2f, %.2f, %.2f) contribution(x:%.2f, yaw:%.2f)",
-                id.c_str(), t.x, t.y, t.z, t.contribution_x, t.contribution_yaw);
+                "Loaded Thruster [%s]: xyz(%.2f, %.2f, %.2f) contribution(x:%.2f, y:%.2f, yaw:%.2f)",
+                id.c_str(), t.x, t.y, t.z, t.contribution_x, t.contribution_y,
+                t.contribution_yaw);
         } else {
             RCLCPP_ERROR(this->get_logger(), "Invalid pose size for thruster %s", id.c_str());
         }
@@ -84,6 +87,7 @@ void KinematicsNode::calculate_contribution(ThrusterConfig & t)
 
     // 1. 前進方向(Surge)への寄与: Fx = F * cos(yaw)
     t.contribution_x = cos_yaw;
+    t.contribution_y = sin_yaw;
 
     // 2. 旋回方向(Yaw)への寄与: Torque = r x F (2D cross product)
     // Torque = x * Fy - y * Fx
@@ -100,6 +104,7 @@ void KinematicsNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr
 {
     // 1. 入力制限
     double linear_cmd = std::clamp(msg->linear.x, -max_linear_vel_, max_linear_vel_);
+    double sway_cmd = std::clamp(msg->linear.y, -max_linear_vel_, max_linear_vel_);
     double angular_cmd = std::clamp(msg->angular.z, -max_angular_vel_, max_angular_vel_);
 
     std_msgs::msg::Int16MultiArray output_msg;
@@ -114,7 +119,8 @@ void KinematicsNode::cmd_vel_callback(const geometry_msgs::msg::Twist::SharedPtr
         // Target Torque = AngularCmd * AngularGain
         
         // 簡易的な加算混合制御
-        double thrust = (linear_cmd * linear_gain_ * t.contribution_x) + 
+        double thrust = (linear_cmd * linear_gain_ * t.contribution_x) +
+                        (sway_cmd * sway_gain_ * t.contribution_y) +
                         (angular_cmd * angular_gain_ * t.contribution_yaw);
 
         // ※ contribution_yaw の符号について:

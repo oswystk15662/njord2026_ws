@@ -55,7 +55,10 @@ jobs:
             src/detection/yolo \
             src/navigation/path_generator/natural_cubic_spline \
             src/navigation/path_generator/waypoint_publisher \
+            src/navigation/buoy_obstacle_publisher \
+            src/driver/micon/kinematics \
             src/sim/dutyed_tf_pub_with_disturbance \
+            src/sim/sensor_sim_with_noise \
             src/sim/operation_validator \
             src/sim/task1_sim \
             src/sim/task2_sim \
@@ -72,7 +75,10 @@ jobs:
             yolo \
             natural_cubic_spline \
             waypoint_publisher \
+            buoy_obstacle_publisher \
+            kinematics \
             dutyed_tf_pub_with_disturbance \
+            sensor_sim_with_noise \
             operation_validator \
             task1_sim \
             task2_sim \

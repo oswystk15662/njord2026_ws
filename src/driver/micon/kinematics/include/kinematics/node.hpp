@@ -21,6 +21,7 @@ struct ThrusterConfig {
     
     // 運動学的な寄与係数 (初期化時に計算)
     double contribution_x;   // 前進力への寄与
+    double contribution_y;   // 横移動力への寄与
     double contribution_yaw; // 旋回力への寄与
 };
 
@@ -44,6 +45,7 @@ private:
     double max_linear_vel_;
     double max_angular_vel_;
     double linear_gain_;
+    double sway_gain_;
     double angular_gain_;
 
     std::vector<std::string> thruster_ids_;
