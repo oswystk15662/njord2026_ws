@@ -50,6 +50,9 @@ jobs:
             python3-rosdep
           rosdep update
           rosdep install --from-paths \
+            src/njord_interfaces \
+            src/detection/pcl_det \
+            src/detection/yolo \
             src/sim/dutyed_tf_pub_with_disturbance \
             src/sim/operation_validator \
             src/sim/task1_sim \
@@ -62,6 +65,9 @@ jobs:
         run: |
           source /opt/ros/humble/setup.bash
           colcon build --event-handlers console_direct+ --packages-select \
+            njord_interfaces \
+            pcl_det \
+            yolo \
             dutyed_tf_pub_with_disturbance \
             operation_validator \
             task1_sim \
