@@ -106,7 +106,6 @@ private:
 
     gps_msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_FIX;
     gps_msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS;
-    
     double var_gps_pos = gps_pos_noise_std_ * gps_pos_noise_std_;
     for (int i = 0; i < 9; ++i) {
       gps_msg.position_covariance[i] = 0.0;
