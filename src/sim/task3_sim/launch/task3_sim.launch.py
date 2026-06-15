@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -43,11 +44,15 @@ def generate_launch_description():
     task_type_arg = DeclareLaunchArgument(
         'task_type', default_value='task3_1',
         description='Task type: task3_1 or task3_2')
+    enable_diagnostics_arg = DeclareLaunchArgument(
+        'enable_diagnostics', default_value='true',
+        description='Launch generic topic heartbeat diagnostics for Task3 simulation')
 
     driver_delay = LaunchConfiguration('driver_delay')
     nav2_delay   = LaunchConfiguration('nav2_delay')
     goal_delay   = LaunchConfiguration('goal_delay')
     task_type    = LaunchConfiguration('task_type')
+    enable_diagnostics = LaunchConfiguration('enable_diagnostics')
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
     # SimNode is the sole Task3 simulation TF authority.
@@ -207,6 +212,7 @@ def generate_launch_description():
             os.path.join(pkg_robot, "launch", "nav2.launch.py")),
         launch_arguments={
             'params_file': os.path.join(pkg_robot, 'config', 'nav2_params_task3.yaml'),
+            'enable_diagnostics': 'false',
         }.items()
     )
 
@@ -234,6 +240,13 @@ def generate_launch_description():
         actions=[waypoint_publisher]
     )
 
+    diagnostics_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, "launch", "diagnostics.launch.py")),
+        launch_arguments={'profile': 'task3'}.items(),
+        condition=IfCondition(enable_diagnostics),
+    )
+
     startup_message = LogInfo(msg='========== Task3 Sim Bringup Started ==========')
 
     return LaunchDescription([
@@ -242,7 +255,9 @@ def generate_launch_description():
         nav2_delay_arg,
         goal_delay_arg,
         task_type_arg,
+        enable_diagnostics_arg,
         sensor_layer_timer,
         nav2_layer_timer,
         goal_layer_timer,
+        diagnostics_launch,
     ])
