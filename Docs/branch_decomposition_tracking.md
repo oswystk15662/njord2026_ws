@@ -3,6 +3,8 @@
 This document tracks the decomposition of the historical `4-task1` and
 `test0506` branches into reviewable changes for `master`.
 
+GitHub tracking issue: [#11](https://github.com/IBO-ASV/njord2026_ws/issues/11)
+
 ## Source preservation
 
 | Source branch | Archived tip | Archive tag |
