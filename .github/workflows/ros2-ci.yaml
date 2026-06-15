@@ -53,6 +53,8 @@ jobs:
             src/njord_interfaces \
             src/detection/pcl_det \
             src/detection/yolo \
+            src/navigation/path_generator/natural_cubic_spline \
+            src/navigation/path_generator/waypoint_publisher \
             src/sim/dutyed_tf_pub_with_disturbance \
             src/sim/operation_validator \
             src/sim/task1_sim \
@@ -68,6 +70,8 @@ jobs:
             njord_interfaces \
             pcl_det \
             yolo \
+            natural_cubic_spline \
+            waypoint_publisher \
             dutyed_tf_pub_with_disturbance \
             operation_validator \
             task1_sim \
