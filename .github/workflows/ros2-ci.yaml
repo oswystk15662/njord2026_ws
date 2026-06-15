@@ -32,17 +32,19 @@ jobs:
 
   core-simulation-build:
     runs-on: ubuntu-22.04
+    container:
+      image: ros:humble-ros-base-jammy
     steps:
       - uses: actions/checkout@v6
         with:
           submodules: false
 
-      - uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: humble
-
-      - name: Install package dependencies
+      - name: Install build tools and package dependencies
         run: |
+          apt-get update
+          apt-get install --no-install-recommends -y \
+            python3-colcon-common-extensions \
+            python3-rosdep
           rosdep update
           rosdep install --from-paths \
             src/sim/dutyed_tf_pub_with_disturbance \
