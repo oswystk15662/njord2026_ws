@@ -32,6 +32,7 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   frame_map_ = this->declare_parameter<std::string>("frame_map", "map");
   frame_odom_ = this->declare_parameter<std::string>("frame_odom", "odom");
   frame_base_link_ = this->declare_parameter<std::string>("frame_base_link", "base_link");
+  publish_tf_ = this->declare_parameter<bool>("publish_tf", true);
 
   auto map_offset = this->declare_parameter<std::vector<double>>("map_offset_xyyaw", {0.0, 0.0, 0.0});
   auto odom_offset = this->declare_parameter<std::vector<double>>("odom_offset_xyyaw", {0.0, 0.0, 0.0});
@@ -125,10 +126,19 @@ void SimNode::commandCallback(const std_msgs::msg::Int16MultiArray::SharedPtr ms
   if (right_reverse_) {
     latest_right_duty_ *= -1.0;
   }
+
+  latest_duties_.resize(msg->data.size());
+  for (size_t i = 0; i < msg->data.size(); ++i) {
+    latest_duties_[i] = clamp(static_cast<double>(msg->data[i]) / res, -1.0, 1.0);
+  }
 }
 
 void SimNode::publishStaticTransforms()
 {
+  if (!publish_tf_) {
+    return;
+  }
+
   geometry_msgs::msg::TransformStamped world_to_map;
   world_to_map.header.stamp = this->now();
   world_to_map.header.frame_id = frame_world_;
@@ -174,13 +184,32 @@ void SimNode::onTimer()
   const double dt = clamp((now - last_stamp_).seconds(), 1e-4, 0.1);
   last_stamp_ = now;
 
-  const double left_force = t200_model_->forceFromDuty(latest_left_duty_);
-  const double right_force = t200_model_->forceFromDuty(latest_right_duty_);
-
   PlanarInput input;
-  input.surge_force = left_force + right_force;
-  input.sway_force = 0.0; // 左右方向のスラスターがない場合は0
-  input.yaw_moment = (right_force - left_force) * half_beam_meter_;
+  if (latest_duties_.size() >= 4U) {
+    const double forces[] = {
+      t200_model_->forceFromDuty(latest_duties_[0]),
+      t200_model_->forceFromDuty(latest_duties_[1]),
+      t200_model_->forceFromDuty(latest_duties_[2]),
+      t200_model_->forceFromDuty(latest_duties_[3]),
+    };
+    const double theta[] = {0.785398, -0.785398, 2.35619, -2.35619};
+    const double x[] = {0.353553, 0.353553, -0.353553, -0.353553};
+    const double y[] = {-0.353553, 0.353553, -0.353553, 0.353553};
+
+    for (size_t i = 0; i < 4U; ++i) {
+      const double fx = forces[i] * std::cos(theta[i]);
+      const double fy = forces[i] * std::sin(theta[i]);
+      input.surge_force += fx;
+      input.sway_force += fy;
+      input.yaw_moment += x[i] * fy - y[i] * fx;
+    }
+  } else {
+    const double left_force = t200_model_->forceFromDuty(latest_left_duty_);
+    const double right_force = t200_model_->forceFromDuty(latest_right_duty_);
+    input.surge_force = left_force + right_force;
+    input.sway_force = 0.0;
+    input.yaw_moment = (right_force - left_force) * half_beam_meter_;
+  }
 
   PlanarAccel accel = mmg_model_->computeAccel(state_, input);
   const DisturbanceAccel disturbance = disturbance_model_->step(dt);
@@ -217,7 +246,9 @@ void SimNode::publishDynamicTfAndOdom(const rclcpp::Time & stamp)
   tf.transform.rotation.y = q.y();
   tf.transform.rotation.z = q.z();
   tf.transform.rotation.w = q.w();
-  tf_broadcaster_->sendTransform(tf);
+  if (publish_tf_) {
+    tf_broadcaster_->sendTransform(tf);
+  }
 
   nav_msgs::msg::Odometry odom;
   odom.header.stamp = stamp;

@@ -1,0 +1,18 @@
+gnss_noise_simulator:
+  ros__parameters:
+    gps_origin_lat: 35.652832
+    gps_origin_lon: 139.839478
+    gps_origin_alt: 0.0
+    gps_pos_noise_std: 0.02
+    gps_heading_noise_std_deg: 2.5
+    publish_rate_hz: 10.0
+    frame_id_gps: "base_link"
+    frame_id_compass: "base_link"
+
+imu_noise_simulator:
+  ros__parameters:
+    imu_orientation_noise_std: 0.034641
+    imu_angular_vel_noise_std: 0.003464
+    imu_linear_accel_noise_std: 0.109544
+    publish_rate_hz: 20.0
+    frame_id_imu: "imu_link"

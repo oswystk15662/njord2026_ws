@@ -1,0 +1,26 @@
+buoy_obstacle_publisher:
+  ros__parameters:
+    map_frame: "map"
+    resolution: 0.1           # m/cell — matches local costmap resolution
+    grid_size_m: 60.0         # 60 m square grid centered at map origin (covers 40m field)
+    buoy_radius_m: 0.45       # physical buoy radius [m]
+    inflation_radius_m: 0.0   # LETHAL ring beyond buoy edge (costmap inflation_layer adds more)
+    publish_rate_hz: 5.0
+    # Explicit TF frame names (b31_ = task3.1, b32_ = task3.2)
+    buoy_frame_names:
+      - "b31_red_1"
+      - "b31_red_2"
+      - "b31_red_3"
+      - "b31_red_gate"
+      - "b31_green_1"
+      - "b31_green_2"
+      - "b31_green_3"
+      - "b31_green_gate"
+      - "b32_red_1"
+      - "b32_red_2"
+      - "b32_red_3"
+      - "b32_red_gate"
+      - "b32_green_1"
+      - "b32_green_2"
+      - "b32_green_3"
+      - "b32_green_gate"

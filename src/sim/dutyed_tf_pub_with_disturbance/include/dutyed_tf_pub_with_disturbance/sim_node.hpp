@@ -3,6 +3,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/int16_multi_array.hpp"
@@ -50,9 +51,11 @@ private:
   double half_beam_meter_{0.35};
   bool left_reverse_{false};
   bool right_reverse_{false};
+  bool publish_tf_{true};
 
   double latest_left_duty_{0.0};
   double latest_right_duty_{0.0};
+  std::vector<double> latest_duties_;
 
   double x_{0.0};
   double y_{0.0};
