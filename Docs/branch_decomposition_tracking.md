@@ -57,3 +57,10 @@ Every integration branch must:
 
 Hardware-dependent changes remain on hold until their hardware behavior is
 confirmed.
+
+## Known validation debt
+
+- `simple_sim` remains in the CI build set but is temporarily excluded from
+  `colcon test` because the pre-existing package has 63 flake8 violations.
+  Restore it to the test set after those violations are fixed in a dedicated
+  maintenance change.

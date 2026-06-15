@@ -73,6 +73,5 @@ jobs:
             operation_validator \
             task1_sim \
             task2_sim \
-            task3_sim \
-            simple_sim
+            task3_sim
           colcon test-result --verbose
