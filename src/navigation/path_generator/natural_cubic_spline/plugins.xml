@@ -1,0 +1,8 @@
+<?xml version="1.0"?>
+<library path="natural_cubic_spline">
+  <class
+    type="natural_cubic_spline::NaturalCubicSplineSmoother"
+    base_class_type="nav2_core::Smoother">
+    <description>A natural cubic spline-based path smoother for Nav2.</description>
+  </class>
+</library>

@@ -26,7 +26,7 @@ independently.
 | 4 | Manual control and Micon agent ([#15](https://github.com/IBO-ASV/njord2026_ws/issues/15)) | `feature/manual-control-micon-agent` | `791ddf0`, `bf12ca9`, `82e42c7`, `919d5cf`, `8dc48fa` | Pending |
 | 5 | X4 omni thruster control ([#16](https://github.com/IBO-ASV/njord2026_ws/issues/16)) | `feature/x4-omni-thruster-control` | `8dc48fa`, `18ab245`, `e4464f1`, `7d8634f`, `c020411` | Pending |
 | 6 | Buoy perception pipeline ([#17](https://github.com/IBO-ASV/njord2026_ws/issues/17)) | `feature/buoy-perception-pipeline` | `09bc35e`, `528f308`, `82e42c7` | In progress |
-| 7 | Nav2 waypoint and smoothing ([#18](https://github.com/IBO-ASV/njord2026_ws/issues/18)) | `feature/nav2-waypoint-smoothing` | `58c545b`, `9f8d770`, `4bde855`, `f481f46`, `c020411` | Pending |
+| 7 | Nav2 waypoint and smoothing ([#18](https://github.com/IBO-ASV/njord2026_ws/issues/18)) | `feature/nav2-waypoint-smoothing` | `58c545b`, `9f8d770`, `4bde855`, `f481f46`, `c020411` | In progress |
 | 8 | Task1 simulation ([#19](https://github.com/IBO-ASV/njord2026_ws/issues/19)) | `feature/task1-simulation` | `31ba23e`, `28eb2ad`, `82e42c7`, `09bc35e` | Pending |
 | 9 | Task3 navigation and simulation ([#20](https://github.com/IBO-ASV/njord2026_ws/issues/20)) | `feature/task3-navigation-simulation` | Task3 commits through `c020411` | Pending |
 | 10 | Visualization and documentation ([#21](https://github.com/IBO-ASV/njord2026_ws/issues/21)) | `docs/architecture-simulation` | `a3d180c`, `18ab245`, `8e6d589`, `c020411` | Pending |

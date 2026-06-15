@@ -1,0 +1,45 @@
+# Task 1: Maneuvering and Path Finding
+# Waypoint configuration for NJORD competition Task 1
+
+task1_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  
+  waypoints:
+    - id: 1
+      x: 0.0
+      y: 0.0
+      yaw: 0.0
+      type: "start"
+      name: "Start"
+      tolerance_m: 5.0
+      
+    - id: 2
+      x: 10.0
+      y: 0.0
+      yaw: 0.0
+      type: "intermediate"
+      name: "Buoy Detection Point"
+      tolerance_m: 5.0
+      
+    - id: 3
+      x: 20.0
+      y: 0.0
+      yaw: 0.0
+      type: "intermediate"
+      name: "Cardinal Mark Evaluation"
+      tolerance_m: 5.0
+      
+    - id: 4
+      x: 25.0
+      y: 0.0
+      yaw: 0.0
+      type: "goal"
+      name: "Goal"
+      tolerance_m: 2.0
+      
+  constraints:
+    buoy_center: [10.0, 0.0]
+    buoy_avoidance_radius: 2.5
+    cardinal_marker_detection: true
+    vision_halfway: true
