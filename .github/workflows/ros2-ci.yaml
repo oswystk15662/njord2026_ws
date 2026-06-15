@@ -43,7 +43,6 @@ jobs:
 
       - name: Install package dependencies
         run: |
-          sudo rosdep init
           rosdep update
           rosdep install --from-paths \
             src/sim/dutyed_tf_pub_with_disturbance \
