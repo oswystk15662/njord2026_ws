@@ -1,0 +1,9 @@
+catmull_rom_path_smoother:
+  ros__parameters:
+    input_topic: "/plan"
+    output_topic: "/plan_smoothed"
+    frame_id: ""
+    sample_interval: 0.5
+    publish_transient_local: true
+    preserve_input_header_stamp: false
+    minimum_input_poses: 2

@@ -65,6 +65,7 @@ jobs:
             src/detection/yolo \
             src/navigation/path_generator/natural_cubic_spline \
             src/navigation/path_generator/waypoint_publisher \
+            src/navigation/path_generator/catmull_rom \
             src/navigation/buoy_obstacle_publisher \
             src/driver/micon/kinematics \
             src/sim/dutyed_tf_pub_with_disturbance \
@@ -85,6 +86,7 @@ jobs:
             yolo \
             natural_cubic_spline \
             waypoint_publisher \
+            catmull_rom_path_smoother \
             buoy_obstacle_publisher \
             kinematics \
             dutyed_tf_pub_with_disturbance \
