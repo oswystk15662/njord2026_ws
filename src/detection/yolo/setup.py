@@ -28,7 +28,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'yolo_node = yolo.main:main'
+            'yolo_node = yolo.main:main',
+            'yolo_cuda_node = yolo.main:cuda_main',
         ],
     },
 )
