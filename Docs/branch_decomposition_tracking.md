@@ -20,9 +20,9 @@ independently.
 
 | Order | Topic | Planned branch | Source commits | Status |
 |---:|---|---|---|---|
-| 1 | CI baseline | `chore/ci-baseline` | new | In progress |
+| 1 | CI baseline | `chore/ci-baseline` | new | Merged in [#12](https://github.com/IBO-ASV/njord2026_ws/pull/12) |
 | 2 | Dependency and submodule cleanup ([#14](https://github.com/IBO-ASV/njord2026_ws/issues/14)) | `chore/dependency-submodules` | `791ddf0`, `82e42c7`, `6f8b986` | Pending review |
-| 3 | GLIM, EKF, and localization ([#13](https://github.com/IBO-ASV/njord2026_ws/issues/13)) | `feature/glim-ekf-localization` | `791ddf0`, `4bde855`, `e31390c`, `c020411` | Pending |
+| 3 | GLIM, EKF, and localization ([#13](https://github.com/IBO-ASV/njord2026_ws/issues/13)) | `feature/glim-ekf-localization` | `791ddf0`, `4bde855`, `e31390c`, `c020411` | In progress |
 | 4 | Manual control and Micon agent ([#15](https://github.com/IBO-ASV/njord2026_ws/issues/15)) | `feature/manual-control-micon-agent` | `791ddf0`, `bf12ca9`, `82e42c7`, `919d5cf`, `8dc48fa` | Pending |
 | 5 | X4 omni thruster control ([#16](https://github.com/IBO-ASV/njord2026_ws/issues/16)) | `feature/x4-omni-thruster-control` | `8dc48fa`, `18ab245`, `e4464f1`, `7d8634f`, `c020411` | Pending |
 | 6 | Buoy perception pipeline ([#17](https://github.com/IBO-ASV/njord2026_ws/issues/17)) | `feature/buoy-perception-pipeline` | `09bc35e`, `528f308`, `82e42c7` | Pending |

@@ -1,98 +1,123 @@
 from launch import LaunchDescription
-from launch.actions import IncludeLaunchDescription
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
-import os
+
 
 def generate_launch_description():
-    
-    # um982_driverのlaunchファイルのパスを取得
-    um982_launch_file = os.path.join(
-        FindPackageShare('um982_driver').find('um982_driver'),
-        'launch',
-        'um982_driver.launch.py'
-    )
+    robot_share = FindPackageShare("robot")
 
-    # Includeしてパラメータを上書き
-    um982_driver = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(um982_launch_file),
-        launch_arguments={
-            'uart_or_tcp': 'tcp',           # モード指定
-            'tcp_ip': '192.168.1.50',       # IPアドレス変更
-            'heading_frame_id': 'base_link' # フレームID変更
-        }.items()
-    )
-
-    local_ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node_local',
-        output='screen',
-        parameters=[os.path.join(
-            FindPackageShare('robot').find('robot'),
-            'config',
-            'ekf.yaml'
-        )],
-        remappings=[('odometry/filtered', 'odometry/filtered/local')]
-    )
-
-    global_ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node_global',
-        output='screen',
-        parameters=[os.path.join(
-            FindPackageShare('robot').find('robot'),
-            'config',
-            'ekf.yaml'
-        )],
-        remappings=[('odometry/filtered', 'odometry/filtered/global')]
-    )
-
-    navsat_transform_node = Node(
-        package='robot_localization',
-        executable='navsat_transform_node',
-        name='navsat_transform_node',
-        output='screen',
-        parameters=[{
-            'frequency': 10.0,
-            'magnetic_declination_radians': 0.0, # 地域の磁気偏角を設定
-            'yaw_offset': 0.0,                   # IMUが真東を向いて0なら0。真北なら1.57(pi/2)
-            'zero_altitude': True,
-            'broadcast_utm_transform': True,
-            'publish_filtered_gps': True,
-            'use_odometry_yaw': False,
-            'wait_for_datum': False,
-        }],
-        remappings=[
-            ('imu/data', '/wit/imu'),          # 方位基準に使うIMU (またはDual AntennaのHeading)
-            ('gps/fix', '/gps/fix'),           # GNSSドライバのトピック
-            ('odometry/filtered', 'odometry/filtered/local') # 初期位置計算用にLocal EKFの結果が必要
+    robot_description = Command(
+        [
+            FindExecutable(name="xacro"),
+            " ",
+            PathJoinSubstitution([robot_share, "urdf", "robot.urdf.xacro"]),
         ]
     )
 
-    static_transform_publisher_launch_file = os.path.join(
-        FindPackageShare('robot').find('robot'),
-        'launch',
-        'static_transform_publisher.launch.py'
-    )
-    static_transform_publisher = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            static_transform_publisher_launch_file
-        ),
-        launch_arguments={
-            'x': '0.0',
-            'y': '0.0',
-            'z': '0.0',
-            'roll': '0.0',
-            'pitch': '0.0',
-            'yaw': '0.0',
-            'frame_id': 'base_link',
-            'child_frame_id': 'um982_link'
-        }.items()
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="robot_state_publisher",
+        output="screen",
+        parameters=[{"robot_description": robot_description}],
     )
 
-    return LaunchDescription([
-        um982_driver
-    ])
+    # The UM982 driver is launched separately because its transport settings
+    # are deployment-specific.
+    um982_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="um982_static_tf_pub",
+        output="screen",
+        arguments=[
+            "--x",
+            "0.0",
+            "--y",
+            "0.0",
+            "--z",
+            "0.0",
+            "--roll",
+            "0.0",
+            "--pitch",
+            "0.0",
+            "--yaw",
+            "0.0",
+            "--frame-id",
+            "base_link",
+            "--child-frame-id",
+            "um982_link",
+        ],
+    )
+
+    glim_node = Node(
+        package="glim_ros",
+        executable="glim_node",
+        name="glim_node",
+        output="screen",
+        parameters=[
+            {
+                "config_path": PathJoinSubstitution(
+                    [robot_share, "config", "glim_config"]
+                ),
+                "use_sim_time": False,
+            }
+        ],
+    )
+
+    local_ekf_node = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node_local",
+        output="screen",
+        parameters=[
+            PathJoinSubstitution([robot_share, "config", "ekf_local.yaml"])
+        ],
+        remappings=[("odometry/filtered", "odometry/filtered/local")],
+    )
+
+    global_ekf_node = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node_global",
+        output="screen",
+        parameters=[
+            PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"])
+        ],
+        remappings=[("odometry/filtered", "odometry/filtered/global")],
+    )
+
+    navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="navsat_transform_node",
+        output="screen",
+        parameters=[
+            {
+                "frequency": 10.0,
+                "magnetic_declination_radians": 0.0,
+                "yaw_offset": 0.0,
+                "zero_altitude": True,
+                "broadcast_utm_transform": True,
+                "publish_filtered_gps": True,
+                "use_odometry_yaw": False,
+                "wait_for_datum": False,
+            }
+        ],
+        remappings=[
+            ("imu", "/wit/imu"),
+            ("gps/fix", "/gps/fix"),
+            ("odometry/filtered", "odometry/filtered/local"),
+        ],
+    )
+
+    return LaunchDescription(
+        [
+            robot_state_publisher,
+            um982_static_tf,
+            glim_node,
+            local_ekf_node,
+            global_ekf_node,
+            navsat_transform_node,
+        ]
+    )
