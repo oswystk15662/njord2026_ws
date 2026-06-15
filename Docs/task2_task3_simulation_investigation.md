@@ -118,7 +118,7 @@ ros2 launch task3_sim task3_sim.launch.py \
 ros2 launch task3_sim task3_sim.launch.py task_type:=task3_2
 ```
 
-ただし、現在の `task3_2` は最後まで自動実行できない。理由は後述する。
+`task3_2` は専用の approach -> wait -> exit フローで自動実行される。
 
 ### 起動確認
 
@@ -244,7 +244,8 @@ Task3 の Nav2 パイプラインは以下。
 
 ### TF authority
 
-現状のシミュレーションでは `dutyed_tf_pub_with_disturbance` が TF authority。
+Task3 simulation では SimNode が唯一の TF authority になる。実機では GLIM が
+`map -> odom -> base_link` を publish し、その `/odom` を local EKF に入力する。
 
 ```mermaid
 flowchart LR
@@ -259,8 +260,7 @@ flowchart LR
 - `world -> map`: SimNode が static TF を publish
 - `map -> odom`: SimNode が static TF を publish
 - `odom -> base_link`: SimNode が dynamic TF を publish
-- local/global EKF: `publish_tf: false`
-- EKF は filtered odometry topic を出すが、TF authority ではない
+- local/global EKF: filtered odometry topic のみ publish
 
 ### Task3 orchestrator
 
@@ -297,46 +297,45 @@ Stage 3: GPS10
 
 ## 4. Task3 の既知問題と注意点
 
+以下の 4.1〜4.4 は `4-task1` ブランチで修正済み。
+
 ### 4.1 BT XML の絶対パス
 
-`src/robot/config/nav2_params_task3.yaml` には以下のような絶対パスがある。
+以前は `src/robot/config/nav2_params_task3.yaml` に以下のような絶対パスがあった。
 
 ```text
 /home/osw/njord2026_ws/install/robot/share/robot/config/...
 ```
 
-workspace が `/home/osw/njord2026_ws` 以外にある場合、`bt_navigator` が BT XML を読めず起動に失敗する可能性が高い。
-
-推奨対応:
-
-- launch 側で `get_package_share_directory("robot")` からパスを生成する
-- または実行環境を一時的に `/home/osw/njord2026_ws` に揃える
+修正後は `robot/launch/nav2.launch.py` が `get_package_share_directory("robot")`
+から BT XML の絶対パスを生成し、`RewrittenYaml` で Nav2 params に注入する。
 
 ### 4.2 `task3_2` の waypoint 数と state machine が不一致
 
-`task3_2_config` の waypoint は4点だが、state machine は `task3_1` と同じ7点構成を前提にしている。
+`task3_2_config` の4点構成に合わせた専用フローを追加した。
 
-- Stage 1 は先頭3点を送れる
-- Stage 2 は `len(waypoints) >= 6` を要求するため実行不可
-- Stage 3 は `len(waypoints) >= 7` を要求するため実行不可
-
-`task3_2` を単独完走させるには専用 state machine を追加する必要がある。
+```text
+GPS9 -> gate -> berth2 -> wait -> GPS10
+```
 
 ### 4.3 X4 omni の sway 指令が kinematics で無視される
 
-Nav2 の `velocity_smoother` は `linear.y` を許可しているが、現在の `kinematics` は以下しか使用していない。
-
-- `msg->linear.x`
-- `msg->angular.z`
-
-`msg->linear.y` は推力配分へ反映されない。
-そのため「holonomic / omni 向け」として設定した Nav2 の横移動指令は実船物理モデルまで届かない。
+`kinematics` に各スラスタの `sin(yaw)` に基づく sway 寄与と `sway_gain`
+を追加した。Nav2 の `linear.y` は `/thruster_command` へ反映される。実機配線用の
+`FL/RL reverse` は Task3 simulation launch 内だけ無効化し、物理シミュレータとの
+符号契約も揃えた。
 
 ### 4.4 TF と filtered odometry の役割が重複気味
 
-SimNode が `map -> odom -> base_link` を直接 publish している一方で、local/global EKF と navsat transform も起動している。
+到達可能な全ブランチ・コミット履歴を確認したが、`glim_base_link` frame は存在しない。
+より新しい関連コミット `e31390c` の設計を正として維持する。
 
-現状は TF 競合を避けるため EKF の `publish_tf` を無効化している。これはシミュレーションには有効だが、実機構成との差分を理解したうえで使用する必要がある。
+- Task3 simulation: SimNode が `world -> map -> odom -> base_link` の唯一の TF authority
+- Task3 local/global EKF: filtered odometry topic のみ publish
+- 実機: GLIM が `map -> odom -> base_link` を publishし、その `/odom` を EKF に入力
+
+Task3 launch 側でも local/global EKF の `publish_tf: false` を明示的に上書きし、
+YAML が将来変更されても SimNode と TF 競合しないようにした。
 
 ### 4.5 `task3_sim 動くけどうまくいかない`
 
@@ -520,7 +519,8 @@ MPPI は自分で global planner を置き換えるため、Task2 では Nav2 �
 ```
 
 ただし `TrajectoryGenerator._own_pose_in_map()` は Odometry の pose を無条件で map 基準として扱う。
-現在は SimNode の `map -> odom` が identity のため見かけ上動くが、将来 `map -> odom` が非 identity になると誤る。
+Task3 simulation では SimNode の `map -> odom` が identity のため見かけ上動くが、
+実機の GLIM 構成ではこの前提に依存できない。
 
 本来は以下のいずれかに修正すべき。
 

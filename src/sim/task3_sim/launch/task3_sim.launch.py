@@ -18,12 +18,12 @@ def generate_launch_description():
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
     #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, orchestrator, EKF, navsat
-    #   t=5.0  NAV2 layer:   Nav2 bringup (needs map→odom TF from global EKF + GPS)
+    #   t=5.0  NAV2 layer:   Nav2 bringup (needs SimNode TF + filtered odometry)
     #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
     #
     # Why 5s for Nav2?
     #   navsat_transform initializes on first GPS fix (~0.5s), publishes /odometry/gps.
-    #   global_ekf fuses it into map→odom TF (~1-2 cycles = 0.1s).
+    #   global_ekf then starts publishing /odometry/filtered/global.
     #   But lifecycle_manager configure+activate for all Nav2 nodes takes 2-5s.
     #   Total margin: 5s should be safe for sim where GPS is synthetic and instant.
     #
@@ -36,7 +36,7 @@ def generate_launch_description():
         description='Delay before launching sensor/EKF layer')
     nav2_delay_arg = DeclareLaunchArgument(
         'nav2_delay', default_value='5.0',
-        description='Delay before launching Nav2 (needs map→odom TF from global EKF)')
+        description='Delay before launching Nav2 (needs SimNode TF and filtered odometry)')
     goal_delay_arg = DeclareLaunchArgument(
         'goal_delay', default_value='8.0',
         description='Delay before launching waypoint_publisher (needs Nav2 action servers up)')
@@ -50,15 +50,14 @@ def generate_launch_description():
     task_type    = LaunchConfiguration('task_type')
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
-    # Physics simulation (odom ground truth, publish_tf=False → EKF handles odom→base_link)
+    # SimNode is the sole Task3 simulation TF authority.
     sim_dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
         executable="dutyed_tf_pub_with_disturbance_node",
         name="dutyed_tf_pub_with_disturbance_node",
         parameters=[
             os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {"publish_tf": True}    # SimNode is sole TF authority (odom→base_link, map→odom, world→map)
-            # EKF nodes have publish_tf=false — they only produce odometry topics
+            {"publish_tf": True}
         ],
         output="screen"
     )
@@ -84,7 +83,14 @@ def generate_launch_description():
         package="kinematics",
         executable="kinematics_node",
         name="kinematics_node",
-        parameters=[os.path.join(pkg_kinematics, "config", "config.yaml")],
+        parameters=[
+            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            {
+                # Hardware wiring reversals are not present in the physics simulator.
+                "thrusters.FL.reverse": False,
+                "thrusters.RL.reverse": False,
+            },
+        ],
         output="screen",
     )
 
@@ -101,23 +107,29 @@ def generate_launch_description():
         }]
     )
 
-    # EKF local: /odom + /wit/imu → odometry/filtered/local  (odom→base_link TF)
+    # EKF local: /odom + /wit/imu -> odometry/filtered/local topic only
     local_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node_local',
         output='screen',
-        parameters=[os.path.join(pkg_robot, 'config', 'ekf_local.yaml')],
+        parameters=[
+            os.path.join(pkg_robot, 'config', 'ekf_local.yaml'),
+            {'publish_tf': False},
+        ],
         remappings=[('odometry/filtered', 'odometry/filtered/local')]
     )
 
-    # EKF global: odometry/filtered/local + /odometry/gps → map→odom TF
+    # EKF global: local filtered odom + GPS -> odometry/filtered/global topic only
     global_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node_global',
         output='screen',
-        parameters=[os.path.join(pkg_robot, 'config', 'ekf_global.yaml')],
+        parameters=[
+            os.path.join(pkg_robot, 'config', 'ekf_global.yaml'),
+            {'publish_tf': False},
+        ],
         remappings=[('odometry/filtered', 'odometry/filtered/global')]
     )
 
@@ -187,7 +199,7 @@ def generate_launch_description():
     )
 
     # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
-    # Start Nav2 after EKF + navsat_transform have had time to produce map→odom TF.
+    # Start Nav2 after SimNode TF and EKF/navsat filtered odometry are available.
     # lifecycle_manager will configure+activate: controller, smoother, planner,
     # behavior, bt_navigator, waypoint_follower, velocity_smoother (~3-5s).
     nav2_launch = IncludeLaunchDescription(
