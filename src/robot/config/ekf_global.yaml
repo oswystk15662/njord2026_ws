@@ -1,24 +1,29 @@
 ### Global EKF (map -> odom) ###
+# The local EKF estimate and GPS odometry are fused into a globally corrected
+# odometry topic. GLIM remains the TF authority on the real robot.
 ekf_filter_node_global:
   ros__parameters:
     frequency: 30.0
-    two_d_mode: false
-    publish_tf: true
+    two_d_mode: true
+    publish_tf: false
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
-    world_frame: map  # Globalはmap座標系が基準
+    world_frame: map
+    print_diagnostics: true
 
-    # LiDAR Odometry (Localと同じ)
-    odom0: /odom
+    # Local EKF output. Differential mode avoids treating an odom-frame pose
+    # as an absolute map-frame pose.
+    odom0: odometry/filtered/local
     odom0_config: [true,  true,  true,
                    true,  true,  true,
                    false, false, false,
                    false, false, false,
                    false, false, false]
-    odom0_differential: false
+    odom0_differential: true
+    odom0_relative: false
 
-    # IMU (Localと同じ)
+    # WIT Motion IMU: retain absolute heading in the global filter
     imu0: /wit/imu
     imu0_config: [false, false, false,
                   true,  true,  true,
@@ -26,11 +31,12 @@ ekf_filter_node_global:
                   true,  true,  true,
                   true,  true,  true]
     imu0_differential: false
-    imu0_relative: false # Globalでは絶対方位(Heading)を信じる
+    imu0_relative: false
+    imu0_remove_gravitational_acceleration: true
 
-    # GPS (navsat_transform_nodeからの出力)
+    # GPS odometry from navsat_transform_node
     odom1: /odometry/gps
-    odom1_config: [true,  true,  false,  # X, Y (Zは信頼しない場合false)
+    odom1_config: [true,  true,  false,
                    false, false, false,
                    false, false, false,
                    false, false, false,
