@@ -1,0 +1,47 @@
+topic_heartbeat_profiles:
+  task3:
+    - monitor_name: sim_odom
+      topic: /odom
+      topic_type: nav_msgs/msg/Odometry
+      mode: required_frequency
+      expected_frequency: 50.0
+      minimum_frequency: 20.0
+      timeout: 0.5
+      stale_timeout: 2.0
+      qos_reliability: best_effort
+    - monitor_name: imu
+      topic: /wit/imu
+      topic_type: sensor_msgs/msg/Imu
+      mode: required_frequency
+      expected_frequency: 50.0
+      minimum_frequency: 20.0
+      timeout: 0.5
+      stale_timeout: 2.0
+      qos_reliability: best_effort
+    - monitor_name: gps_fix
+      topic: /gps/fix
+      topic_type: sensor_msgs/msg/NavSatFix
+      mode: required_frequency
+      expected_frequency: 10.0
+      minimum_frequency: 2.0
+      timeout: 1.0
+      stale_timeout: 3.0
+      qos_reliability: best_effort
+    - monitor_name: cmd_vel
+      topic: /cmd_vel
+      topic_type: geometry_msgs/msg/Twist
+      mode: heartbeat_only
+      expected_frequency: 10.0
+      minimum_frequency: 1.0
+      timeout: 2.0
+      stale_timeout: 8.0
+      qos_reliability: reliable
+    - monitor_name: thruster_command
+      topic: /thruster_command
+      topic_type: std_msgs/msg/Int16MultiArray
+      mode: heartbeat_only
+      expected_frequency: 10.0
+      minimum_frequency: 1.0
+      timeout: 2.0
+      stale_timeout: 8.0
+      qos_reliability: reliable

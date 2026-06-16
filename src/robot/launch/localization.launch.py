@@ -1,11 +1,25 @@
+import os
+
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     robot_share = FindPackageShare("robot")
+    robot_share_path = get_package_share_directory("robot")
+
+    enable_diagnostics_arg = DeclareLaunchArgument(
+        "enable_diagnostics",
+        default_value="true",
+        description="Launch generic topic heartbeat diagnostics for localization topics",
+    )
 
     robot_description = Command(
         [
@@ -111,13 +125,23 @@ def generate_launch_description():
         ],
     )
 
+    diagnostics_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
+        ),
+        launch_arguments={"profile": "localization"}.items(),
+        condition=IfCondition(LaunchConfiguration("enable_diagnostics")),
+    )
+
     return LaunchDescription(
         [
+            enable_diagnostics_arg,
             robot_state_publisher,
             um982_static_tf,
             glim_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,
+            diagnostics_launch,
         ]
     )

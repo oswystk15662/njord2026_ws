@@ -66,6 +66,7 @@ jobs:
             src/navigation/path_generator/natural_cubic_spline \
             src/navigation/path_generator/waypoint_publisher \
             src/navigation/buoy_obstacle_publisher \
+            src/diagnostics/diagnostic_monitors \
             src/driver/micon/kinematics \
             src/sim/dutyed_tf_pub_with_disturbance \
             src/sim/sensor_sim_with_noise \
@@ -86,6 +87,7 @@ jobs:
             natural_cubic_spline \
             waypoint_publisher \
             buoy_obstacle_publisher \
+            diagnostic_monitors \
             kinematics \
             dutyed_tf_pub_with_disturbance \
             sensor_sim_with_noise \
