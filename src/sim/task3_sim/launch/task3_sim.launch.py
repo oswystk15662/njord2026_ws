@@ -120,9 +120,15 @@ def generate_launch_description():
         output='screen',
         parameters=[
             os.path.join(pkg_robot, 'config', 'ekf_local.yaml'),
-            {'publish_tf': False},
+            {
+                'publish_tf': False,
+                'print_diagnostics': False,
+            },
         ],
-        remappings=[('odometry/filtered', 'odometry/filtered/local')]
+        remappings=[
+            ('odometry/filtered', 'odometry/filtered/local'),
+            ('/diagnostics', '/diagnostics/ekf'),
+        ]
     )
 
     # EKF global: local filtered odom + GPS -> odometry/filtered/global topic only
@@ -133,9 +139,15 @@ def generate_launch_description():
         output='screen',
         parameters=[
             os.path.join(pkg_robot, 'config', 'ekf_global.yaml'),
-            {'publish_tf': False},
+            {
+                'publish_tf': False,
+                'print_diagnostics': False,
+            },
         ],
-        remappings=[('odometry/filtered', 'odometry/filtered/global')]
+        remappings=[
+            ('odometry/filtered', 'odometry/filtered/global'),
+            ('/diagnostics', '/diagnostics/ekf'),
+        ]
     )
 
     # NavSat transform: /gps/fix + /wit/imu → /odometry/gps
