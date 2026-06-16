@@ -1,0 +1,44 @@
+opponent_vessel_node:
+  ros__parameters:
+    frame_id: "map"
+    vessel_frame_id: "opponent_vessel"
+    footprint_topic: "/sim/opponent_vessel_footprint"
+    marker_topic: "/sim/opponent_vessel_outline"
+    gps_marker_topic: "/sim/task2_gps_markers"
+    start_label: "GPS point 6"
+    goal_label: "GPS point 5"
+    publish_rate_hz: 10.0
+    start_delay_s: 3.0
+    speed_mps: 1.0289
+    start_xy: [60.0, 0.0]
+    goal_xy: [0.0, 0.0]
+    disturbance_amp_m: 0.3
+    disturbance_freq_hz: 0.1
+    vessel_height_m: 3.0
+    marker_line_width_m: 0.08
+    footprint_vertices:
+      - 2.0
+      - 0.0
+      - 0.0
+      - 1.0
+      - -2.0
+      - 1.0
+      - -2.0
+      - -1.0
+      - 0.0
+      - -1.0
+
+ideal_lidar_pointcloud_node:
+  ros__parameters:
+    map_frame: "map"
+    target_frame: "livox_frame"
+    input_topic: "/sim/opponent_vessel_footprint"
+    output_topic: "/pointcloud"
+    publish_rate_hz: 10.0
+    point_z_m: 0.0
+    min_range_m: 0.2
+    max_range_m: 80.0
+    min_angle_deg: -180.0
+    max_angle_deg: 180.0
+    angle_increment_deg: 0.1
+    tf_timeout_s: 0.02
