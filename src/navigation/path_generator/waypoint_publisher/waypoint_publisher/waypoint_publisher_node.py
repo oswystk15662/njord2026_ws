@@ -71,6 +71,7 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
+        self.frame_id = self.frame_id or self.config.get('frame_id', 'map')
         
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')

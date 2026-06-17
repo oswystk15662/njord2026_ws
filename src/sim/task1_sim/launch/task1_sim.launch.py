@@ -21,6 +21,7 @@ def include_launch(package_name, relative_path, condition, launch_arguments=None
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
+    pkg_kinematics = get_package_share_directory("kinematics")
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
     nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
     nav_through_poses_bt_xml = os.path.join(
@@ -31,6 +32,7 @@ def generate_launch_description():
 
     use_dynamics_arg = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="true")
+    use_kinematics_arg = DeclareLaunchArgument("use_kinematics", default_value="true")
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
     driver_delay_arg = DeclareLaunchArgument(
@@ -55,6 +57,22 @@ def generate_launch_description():
         "dutyed_tf_pub_with_disturbance",
         ["launch", "sim_dynamics.launch.py"],
         IfCondition(LaunchConfiguration("use_dynamics")),
+    )
+
+    kinematics = Node(
+        package="kinematics",
+        executable="kinematics_node",
+        name="kinematics_node",
+        parameters=[
+            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            {
+                # Hardware wiring reversals are not present in the physics simulator.
+                "thrusters.FL.reverse": False,
+                "thrusters.RL.reverse": False,
+            },
+        ],
+        condition=IfCondition(LaunchConfiguration("use_kinematics")),
+        output="screen",
     )
 
     configured_nav2_params = RewrittenYaml(
@@ -106,6 +124,7 @@ def generate_launch_description():
         period=LaunchConfiguration("driver_delay"),
         actions=[
             dynamics,
+            kinematics,
             validator,
             orchestrator,
         ],
@@ -127,6 +146,7 @@ def generate_launch_description():
         startup_message,
         use_dynamics_arg,
         use_nav2_arg,
+        use_kinematics_arg,
         use_waypoints_arg,
         use_validator_arg,
         driver_delay_arg,
