@@ -74,7 +74,6 @@ jobs:
             src/sim/task1_sim \
             src/sim/task2_sim \
             src/sim/task3_sim \
-            src/simple_sim \
             --ignore-src --rosdistro humble -r -y
 
       - name: Build core simulation packages
@@ -94,8 +93,7 @@ jobs:
             operation_validator \
             task1_sim \
             task2_sim \
-            task3_sim \
-            simple_sim
+            task3_sim
 
       - name: Test core simulation packages
         run: |
