@@ -81,7 +81,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("forced_mark", "")
         self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 15.0])
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
-        self.declare_parameter("pre_inference_block", [0.0, 28.0, -35.0, -10.0])
+        self.declare_parameter("pre_inference_block", [])
         self.declare_parameter("obstacle_spacing", 0.25)
         self.declare_parameter("boundary_marker_step", 5.0)
         self.declare_parameter("seed", 2026)
@@ -230,6 +230,8 @@ class Task1Orchestrator(Node):
             points.extend(sample_line([start_x, y + y_offset], [end_x, y + y_offset], self.obstacle_spacing))
 
     def _append_rect_fill(self, points: list[list[float]], rect: list[float]):
+        if len(rect) != 4:
+            return
         min_x, max_x, min_y, max_y = rect
         y = min_y
         while y <= max_y + 1.0e-6:

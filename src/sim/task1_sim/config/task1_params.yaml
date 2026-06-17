@@ -24,7 +24,11 @@ task1_orchestrator:
     # inside the simulated course instead of on the boundary obstacle.
     course_bounds: [-5.0, 55.0, -40.0, 15.0]
     center_line: [0.0, 40.0, -10.0, 0.05]
-    pre_inference_block: [0.0, 28.0, -35.0, -10.0]
+    # Optional [min_x, max_x, min_y, max_y] blocker before marker detection.
+    # Keep disabled by default because the full NavigateThroughPoses request
+    # includes post-inference waypoints; blocking that area makes those goals
+    # invalid before the route can start.
+    pre_inference_block: []
     obstacle_spacing: 0.25
     boundary_marker_step: 5.0
 
