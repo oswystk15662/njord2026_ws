@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from nav2_common.launch import RewrittenYaml
 
 
 def include_launch(package_name, relative_path, condition, launch_arguments=None):
@@ -22,6 +23,11 @@ def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
     nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
+    nav_through_poses_bt_xml = os.path.join(
+        pkg_share,
+        "behavior_trees",
+        "navigate_through_poses_w_replanning_and_recovery.xml",
+    )
 
     use_dynamics_arg = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="true")
@@ -51,12 +57,21 @@ def generate_launch_description():
         IfCondition(LaunchConfiguration("use_dynamics")),
     )
 
+    configured_nav2_params = RewrittenYaml(
+        source_file=LaunchConfiguration("nav2_params"),
+        root_key=None,
+        param_rewrites={
+            "bt_navigator.ros__parameters.default_nav_through_poses_bt_xml": nav_through_poses_bt_xml,
+        },
+        convert_types=True,
+    )
+
     nav2 = include_launch(
         "nav2_bringup",
         ["launch", "navigation_launch.py"],
         IfCondition(LaunchConfiguration("use_nav2")),
         {
-            "params_file": LaunchConfiguration("nav2_params"),
+            "params_file": configured_nav2_params,
             "use_sim_time": "false",
             "autostart": "true",
         },

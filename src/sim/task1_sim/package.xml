@@ -17,6 +17,7 @@
   <depend>nav_msgs</depend>
   <depend>visualization_msgs</depend>
   <depend>nav2_bringup</depend>
+  <depend>natural_cubic_spline</depend>
   <depend>waypoint_publisher</depend>
   <depend>operation_validator</depend>
   <depend>dutyed_tf_pub_with_disturbance</depend>
