@@ -2,8 +2,9 @@
 # Waypoint configuration for NJORD competition Task 3
 # Supports both normal docking (3.1) and parallel docking (3.2)
 #
-# Full competition sequence (task3_1 → task3_2):
-#   gps7(start) → gps8(gate) → berth1(normal dock) → gps8(exit) → gps9(gate2) → berth2(parallel dock) → gps10(finish)
+# Full competition sequence (task3_1 -> task3_2):
+#   gps7(start) -> gps8(gate midpoint) -> berth1 approach -> berth1
+#     -> berth1 exit -> gps9(gate midpoint) -> berth2 approach -> berth2 -> gps10(finish)
 #
 # Field geometry (point-symmetric about origin):
 #   Normal dock (3.1):   x=14~16, y=±2.0  (boat enters from west, heading=0)
@@ -26,14 +27,26 @@ task3_1_config:
       name: "GPS 7 - Start"
       tolerance_m: 2.0
 
-    # GPS 8: gate approach to normal dock field, come from south heading north
+    # GPS 8: gate center between b31_red_gate and b31_green_gate
     - id: 8
       x: 13.0
-      y: 11.0
+      y: 10.0
       yaw: 1.5708        # heading north (π/2)
       type: "gate"
       name: "GPS 8 - Normal Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b31_red_gate"
+        green_frame: "b31_green_gate"
+
+    # Safe mouth point before entering the normal dock slot.
+    - id: "berth1_approach"
+      x: 13.25
+      y: 1.065
+      yaw: 0.0
+      type: "dock_approach"
+      name: "Berth 1 - Approach"
+      tolerance_m: 0.8
 
     # Berth 1: normal docking (center berth, heading east into dock)
     - id: "berth1"
@@ -45,23 +58,35 @@ task3_1_config:
       tolerance_m: 0.8
       dock_type: "normal"
 
-    # GPS 8 again: undock and return to gate
-    - id: "8_exit"
-      x: 13.0
-      y: 11.0
-      yaw: -1.5708       # heading south (back out)
+    # Back out to the mouth before navigating away from the dock.
+    - id: "berth1_exit"
+      x: 13.25
+      y: 1.065
+      yaw: 3.14159
       type: "undock_exit"
-      name: "GPS 8 - Exit Normal Dock"
+      name: "Berth 1 - Exit"
       tolerance_m: 1.5
 
-    # GPS 9: gate approach to parallel dock field (point-symmetric side)
+    # GPS 9: gate center between b32_red_gate and b32_green_gate
     - id: 9
       x: -13.0
-      y: 11.0
+      y: -10.0
       yaw: -1.5708       # heading south toward parallel dock gate
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b32_red_gate"
+        green_frame: "b32_green_gate"
+
+    # Safe mouth point before entering the parallel dock.
+    - id: "berth2_approach"
+      x: -13.25
+      y: 0.0
+      yaw: 3.14159
+      type: "dock_approach"
+      name: "Berth 2 - Approach"
+      tolerance_m: 0.8
 
     # Berth 2: parallel docking (heading west into parallel dock)
     - id: "berth2"
@@ -91,6 +116,11 @@ task3_1_config:
     attempts: 2
     goal_tolerance: 1.0
 
+  stages:
+    stage_1: [7, 8, "berth1_approach", "berth1"]
+    stage_2: ["berth1_exit", 9, "berth2_approach", "berth2"]
+    stage_3: [10]
+
 
 # Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
 task3_2_config:
@@ -108,14 +138,26 @@ task3_2_config:
       name: "GPS 9 - Start (standalone)"
       tolerance_m: 2.0
 
-    # Gate for parallel dock
+    # Gate for parallel dock, centered between b32_red_gate and b32_green_gate
     - id: "9_gate"
       x: -13.0
-      y: 11.0
+      y: -10.0
       yaw: -1.5708
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b32_red_gate"
+        green_frame: "b32_green_gate"
+
+    # Safe mouth point before entering the parallel dock.
+    - id: "berth2_approach"
+      x: -13.25
+      y: 0.0
+      yaw: 3.14159
+      type: "dock_approach"
+      name: "Berth 2 - Approach"
+      tolerance_m: 0.8
 
     # Berth 2: parallel docking
     - id: "berth2"
@@ -145,17 +187,22 @@ task3_2_config:
     attempts: 2
     goal_tolerance: 1.0
 
+  stages:
+    stage_1: [9, "9_gate", "berth2_approach", "berth2"]
+    stage_2: []
+    stage_3: [10]
+
 
 # Multi-stage async flow for task3 (handled by waypoint_publisher_node.py state machine)
-# Stage 1: 7 → 8 → berth1       (approach + normal dock)
+# Stage 1: 7 -> 8 -> berth1_approach -> berth1
 # Wait:    stationary at berth1 for wait_time_s
-# Stage 2: 8_exit → 9 → berth2  (undock + gate + parallel dock)
+# Stage 2: berth1_exit -> 9 -> berth2_approach -> berth2
 # Wait:    stationary at berth2 for wait_time_s
 # Stage 3: 10                    (exit + finish)
 async_flow:
   stage_1:
     name: "Approach Normal Dock"
-    waypoints: [7, 8, "berth1"]
+    waypoints: [7, 8, "berth1_approach", "berth1"]
     next_trigger: "goal_reached"
 
   stage_2:
@@ -165,7 +212,7 @@ async_flow:
 
   stage_3:
     name: "Undock and Approach Parallel Dock"
-    waypoints: ["8_exit", 9, "berth2"]
+    waypoints: ["berth1_exit", 9, "berth2_approach", "berth2"]
     next_trigger: "goal_reached"
 
   stage_4:

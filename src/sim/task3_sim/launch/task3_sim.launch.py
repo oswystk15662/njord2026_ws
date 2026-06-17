@@ -174,6 +174,8 @@ def generate_launch_description():
             'field_center_x': 0.0,
             'field_center_y': 0.0,
             'boundary_cost': 100,
+            'include_task3_docks': True,
+            'dock_wall_thickness_m': 0.3,
         }],
         output='screen',
     )
@@ -232,6 +234,7 @@ def generate_launch_description():
             'task_type': task_type,
             'frame_id': 'map',
             'publish_rate_hz': '2.0',
+            'use_dynamic_gate_midpoints': 'true',
         }.items()
     )
 
