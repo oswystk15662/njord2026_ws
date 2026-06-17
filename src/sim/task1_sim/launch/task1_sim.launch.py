@@ -2,7 +2,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
@@ -27,6 +27,21 @@ def generate_launch_description():
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="true")
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
+    driver_delay_arg = DeclareLaunchArgument(
+        "driver_delay",
+        default_value="0.0",
+        description="Delay before launching Task1 dynamics/orchestrator/validator layer",
+    )
+    nav2_delay_arg = DeclareLaunchArgument(
+        "nav2_delay",
+        default_value="5.0",
+        description="Delay before launching Nav2",
+    )
+    goal_delay_arg = DeclareLaunchArgument(
+        "goal_delay",
+        default_value="8.0",
+        description="Delay before launching waypoint_publisher",
+    )
     params_arg = DeclareLaunchArgument("params", default_value=config)
     nav2_params_arg = DeclareLaunchArgument("nav2_params", default_value=nav2_params)
 
@@ -72,16 +87,39 @@ def generate_launch_description():
         output="screen",
     )
 
+    sensor_layer_timer = TimerAction(
+        period=LaunchConfiguration("driver_delay"),
+        actions=[
+            dynamics,
+            validator,
+            orchestrator,
+        ],
+    )
+
+    nav2_layer_timer = TimerAction(
+        period=LaunchConfiguration("nav2_delay"),
+        actions=[nav2],
+    )
+
+    goal_layer_timer = TimerAction(
+        period=LaunchConfiguration("goal_delay"),
+        actions=[waypoints],
+    )
+
+    startup_message = LogInfo(msg="========== Task1 Sim Bringup Started ==========")
+
     return LaunchDescription([
+        startup_message,
         use_dynamics_arg,
         use_nav2_arg,
         use_waypoints_arg,
         use_validator_arg,
+        driver_delay_arg,
+        nav2_delay_arg,
+        goal_delay_arg,
         params_arg,
         nav2_params_arg,
-        dynamics,
-        nav2,
-        validator,
-        waypoints,
-        orchestrator,
+        sensor_layer_timer,
+        nav2_layer_timer,
+        goal_layer_timer,
     ])
