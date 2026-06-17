@@ -1,12 +1,36 @@
-このpkgはnjord2026のtask1のシミュレーションをするpkgです。
-task1の詳細はこのpkg内のDocs内を見てください。
+# task1_sim
 
-このpkgは、
-* task1_simのための以下のlaunchを含みます
-  * dutyed_tf_pub_with_disturbance
-  * nav2
-  * configに緯度経度で指定されたGPSpoint4つとwaypoint1.1~1.10・3.1~3.3をnav2に渡す
-  * 下記自分のnode
-* yoloの代替として、yoloの推論開始serviceが来たら、即座にランダムなEWNSいずれかを返すnodeを実装。
-* start（初期位置を与える必要があれば初期位置も）とgoal（こちらはGPSpoint4の半径~mに入ったら）を出せるようにする。
-などtask1_simのorchestratorを担当します。
+NJORD 2026 Task 1 maneuvering/path-finding simulation harness.
+
+Task 1 requires the ASV to follow four GPS checkpoints, pass intermediate GPS
+waypoints, detect cardinal markers, pass the buoy on the side indicated by the
+marker, avoid buoy contact, and compare the actual route with the ideal route.
+This package models that flow in a simulation-local `map` frame.
+
+## Responsibilities
+
+- launch the Task1 sim stack: dynamics, Nav2, waypoint publisher, validator, and orchestrator
+- provide a YOLO/cardinal-marker stub through `/yolo/start_inference`
+- publish dynamic virtual obstacles on `/virtual_obstacles`
+- publish route and buoy status on `/sim/task1_status`
+- publish boundary/buoy RViz markers on `/sim/boundary_markers`
+- publish `/sim/goal_reached` only after waypoint, avoidance, and final goal constraints pass
+
+Waypoint goals are sent by `waypoint_publisher` through Nav2's
+`/navigate_through_poses` action. `task1_sim` does not publish `/goal_pose`.
+
+## Usage
+
+```bash
+ros2 launch task1_sim task1_sim.launch.py
+```
+
+Useful launch switches:
+
+- `use_dynamics:=false`
+- `use_nav2:=false`
+- `use_waypoints:=false`
+- `use_validator:=false`
+
+The default route and simulated obstacle geometry are configured in
+`config/task1_params.yaml`.
