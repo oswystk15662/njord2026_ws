@@ -14,10 +14,12 @@ This package models that flow in a simulation-local `map` frame.
 - publish dynamic virtual obstacles on `/virtual_obstacles`
 - publish route and buoy status on `/sim/task1_status`
 - publish boundary/buoy RViz markers on `/sim/boundary_markers`
+- publish cardinal-direction RViz arrows on `/sim/cardinal_mark_markers`
 - publish `/sim/goal_reached` only after waypoint, avoidance, and final goal constraints pass
 
 Waypoint goals are sent by `waypoint_publisher` through Nav2's
-`/navigate_through_poses` action. `task1_sim` does not publish `/goal_pose`.
+`/navigate_through_poses` action and visualized on `/waypoint_markers`.
+`task1_sim` does not publish `/goal_pose`.
 
 ## Usage
 

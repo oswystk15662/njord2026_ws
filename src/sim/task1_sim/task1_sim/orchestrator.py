@@ -3,6 +3,7 @@ import math
 import random
 import struct
 
+from geometry_msgs.msg import Point
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -78,7 +79,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("avoidance_eval_radius", 8.0)
         self.declare_parameter("avoidance_margin", 0.5)
         self.declare_parameter("forced_mark", "")
-        self.declare_parameter("course_bounds", [0.0, 50.0, -35.0, 10.0])
+        self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 15.0])
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
         self.declare_parameter("pre_inference_block", [0.0, 28.0, -35.0, -10.0])
         self.declare_parameter("obstacle_spacing", 0.25)
@@ -138,6 +139,11 @@ class Task1Orchestrator(Node):
         self.pub_virtual_obstacles = self.create_publisher(PointCloud2, "/virtual_obstacles", 10)
         self.pub_status = self.create_publisher(String, "/sim/task1_status", 10)
         self.pub_boundary_markers = self.create_publisher(MarkerArray, "/sim/boundary_markers", transient_qos)
+        self.pub_cardinal_markers = self.create_publisher(
+            MarkerArray,
+            "/sim/cardinal_mark_markers",
+            transient_qos,
+        )
 
         self.sub_odom = self.create_subscription(Odometry, "/odom", self.on_odom, 10)
         self.srv_infer = self.create_service(Trigger, "/yolo/start_inference", self.on_start_inference)
@@ -145,6 +151,7 @@ class Task1Orchestrator(Node):
         self.publish_start()
         self.publish_virtual_obstacles()
         self.publish_boundary_markers()
+        self.publish_cardinal_markers()
 
         period = 1.0 / max(0.2, self.publish_rate_hz)
         self.timer = self.create_timer(period, self.on_timer)
@@ -191,6 +198,7 @@ class Task1Orchestrator(Node):
         self.avoidance_failed = False
         self.avoidance_results = []
         self.publish_virtual_obstacles()
+        self.publish_cardinal_markers()
 
         response.success = True
         response.message = self.current_mark
@@ -318,6 +326,51 @@ class Task1Orchestrator(Node):
 
         self.pub_boundary_markers.publish(marker_array)
 
+    def publish_cardinal_markers(self):
+        marker_array = MarkerArray()
+        clear_marker = Marker()
+        clear_marker.action = Marker.DELETEALL
+        marker_array.markers.append(clear_marker)
+
+        stamp = self.get_clock().now().to_msg()
+        dx, dy = {
+            "N": (0.0, 1.0),
+            "E": (1.0, 0.0),
+            "S": (0.0, -1.0),
+            "W": (-1.0, 0.0),
+        }.get(self.current_mark, (0.0, 1.0))
+
+        for idx, (bx, by) in enumerate(self.buoy_positions):
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = "task1_cardinal_arrow"
+            marker.id = idx
+            marker.type = Marker.ARROW
+            marker.action = Marker.ADD
+            marker.pose.orientation.w = 1.0
+
+            start = Point()
+            start.x = float(bx)
+            start.y = float(by)
+            start.z = 1.0
+            end = Point()
+            end.x = float(bx + dx * 3.0)
+            end.y = float(by + dy * 3.0)
+            end.z = 1.0
+            marker.points = [start, end]
+
+            marker.scale.x = 0.25
+            marker.scale.y = 0.75
+            marker.scale.z = 0.75
+            marker.color.r = 1.0
+            marker.color.g = 0.85
+            marker.color.b = 0.0
+            marker.color.a = 1.0
+            marker_array.markers.append(marker)
+
+        self.pub_cardinal_markers.publish(marker_array)
+
     def on_odom(self, msg: Odometry):
         if self.goal_announced:
             return
@@ -376,6 +429,7 @@ class Task1Orchestrator(Node):
         self.pub_cardinal.publish(cardinal)
         self.publish_virtual_obstacles()
         self.publish_boundary_markers()
+        self.publish_cardinal_markers()
 
 
 def main(args=None):
@@ -386,8 +440,14 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+        except Exception:
+            pass
+        try:
+            rclpy.shutdown()
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

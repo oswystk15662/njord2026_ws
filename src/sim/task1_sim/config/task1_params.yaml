@@ -20,7 +20,9 @@ task1_orchestrator:
     avoidance_margin: 0.5
     forced_mark: ""
 
-    course_bounds: [0.0, 50.0, -35.0, 10.0]
+    # Matches the default Nav2 costmap window and keeps the spawn at (0, 0)
+    # inside the simulated course instead of on the boundary obstacle.
+    course_bounds: [-5.0, 55.0, -40.0, 15.0]
     center_line: [0.0, 40.0, -10.0, 0.05]
     pre_inference_block: [0.0, 28.0, -35.0, -10.0]
     obstacle_spacing: 0.25

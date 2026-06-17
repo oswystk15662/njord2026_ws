@@ -19,6 +19,8 @@ from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path as PathMsg
 from nav2_msgs.action import NavigateThroughPoses
+from std_msgs.msg import ColorRGBA
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 from pathlib import Path
 from enum import Enum
@@ -74,6 +76,7 @@ class WaypointPublisher(Node):
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
         path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.path_publisher = self.create_publisher(PathMsg, '/plan', path_qos)
+        self.marker_publisher = self.create_publisher(MarkerArray, '/waypoint_markers', path_qos)
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -327,7 +330,71 @@ class WaypointPublisher(Node):
             path.poses.append(pose)
 
         self.path_publisher.publish(path)
+        self._publish_waypoint_markers(poses, stamp)
         self.get_logger().info(f"Published /plan with {len(path.poses)} poses")
+
+    def _publish_waypoint_markers(self, poses: list, stamp):
+        """Publish RViz markers that match the currently published path."""
+        marker_array = MarkerArray()
+        clear_marker = Marker()
+        clear_marker.action = Marker.DELETEALL
+        marker_array.markers.append(clear_marker)
+
+        waypoint_defs = self.config.get('waypoints', [])
+        for idx, pose in enumerate(poses):
+            wp = waypoint_defs[idx] if idx < len(waypoint_defs) else {}
+            marker_array.markers.append(self._make_waypoint_marker(idx, pose, wp, stamp))
+            marker_array.markers.append(self._make_waypoint_label_marker(idx, pose, wp, stamp))
+
+        self.marker_publisher.publish(marker_array)
+
+    def _waypoint_color(self, wp_type: str) -> ColorRGBA:
+        color = ColorRGBA()
+        color.a = 0.95
+        if wp_type == 'start':
+            color.r, color.g, color.b = 0.1, 0.9, 0.2
+        elif wp_type == 'goal':
+            color.r, color.g, color.b = 1.0, 0.1, 0.1
+        elif wp_type == 'gps':
+            color.r, color.g, color.b = 0.1, 0.35, 1.0
+        else:
+            color.r, color.g, color.b = 1.0, 0.85, 0.05
+        return color
+
+    def _make_waypoint_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
+        marker = Marker()
+        marker.header.frame_id = self.frame_id
+        marker.header.stamp = stamp
+        marker.ns = 'waypoints'
+        marker.id = idx
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = pose.pose.position.x
+        marker.pose.position.y = pose.pose.position.y
+        marker.pose.position.z = 0.3
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.8
+        marker.scale.y = 0.8
+        marker.scale.z = 0.8
+        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
+        return marker
+
+    def _make_waypoint_label_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
+        marker = Marker()
+        marker.header.frame_id = self.frame_id
+        marker.header.stamp = stamp
+        marker.ns = 'waypoint_labels'
+        marker.id = idx
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+        marker.pose.position.x = pose.pose.position.x
+        marker.pose.position.y = pose.pose.position.y
+        marker.pose.position.z = 1.1
+        marker.pose.orientation.w = 1.0
+        marker.scale.z = 0.8
+        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
+        marker.text = str(wp.get('name', f'WP {idx + 1}'))
+        return marker
 
 def main(args=None):
     rclpy.init(args=args)
