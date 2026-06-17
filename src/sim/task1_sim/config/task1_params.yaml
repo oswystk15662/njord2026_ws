@@ -28,7 +28,7 @@ task1_orchestrator:
     # Keep disabled by default because the full NavigateThroughPoses request
     # includes post-inference waypoints; blocking that area makes those goals
     # invalid before the route can start.
-    pre_inference_block: []
+    pre_inference_block: "[]"
     obstacle_spacing: 0.25
     boundary_marker_step: 5.0
 

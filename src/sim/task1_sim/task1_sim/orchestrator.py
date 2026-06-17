@@ -81,7 +81,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("forced_mark", "")
         self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 15.0])
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
-        self.declare_parameter("pre_inference_block", [])
+        self.declare_parameter("pre_inference_block", "[]")
         self.declare_parameter("obstacle_spacing", 0.25)
         self.declare_parameter("boundary_marker_step", 5.0)
         self.declare_parameter("seed", 2026)
@@ -111,8 +111,8 @@ class Task1Orchestrator(Node):
         self.forced_mark = self.get_parameter("forced_mark").get_parameter_value().string_value.strip().upper()
         self.course_bounds = list(self.get_parameter("course_bounds").get_parameter_value().double_array_value)
         self.center_line = list(self.get_parameter("center_line").get_parameter_value().double_array_value)
-        self.pre_inference_block = list(
-            self.get_parameter("pre_inference_block").get_parameter_value().double_array_value
+        self.pre_inference_block = self._parse_rect_json(
+            self.get_parameter("pre_inference_block").get_parameter_value().string_value
         )
         self.obstacle_spacing = max(0.05, self.get_parameter("obstacle_spacing").get_parameter_value().double_value)
         self.boundary_marker_step = max(
@@ -240,6 +240,20 @@ class Task1Orchestrator(Node):
                 points.append([x, y, 0.0])
                 x += self.obstacle_spacing
             y += self.obstacle_spacing
+
+    def _parse_rect_json(self, json_str: str) -> list[float]:
+        if not json_str:
+            return []
+        try:
+            parsed = json.loads(json_str)
+        except json.JSONDecodeError:
+            return []
+        if not isinstance(parsed, list) or len(parsed) != 4:
+            return []
+        try:
+            return [float(value) for value in parsed]
+        except (TypeError, ValueError):
+            return []
 
     def _append_cardinal_walls(self, points: list[list[float]]):
         spacing = max(self.obstacle_spacing, self.wall_radius / max(self.wall_points, 1))
