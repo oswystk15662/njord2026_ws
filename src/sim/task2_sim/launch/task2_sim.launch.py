@@ -5,8 +5,9 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 
 def generate_launch_description():
@@ -19,8 +20,8 @@ def generate_launch_description():
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
     opponent_config = os.path.join(pkg_task2, "config", "task2_opponent_sim.yaml")
-    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
-    robot_description = open(robot_description_file, "r").read()
+    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf.xacro")
+    robot_description = Command(["xacro ", robot_description_file])
 
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
@@ -96,7 +97,7 @@ def generate_launch_description():
         parameters=[
             os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                "robot_description": robot_description,
+                "robot_description": ParameterValue(robot_description, value_type=str),
                 "transport_mode": "sim",
                 "control.dob.enable": False,
             },
@@ -110,7 +111,7 @@ def generate_launch_description():
         name="robot_state_publisher",
         output="screen",
         parameters=[{
-            "robot_description": robot_description,
+            "robot_description": ParameterValue(robot_description, value_type=str),
             "use_sim_time": False,
         }],
     )

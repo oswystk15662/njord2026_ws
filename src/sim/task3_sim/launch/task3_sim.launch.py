@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, LogInfo
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
 
@@ -15,8 +15,8 @@ def generate_launch_description():
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
     pkg_thruster   = get_package_share_directory("thruster_driver")
-    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
-    robot_description = open(robot_description_file, 'r').read()
+    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf.xacro')
+    robot_description = Command(['xacro ', robot_description_file])
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
@@ -103,7 +103,7 @@ def generate_launch_description():
         parameters=[
             os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                "robot_description": robot_description,
+                "robot_description": ParameterValue(robot_description, value_type=str),
                 "transport_mode": "sim",
                 "control.dob.enable": False,
             },
@@ -118,7 +118,7 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': robot_description,
+            'robot_description': ParameterValue(robot_description, value_type=str),
             'use_sim_time': False
         }]
     )
