@@ -103,4 +103,56 @@
 		<child link="gnss_sub_link"/>
 		<origin rpy="0 0 0" xyz="-0.5 -0.4 1.0"/>
 	</joint>
+	<link name="thruster_FR">
+		<visual>
+			<geometry>
+				<cylinder length="0.16" radius="0.04"/>
+			</geometry>
+			<material name="black"/>
+		</visual>
+	</link>
+	<joint name="thruster_FR_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="thruster_FR"/>
+		<origin rpy="0 0 0" xyz="0.1803 -0.2500 -0.1"/>
+	</joint>
+	<link name="thruster_FL">
+		<visual>
+			<geometry>
+				<cylinder length="0.16" radius="0.04"/>
+			</geometry>
+			<material name="black"/>
+		</visual>
+	</link>
+	<joint name="thruster_FL_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="thruster_FL"/>
+		<origin rpy="0 0 0" xyz="0.1803 0.2500 -0.1"/>
+	</joint>
+	<link name="thruster_RR">
+		<visual>
+			<geometry>
+				<cylinder length="0.16" radius="0.04"/>
+			</geometry>
+			<material name="black"/>
+		</visual>
+	</link>
+	<joint name="thruster_RR_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="thruster_RR"/>
+		<origin rpy="0 0 0" xyz="-0.1803 -0.2500 -0.1"/>
+	</joint>
+	<link name="thruster_RL">
+		<visual>
+			<geometry>
+				<cylinder length="0.16" radius="0.04"/>
+			</geometry>
+			<material name="black"/>
+		</visual>
+	</link>
+	<joint name="thruster_RL_joint" type="fixed">
+		<parent link="base_link"/>
+		<child link="thruster_RL"/>
+		<origin rpy="0 0 0" xyz="-0.1803 0.2500 -0.1"/>
+	</joint>
 </robot>
