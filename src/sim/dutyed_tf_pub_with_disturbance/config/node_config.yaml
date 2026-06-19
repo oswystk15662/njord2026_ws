@@ -40,7 +40,7 @@ dutyed_tf_pub_with_disturbance_node:
     disturbance:
       natural_frequency_hz: 0.18
       damping_ratio: 0.8
-      sigma_u: 0.12
-      sigma_v: 0.12
-      sigma_r: 0.04
+      sigma_u: 0.0
+      sigma_v: 0.0
+      sigma_r: 0.0
       seed: 2026
