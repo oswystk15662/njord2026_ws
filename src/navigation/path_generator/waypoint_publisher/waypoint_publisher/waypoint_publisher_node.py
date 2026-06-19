@@ -169,9 +169,15 @@ class WaypointPublisher(Node):
             self.docking_state = DockingState.STAGE1_APPROACH
             self._send_navigate_through_poses_goal(stage1, stage_name='stage_1')
             if self.task_type == TaskType.TASK3_2:
-                self.get_logger().info("Task3.2: approach sent [gps9 -> gate -> berth2_approach -> berth2]")
+                self.get_logger().info(
+                    "Task3.2: approach sent [gps9 -> corridor_gate -> "
+                    "gps9_gate -> berth2_approach -> berth2]"
+                )
             else:
-                self.get_logger().info("Task3.1: Stage 1 sent [gps7 -> gps8 -> berth1_approach -> berth1]")
+                self.get_logger().info(
+                    "Task3.1: Stage 1 sent [gps7 -> corridor_gate -> "
+                    "gps8 -> berth1_approach -> berth1]"
+                )
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 1")
     
@@ -397,7 +403,8 @@ class WaypointPublisher(Node):
             self._send_navigate_through_poses_goal(stage2, stage_name='stage_2')
             if self.run_full_sequence:
                 self.get_logger().info(
-                    "Task3: Stage 2 sent [berth1_exit -> gps9 -> berth2_approach -> berth2]"
+                    "Task3: Stage 2 sent [berth1_exit -> corridor_gate -> "
+                    "gps9 -> berth2_approach -> berth2]"
                 )
             else:
                 self.get_logger().info("Task3.1: Stage 2 sent [berth1_exit -> gps8 - finish]")

@@ -39,7 +39,7 @@ def generate_launch_description():
         'nav2_delay', default_value='5.0',
         description='Delay before launching Nav2 (needs SimNode TF and filtered odometry)')
     goal_delay_arg = DeclareLaunchArgument(
-        'goal_delay', default_value='8.0',
+        'goal_delay', default_value='12.0',
         description='Delay before launching waypoint_publisher (needs Nav2 action servers up)')
     task_type_arg = DeclareLaunchArgument(
         'task_type', default_value='task3_1',

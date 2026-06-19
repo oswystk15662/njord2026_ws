@@ -3,14 +3,15 @@
 # Supports both normal docking (3.1) and parallel docking (3.2)
 #
 # Rulebook default sequence:
-#   task3_1: gps7(start) -> gps8(gate midpoint) -> berth1 approach -> berth1
+#   task3_1: gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint) -> berth1 approach -> berth1
 #     -> berth1 exit -> gps8(finish)
-#   task3_2: gps9(start) -> gps9 gate midpoint -> berth2 approach -> berth2
+#   task3_2: gps9(start) -> buoy corridor midpoint -> gps9 gate midpoint -> berth2 approach -> berth2
 #     -> gps10(finish)
 #
 # Optional continuous sequence (run_full_sequence:=true):
-#   gps7(start) -> gps8(gate midpoint) -> berth1 approach -> berth1
-#     -> berth1 exit -> gps9(gate midpoint) -> berth2 approach -> berth2 -> gps10(finish)
+#   gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint) -> berth1 approach -> berth1
+#     -> berth1 exit -> mirrored corridor midpoint -> gps9(gate midpoint)
+#     -> berth2 approach -> berth2 -> gps10(finish)
 #
 # Field geometry (point-symmetric about origin):
 #   Normal dock (3.1):   x=19~21, y=±2.0  (boat enters from west, heading=0)
@@ -44,6 +45,16 @@ task3_1_config:
       gate_pair:
         red_frame: "b31_red_gate"
         green_frame: "b31_green_gate"
+
+    # Midpoint of the deepest pair in the first three buoy sets.
+    # This keeps the global plan inside the red/green buoy corridor.
+    - id: "b31_corridor_gate"
+      x: 12.0
+      y: 0.0
+      yaw: 0.0
+      type: "corridor_gate"
+      name: "Task3.1 Buoy Corridor Gate"
+      tolerance_m: 1.0
 
     # Safe mouth point before entering the normal dock slot.
     - id: "berth1_approach"
@@ -85,6 +96,15 @@ task3_1_config:
         red_frame: "b32_red_gate"
         green_frame: "b32_green_gate"
 
+    # Point-symmetric corridor gate for Task3.2.
+    - id: "b32_corridor_gate"
+      x: -12.0
+      y: 0.0
+      yaw: 3.14159
+      type: "corridor_gate"
+      name: "Task3.2 Buoy Corridor Gate"
+      tolerance_m: 1.0
+
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
       x: -18.25
@@ -124,13 +144,13 @@ task3_1_config:
     goal_tolerance: 1.0
 
   stages:
-    stage_1: [7, 8, "berth1_approach", "berth1"]
+    stage_1: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
     stage_2: ["berth1_exit", 8]
     stage_3: []
 
   full_sequence_stages:
-    stage_1: [7, 8, "berth1_approach", "berth1"]
-    stage_2: ["berth1_exit", 9, "berth2_approach", "berth2"]
+    stage_1: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
+    stage_2: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
     stage_3: [10]
 
 
@@ -161,6 +181,15 @@ task3_2_config:
       gate_pair:
         red_frame: "b32_red_gate"
         green_frame: "b32_green_gate"
+
+    # Midpoint of the deepest pair in the first three mirrored buoy sets.
+    - id: "b32_corridor_gate"
+      x: -12.0
+      y: 0.0
+      yaw: 3.14159
+      type: "corridor_gate"
+      name: "Task3.2 Buoy Corridor Gate"
+      tolerance_m: 1.0
 
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
@@ -200,7 +229,7 @@ task3_2_config:
     goal_tolerance: 1.0
 
   stages:
-    stage_1: [9, "9_gate", "berth2_approach", "berth2"]
+    stage_1: [9, "b32_corridor_gate", "9_gate", "berth2_approach", "berth2"]
     stage_2: []
     stage_3: [10]
 
@@ -210,7 +239,7 @@ task3_2_config:
 async_flow:
   stage_1:
     name: "Approach Normal Dock"
-    waypoints: [7, 8, "berth1_approach", "berth1"]
+    waypoints: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
     next_trigger: "goal_reached"
 
   stage_2:
@@ -220,7 +249,7 @@ async_flow:
 
   stage_3:
     name: "Undock and Approach Parallel Dock"
-    waypoints: ["berth1_exit", 9, "berth2_approach", "berth2"]
+    waypoints: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
     next_trigger: "goal_reached"
 
   stage_4:
