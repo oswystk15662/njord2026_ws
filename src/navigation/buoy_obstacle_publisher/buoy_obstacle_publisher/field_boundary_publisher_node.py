@@ -113,20 +113,20 @@ class FieldBoundaryPublisher(Node):
         def vertical(x0, y1, y2):
             return segment_rect(x0 - half_t, x0 + half_t, min(y1, y2), max(y1, y2))
 
-        # Task 3.1 normal dock at x=14..16. Three prongs and rear walls.
+        # Task 3.1 normal dock at x=19..21. Three prongs and rear walls.
         normal_dock = (
-            horizontal(14.0, 16.0, 2.13) or
-            horizontal(14.0, 16.0, -2.13) or
-            horizontal(14.0, 16.0, 0.0) or
-            vertical(16.0, 0.0, 2.13) or
-            vertical(16.0, -2.13, 0.0)
+            horizontal(19.0, 21.0, 2.13) or
+            horizontal(19.0, 21.0, -2.13) or
+            horizontal(19.0, 21.0, 0.0) or
+            vertical(21.0, 0.0, 2.13) or
+            vertical(21.0, -2.13, 0.0)
         )
 
-        # Task 3.2 parallel dock at x=-14..-16. Two prongs and one rear wall.
+        # Task 3.2 parallel dock at x=-19..-21. Two prongs and one rear wall.
         parallel_dock = (
-            horizontal(-16.0, -14.0, 2.13) or
-            horizontal(-16.0, -14.0, -2.13) or
-            vertical(-16.0, -2.13, 2.13)
+            horizontal(-21.0, -19.0, 2.13) or
+            horizontal(-21.0, -19.0, -2.13) or
+            vertical(-21.0, -2.13, 2.13)
         )
 
         return normal_dock or parallel_dock

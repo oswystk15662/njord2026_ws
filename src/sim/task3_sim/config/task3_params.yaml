@@ -5,9 +5,9 @@ task3_orchestrator:
     green_center: [0.0, -2.0]
     motion_amp: 0.3
     motion_freq_hz: 0.1
-    dock_pose: [15.0, 0.0, 0.0]
+    dock_pose: [20.0, 0.0, 0.0]
     dock_size_xy: [2.0, 4.13]
-    goal_xy: [13.0, 10.0]
+    goal_xy: [18.0, 10.0]
     goal_radius: 1.5
     dock_visit_radius: 1.5
     publish_rate_hz: 10.0

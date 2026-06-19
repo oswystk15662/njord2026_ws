@@ -180,9 +180,9 @@ def generate_launch_description():
             'map_frame': 'map',
             'resolution': 0.2,
             'map_size_m': 80.0,
-            # GPS points fit in x=[-13, 13], y=[-11, 10]. The x margin also
-            # encloses the fixed docks, whose rear walls reach x=+/-16 m.
-            'field_size_x_m': 36.0,
+            # GPS points fit in x=[-18, 18], y=[-11, 10]. The x margin also
+            # encloses the fixed docks, whose rear walls reach x=+/-21 m.
+            'field_size_x_m': 48.0,
             'field_size_y_m': 28.0,
             'field_center_x': 0.0,
             'field_center_y': 0.0,

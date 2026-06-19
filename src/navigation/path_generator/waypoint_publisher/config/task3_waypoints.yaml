@@ -13,10 +13,10 @@
 #     -> berth1 exit -> gps9(gate midpoint) -> berth2 approach -> berth2 -> gps10(finish)
 #
 # Field geometry (point-symmetric about origin):
-#   Normal dock (3.1):   x=14~16, y=±2.0  (boat enters from west, heading=0)
-#   Parallel dock (3.2): x=-14~-16, y=±2.0 (boat enters from east, heading=π)
-#   Gate buoys 3.1:      x≈12, y=±4  (red/green)
-#   Gate buoys 3.2:      x≈-12, y=±4  (red/green)
+#   Normal dock (3.1):   x=19~21, y=±2.0  (boat enters from west, heading=0)
+#   Parallel dock (3.2): x=-19~-21, y=±2.0 (boat enters from east, heading=π)
+#   Gate buoys 3.1:      x≈18, y=10  (red/green midpoint)
+#   Gate buoys 3.2:      x≈-18, y=-10 (red/green midpoint)
 
 task3_1_config:
   frame_id: "map"
@@ -35,7 +35,7 @@ task3_1_config:
 
     # GPS 8: gate center between b31_red_gate and b31_green_gate
     - id: 8
-      x: 13.0
+      x: 18.0
       y: 10.0
       yaw: 1.5708        # heading north (π/2)
       type: "gate"
@@ -47,7 +47,7 @@ task3_1_config:
 
     # Safe mouth point before entering the normal dock slot.
     - id: "berth1_approach"
-      x: 13.25
+      x: 18.25
       y: 1.065
       yaw: 0.0
       type: "dock_approach"
@@ -56,7 +56,7 @@ task3_1_config:
 
     # Berth 1: normal docking (center berth, heading east into dock)
     - id: "berth1"
-      x: 15.0
+      x: 20.0
       y: 1.065
       yaw: 0.0           # heading east (into normal dock)
       type: "dock"
@@ -66,7 +66,7 @@ task3_1_config:
 
     # Back out to the mouth before navigating away from the dock.
     - id: "berth1_exit"
-      x: 13.25
+      x: 18.25
       y: 1.065
       yaw: 3.14159
       type: "undock_exit"
@@ -75,7 +75,7 @@ task3_1_config:
 
     # GPS 9: gate center between b32_red_gate and b32_green_gate
     - id: 9
-      x: -13.0
+      x: -18.0
       y: -10.0
       yaw: -1.5708       # heading south toward parallel dock gate
       type: "gate"
@@ -87,7 +87,7 @@ task3_1_config:
 
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
-      x: -13.25
+      x: -18.25
       y: 0.0
       yaw: 3.14159
       type: "dock_approach"
@@ -96,7 +96,7 @@ task3_1_config:
 
     # Berth 2: parallel docking (heading west into parallel dock)
     - id: "berth2"
-      x: -15.0
+      x: -20.0
       y: 0.0
       yaw: 3.14159       # heading west (into parallel dock, π)
       type: "dock"
@@ -106,7 +106,7 @@ task3_1_config:
 
     # GPS 10: finish point (exit parallel dock, go south)
     - id: 10
-      x: -13.0
+      x: -18.0
       y: -11.0
       yaw: -1.5708       # heading south
       type: "goal"
@@ -152,7 +152,7 @@ task3_2_config:
 
     # Gate for parallel dock, centered between b32_red_gate and b32_green_gate
     - id: "9_gate"
-      x: -13.0
+      x: -18.0
       y: -10.0
       yaw: -1.5708
       type: "gate"
@@ -164,7 +164,7 @@ task3_2_config:
 
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
-      x: -13.25
+      x: -18.25
       y: 0.0
       yaw: 3.14159
       type: "dock_approach"
@@ -173,7 +173,7 @@ task3_2_config:
 
     # Berth 2: parallel docking
     - id: "berth2"
-      x: -15.0
+      x: -20.0
       y: 0.0
       yaw: 3.14159
       type: "dock"
@@ -183,7 +183,7 @@ task3_2_config:
 
     # GPS 10: finish
     - id: 10
-      x: -13.0
+      x: -18.0
       y: -11.0
       yaw: -1.5708
       type: "goal"

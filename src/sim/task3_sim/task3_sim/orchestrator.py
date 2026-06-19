@@ -22,9 +22,9 @@ class Task3Orchestrator(Node):
         self.declare_parameter("run_full_sequence", False)
         self.declare_parameter("motion_amp", 0.3)
         self.declare_parameter("motion_freq_hz", 0.1)
-        self.declare_parameter("dock_pose", [15.0, 0.0, 0.0])
+        self.declare_parameter("dock_pose", [20.0, 0.0, 0.0])
         self.declare_parameter("dock_size_xy", [2.0, 4.13])
-        self.declare_parameter("goal_xy", [13.0, 10.0])
+        self.declare_parameter("goal_xy", [18.0, 10.0])
         self.declare_parameter("goal_radius", 1.5)
         self.declare_parameter("dock_visit_radius", 1.5)
         self.declare_parameter("publish_rate_hz", 10.0)
@@ -40,17 +40,17 @@ class Task3Orchestrator(Node):
 
         # Dynamically override parameters based on task type to form a point-symmetric virtual field
         if self.task_type == "task3_2":
-            self.dock_pose = [-15.0, 0.0, 3.14159]
+            self.dock_pose = [-20.0, 0.0, 3.14159]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [-13.0, -11.0]
+            self.goal_xy = [-18.0, -11.0]
             self.completion_requires_dock_visit = False
         else:  # task3_1 default
-            self.dock_pose = [15.0, 0.0, 0.0]
+            self.dock_pose = [20.0, 0.0, 0.0]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [-13.0, -11.0] if self.run_full_sequence else [13.0, 10.0]
+            self.goal_xy = [-18.0, -11.0] if self.run_full_sequence else [18.0, 10.0]
             self.completion_requires_dock_visit = not self.run_full_sequence
 
-        self.dock_visit_xy = [15.0, 1.065]
+        self.dock_visit_xy = [20.0, 1.065]
 
         # Always import BOTH buoy sets — full field is always visible
         from .buoy_config import BUOY_DEFINITIONS_3_1, BUOY_DEFINITIONS_3_2
@@ -158,34 +158,34 @@ class Task3Orchestrator(Node):
 
     def generate_field_points(self):
         pts = []
-        # 1. Task 3.1 Dock (Normal Dock) - shifted 2m deeper (x: 14.0 to 16.0)
+        # 1. Task 3.1 Dock (Normal Dock) - shifted deeper (x: 19.0 to 21.0)
         # Left prong
-        pts.extend(self.line_points(14.0, 2.195, 16.0, 2.195, 0.05))
-        pts.extend(self.line_points(14.0, 2.065, 16.0, 2.065, 0.05))
-        pts.extend(self.line_points(14.0, 2.065, 14.0, 2.195, 0.05))
+        pts.extend(self.line_points(19.0, 2.195, 21.0, 2.195, 0.05))
+        pts.extend(self.line_points(19.0, 2.065, 21.0, 2.065, 0.05))
+        pts.extend(self.line_points(19.0, 2.065, 19.0, 2.195, 0.05))
         # Right prong
-        pts.extend(self.line_points(14.0, -2.195, 16.0, -2.195, 0.05))
-        pts.extend(self.line_points(14.0, -2.065, 16.0, -2.065, 0.05))
-        pts.extend(self.line_points(14.0, -2.065, 14.0, -2.195, 0.05))
+        pts.extend(self.line_points(19.0, -2.195, 21.0, -2.195, 0.05))
+        pts.extend(self.line_points(19.0, -2.065, 21.0, -2.065, 0.05))
+        pts.extend(self.line_points(19.0, -2.065, 19.0, -2.195, 0.05))
         # Center prong
-        pts.extend(self.line_points(14.0, 0.065, 16.0, 0.065, 0.05))
-        pts.extend(self.line_points(14.0, -0.065, 16.0, -0.065, 0.05))
-        pts.extend(self.line_points(14.0, -0.065, 14.0, 0.065, 0.05))
+        pts.extend(self.line_points(19.0, 0.065, 21.0, 0.065, 0.05))
+        pts.extend(self.line_points(19.0, -0.065, 21.0, -0.065, 0.05))
+        pts.extend(self.line_points(19.0, -0.065, 19.0, 0.065, 0.05))
         # Back walls
-        pts.extend(self.line_points(16.0, 0.065, 16.0, 2.065, 0.05))
-        pts.extend(self.line_points(16.0, -2.065, 16.0, -0.065, 0.05))
+        pts.extend(self.line_points(21.0, 0.065, 21.0, 2.065, 0.05))
+        pts.extend(self.line_points(21.0, -2.065, 21.0, -0.065, 0.05))
 
-        # 2. Task 3.2 Dock (Parallel Dock) - shifted 2m deeper (x: -14.0 to -16.0)
+        # 2. Task 3.2 Dock (Parallel Dock) - shifted deeper (x: -19.0 to -21.0)
         # Left prong
-        pts.extend(self.line_points(-14.0, 2.195, -16.0, 2.195, 0.05))
-        pts.extend(self.line_points(-14.0, 2.065, -16.0, 2.065, 0.05))
-        pts.extend(self.line_points(-14.0, 2.065, -14.0, 2.195, 0.05))
+        pts.extend(self.line_points(-19.0, 2.195, -21.0, 2.195, 0.05))
+        pts.extend(self.line_points(-19.0, 2.065, -21.0, 2.065, 0.05))
+        pts.extend(self.line_points(-19.0, 2.065, -19.0, 2.195, 0.05))
         # Right prong
-        pts.extend(self.line_points(-14.0, -2.195, -16.0, -2.195, 0.05))
-        pts.extend(self.line_points(-14.0, -2.065, -16.0, -2.065, 0.05))
-        pts.extend(self.line_points(-14.0, -2.065, -14.0, -2.195, 0.05))
+        pts.extend(self.line_points(-19.0, -2.195, -21.0, -2.195, 0.05))
+        pts.extend(self.line_points(-19.0, -2.065, -21.0, -2.065, 0.05))
+        pts.extend(self.line_points(-19.0, -2.065, -19.0, -2.195, 0.05))
         # Back wall (no center prong)
-        pts.extend(self.line_points(-16.0, -2.065, -16.0, 2.065, 0.05))
+        pts.extend(self.line_points(-21.0, -2.065, -21.0, 2.065, 0.05))
 
         # Unique points (deduplicate within 1mm)
         unique_pts = []

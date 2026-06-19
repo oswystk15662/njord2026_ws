@@ -36,8 +36,8 @@ def generate_launch_description():
             "map_frame": "map",
             "resolution": 0.2,
             "map_size_m": 80.0,
-            # Operating bounds: x=[-18, 18], y=[-14, 14].
-            "field_size_x_m": 36.0,
+            # Operating bounds: x=[-24, 24], y=[-14, 14].
+            "field_size_x_m": 48.0,
             "field_size_y_m": 28.0,
             "field_center_x": 0.0,
             "field_center_y": 0.0,
