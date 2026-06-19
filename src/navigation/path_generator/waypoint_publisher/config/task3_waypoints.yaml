@@ -2,7 +2,13 @@
 # Waypoint configuration for NJORD competition Task 3
 # Supports both normal docking (3.1) and parallel docking (3.2)
 #
-# Full competition sequence (task3_1 -> task3_2):
+# Rulebook default sequence:
+#   task3_1: gps7(start) -> gps8(gate midpoint) -> berth1 approach -> berth1
+#     -> berth1 exit -> gps8(finish)
+#   task3_2: gps9(start) -> gps9 gate midpoint -> berth2 approach -> berth2
+#     -> gps10(finish)
+#
+# Optional continuous sequence (run_full_sequence:=true):
 #   gps7(start) -> gps8(gate midpoint) -> berth1 approach -> berth1
 #     -> berth1 exit -> gps9(gate midpoint) -> berth2 approach -> berth2 -> gps10(finish)
 #
@@ -15,7 +21,7 @@
 task3_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  scenario: "normal_docking_full"
+  scenario: "normal_docking_rulebook"
 
   waypoints:
     # GPS 7: start (origin)
@@ -111,12 +117,18 @@ task3_1_config:
     dock_identification: "ar_tag_detection"
     impact_minimization: true
     wait_time_s: 10           # wait at berth before undocking
+    second_wait_time_s: 5     # task3_2 wait during run_full_sequence
     wait_condition: "after_docking_stationary"
     reversal_requirement: true
     attempts: 2
     goal_tolerance: 1.0
 
   stages:
+    stage_1: [7, 8, "berth1_approach", "berth1"]
+    stage_2: ["berth1_exit", 8]
+    stage_3: []
+
+  full_sequence_stages:
     stage_1: [7, 8, "berth1_approach", "berth1"]
     stage_2: ["berth1_exit", 9, "berth2_approach", "berth2"]
     stage_3: [10]
@@ -193,12 +205,8 @@ task3_2_config:
     stage_3: [10]
 
 
-# Multi-stage async flow for task3 (handled by waypoint_publisher_node.py state machine)
-# Stage 1: 7 -> 8 -> berth1_approach -> berth1
-# Wait:    stationary at berth1 for wait_time_s
-# Stage 2: berth1_exit -> 9 -> berth2_approach -> berth2
-# Wait:    stationary at berth2 for wait_time_s
-# Stage 3: 10                    (exit + finish)
+# Reference full-sequence async flow for task3 (handled by waypoint_publisher_node.py)
+# The rulebook default uses task3_1_config.stages and task3_2_config.stages above.
 async_flow:
   stage_1:
     name: "Approach Normal Dock"

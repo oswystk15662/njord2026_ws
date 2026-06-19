@@ -114,7 +114,7 @@ local_costmap:
       height: 20
       resolution: 0.1
       robot_radius: 0.35
-      plugins: ["obstacle_layer", "buoy_costmap_layer", "inflation_layer"]
+      plugins: ["obstacle_layer", "inflation_layer"]
 
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
@@ -128,12 +128,6 @@ local_costmap:
           data_type: "PointCloud2"
           raytrace_max_range: 20.0
           obstacle_max_range: 18.0
-
-      buoy_costmap_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: False
-        map_topic: "/buoy_costmap"
-        subscribe_to_updates: True
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -158,7 +152,7 @@ global_costmap:
       origin_y: -25.0
       track_unknown_space: false
 
-      plugins: ["field_boundary_layer", "buoy_costmap_layer", "inflation_layer"]
+      plugins: ["field_boundary_layer", "obstacle_layer", "inflation_layer"]
 
       field_boundary_layer:
         plugin: "nav2_costmap_2d::StaticLayer"
@@ -166,11 +160,18 @@ global_costmap:
         map_topic: "/field_boundary_costmap"
         subscribe_to_updates: False
 
-      buoy_costmap_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: False
-        map_topic: "/buoy_costmap"
-        subscribe_to_updates: True
+      obstacle_layer:
+        plugin: "nav2_costmap_2d::ObstacleLayer"
+        enabled: True
+        observation_sources: pointcloud
+        pointcloud:
+          topic: /pointcloud
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 30.0
+          obstacle_max_range: 30.0
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"

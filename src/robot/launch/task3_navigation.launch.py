@@ -11,17 +11,21 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_robot = get_package_share_directory("robot")
     pkg_waypoint = get_package_share_directory("waypoint_publisher")
-    pkg_buoy_pub = get_package_share_directory("buoy_obstacle_publisher")
 
     task_type_arg = DeclareLaunchArgument(
         "task_type",
         default_value="task3_1",
-        description="Task3 mode. task3_1 runs the full task3_1 -> task3_2 sequence.",
+        description="Task3 mode: task3_1 or task3_2.",
     )
     enable_dynamic_gate_arg = DeclareLaunchArgument(
         "use_dynamic_gate_midpoints",
         default_value="true",
         description="Use live red/green buoy TF midpoints for Task3 gate waypoints.",
+    )
+    full_sequence_arg = DeclareLaunchArgument(
+        "run_full_sequence",
+        default_value="false",
+        description="For task3_1, continue through task3_2 and finish at GPS10.",
     )
 
     field_boundary_node = Node(
@@ -44,16 +48,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    buoy_obstacle_node = Node(
-        package="buoy_obstacle_publisher",
-        executable="buoy_obstacle_publisher",
-        name="buoy_obstacle_publisher",
-        parameters=[
-            os.path.join(pkg_buoy_pub, "config", "buoy_obstacle_publisher.yaml")
-        ],
-        output="screen",
-    )
-
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_robot, "launch", "nav2.launch.py")
@@ -72,14 +66,15 @@ def generate_launch_description():
             "frame_id": "map",
             "publish_rate_hz": "2.0",
             "use_dynamic_gate_midpoints": LaunchConfiguration("use_dynamic_gate_midpoints"),
+            "run_full_sequence": LaunchConfiguration("run_full_sequence"),
         }.items(),
     )
 
     return LaunchDescription([
         task_type_arg,
         enable_dynamic_gate_arg,
+        full_sequence_arg,
         field_boundary_node,
-        buoy_obstacle_node,
         nav2_launch,
         waypoint_publisher,
     ])

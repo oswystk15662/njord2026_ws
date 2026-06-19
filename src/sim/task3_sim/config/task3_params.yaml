@@ -7,8 +7,9 @@ task3_orchestrator:
     motion_freq_hz: 0.1
     dock_pose: [15.0, 0.0, 0.0]
     dock_size_xy: [2.0, 4.13]
-    goal_xy: [13.0, 11.0]
+    goal_xy: [13.0, 10.0]
     goal_radius: 1.5
+    dock_visit_radius: 1.5
     publish_rate_hz: 10.0
 
 sensor_noise_simulator:

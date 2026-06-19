@@ -19,19 +19,23 @@ class Task3Orchestrator(Node):
         # Declare parameters
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("task_type", "task3_1")
+        self.declare_parameter("run_full_sequence", False)
         self.declare_parameter("motion_amp", 0.3)
         self.declare_parameter("motion_freq_hz", 0.1)
         self.declare_parameter("dock_pose", [15.0, 0.0, 0.0])
         self.declare_parameter("dock_size_xy", [2.0, 4.13])
-        self.declare_parameter("goal_xy", [13.0, 11.0])
+        self.declare_parameter("goal_xy", [13.0, 10.0])
         self.declare_parameter("goal_radius", 1.5)
+        self.declare_parameter("dock_visit_radius", 1.5)
         self.declare_parameter("publish_rate_hz", 10.0)
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         self.task_type = self.get_parameter("task_type").get_parameter_value().string_value
+        self.run_full_sequence = self.get_parameter("run_full_sequence").get_parameter_value().bool_value
         self.motion_amp = self.get_parameter("motion_amp").get_parameter_value().double_value
         self.motion_freq_hz = self.get_parameter("motion_freq_hz").get_parameter_value().double_value
         self.goal_radius = self.get_parameter("goal_radius").get_parameter_value().double_value
+        self.dock_visit_radius = self.get_parameter("dock_visit_radius").get_parameter_value().double_value
         self.publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
 
         # Dynamically override parameters based on task type to form a point-symmetric virtual field
@@ -39,10 +43,14 @@ class Task3Orchestrator(Node):
             self.dock_pose = [-15.0, 0.0, 3.14159]
             self.dock_size_xy = [2.0, 4.13]
             self.goal_xy = [-13.0, -11.0]
+            self.completion_requires_dock_visit = False
         else:  # task3_1 default
             self.dock_pose = [15.0, 0.0, 0.0]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [13.0, 11.0]
+            self.goal_xy = [-13.0, -11.0] if self.run_full_sequence else [13.0, 10.0]
+            self.completion_requires_dock_visit = not self.run_full_sequence
+
+        self.dock_visit_xy = [15.0, 1.065]
 
         # Always import BOTH buoy sets — full field is always visible
         from .buoy_config import BUOY_DEFINITIONS_3_1, BUOY_DEFINITIONS_3_2
@@ -63,6 +71,7 @@ class Task3Orchestrator(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.goal_announced = False
+        self.dock_visited = False
         self.publish_start_and_goal()
 
         # Pre-generate static dock points in the global map frame
@@ -299,9 +308,20 @@ class Task3Orchestrator(Node):
     def on_odom(self, msg: Odometry):
         if self.goal_announced:
             return
+
+        if self.completion_requires_dock_visit and not self.dock_visited:
+            dock_dx = msg.pose.pose.position.x - self.dock_visit_xy[0]
+            dock_dy = msg.pose.pose.position.y - self.dock_visit_xy[1]
+            if math.hypot(dock_dx, dock_dy) <= self.dock_visit_radius:
+                self.dock_visited = True
+                self.get_logger().info("Task3.1 dock visit observed; final GPS8 check armed")
+
         dx = msg.pose.pose.position.x - self.goal_xy[0]
         dy = msg.pose.pose.position.y - self.goal_xy[1]
-        if math.hypot(dx, dy) <= self.goal_radius:
+        if (
+            math.hypot(dx, dy) <= self.goal_radius and
+            (not self.completion_requires_dock_visit or self.dock_visited)
+        ):
             done = Bool()
             done.data = True
             self.pub_goal.publish(done)

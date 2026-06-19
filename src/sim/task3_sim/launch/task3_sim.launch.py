@@ -7,6 +7,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_task3_sim  = get_package_share_directory("task3_sim")
@@ -14,7 +15,6 @@ def generate_launch_description():
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
     pkg_kinematics = get_package_share_directory("kinematics")
-    pkg_buoy_pub   = get_package_share_directory("buoy_obstacle_publisher")
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
@@ -44,6 +44,9 @@ def generate_launch_description():
     task_type_arg = DeclareLaunchArgument(
         'task_type', default_value='task3_1',
         description='Task type: task3_1 or task3_2')
+    full_sequence_arg = DeclareLaunchArgument(
+        'run_full_sequence', default_value='false',
+        description='For task3_1, continue through task3_2 and finish at GPS10')
     enable_diagnostics_arg = DeclareLaunchArgument(
         'enable_diagnostics', default_value='true',
         description='Launch generic topic heartbeat diagnostics for Task3 simulation')
@@ -52,6 +55,7 @@ def generate_launch_description():
     nav2_delay   = LaunchConfiguration('nav2_delay')
     goal_delay   = LaunchConfiguration('goal_delay')
     task_type    = LaunchConfiguration('task_type')
+    run_full_sequence = LaunchConfiguration('run_full_sequence')
     enable_diagnostics = LaunchConfiguration('enable_diagnostics')
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
@@ -79,7 +83,13 @@ def generate_launch_description():
         package="task3_sim",
         executable="task3_orchestrator",
         name="task3_orchestrator",
-        parameters=[config, {"task_type": task_type}],
+        parameters=[
+            config,
+            {
+                "task_type": task_type,
+                "run_full_sequence": ParameterValue(run_full_sequence, value_type=bool),
+            },
+        ],
         output="screen",
     )
 
@@ -183,15 +193,6 @@ def generate_launch_description():
         output='screen',
     )
 
-    # Buoy obstacle publisher: buoy TFs → /buoy_costmap (OccupancyGrid, 5 Hz)
-    buoy_obstacle_node = Node(
-        package='buoy_obstacle_publisher',
-        executable='buoy_obstacle_publisher',
-        name='buoy_obstacle_publisher',
-        parameters=[os.path.join(pkg_buoy_pub, 'config', 'buoy_obstacle_publisher.yaml')],
-        output='screen',
-    )
-
     sensor_layer_timer = TimerAction(
         period=driver_delay,
         actions=[
@@ -204,7 +205,6 @@ def generate_launch_description():
             global_ekf_node,
             navsat_transform_node,
             field_boundary_node,
-            buoy_obstacle_node,
         ]
     )
 
@@ -238,6 +238,7 @@ def generate_launch_description():
             'frame_id': 'map',
             'publish_rate_hz': '2.0',
             'use_dynamic_gate_midpoints': 'true',
+            'run_full_sequence': run_full_sequence,
         }.items()
     )
 
@@ -261,6 +262,7 @@ def generate_launch_description():
         nav2_delay_arg,
         goal_delay_arg,
         task_type_arg,
+        full_sequence_arg,
         enable_diagnostics_arg,
         sensor_layer_timer,
         nav2_layer_timer,
