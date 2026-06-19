@@ -54,8 +54,8 @@ controller_server:
       approach_velocity_scaling_dist: 6.0  # ここから減速開始 [m] (5m行き過ぎ対策)
 
       # ── ルックアヘッド設定 ─────────────────────────────────────────────
-      # lookahead_distを大きくすると、ThetaStarの格子パスの急な方向変換を
-      # 滑らかに先読みし、くるくる回転を抑制できる
+      # A moderate lookahead smooths ThetaStar grid corners without making the
+      # ASV cut too far away from the buoy-corridor waypoint.
       lookahead_dist: 3.0
       min_lookahead_dist: 1.5
       max_lookahead_dist: 8.0
@@ -67,7 +67,7 @@ controller_server:
       # use_rotate_to_heading=falseではproportional_gainは使われない
       # (angular.z = linear_vel * curvatureで計算される)
       use_rotate_to_heading: false
-      max_angular_accel: 1.0           # 角加速度リミット [rad/s²]
+      max_angular_accel: 0.7           # 角加速度リミット [rad/s²]
 
       # ── 規制 ──────────────────────────────────────────────────────────
       use_cost_regulated_linear_velocity_scaling: false  # コストマップ障害物での減速(今は無効)
@@ -219,10 +219,10 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.5,  0.5,  1.0]   # reduced to match desired_linear_vel
-    min_velocity: [-0.5, -0.5, -1.0]
-    max_accel:    [0.5,  0.5,  1.0]   # gentle accel to prevent overshoot
-    max_decel:    [-0.5, -0.5, -1.0]
+    max_velocity: [0.5,  0.5,  0.65]  # limit yaw so the ASV keeps translating through bends
+    min_velocity: [-0.5, -0.5, -0.65]
+    max_accel:    [0.5,  0.5,  0.7]
+    max_decel:    [-0.5, -0.5, -0.7]
     odom_topic: "odom"
 
 smoother_server:
