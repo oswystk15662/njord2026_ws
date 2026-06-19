@@ -68,6 +68,8 @@ jobs:
             src/navigation/buoy_obstacle_publisher \
             src/diagnostics/diagnostic_monitors \
             src/driver/micon/kinematics \
+            src/driver/micon/thruster_driver \
+            src/robot \
             src/sim/dutyed_tf_pub_with_disturbance \
             src/sim/sensor_sim_with_noise \
             src/sim/operation_validator \
@@ -88,6 +90,8 @@ jobs:
             buoy_obstacle_publisher \
             diagnostic_monitors \
             kinematics \
+            thruster_driver \
+            robot \
             dutyed_tf_pub_with_disturbance \
             sensor_sim_with_noise \
             operation_validator \
