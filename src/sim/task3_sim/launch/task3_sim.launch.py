@@ -14,7 +14,9 @@ def generate_launch_description():
     pkg_robot      = get_package_share_directory("robot")
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
-    pkg_kinematics = get_package_share_directory("kinematics")
+    pkg_thruster   = get_package_share_directory("thruster_driver")
+    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
+    robot_description = open(robot_description_file, 'r').read()
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
@@ -93,31 +95,30 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Kinematics: cmd_vel → /thruster_command (Int16MultiArray)
-    kinematics_node = Node(
-        package="kinematics",
-        executable="kinematics_node",
-        name="kinematics_node",
+    # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
+    thruster_driver_node = Node(
+        package="thruster_driver",
+        executable="thruster_driver_node",
+        name="thruster_driver_node",
         parameters=[
-            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                # Hardware wiring reversals are not present in the physics simulator.
-                "thrusters.FL.reverse": False,
-                "thrusters.RL.reverse": False,
+                "robot_description": robot_description,
+                "transport_mode": "sim",
+                "control.dob.enable": False,
             },
         ],
         output="screen",
     )
 
     # Robot state publisher: URDF → base_link→{imu_link, livox_frame, gnss_link, …}
-    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
     robot_state_pub_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': open(robot_description_file, 'r').read(),
+            'robot_description': robot_description,
             'use_sim_time': False
         }]
     )
@@ -199,7 +200,7 @@ def generate_launch_description():
             sim_dynamics,
             sensor_noise_launch,
             task3_orchestrator,
-            kinematics_node,
+            thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
