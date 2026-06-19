@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class Task3Orchestrator(Node):
@@ -51,6 +52,7 @@ class Task3Orchestrator(Node):
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
         self.pub_dock_projection = self.create_publisher(PolygonStamped, "/sim/dock_projection", 10)
+        self.pub_buoy_markers = self.create_publisher(MarkerArray, "/sim/buoy_markers", 10)
 
         # Pointcloud publisher and TF listener
         self.pub_pointcloud = self.create_publisher(PointCloud2, "/pointcloud", 10)
@@ -108,6 +110,42 @@ class Task3Orchestrator(Node):
             p.z = 0.0
             poly.polygon.points.append(p)
         self.pub_dock_projection.publish(poly)
+
+    def publish_buoy_markers(self, buoy_positions):
+        markers = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+
+        for marker_id, buoy in enumerate(buoy_positions):
+            marker = Marker()
+            marker.header.stamp = stamp
+            marker.header.frame_id = self.frame_id
+            marker.ns = "task3_buoys"
+            marker.id = marker_id
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = buoy["x"]
+            marker.pose.position.y = buoy["y"]
+            marker.pose.position.z = 0.45
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.9
+            marker.scale.y = 0.9
+            marker.scale.z = 0.9
+            marker.color.a = 0.9
+            if "red" in buoy["name"]:
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+            elif "green" in buoy["name"]:
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            else:
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+            markers.markers.append(marker)
+
+        self.pub_buoy_markers.publish(markers)
 
     def generate_field_points(self):
         pts = []
@@ -212,6 +250,7 @@ class Task3Orchestrator(Node):
 
         # Generate dynamic buoy positions and broadcast TFs
         buoy_pts = []
+        buoy_positions = []
         s = 0.05  # 5cm square
         for buoy in self.buoy_definitions:
             phase = 2.0 * math.pi * self.motion_freq_hz * t + buoy['phase_offset']
@@ -220,6 +259,7 @@ class Task3Orchestrator(Node):
 
             # Broadcast buoy TF
             self.publish_tf(buoy['name'], x_dyn, y_dyn)
+            buoy_positions.append({"name": buoy["name"], "x": x_dyn, "y": y_dyn})
 
             # Generate 5cm-squared points around the dynamic center
             buoy_pts.extend(self.line_points(x_dyn - s/2, y_dyn + s/2, x_dyn + s/2, y_dyn + s/2, 0.01))
@@ -230,6 +270,7 @@ class Task3Orchestrator(Node):
         # Broadcast dock TF and projection
         self.publish_tf("dock", self.dock_pose[0], self.dock_pose[1], self.dock_pose[2])
         self.publish_dock_projection()
+        self.publish_buoy_markers(buoy_positions)
 
         # Combine static dock and dynamic buoy points
         all_map_pts = self.static_map_points + buoy_pts
