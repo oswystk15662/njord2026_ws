@@ -3,13 +3,16 @@
 # Supports both normal docking (3.1) and parallel docking (3.2)
 #
 # Rulebook default sequence:
-#   task3_1: gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint) -> berth1 approach -> berth1
+#   task3_1: gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint, stop)
+#     -> berth1 approach -> berth1
 #     -> berth1 exit -> gps8(finish)
-#   task3_2: gps9(start) -> buoy corridor midpoint -> gps9 gate midpoint -> berth2 approach -> berth2
+#   task3_2: gps9(start) -> buoy corridor midpoint -> gps9 gate midpoint(stop)
+#     -> berth2 approach -> berth2
 #     -> gps10(finish)
 #
 # Optional continuous sequence (run_full_sequence:=true):
-#   gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint) -> berth1 approach -> berth1
+#   gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint, stop)
+#     -> berth1 approach -> berth1
 #     -> berth1 exit -> mirrored corridor midpoint -> gps9(gate midpoint)
 #     -> berth2 approach -> berth2 -> gps10(finish)
 #
@@ -144,12 +147,14 @@ task3_1_config:
     goal_tolerance: 1.0
 
   stages:
-    stage_1: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
+    stage_1_gate: [7, "b31_corridor_gate", 8]
+    stage_1: ["berth1_approach", "berth1"]
     stage_2: ["berth1_exit", 8]
     stage_3: []
 
   full_sequence_stages:
-    stage_1: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
+    stage_1_gate: [7, "b31_corridor_gate", 8]
+    stage_1: ["berth1_approach", "berth1"]
     stage_2: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
     stage_3: [10]
 
@@ -229,7 +234,8 @@ task3_2_config:
     goal_tolerance: 1.0
 
   stages:
-    stage_1: [9, "b32_corridor_gate", "9_gate", "berth2_approach", "berth2"]
+    stage_1_gate: [9, "b32_corridor_gate", "9_gate"]
+    stage_1: ["berth2_approach", "berth2"]
     stage_2: []
     stage_3: [10]
 
@@ -238,25 +244,30 @@ task3_2_config:
 # The rulebook default uses task3_1_config.stages and task3_2_config.stages above.
 async_flow:
   stage_1:
-    name: "Approach Normal Dock"
-    waypoints: [7, "b31_corridor_gate", 8, "berth1_approach", "berth1"]
+    name: "Approach GPS8 Gate"
+    waypoints: [7, "b31_corridor_gate", 8]
     next_trigger: "goal_reached"
 
   stage_2:
+    name: "Approach Normal Dock"
+    waypoints: ["berth1_approach", "berth1"]
+    next_trigger: "goal_reached"
+
+  stage_3:
     name: "Stationary Wait at Berth 1"
     duration_s: 10
     next_trigger: "timer_complete"
 
-  stage_3:
+  stage_4:
     name: "Undock and Approach Parallel Dock"
     waypoints: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
     next_trigger: "goal_reached"
 
-  stage_4:
+  stage_5:
     name: "Stationary Wait at Berth 2"
     duration_s: 5
     next_trigger: "timer_complete"
 
-  stage_5:
+  stage_6:
     name: "Exit to Finish"
     waypoints: [10]

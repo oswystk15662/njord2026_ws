@@ -44,7 +44,7 @@ def generate_launch_description():
         'goal_delay', default_value='12.0',
         description='Delay before launching waypoint_publisher (needs Nav2 action servers up)')
     task_type_arg = DeclareLaunchArgument(
-        'task_type', default_value='task3_1',
+        'task_type', default_value='task3_2',
         description='Task type: task3_1 or task3_2')
     full_sequence_arg = DeclareLaunchArgument(
         'run_full_sequence', default_value='false',

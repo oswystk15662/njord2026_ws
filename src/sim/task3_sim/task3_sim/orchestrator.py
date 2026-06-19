@@ -43,14 +43,18 @@ class Task3Orchestrator(Node):
             self.dock_pose = [-20.0, 0.0, 3.14159]
             self.dock_size_xy = [2.0, 4.13]
             self.goal_xy = [-18.0, -11.0]
-            self.completion_requires_dock_visit = False
+            self.dock_visit_xy = [-20.0, 0.0]
         else:  # task3_1 default
             self.dock_pose = [20.0, 0.0, 0.0]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [-18.0, -11.0] if self.run_full_sequence else [18.0, 10.0]
-            self.completion_requires_dock_visit = not self.run_full_sequence
+            if self.run_full_sequence:
+                self.goal_xy = [-18.0, -11.0]
+                self.dock_visit_xy = [-20.0, 0.0]
+            else:
+                self.goal_xy = [18.0, 10.0]
+                self.dock_visit_xy = [20.0, 1.065]
 
-        self.dock_visit_xy = [20.0, 1.065]
+        self.completion_requires_dock_visit = True
 
         # Always import BOTH buoy sets — full field is always visible
         from .buoy_config import BUOY_DEFINITIONS_3_1, BUOY_DEFINITIONS_3_2
@@ -59,6 +63,7 @@ class Task3Orchestrator(Node):
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
+        self.pub_gps8_reached = self.create_publisher(Bool, "/sim/task3/gps8_reached", transient_qos)
         self.pub_dock_projection = self.create_publisher(PolygonStamped, "/sim/dock_projection", 10)
         self.pub_buoy_markers = self.create_publisher(MarkerArray, "/sim/buoy_markers", 10)
 
@@ -72,6 +77,8 @@ class Task3Orchestrator(Node):
 
         self.goal_announced = False
         self.dock_visited = False
+        self.gps8_visited = False
+        self.gate_midpoints = {}
         self.publish_start_and_goal()
 
         # Pre-generate static dock points in the global map frame
@@ -155,6 +162,22 @@ class Task3Orchestrator(Node):
             markers.markers.append(marker)
 
         self.pub_buoy_markers.publish(markers)
+
+    def update_gate_midpoints(self, buoy_positions):
+        by_name = {buoy["name"]: buoy for buoy in buoy_positions}
+        gate_pairs = {
+            "gps8": ("b31_red_gate", "b31_green_gate"),
+            "gps9": ("b32_red_gate", "b32_green_gate"),
+        }
+        for gate_name, (red_name, green_name) in gate_pairs.items():
+            red = by_name.get(red_name)
+            green = by_name.get(green_name)
+            if red is None or green is None:
+                continue
+            self.gate_midpoints[gate_name] = (
+                0.5 * (red["x"] + green["x"]),
+                0.5 * (red["y"] + green["y"]),
+            )
 
     def generate_field_points(self):
         pts = []
@@ -278,6 +301,7 @@ class Task3Orchestrator(Node):
 
         # Broadcast dock TF and projection
         self.publish_tf("dock", self.dock_pose[0], self.dock_pose[1], self.dock_pose[2])
+        self.update_gate_midpoints(buoy_positions)
         self.publish_dock_projection()
         self.publish_buoy_markers(buoy_positions)
 
@@ -309,15 +333,39 @@ class Task3Orchestrator(Node):
         if self.goal_announced:
             return
 
+        gps8_xy = self.gate_midpoints.get("gps8", (18.0, 10.0))
+        gps8_dx = msg.pose.pose.position.x - gps8_xy[0]
+        gps8_dy = msg.pose.pose.position.y - gps8_xy[1]
+        if (
+            self.task_type == "task3_1" and
+            not self.gps8_visited and
+            math.hypot(gps8_dx, gps8_dy) <= self.goal_radius
+        ):
+            self.gps8_visited = True
+            reached = Bool()
+            reached.data = True
+            self.pub_gps8_reached.publish(reached)
+            self.get_logger().info(
+                f"Task3.1 first GPS8 gate reached at dynamic midpoint "
+                f"({gps8_xy[0]:.2f}, {gps8_xy[1]:.2f})"
+            )
+
         if self.completion_requires_dock_visit and not self.dock_visited:
             dock_dx = msg.pose.pose.position.x - self.dock_visit_xy[0]
             dock_dy = msg.pose.pose.position.y - self.dock_visit_xy[1]
             if math.hypot(dock_dx, dock_dy) <= self.dock_visit_radius:
                 self.dock_visited = True
-                self.get_logger().info("Task3.1 dock visit observed; final GPS8 check armed")
+                self.get_logger().info(
+                    f"{self.task_type} dock visit observed; final goal check armed"
+                )
 
-        dx = msg.pose.pose.position.x - self.goal_xy[0]
-        dy = msg.pose.pose.position.y - self.goal_xy[1]
+        goal_xy = gps8_xy if (
+            self.task_type == "task3_1" and
+            not self.run_full_sequence
+        ) else self.goal_xy
+
+        dx = msg.pose.pose.position.x - goal_xy[0]
+        dy = msg.pose.pose.position.y - goal_xy[1]
         if (
             math.hypot(dx, dy) <= self.goal_radius and
             (not self.completion_requires_dock_visit or self.dock_visited)

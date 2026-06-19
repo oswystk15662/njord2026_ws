@@ -32,13 +32,14 @@ class TaskType(Enum):
 class DockingState(Enum):
     """State machine for task3 multi-stage docking."""
     IDLE = 0
-    STAGE1_APPROACH = 1
-    STAGE1_WAIT = 2
-    STAGE2_APPROACH = 3
-    STAGE2_WAIT = 4
-    FINAL_EXIT = 5
-    COMPLETE = 6
-    FAILED = 7
+    STAGE1_GATE = 1
+    STAGE1_APPROACH = 2
+    STAGE1_WAIT = 3
+    STAGE2_APPROACH = 4
+    STAGE2_WAIT = 5
+    FINAL_EXIT = 6
+    COMPLETE = 7
+    FAILED = 8
 
 class WaypointPublisher(Node):
     """
@@ -163,20 +164,40 @@ class WaypointPublisher(Node):
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
     
     def _publish_task3_first_stage(self):
-        """Publish the docking approach stage for the selected Task3 mode."""
+        """Publish the gate approach stage for the selected Task3 mode."""
+        gate_stage_ids = self._task3_stage_ids('stage_1_gate')
+        if not gate_stage_ids:
+            self._publish_task3_dock_stage()
+            return
+
+        stage1 = self._build_poses_for_ids(gate_stage_ids)
+        if stage1:
+            self.docking_state = DockingState.STAGE1_GATE
+            self._send_navigate_through_poses_goal(stage1, stage_name='stage_1_gate')
+            if self.task_type == TaskType.TASK3_2:
+                self.get_logger().info(
+                    "Task3.2: gate stage sent [gps9 -> corridor_gate -> gps9_gate]"
+                )
+            else:
+                self.get_logger().info(
+                    "Task3.1: gate stage sent [gps7 -> corridor_gate -> gps8]"
+                )
+        else:
+            self.get_logger().warn("Task3: Insufficient waypoints for stage_1_gate")
+
+    def _publish_task3_dock_stage(self):
+        """Publish the dock approach stage after the mandatory gate goal."""
         stage1 = self._build_poses_for_ids(self._task3_stage_ids('stage_1'))
         if stage1:
             self.docking_state = DockingState.STAGE1_APPROACH
             self._send_navigate_through_poses_goal(stage1, stage_name='stage_1')
             if self.task_type == TaskType.TASK3_2:
                 self.get_logger().info(
-                    "Task3.2: approach sent [gps9 -> corridor_gate -> "
-                    "gps9_gate -> berth2_approach -> berth2]"
+                    "Task3.2: dock stage sent [berth2_approach -> berth2]"
                 )
             else:
                 self.get_logger().info(
-                    "Task3.1: Stage 1 sent [gps7 -> corridor_gate -> "
-                    "gps8 -> berth1_approach -> berth1]"
+                    "Task3.1: dock stage sent [berth1_approach -> berth1]"
                 )
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 1")
@@ -330,7 +351,11 @@ class WaypointPublisher(Node):
             self._retry_or_fail_current_task3_stage(f"goal status={status}")
             return
 
-        if self.docking_state == DockingState.STAGE1_APPROACH:
+        if self.docking_state == DockingState.STAGE1_GATE:
+            self.get_logger().info("Task3: mandatory gate reached; continuing to dock stage")
+            self._publish_task3_dock_stage()
+
+        elif self.docking_state == DockingState.STAGE1_APPROACH:
             self.docking_state = DockingState.STAGE1_WAIT
             wait_time = float(self.config.get('constraints', {}).get('wait_time_s', 10))
             berth_name = "Berth 2" if self.task_type == TaskType.TASK3_2 else "Berth 1"
