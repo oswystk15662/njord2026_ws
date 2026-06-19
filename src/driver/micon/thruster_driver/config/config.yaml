@@ -1,31 +1,82 @@
 thruster_driver_node:
   ros__parameters:
-    input_mode: "duty_array"      # cmd_vel or duty_array
-    transport_mode: "both"        # mros_usb or can or both
-
-    max_linear_x: 1.0
-    max_angular_z: 1.0
-    angular_coeff: 0.5
+    input_mode: "cmd_vel"       # cmd_vel or duty_array
+    transport_mode: "sim"       # sim, mros_usb, can, both, sim_and_mros_usb, sim_and_can, sim_and_both
 
     duty_resolution: 1000
 
-    left_reverse: false
-    right_reverse: false
+    input_scaling:
+      max_linear_x: 1.5
+      max_linear_y: 1.5
+      max_angular_z: 2.0
+
+    control:
+      rate_hz: 50.0
+      feedback_timeout_sec: 0.5
+      stop_on_feedback_timeout: true
+      p:
+        surge: 0.8
+        sway: 0.8
+        yaw: 0.5
+      dob:
+        enable: false
+        observer_gain: 1.0
+        filter_tau_sec: 0.1
+      nominal:
+        mass: 10.0
+        iz: 1.5
+        damping:
+          linear:
+            surge: 0.2
+            sway: 0.2
+            yaw: 0.02
+          quadratic:
+            surge: 0.0
+            sway: 0.0
+            yaw: 0.0
+
+    allocation:
+      regularization_lambda: 1.0e-4
+
+    safety:
+      watchdog_timeout_sec: 0.5
+
+    static_map:
+      deadzone_pos: 0.0
+      deadzone_neg: 0.0
+      wheels:
+        forward_gain: [1.0, 1.0, 1.0, 1.0]
+        reverse_gain: [1.0, 1.0, 1.0, 1.0]
+        offset: [0.0, 0.0, 0.0, 0.0]
+
+    # URDF stores only the fixed pose for these links. Direction, reverse and
+    # output mapping stay here so wiring and prop orientation can be changed
+    # without changing the robot model.
+    thrusters:
+      ids: ["FR", "FL", "RR", "RL"]
+      links: ["thruster_FR", "thruster_FL", "thruster_RR", "thruster_RL"]
+      angle_rad: [0.785398, -0.785398, 2.356194, -2.356194]
+      reverse: [false, false, false, false]
+      force_per_duty: [1.0, 1.0, 1.0, 1.0]
+      can_ids: [769, 770, 771, 772]
 
     # ESP32 expects one UInt16 command per ESC.
     # command = u16_neutral + normalized[-1,1] * u16_span
     u16_neutral: 1000
     u16_span: 1000
 
-    left_can_id: 769   # 0x301
-    right_can_id: 770  # 0x302
-
     topics:
       cmd_vel: "cmd_vel"
       duty_array: "thruster_command"
-
-      left_mros_cmd: "left_esp32/cmd_duty_u16"
-      right_mros_cmd: "right_esp32/cmd_duty_u16"
-
-      left_can_tx: "left_esp32/can_tx"
-      right_can_tx: "right_esp32/can_tx"
+      feedback_odometry: "/odometry/filtered/local"
+      sim_thruster_command: "/thruster_command"
+      mros_cmd:
+        - "FR_esp32/cmd_duty_u16"
+        - "FL_esp32/cmd_duty_u16"
+        - "RR_esp32/cmd_duty_u16"
+        - "RL_esp32/cmd_duty_u16"
+      can_tx:
+        - "FR_esp32/can_tx"
+        - "FL_esp32/can_tx"
+        - "RR_esp32/can_tx"
+        - "RL_esp32/can_tx"

@@ -15,10 +15,12 @@ def generate_launch_description():
     pkg_dutyed = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     pkg_waypoint = get_package_share_directory("waypoint_publisher")
-    pkg_kinematics = get_package_share_directory("kinematics")
+    pkg_thruster = get_package_share_directory("thruster_driver")
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
     opponent_config = os.path.join(pkg_task2, "config", "task2_opponent_sim.yaml")
+    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
+    robot_description = open(robot_description_file, "r").read()
 
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
@@ -87,28 +89,28 @@ def generate_launch_description():
         output="screen",
     )
 
-    kinematics_node = Node(
-        package="kinematics",
-        executable="kinematics_node",
-        name="kinematics_node",
+    thruster_driver_node = Node(
+        package="thruster_driver",
+        executable="thruster_driver_node",
+        name="thruster_driver_node",
         parameters=[
-            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                "thrusters.FL.reverse": False,
-                "thrusters.RL.reverse": False,
+                "robot_description": robot_description,
+                "transport_mode": "sim",
+                "control.dob.enable": False,
             },
         ],
         output="screen",
     )
 
-    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
         parameters=[{
-            "robot_description": open(robot_description_file, "r").read(),
+            "robot_description": robot_description,
             "use_sim_time": False,
         }],
     )
@@ -167,7 +169,7 @@ def generate_launch_description():
             task2_orchestrator,
             opponent_vessel,
             ideal_lidar,
-            kinematics_node,
+            thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
