@@ -24,7 +24,7 @@ public:
   {
     this->declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
     this->declare_parameter<int>("baud", 115200);
-    this->declare_parameter<std::string>("command_topic", "/debug/current_force");
+    this->declare_parameter<std::string>("command_topic", "/thruster_command");
     serial_port_ = this->get_parameter("serial_port").as_string();
     baud_ = this->get_parameter("baud").as_int();
     command_topic_ = this->get_parameter("command_topic").as_string();
