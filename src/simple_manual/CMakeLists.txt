@@ -1,24 +1,17 @@
 cmake_minimum_required(VERSION 3.8)
-project(micon_driver_fd)
+project(simple_manual)
 
 if(CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
 # find dependencies
+# find dependencies
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
-
-add_executable(serial_writer src/serial_writer.cpp)
-ament_target_dependencies(serial_writer rclcpp std_msgs)
-
-install(TARGETS serial_writer
-  DESTINATION lib/${PROJECT_NAME}
-)
-# uncomment the following section in order to fill in
-# further dependencies manually.
-# find_package(<dependency> REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
@@ -31,5 +24,19 @@ if(BUILD_TESTING)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
 endif()
+
+add_executable(joy_converter_node src/joy_converter.cpp)
+target_compile_features(joy_converter_node PUBLIC cxx_std_17)
+ament_target_dependencies(joy_converter_node rclcpp sensor_msgs geometry_msgs std_msgs)
+
+install(TARGETS
+  joy_converter_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}
+)
 
 ament_package()
