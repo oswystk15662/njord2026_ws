@@ -1,5 +1,7 @@
 #include "thruster_driver/node.hpp"
 
+#include "thruster_driver/allocation.hpp"
+
 #include <algorithm>
 #include <cctype>
 #include <chrono>
@@ -29,8 +31,8 @@ std::vector<double> parseDoubleList(const std::string & text)
   std::vector<double> values;
   const std::regex number_pattern(R"([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)");
   for (auto it = std::sregex_iterator(text.begin(), text.end(), number_pattern);
-       it != std::sregex_iterator();
-       ++it)
+    it != std::sregex_iterator();
+    ++it)
   {
     values.push_back(std::stod(it->str()));
   }
@@ -53,7 +55,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
   feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
-  stop_on_feedback_timeout_ = this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
+  stop_on_feedback_timeout_ =
+    this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
 
   kp_surge_ = this->declare_parameter<double>("control.p.surge", 1.0);
   kp_sway_ = this->declare_parameter<double>("control.p.sway", 1.0);
@@ -65,12 +68,19 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   mass_ = this->declare_parameter<double>("control.nominal.mass", 10.0);
   iz_ = this->declare_parameter<double>("control.nominal.iz", 1.0);
-  damping_linear_surge_ = this->declare_parameter<double>("control.nominal.damping.linear.surge", 0.0);
-  damping_linear_sway_ = this->declare_parameter<double>("control.nominal.damping.linear.sway", 0.0);
+  damping_linear_surge_ = this->declare_parameter<double>(
+    "control.nominal.damping.linear.surge",
+    0.0);
+  damping_linear_sway_ =
+    this->declare_parameter<double>("control.nominal.damping.linear.sway", 0.0);
   damping_linear_yaw_ = this->declare_parameter<double>("control.nominal.damping.linear.yaw", 0.0);
-  damping_quadratic_surge_ = this->declare_parameter<double>("control.nominal.damping.quadratic.surge", 0.0);
-  damping_quadratic_sway_ = this->declare_parameter<double>("control.nominal.damping.quadratic.sway", 0.0);
-  damping_quadratic_yaw_ = this->declare_parameter<double>("control.nominal.damping.quadratic.yaw", 0.0);
+  damping_quadratic_surge_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.surge", 0.0);
+  damping_quadratic_sway_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.sway", 0.0);
+  damping_quadratic_yaw_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.yaw",
+    0.0);
 
   allocation_regularization_ = std::max(
     1e-9,
@@ -113,7 +123,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   loadThrusterPosesFromUrdf(robot_description);
   validateThrusterConfigs();
 
-  const std::string cmd_vel_topic = this->declare_parameter<std::string>("topics.cmd_vel", "cmd_vel");
+  const std::string cmd_vel_topic =
+    this->declare_parameter<std::string>("topics.cmd_vel", "cmd_vel");
   const std::string duty_array_topic =
     this->declare_parameter<std::string>("topics.duty_array", "thruster_command");
   const std::string odom_topic =
@@ -156,7 +167,9 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
       std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
     const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
     control_timer_ = this->create_wall_timer(
-      std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(period_sec)),
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::duration<double>(
+          period_sec)),
       std::bind(&ThrusterDriverNode::controlTimerCallback, this));
   } else if (input_mode_ == "duty_array") {
     sub_duty_array_ = this->create_subscription<std_msgs::msg::Int16MultiArray>(
@@ -312,9 +325,10 @@ void ThrusterDriverNode::loadThrusterPosesFromUrdf(const std::string & robot_des
   const std::regex origin_pattern(R"(<origin\b[^>]*xyz=["']([^"']+)["'])");
 
   std::vector<bool> found(thrusters_.size(), false);
-  for (auto it = std::sregex_iterator(robot_description.begin(), robot_description.end(), joint_pattern);
-       it != std::sregex_iterator();
-       ++it)
+  for (auto it =
+    std::sregex_iterator(robot_description.begin(), robot_description.end(), joint_pattern);
+    it != std::sregex_iterator();
+    ++it)
   {
     const std::string joint_xml = it->str();
     const std::string parent = captureFirst(joint_xml, parent_pattern);
@@ -340,7 +354,8 @@ void ThrusterDriverNode::loadThrusterPosesFromUrdf(const std::string & robot_des
 
   for (std::size_t i = 0; i < thrusters_.size(); ++i) {
     if (!found[i]) {
-      throw std::runtime_error("Missing fixed base_link joint for thruster link: " + thrusters_[i].link);
+      throw std::runtime_error(
+              "Missing fixed base_link joint for thruster link: " + thrusters_[i].link);
     }
   }
 }
@@ -405,101 +420,14 @@ std::vector<double> ThrusterDriverNode::computeWrench(double dt)
 
 std::vector<double> ThrusterDriverNode::allocateWrench(const std::vector<double> & wrench) const
 {
-  std::vector<std::vector<double>> a(3, std::vector<double>(thrusters_.size(), 0.0));
-  for (std::size_t i = 0; i < thrusters_.size(); ++i) {
-    const auto & thruster = thrusters_[i];
-    const double dx = std::cos(thruster.angle_rad);
-    const double dy = std::sin(thruster.angle_rad);
-    const double gain = thruster.force_per_duty;
-    a[0][i] = gain * dx;
-    a[1][i] = gain * dy;
-    a[2][i] = gain * (thruster.x * dy - thruster.y * dx);
+  std::vector<ThrusterGeometry> geometry;
+  geometry.reserve(thrusters_.size());
+  for (const auto & thruster : thrusters_) {
+    geometry.push_back(
+        {
+          thruster.x, thruster.y, thruster.angle_rad, thruster.force_per_duty, thruster.reverse});
   }
-
-  std::vector<double> commands =
-    solveRegularizedLeastSquares(a, wrench, allocation_regularization_);
-
-  double max_abs = 0.0;
-  for (double value : commands) {
-    max_abs = std::max(max_abs, std::abs(value));
-  }
-  if (max_abs > 1.0) {
-    for (double & value : commands) {
-      value /= max_abs;
-    }
-  }
-
-  for (std::size_t i = 0; i < commands.size(); ++i) {
-    if (thrusters_[i].reverse) {
-      commands[i] *= -1.0;
-    }
-    commands[i] = clamp(commands[i], -1.0, 1.0);
-  }
-  return commands;
-}
-
-std::vector<double> ThrusterDriverNode::solveRegularizedLeastSquares(
-  const std::vector<std::vector<double>> & a,
-  const std::vector<double> & b,
-  double lambda) const
-{
-  const std::size_t rows = a.size();
-  const std::size_t cols = a.front().size();
-  std::vector<std::vector<double>> ata(cols, std::vector<double>(cols, 0.0));
-  std::vector<double> atb(cols, 0.0);
-
-  for (std::size_t i = 0; i < cols; ++i) {
-    for (std::size_t j = 0; j < cols; ++j) {
-      for (std::size_t k = 0; k < rows; ++k) {
-        ata[i][j] += a[k][i] * a[k][j];
-      }
-    }
-    ata[i][i] += lambda;
-    for (std::size_t k = 0; k < rows; ++k) {
-      atb[i] += a[k][i] * b[k];
-    }
-  }
-
-  for (std::size_t i = 0; i < cols; ++i) {
-    std::size_t pivot = i;
-    double max_abs = std::abs(ata[i][i]);
-    for (std::size_t r = i + 1U; r < cols; ++r) {
-      if (std::abs(ata[r][i]) > max_abs) {
-        max_abs = std::abs(ata[r][i]);
-        pivot = r;
-      }
-    }
-    if (pivot != i) {
-      std::swap(ata[i], ata[pivot]);
-      std::swap(atb[i], atb[pivot]);
-    }
-
-    const double diag = ata[i][i];
-    if (std::abs(diag) < 1e-12) {
-      continue;
-    }
-
-    for (std::size_t r = i + 1U; r < cols; ++r) {
-      const double factor = ata[r][i] / diag;
-      for (std::size_t c = i; c < cols; ++c) {
-        ata[r][c] -= factor * ata[i][c];
-      }
-      atb[r] -= factor * atb[i];
-    }
-  }
-
-  std::vector<double> x(cols, 0.0);
-  for (int i = static_cast<int>(cols) - 1; i >= 0; --i) {
-    double rhs = atb[static_cast<std::size_t>(i)];
-    for (std::size_t c = static_cast<std::size_t>(i) + 1U; c < cols; ++c) {
-      rhs -= ata[static_cast<std::size_t>(i)][c] * x[c];
-    }
-    const double diag = ata[static_cast<std::size_t>(i)][static_cast<std::size_t>(i)];
-    if (std::abs(diag) >= 1e-12) {
-      x[static_cast<std::size_t>(i)] = rhs / diag;
-    }
-  }
-  return x;
+  return njord::thruster_driver::allocateWrench(geometry, wrench, allocation_regularization_);
 }
 
 double ThrusterDriverNode::applyStaticMap(double value, const ThrusterConfig & thruster) const
@@ -578,7 +506,8 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
 std::uint16_t ThrusterDriverNode::toUint16Command(double normalized) const
 {
   const double cmd =
-    static_cast<double>(u16_neutral_) + clamp(normalized, -1.0, 1.0) * static_cast<double>(u16_span_);
+    static_cast<double>(u16_neutral_) +
+    clamp(normalized, -1.0, 1.0) * static_cast<double>(u16_span_);
   const int cmd_i = static_cast<int>(std::lround(cmd));
   return static_cast<std::uint16_t>(std::clamp(cmd_i, 0, 65535));
 }
@@ -618,9 +547,10 @@ std::vector<int64_t> ThrusterDriverNode::getIntVector(
 
 std::string ThrusterDriverNode::toLower(std::string value)
 {
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
+  std::transform(
+    value.begin(), value.end(), value.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
   return value;
 }
 
