@@ -1,5 +1,7 @@
 #include "dutyed_tf_pub_with_disturbance/sim_node.hpp"
 
+#include "dutyed_tf_pub_with_disturbance/thruster_wrench.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <vector>
@@ -25,7 +27,9 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
 {
   update_rate_hz_ = this->declare_parameter<double>("update_rate_hz", 50.0);
   duty_resolution_ = this->declare_parameter<double>("duty_resolution", 1000.0);
-  topic_thruster_command_ = this->declare_parameter<std::string>("topic_thruster_command", "/thruster_command");
+  topic_thruster_command_ = this->declare_parameter<std::string>(
+    "topic_thruster_command",
+    "/thruster_command");
   topic_odom_ = this->declare_parameter<std::string>("topic_odom", "/odom");
 
   frame_world_ = this->declare_parameter<std::string>("frame_world", "world");
@@ -34,8 +38,11 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   frame_base_link_ = this->declare_parameter<std::string>("frame_base_link", "base_link");
   publish_tf_ = this->declare_parameter<bool>("publish_tf", true);
 
-  auto map_offset = this->declare_parameter<std::vector<double>>("map_offset_xyyaw", {0.0, 0.0, 0.0});
-  auto odom_offset = this->declare_parameter<std::vector<double>>("odom_offset_xyyaw", {0.0, 0.0, 0.0});
+  auto map_offset =
+    this->declare_parameter<std::vector<double>>("map_offset_xyyaw", {0.0, 0.0, 0.0});
+  auto odom_offset = this->declare_parameter<std::vector<double>>(
+    "odom_offset_xyyaw", {0.0, 0.0,
+      0.0});
   if (map_offset.size() >= 3U) {
     map_offset_x_ = map_offset[0];
     map_offset_y_ = map_offset[1];
@@ -53,9 +60,9 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   left_reverse_ = this->declare_parameter<bool>("thruster.left_reverse", false);
   right_reverse_ = this->declare_parameter<bool>("thruster.right_reverse", false);
 
-DoyleParams mmg;
-mmg.Lpp = this->declare_parameter<double>("mmg.Lpp", 1.0);
-mmg.D = this->declare_parameter<double>("mmg.D", 0.25);
+  DoyleParams mmg;
+  mmg.Lpp = this->declare_parameter<double>("mmg.Lpp", 1.0);
+  mmg.D = this->declare_parameter<double>("mmg.D", 0.25);
   mmg.mass_kg = this->declare_parameter<double>("mmg.mass_kg", 10.0);
   mmg.I_zG = this->declare_parameter<double>("mmg.I_zG", 1.5);
   mmg.x_G = this->declare_parameter<double>("mmg.x_G", 0.0);
@@ -70,7 +77,9 @@ mmg.D = this->declare_parameter<double>("mmg.D", 0.25);
   mmg.N_v = this->declare_parameter<double>("mmg.N_v", -0.2);
   mmg.N_r = this->declare_parameter<double>("mmg.N_r", -0.02);
 
-  const double disturbance_hz = this->declare_parameter<double>("disturbance.natural_frequency_hz", 0.18);
+  const double disturbance_hz = this->declare_parameter<double>(
+    "disturbance.natural_frequency_hz",
+    0.18);
   const double disturbance_zeta = this->declare_parameter<double>("disturbance.damping_ratio", 0.8);
   const double disturbance_sigma_u = this->declare_parameter<double>("disturbance.sigma_u", 0.12);
   const double disturbance_sigma_v = this->declare_parameter<double>("disturbance.sigma_v", 0.12);
@@ -186,23 +195,13 @@ void SimNode::onTimer()
 
   PlanarInput input;
   if (latest_duties_.size() >= 4U) {
-    const double forces[] = {
-      t200_model_->forceFromDuty(latest_duties_[0]),
-      t200_model_->forceFromDuty(latest_duties_[1]),
-      t200_model_->forceFromDuty(latest_duties_[2]),
-      t200_model_->forceFromDuty(latest_duties_[3]),
-    };
-    const double theta[] = {0.785398, -0.785398, 2.35619, -2.35619};
-    const double x[] = {0.353553, 0.353553, -0.353553, -0.353553};
-    const double y[] = {-0.353553, 0.353553, -0.353553, 0.353553};
-
-    for (size_t i = 0; i < 4U; ++i) {
-      const double fx = forces[i] * std::cos(theta[i]);
-      const double fy = forces[i] * std::sin(theta[i]);
-      input.surge_force += fx;
-      input.sway_force += fy;
-      input.yaw_moment += x[i] * fy - y[i] * fx;
-    }
+    const std::vector<double> duties(latest_duties_.begin(), latest_duties_.begin() + 4);
+    const std::vector<SimThrusterGeometry> geometry = {
+      {0.353553, -0.353553, 0.785398},
+      {0.353553, 0.353553, -0.785398},
+      {-0.353553, -0.353553, 2.35619},
+      {-0.353553, 0.353553, -2.35619}};
+    input = dutiesToPlanarInput(duties, geometry, *t200_model_);
   } else {
     const double left_force = t200_model_->forceFromDuty(latest_left_duty_);
     const double right_force = t200_model_->forceFromDuty(latest_right_duty_);

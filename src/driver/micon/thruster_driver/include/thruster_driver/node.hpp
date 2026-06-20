@@ -53,22 +53,21 @@ private:
 
   std::vector<double> computeWrench(double dt);
   std::vector<double> allocateWrench(const std::vector<double> & wrench) const;
-  std::vector<double> solveRegularizedLeastSquares(
-    const std::vector<std::vector<double>> & a,
-    const std::vector<double> & b,
-    double lambda) const;
-
   double applyStaticMap(double value, const ThrusterConfig & thruster) const;
   double applyDeadzone(double value, double deadzone) const;
   void publishCommands(const std::vector<double> & commands);
   std::uint16_t toUint16Command(double normalized) const;
   double clamp(double value, double min_value, double max_value) const;
-  std::vector<double> getDoubleVector(const std::string & name, const std::vector<double> & defaults);
+  std::vector<double> getDoubleVector(
+    const std::string & name,
+    const std::vector<double> & defaults);
   std::vector<std::string> getStringVector(
     const std::string & name,
     const std::vector<std::string> & defaults);
   std::vector<bool> getBoolVector(const std::string & name, const std::vector<bool> & defaults);
-  std::vector<int64_t> getIntVector(const std::string & name, const std::vector<int64_t> & defaults);
+  std::vector<int64_t> getIntVector(
+    const std::string & name,
+    const std::vector<int64_t> & defaults);
   static std::string toLower(std::string value);
 
   // Input subscriptions
