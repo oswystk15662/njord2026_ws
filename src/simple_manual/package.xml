@@ -22,7 +22,9 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>micon_driver_fd</exec_depend>
   <exec_depend>thruster_driver</exec_depend>
+  <exec_depend>rqt_reconfigure</exec_depend>
 
+  <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
 

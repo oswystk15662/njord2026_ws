@@ -18,3 +18,8 @@ hardware before operation.
 ```bash
 ros2 launch simple_manual manual_control.launch.py serial_port:=/dev/ttyUSB0
 ```
+
+The launch file opens `rqt_reconfigure` by default. Select `/joy_converter` to
+change the `axis.*`, `button.*`, and `scale.*` parameters while the node is
+running. The save and load buttons store and restore a YAML profile. Disable
+the GUI on headless systems with `launch_gui:=false`.

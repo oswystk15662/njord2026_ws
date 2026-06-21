@@ -1,79 +1,128 @@
-// joy_converter.cpp
-// Convert sensor_msgs::msg::Joy to velocity and operator-control topics.
+#include "simple_manual/joy_converter.hpp"
 
-#include <memory>
-#include "rclcpp/rclcpp.hpp"
-#include "sensor_msgs/msg/joy.hpp"
-#include "geometry_msgs/msg/twist.hpp"
-#include "std_msgs/msg/bool.hpp"
+#include <cmath>
+#include <functional>
+#include <string>
 
-using std::placeholders::_1;
-
-class JoyConverter : public rclcpp::Node
+namespace simple_manual
 {
-public:
-  JoyConverter()
-  : Node("joy_converter")
-  {
-    sub_ =
-      this->create_subscription<sensor_msgs::msg::Joy>(
-      "joy", 10,
-      std::bind(&JoyConverter::joy_cb, this, _1));
-    pub_cmd_vel_ = this->create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
-    pub_emg_ = this->create_publisher<std_msgs::msg::Bool>("/emg", 10);
-    pub_green_ = this->create_publisher<std_msgs::msg::Bool>("/green", 10);
-    pub_yellow_ = this->create_publisher<std_msgs::msg::Bool>("/yellow", 10);
-    pub_red_ = this->create_publisher<std_msgs::msg::Bool>("/red", 10);
-    RCLCPP_INFO(this->get_logger(), "joy_converter started");
-  }
-
-private:
-  void joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
-  {
-    float axes0 = 0.0f;
-    float axes1 = 0.0f;
-    if (msg->axes.size() > 0) {axes0 = msg->axes[0];}
-    if (msg->axes.size() > 1) {axes1 = msg->axes[1];}
-
-    geometry_msgs::msg::Twist cmd_vel;
-    cmd_vel.linear.x = 0.2 * axes1;
-    cmd_vel.linear.y = 0.2 * axes0;
-
-    // torque from buttons: button index 6 = cw, 7 = ccw. Total magnitude 0.2 N*m
-    bool b6 = (msg->buttons.size() > 6) ? (msg->buttons[6] != 0) : false;
-    bool b7 = (msg->buttons.size() > 7) ? (msg->buttons[7] != 0) : false;
-    cmd_vel.angular.z = 0.2 * (static_cast<double>(b6) - static_cast<double>(b7));
-    pub_cmd_vel_->publish(cmd_vel);
-
-    // publish emg and LEDs
-    std_msgs::msg::Bool emg_msg;
-    emg_msg.data = (msg->buttons.size() > 0) ? (msg->buttons[0] != 1) : true;
-    std_msgs::msg::Bool green_msg;
-    green_msg.data = (msg->buttons.size() > 1) ? (msg->buttons[1] != 0) : false;
-    std_msgs::msg::Bool yellow_msg;
-    yellow_msg.data = (msg->buttons.size() > 2) ? (msg->buttons[2] != 0) : false;
-    std_msgs::msg::Bool red_msg;
-    red_msg.data = (msg->buttons.size() > 3) ? (msg->buttons[3] != 0) : false;
-
-    pub_emg_->publish(emg_msg);
-    pub_green_->publish(green_msg);
-    pub_yellow_->publish(yellow_msg);
-    pub_red_->publish(red_msg);
-  }
-
-  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_;
-  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_emg_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_green_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_yellow_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_red_;
-};
-
-int main(int argc, char ** argv)
+namespace
 {
-  rclcpp::init(argc, argv);
-  auto node = std::make_shared<JoyConverter>();
-  rclcpp::spin(node);
-  rclcpp::shutdown();
-  return 0;
+
+double axis_value(const sensor_msgs::msg::Joy & msg, int64_t index)
+{
+  return static_cast<size_t>(index) < msg.axes.size() ? msg.axes[index] : 0.0;
 }
+
+bool button_value(const sensor_msgs::msg::Joy & msg, int64_t index)
+{
+  return static_cast<size_t>(index) < msg.buttons.size() && msg.buttons[index] != 0;
+}
+
+}  // namespace
+
+JoyOutput convert_joy(const sensor_msgs::msg::Joy & msg, const JoyConfig & config)
+{
+  JoyOutput output;
+  output.cmd_vel.linear.x = config.linear_x_scale * axis_value(msg, config.linear_x_axis);
+  output.cmd_vel.linear.y = config.linear_y_scale * axis_value(msg, config.linear_y_axis);
+  output.cmd_vel.angular.z = config.angular_z_scale *
+    (static_cast<double>(button_value(msg, config.yaw_positive_button)) -
+    static_cast<double>(button_value(msg, config.yaw_negative_button)));
+  output.emergency = !button_value(msg, config.emergency_button);
+  output.green = button_value(msg, config.green_button);
+  output.yellow = button_value(msg, config.yellow_button);
+  output.red = button_value(msg, config.red_button);
+  return output;
+}
+
+JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
+: Node("joy_converter", options)
+{
+  config_.linear_x_axis = declare_parameter<int64_t>("axis.linear_x", 1);
+  config_.linear_y_axis = declare_parameter<int64_t>("axis.linear_y", 0);
+  config_.yaw_positive_button = declare_parameter<int64_t>("button.yaw_positive", 6);
+  config_.yaw_negative_button = declare_parameter<int64_t>("button.yaw_negative", 7);
+  config_.emergency_button = declare_parameter<int64_t>("button.emergency", 0);
+  config_.green_button = declare_parameter<int64_t>("button.green", 1);
+  config_.yellow_button = declare_parameter<int64_t>("button.yellow", 2);
+  config_.red_button = declare_parameter<int64_t>("button.red", 3);
+  config_.linear_x_scale = declare_parameter<double>("scale.linear_x", 0.2);
+  config_.linear_y_scale = declare_parameter<double>("scale.linear_y", 0.2);
+  config_.angular_z_scale = declare_parameter<double>("scale.angular_z", 0.2);
+
+  parameter_callback_ = add_on_set_parameters_callback(
+    std::bind(&JoyConverter::on_parameters, this, std::placeholders::_1));
+  sub_ = create_subscription<sensor_msgs::msg::Joy>(
+    "joy", 10, std::bind(&JoyConverter::joy_cb, this, std::placeholders::_1));
+  pub_cmd_vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+  pub_emg_ = create_publisher<std_msgs::msg::Bool>("/emg", 10);
+  pub_green_ = create_publisher<std_msgs::msg::Bool>("/green", 10);
+  pub_yellow_ = create_publisher<std_msgs::msg::Bool>("/yellow", 10);
+  pub_red_ = create_publisher<std_msgs::msg::Bool>("/red", 10);
+  RCLCPP_INFO(get_logger(), "joy_converter started");
+}
+
+void JoyConverter::joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
+{
+  JoyConfig config;
+  {
+    std::lock_guard<std::mutex> lock(config_mutex_);
+    config = config_;
+  }
+  const auto output = convert_joy(*msg, config);
+  pub_cmd_vel_->publish(output.cmd_vel);
+  pub_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
+  pub_green_->publish(std_msgs::msg::Bool().set__data(output.green));
+  pub_yellow_->publish(std_msgs::msg::Bool().set__data(output.yellow));
+  pub_red_->publish(std_msgs::msg::Bool().set__data(output.red));
+}
+
+rcl_interfaces::msg::SetParametersResult JoyConverter::on_parameters(
+  const std::vector<rclcpp::Parameter> & parameters)
+{
+  std::lock_guard<std::mutex> lock(config_mutex_);
+  JoyConfig candidate = config_;
+  for (const auto & parameter : parameters) {
+    const auto & name = parameter.get_name();
+    if (name == "axis.linear_x") {
+      candidate.linear_x_axis = parameter.as_int();
+    } else if (name == "axis.linear_y") {
+      candidate.linear_y_axis = parameter.as_int();
+    } else if (name == "button.yaw_positive") {
+      candidate.yaw_positive_button = parameter.as_int();
+    } else if (name == "button.yaw_negative") {
+      candidate.yaw_negative_button = parameter.as_int();
+    } else if (name == "button.emergency") {
+      candidate.emergency_button = parameter.as_int();
+    } else if (name == "button.green") {
+      candidate.green_button = parameter.as_int();
+    } else if (name == "button.yellow") {
+      candidate.yellow_button = parameter.as_int();
+    } else if (name == "button.red") {
+      candidate.red_button = parameter.as_int();
+    } else if (name == "scale.linear_x") {
+      candidate.linear_x_scale = parameter.as_double();
+    } else if (name == "scale.linear_y") {
+      candidate.linear_y_scale = parameter.as_double();
+    } else if (name == "scale.angular_z") {candidate.angular_z_scale = parameter.as_double();}
+  }
+
+  const bool valid_indices = candidate.linear_x_axis >= 0 && candidate.linear_y_axis >= 0 &&
+    candidate.yaw_positive_button >= 0 && candidate.yaw_negative_button >= 0 &&
+    candidate.emergency_button >= 0 && candidate.green_button >= 0 &&
+    candidate.yellow_button >= 0 && candidate.red_button >= 0;
+  const bool valid_scales = std::isfinite(candidate.linear_x_scale) &&
+    std::isfinite(candidate.linear_y_scale) && std::isfinite(candidate.angular_z_scale);
+
+  rcl_interfaces::msg::SetParametersResult result;
+  result.successful = valid_indices && valid_scales;
+  if (!result.successful) {
+    result.reason = "Joy indices must be non-negative and scales must be finite";
+    return result;
+  }
+  config_ = candidate;
+  return result;
+}
+
+}  // namespace simple_manual
