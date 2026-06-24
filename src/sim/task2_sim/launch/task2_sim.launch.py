@@ -25,8 +25,11 @@ def generate_launch_description():
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
     use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="true")
+    use_mppi = DeclareLaunchArgument("use_mppi", default_value="true")
+
     params_arg = DeclareLaunchArgument("params", default_value=config)
     opponent_params_arg = DeclareLaunchArgument("opponent_params", default_value=opponent_config)
+
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
         default_value="0.0",
@@ -42,10 +45,16 @@ def generate_launch_description():
         default_value="8.0",
         description="Delay before launching waypoint_publisher",
     )
+    mppi_delay_arg = DeclareLaunchArgument(
+        "mppi_delay",
+        default_value="2.0",
+        description="Delay before launching MPPI planner node",
+    )
 
     driver_delay = LaunchConfiguration("driver_delay")
     nav2_delay = LaunchConfiguration("nav2_delay")
     goal_delay = LaunchConfiguration("goal_delay")
+    mppi_delay = LaunchConfiguration("mppi_delay")
 
     dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
@@ -109,10 +118,12 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
-        parameters=[{
-            "robot_description": robot_description,
-            "use_sim_time": False,
-        }],
+        parameters=[
+            {
+                "robot_description": robot_description,
+                "use_sim_time": False,
+            }
+        ],
     )
 
     local_ekf_node = Node(
@@ -144,21 +155,31 @@ def generate_launch_description():
         executable="navsat_transform_node",
         name="navsat_transform_node",
         output="screen",
-        parameters=[{
-            "frequency": 10.0,
-            "magnetic_declination_radians": 0.0,
-            "yaw_offset": 0.0,
-            "zero_altitude": True,
-            "broadcast_utm_transform": False,
-            "publish_filtered_gps": True,
-            "use_odometry_yaw": False,
-            "wait_for_datum": False,
-        }],
+        parameters=[
+            {
+                "frequency": 10.0,
+                "magnetic_declination_radians": 0.0,
+                "yaw_offset": 0.0,
+                "zero_altitude": True,
+                "broadcast_utm_transform": False,
+                "publish_filtered_gps": True,
+                "use_odometry_yaw": False,
+                "wait_for_datum": False,
+            }
+        ],
         remappings=[
             ("imu", "/wit/imu"),
             ("gps/fix", "/gps/fix"),
             ("odometry/filtered", "odometry/filtered/local"),
         ],
+    )
+
+    mppi_planner = Node(
+        package="asv_trajectory_planner",
+        executable="planner_node",
+        name="mppi_planner_node",
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_mppi")),
     )
 
     sensor_layer_timer = TimerAction(
@@ -178,7 +199,9 @@ def generate_launch_description():
     )
 
     nav2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(pkg_robot, "launch", "nav2.launch.py")),
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, "launch", "nav2.launch.py")
+        ),
         launch_arguments={
             "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2.yaml"),
             "enable_diagnostics": "false",
@@ -186,7 +209,10 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )
 
-    nav2_layer_timer = TimerAction(period=nav2_delay, actions=[nav2_launch])
+    nav2_layer_timer = TimerAction(
+        period=nav2_delay,
+        actions=[nav2_launch],
+    )
 
     waypoint_publisher = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -200,19 +226,32 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_waypoints")),
     )
 
-    goal_layer_timer = TimerAction(period=goal_delay, actions=[waypoint_publisher])
+    goal_layer_timer = TimerAction(
+        period=goal_delay,
+        actions=[waypoint_publisher],
+    )
 
-    return LaunchDescription([
-        LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
-        use_dynamics,
-        use_nav2,
-        use_waypoints,
-        params_arg,
-        opponent_params_arg,
-        driver_delay_arg,
-        nav2_delay_arg,
-        goal_delay_arg,
-        sensor_layer_timer,
-        nav2_layer_timer,
-        goal_layer_timer,
-    ])
+    mppi_layer_timer = TimerAction(
+        period=mppi_delay,
+        actions=[mppi_planner],
+    )
+
+    return LaunchDescription(
+        [
+            LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
+            use_dynamics,
+            use_nav2,
+            use_waypoints,
+            use_mppi,
+            params_arg,
+            opponent_params_arg,
+            driver_delay_arg,
+            nav2_delay_arg,
+            goal_delay_arg,
+            mppi_delay_arg,
+            sensor_layer_timer,
+            mppi_layer_timer,
+            nav2_layer_timer,
+            goal_layer_timer,
+        ]
+    )
