@@ -1,0 +1,22 @@
+# .codex/config.toml
+# Shared recommended config for njord2026_ws.
+# Copy relevant parts to ~/.codex/config.toml if your Codex client does not read repo-local config.
+
+[workspace]
+name = "njord2026_ws"
+
+[behavior]
+default_mode = "safe"
+prefer_plan_first = true
+require_handoff_for_autonomous_work = true
+
+[limits]
+max_subagents = 3
+max_editor_agents = 1
+max_retries_per_command = 2
+
+[safety]
+allow_hardware_launch = false
+allow_sudo = false
+allow_force_push = false
+allow_secret_changes = false
