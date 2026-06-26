@@ -226,9 +226,32 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_waypoints")),
     )
 
+    task2_gate_midpoint_publisher = Node(
+    package="waypoint_publisher",
+    executable="task2_gate_midpoint_publisher",
+    name="task2_gate_midpoint_publisher",
+    output="screen",
+    parameters=[
+        {
+            "frame_id": "map",
+            "red_buoys_topic": "/task2/red_buoys",
+            "green_buoys_topic": "/task2/green_buoys",
+            "gate_xs": [20.0, 40.0],
+            "include_start": True,
+            "start_x": 0.0,
+            "start_y": 0.0,
+            "goal_x": 60.0,
+            "goal_y": 0.0,
+            "max_gate_x_error": 10.0,
+        }
+    ],
+    condition=IfCondition(LaunchConfiguration("use_waypoints")),
+    )
+
     goal_layer_timer = TimerAction(
         period=goal_delay,
-        actions=[waypoint_publisher],
+        # actions=[waypoint_publisher],
+        actions=[task2_gate_midpoint_publisher],
     )
 
     mppi_layer_timer = TimerAction(
