@@ -102,6 +102,15 @@
     <origin xyz="${imu_x} ${imu_y} ${imu_z}" rpy="0 0 0"/>
   </joint>
 
+  <!-- Placeholder Spatial extrinsics. Measure and replace before tuning fusion. -->
+  <link name="spatial_link"/>
+
+  <joint name="spatial_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="spatial_link"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
   <link name="gnss_link">
     <visual>
       <geometry>
