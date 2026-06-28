@@ -30,9 +30,11 @@ setup(
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
-        "console_scripts": [
-            "planner_node = asv_trajectory_planner.planner_node:main",
-            "follow_path_client_node = asv_trajectory_planner.follow_path_client_node:main",
-        ],
+    "console_scripts": [
+        "planner_node = asv_trajectory_planner.planner_node:main",
+        "follow_path_client_node = asv_trajectory_planner.follow_path_client_node:main",
+        "task2_gps_waypoint_publisher = asv_trajectory_planner.task2_gps_waypoint_publisher:main",
+                "opponent_twist_from_tf_node = asv_trajectory_planner.opponent_twist_from_tf_node:main",
+],
     },
 )

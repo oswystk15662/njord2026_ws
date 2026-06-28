@@ -9,11 +9,14 @@ opponent_vessel_node:
     goal_label: "GPS point 5"
     publish_rate_hz: 10.0
     start_delay_s: 3.0
-    speed_mps: 1.0289
+    # speed_mps: 1.0289
+    speed_mps: 1.2861
     start_xy: [60.0, 0.0]
     goal_xy: [0.0, 0.0]
     disturbance_amp_m: 0.3
     disturbance_freq_hz: 0.1
+    # disturbance_amp_m: 0.0
+    # disturbance_freq_hz: 0.0
     vessel_height_m: 3.0
     marker_line_width_m: 0.08
     footprint_vertices:

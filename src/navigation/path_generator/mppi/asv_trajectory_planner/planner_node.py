@@ -58,6 +58,13 @@ class PlannerNode(Node):
         self.declare_parameter("avoid_offset", 3.0)
         self.declare_parameter("require_other_ship", True)
         self.declare_parameter("other_twist_is_relative", True)
+        self.declare_parameter("reconnect_line_distance_m", 1.0)
+        self.declare_parameter("reconnect_ahead_length_m", 8.0)
+        self.declare_parameter("straight_path_spacing_m", 2.0)
+        self.declare_parameter("straight_path_length_m", 60.0)
+        self.declare_parameter("mppi_smoothing_window", 5)
+        self.declare_parameter("opponent_use_distance_m", 20.0)
+        self.declare_parameter("opponent_passed_margin_m", 2.0)
 
         self.own_odom_topic = self.get_parameter("own_odom_topic").value
         self.other_ship_twist_topic = self.get_parameter("other_ship_twist_topic").value
@@ -75,6 +82,13 @@ class PlannerNode(Node):
         avoid_offset = self.get_parameter("avoid_offset").value
         self.require_other_ship = self.get_parameter("require_other_ship").value
         other_twist_is_relative = self.get_parameter("other_twist_is_relative").value
+        reconnect_line_distance_m = self.get_parameter("reconnect_line_distance_m").value
+        reconnect_ahead_length_m = self.get_parameter("reconnect_ahead_length_m").value
+        straight_path_spacing_m = self.get_parameter("straight_path_spacing_m").value
+        straight_path_length_m = self.get_parameter("straight_path_length_m").value
+        mppi_smoothing_window = self.get_parameter("mppi_smoothing_window").value
+        opponent_use_distance_m = self.get_parameter("opponent_use_distance_m").value
+        opponent_passed_margin_m = self.get_parameter("opponent_passed_margin_m").value
 
         self.trajectory_generator = TrajectoryGenerator(
             frame_id=self.frame_id,
@@ -82,6 +96,13 @@ class PlannerNode(Node):
             avoid_radius=avoid_radius,
             avoid_offset=avoid_offset,
             other_twist_is_relative=other_twist_is_relative,
+            opponent_use_distance_m=opponent_use_distance_m,
+            opponent_passed_margin_m=opponent_passed_margin_m,
+            reconnect_line_distance_m=reconnect_line_distance_m,
+            reconnect_ahead_length_m=reconnect_ahead_length_m,
+            straight_path_spacing_m=straight_path_spacing_m,
+            straight_path_length_m=straight_path_length_m,
+            mppi_smoothing_window=mppi_smoothing_window,
         )
 
         self.latest_own_odom = None
@@ -137,6 +158,12 @@ class PlannerNode(Node):
         self.get_logger().info(f"TF own_frame             : {self.own_frame}")
         self.get_logger().info(f"TF other_ship_frame      : {self.other_ship_frame}")
         self.get_logger().info(f"Publish planned_path     : {self.path_topic}")
+        self.get_logger().info(f"Opponent use distance    : {opponent_use_distance_m} m")
+        self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
+        self.get_logger().info(f"Reconnect line distance  : {reconnect_line_distance_m} m")
+        self.get_logger().info(f"Reconnect ahead length   : {reconnect_ahead_length_m} m")
+        self.get_logger().info(f"Opponent use distance    : {opponent_use_distance_m} m")
+        self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
 
     def own_odom_callback(self, msg: Odometry):
         self.latest_own_odom = msg

@@ -181,8 +181,9 @@ def diviation2infinite_line(predx, predy, wp0, wp1, eps=1e-6):
     return diviation
 
 def get_traj(x, y, psi, U, r, opt_rudder, opt_acc, loa, pred_dt):
+    task2_speed_mps = 2.0 * 1852.0 / 3600.0
     _ship = ship(loa)
-    _ship.reset(x, y, U, psi, r)
+    _ship.reset(x, y, task2_speed_mps, psi, r)
     opts_traj = [_ship.data]
     for _rud, _acc in zip(opt_rudder, opt_acc):
         _ship.move(
@@ -334,14 +335,100 @@ class MPPItorch():
             predx, predy, predU, predpsi, predr, pred_rudders, pred_accs, predtimes
         )
     
+
+    def _truncate_path_behind_own(self, own_x, own_y, path, ref_tensor):
+        """
+        逸脱コスト計算で自船より後ろ側の基準線を使わないため、
+        pathの始点を「現在位置をpath直線に射影した点」に置き換える。
+
+        既存の逸脱コスト計算式は変更せず、pathだけを前方区間に切り詰める。
+        """
+        if path is None:
+            return path
+
+        device = ref_tensor.device
+        dtype = ref_tensor.dtype
+
+        if torch.is_tensor(path):
+            path_t = path.to(device=device, dtype=dtype)
+        else:
+            path_t = torch.tensor(path, dtype=dtype, device=device)
+
+        if path_t.numel() < 4:
+            return path
+
+        # [x0, y0, x1, y1] 形式
+        if path_t.ndim == 1:
+            path_xy = path_t.reshape(-1, 2)
+
+        # [[x, y], ...] 形式
+        elif path_t.ndim >= 2 and path_t.shape[-1] >= 2:
+            path_xy = path_t[..., :2].reshape(-1, 2)
+
+        else:
+            return path
+
+        if path_xy.shape[0] < 2:
+            return path
+
+        x0 = path_xy[0, 0]
+        y0 = path_xy[0, 1]
+        x1 = path_xy[-1, 0]
+        y1 = path_xy[-1, 1]
+
+        dx = x1 - x0
+        dy = y1 - y0
+        line_len2 = dx * dx + dy * dy + 1.0e-6
+
+        own_x_t = torch.as_tensor(own_x, dtype=dtype, device=device)
+        own_y_t = torch.as_tensor(own_y, dtype=dtype, device=device)
+
+        # 自船位置を path の始点-終点直線に射影
+        own_s = ((own_x_t - x0) * dx + (own_y_t - y0) * dy) / line_len2
+        own_s = torch.clamp(own_s, 0.0, 1.0)
+
+        proj_x = x0 + own_s * dx
+        proj_y = y0 + own_s * dy
+        proj = torch.stack([proj_x, proj_y]).reshape(1, 2)
+
+        # 各path点の進行方向パラメータ
+        s_each = ((path_xy[:, 0] - x0) * dx + (path_xy[:, 1] - y0) * dy) / line_len2
+
+        # 自船射影点より前方だけ残す
+        keep = s_each >= own_s
+
+        forward_xy = path_xy[keep]
+
+        # 全部消える場合は、射影点と終点だけにする
+        if forward_xy.shape[0] == 0:
+            new_path = torch.cat([proj, path_xy[-1:].clone()], dim=0)
+        else:
+            # 先頭に射影点を追加し、後方の線を確実に消す
+            new_path = torch.cat([proj, forward_xy], dim=0)
+
+        # 重複しすぎる場合の保険
+        if new_path.shape[0] < 2:
+            new_path = torch.cat([proj, path_xy[-1:].clone()], dim=0)
+
+        return new_path
+
     def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, seed=None,straight_time = 0, debug=False):
 
         predx, predy, predU, predpsi, predr, pred_rudders, pred_accs, predtimes = self.prediction(
             x, y, psi, U, r, rudders, accs, seed=seed, straight_time = straight_time
         )
 
+        # 自船より後ろ側の基準pathは逸脱コストに使わない
+        # 既存コスト式は変えず、pathだけを現在位置射影点から前方へ切り詰める
+        path = self._truncate_path_behind_own(
+            own_x=x,
+            own_y=y,
+            path=path,
+            ref_tensor=predx,
+        )
+
         # costs for collision risks
-        if others[0] == None:
+        if len(others) == 0:
             cost_collision = torch.zeros_like(predy)
         else:
             cost_collision = crm_torch.timedomaincrm(
@@ -530,7 +617,7 @@ class MPPIPlanner():
         self.col_cost_min = 10
         self.col_cost_max = 50
 
-        self.path_spacing_m = 3.0 #waypoint 分割距離[m]
+        self.path_spacing_m = 2.0 #waypoint 分割距離[m]
         simdt = 0.1
 
         self.mppi_controller = MPPItorch(
@@ -545,7 +632,7 @@ class MPPIPlanner():
             umin = [-20,-0.1],
             umax = [ 20, 0.1],
             loa = self.loa,
-            targU = targU
+            targU=2.0 * 1852.0 / 3600.0,
         )
 
         self.opt_rudder = np.zeros((self.mppi_controller.horizon,))
@@ -559,7 +646,7 @@ class MPPIPlanner():
         waypoint2: Tuple[float, float],
     ) -> List[Tuple[float, float]]:
 
-        others = [other] #他船が複数の場合は要変更
+        others = [] if other is None else [other]  # 他船がなければ衝突コストなし
         path = [waypoint1, waypoint2]
 
         (

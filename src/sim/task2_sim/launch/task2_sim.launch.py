@@ -16,6 +16,7 @@ def generate_launch_description():
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     pkg_waypoint = get_package_share_directory("waypoint_publisher")
     pkg_thruster = get_package_share_directory("thruster_driver")
+    pkg_asv_planner = get_package_share_directory("asv_trajectory_planner")
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
     opponent_config = os.path.join(pkg_task2, "config", "task2_opponent_sim.yaml")
@@ -24,7 +25,7 @@ def generate_launch_description():
 
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
-    use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="true")
+    use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="false")
     use_mppi = DeclareLaunchArgument("use_mppi", default_value="true")
 
     params_arg = DeclareLaunchArgument("params", default_value=config)
@@ -43,18 +44,12 @@ def generate_launch_description():
     goal_delay_arg = DeclareLaunchArgument(
         "goal_delay",
         default_value="8.0",
-        description="Delay before launching waypoint_publisher",
-    )
-    mppi_delay_arg = DeclareLaunchArgument(
-        "mppi_delay",
-        default_value="2.0",
-        description="Delay before launching MPPI planner node",
+        description="Delay before launching goal/planner layer",
     )
 
     driver_delay = LaunchConfiguration("driver_delay")
     nav2_delay = LaunchConfiguration("nav2_delay")
     goal_delay = LaunchConfiguration("goal_delay")
-    mppi_delay = LaunchConfiguration("mppi_delay")
 
     dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
@@ -111,6 +106,10 @@ def generate_launch_description():
             },
         ],
         output="screen",
+        remappings=[
+            ('/cmd_vel', '/cmd_vel_thruster'),
+            ('cmd_vel', '/cmd_vel_thruster'),
+        ]
     )
 
     robot_state_pub_node = Node(
@@ -118,12 +117,10 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
-        parameters=[
-            {
-                "robot_description": robot_description,
-                "use_sim_time": False,
-            }
-        ],
+        parameters=[{
+            "robot_description": robot_description,
+            "use_sim_time": False,
+        }],
     )
 
     local_ekf_node = Node(
@@ -155,31 +152,21 @@ def generate_launch_description():
         executable="navsat_transform_node",
         name="navsat_transform_node",
         output="screen",
-        parameters=[
-            {
-                "frequency": 10.0,
-                "magnetic_declination_radians": 0.0,
-                "yaw_offset": 0.0,
-                "zero_altitude": True,
-                "broadcast_utm_transform": False,
-                "publish_filtered_gps": True,
-                "use_odometry_yaw": False,
-                "wait_for_datum": False,
-            }
-        ],
+        parameters=[{
+            "frequency": 10.0,
+            "magnetic_declination_radians": 0.0,
+            "yaw_offset": 0.0,
+            "zero_altitude": True,
+            "broadcast_utm_transform": False,
+            "publish_filtered_gps": True,
+            "use_odometry_yaw": False,
+            "wait_for_datum": False,
+        }],
         remappings=[
             ("imu", "/wit/imu"),
             ("gps/fix", "/gps/fix"),
             ("odometry/filtered", "odometry/filtered/local"),
         ],
-    )
-
-    mppi_planner = Node(
-        package="asv_trajectory_planner",
-        executable="planner_node",
-        name="mppi_planner_node",
-        output="screen",
-        condition=IfCondition(LaunchConfiguration("use_mppi")),
     )
 
     sensor_layer_timer = TimerAction(
@@ -226,55 +213,40 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_waypoints")),
     )
 
-    task2_gate_midpoint_publisher = Node(
-    package="waypoint_publisher",
-    executable="task2_gate_midpoint_publisher",
-    name="task2_gate_midpoint_publisher",
-    output="screen",
-    parameters=[
-        {
-            "frame_id": "map",
-            "red_buoys_topic": "/task2/red_buoys",
-            "green_buoys_topic": "/task2/green_buoys",
-            "gate_xs": [20.0, 40.0],
-            "include_start": True,
-            "start_x": 0.0,
-            "start_y": 0.0,
-            "goal_x": 60.0,
-            "goal_y": 0.0,
-            "max_gate_x_error": 10.0,
-        }
-    ],
-    condition=IfCondition(LaunchConfiguration("use_waypoints")),
-    )
-
     goal_layer_timer = TimerAction(
         period=goal_delay,
-        # actions=[waypoint_publisher],
-        actions=[task2_gate_midpoint_publisher],
+        actions=[waypoint_publisher],
+    )
+
+    mppi_planner_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                pkg_asv_planner,
+                "launch",
+                "planner_with_follow_path.launch.py",
+            )
+        ),
+        condition=IfCondition(LaunchConfiguration("use_mppi")),
     )
 
     mppi_layer_timer = TimerAction(
-        period=mppi_delay,
-        actions=[mppi_planner],
+        period=goal_delay,
+        actions=[mppi_planner_launch],
     )
 
-    return LaunchDescription(
-        [
-            LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
-            use_dynamics,
-            use_nav2,
-            use_waypoints,
-            use_mppi,
-            params_arg,
-            opponent_params_arg,
-            driver_delay_arg,
-            nav2_delay_arg,
-            goal_delay_arg,
-            mppi_delay_arg,
-            sensor_layer_timer,
-            mppi_layer_timer,
-            nav2_layer_timer,
-            goal_layer_timer,
-        ]
-    )
+    return LaunchDescription([
+        LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
+        use_dynamics,
+        use_nav2,
+        use_waypoints,
+        use_mppi,
+        params_arg,
+        opponent_params_arg,
+        driver_delay_arg,
+        nav2_delay_arg,
+        goal_delay_arg,
+        sensor_layer_timer,
+        nav2_layer_timer,
+        goal_layer_timer,
+        mppi_layer_timer,
+    ])

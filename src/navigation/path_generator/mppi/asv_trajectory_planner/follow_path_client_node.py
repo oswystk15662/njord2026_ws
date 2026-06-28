@@ -32,10 +32,10 @@ class FollowPathClientNode(Node):
         self.declare_parameter("progress_checker_id", "progress_checker")
 
         # PathをNav2へ送る周期
-        self.declare_parameter("send_frequency", 1.0)
+        self.declare_parameter("send_frequency", 0.2)
 
         # Trueにすると，新しいPathを定期的に送り直す
-        self.declare_parameter("enable_replanning", True)
+        self.declare_parameter("enable_replanning", False)
 
         self.path_topic = self.get_parameter("path_topic").value
         self.action_name = self.get_parameter("action_name").value
@@ -98,7 +98,12 @@ class FollowPathClientNode(Node):
         goal_msg.path = path
         goal_msg.controller_id = self.controller_id
         goal_msg.goal_checker_id = self.goal_checker_id
-        goal_msg.progress_checker_id = self.progress_checker_id
+
+        # ROS2 Humble の FollowPath.Goal には progress_checker_id がないため、
+        # フィールドが存在する環境でのみ設定する
+        if hasattr(goal_msg, "progress_checker_id"):
+            if hasattr(goal_msg, "progress_checker_id"):
+                goal_msg.progress_checker_id = self.progress_checker_id
 
         self.get_logger().info(
             f"Sending FollowPath goal: {len(path.poses)} poses",
@@ -134,11 +139,18 @@ class FollowPathClientNode(Node):
         self.get_logger().debug(f"FollowPath feedback: {feedback}")
 
     def result_callback(self, future):
-        result = future.result().result
+        response = future.result()
+        status = response.status
+        result = response.result
 
-        self.get_logger().info(
-            f"FollowPath finished. Error code: {result.error_code}"
-        )
+        if hasattr(result, "error_code"):
+            self.get_logger().info(
+                f"FollowPath finished. status={status}, error_code={result.error_code}"
+            )
+        else:
+            self.get_logger().info(
+                f"FollowPath finished. status={status}"
+            )
 
         self.goal_active = False
 
