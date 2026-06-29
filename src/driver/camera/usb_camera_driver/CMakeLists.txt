@@ -16,6 +16,14 @@ find_package(rclcpp_components REQUIRED) # Add rclcpp_components
 find_package(PkgConfig REQUIRED) # Gstreamer
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
+set(OLD_CV_BRIDGE_HEADER_DISTROS "humble;galactic;foxy")
+if("$ENV{ROS_DISTRO}" IN_LIST OLD_CV_BRIDGE_HEADER_DISTROS)
+  set(CV_BRIDGE_HEADER_DEFINITION CV_BRIDGE_INCLUDE_H)
+else()
+  set(CV_BRIDGE_HEADER_DEFINITION CV_BRIDGE_INCLUDE_HPP)
+endif()
+message(STATUS "${PROJECT_NAME}: ROS_DISTRO=$ENV{ROS_DISTRO}, cv_bridge header define=${CV_BRIDGE_HEADER_DEFINITION}")
+
 # -----------------
 # GStreamer component
 # -----------------
@@ -27,6 +35,7 @@ target_include_directories(usb_camera_driver_component PUBLIC
   $<INSTALL_INTERFACE:include>
   ${GSTREAMER_INCLUDE_DIRS}
 )
+target_compile_definitions(usb_camera_driver_component PUBLIC ${CV_BRIDGE_HEADER_DEFINITION})
 
 # Link dependencies
 ament_target_dependencies(usb_camera_driver_component
@@ -68,6 +77,7 @@ target_include_directories(usb_camera_driver_mjpg_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+target_compile_definitions(usb_camera_driver_mjpg_component PUBLIC ${CV_BRIDGE_HEADER_DEFINITION})
 
 ament_target_dependencies(usb_camera_driver_mjpg_component
   "rclcpp_components"  # Add rclcpp_components as a dependency

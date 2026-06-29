@@ -4,7 +4,13 @@
 #include <rclcpp_components/register_node_macro.hpp> // Required for composable nodes
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
+#ifdef CV_BRIDGE_INCLUDE_H
 #include <cv_bridge/cv_bridge.h>
+#elif defined(CV_BRIDGE_INCLUDE_HPP)
+#include <cv_bridge/cv_bridge.hpp>
+#else
+#error "File extension of cv_bridge is unknown!!"
+#endif
 #include <opencv2/opencv.hpp>
 #include <opencv2/highgui/highgui.hpp> // For cv::VideoCapture
 #include <gst/gst.h>
