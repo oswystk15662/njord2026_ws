@@ -71,7 +71,7 @@ def generate_launch_description():
         enable_diagnostics_arg,
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(pkg_nav2_bringup, 'launch', 'navigation_launch.py')
+                os.path.join(pkg_robot, 'launch', 'navigation_launch_task2.py')
             ),
             launch_arguments={
                 'params_file': configured_params,

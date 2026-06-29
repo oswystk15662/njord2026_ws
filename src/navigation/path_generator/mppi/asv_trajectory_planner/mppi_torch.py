@@ -243,6 +243,126 @@ def resample_traj_by_distance(
 
     return points
 
+def buoy_outside_cost(
+    X,
+    Y,
+    gps0,
+    gps1,
+    buoys,
+    margin_m=1.0,
+    longitudinal_sigma_m=8.0,
+    weight=50.0,
+):
+    """
+    GPS直線に対して、各ブイの外側に出た点へコストを与える。
+
+    X, Y:
+        MPPI予測点。torch.Tensor
+    gps0, gps1:
+        GPS point の座標 [x, y]
+    buoys:
+        ブイ座標のリスト [[x, y], ...]
+    """
+
+    if buoys is None or len(buoys) == 0:
+        return torch.zeros_like(X)
+
+    device = X.device
+    dtype = X.dtype
+
+    p0 = torch.tensor(gps0, device=device, dtype=dtype)
+    p1 = torch.tensor(gps1, device=device, dtype=dtype)
+
+    route = p1 - p0
+    route_norm = torch.linalg.norm(route) + 1e-6
+    e = route / route_norm
+
+    # 左向き法線
+    n = torch.stack([-e[1], e[0]])
+
+    # 予測点のGPS直線に沿った位置と横方向位置
+    px = X - p0[0]
+    py = Y - p0[1]
+
+    s = px * e[0] + py * e[1]
+    d = px * n[0] + py * n[1]
+
+    total_cost = torch.zeros_like(X)
+
+    for buoy in buoys:
+        b = torch.tensor(buoy, device=device, dtype=dtype)
+
+        bx = b[0] - p0[0]
+        by = b[1] - p0[1]
+
+        s_b = bx * e[0] + by * e[1]
+        d_b = bx * n[0] + by * n[1]
+
+        # ブイ周辺の前後方向だけ効かせる
+        longitudinal_gate = torch.exp(-((s - s_b) ** 2) / (2.0 * longitudinal_sigma_m ** 2))
+
+        # ブイが左側なら、さらに左側が危険
+        # ブイが右側なら、さらに右側が危険
+        outside_amount = torch.where(
+            d_b >= 0.0,
+            d - (d_b - margin_m),
+            (d_b + margin_m) - d,
+        )
+
+        outside_penalty = torch.relu(outside_amount) ** 2
+
+        total_cost = total_cost + outside_penalty * longitudinal_gate
+
+    return weight * total_cost
+
+def make_virtual_gate_from_path(
+    gps0,
+    gps1,
+    half_width_m=4.0,
+    s_ratio=0.5,
+):
+    """
+    GPS pointで作った直線から、左右の仮想ブイとゲート中心を作る。
+
+    gps0, gps1:
+        MPPI座標系の2点 [x, y]
+
+    half_width_m:
+        航路中心線から左右ブイまでの距離。
+        つまりブイ間隔は 2 * half_width_m。
+
+    s_ratio:
+        gps0 -> gps1 のどの位置にゲートを置くか。
+        0.5なら中点。
+    """
+    p0 = np.asarray(gps0[:2], dtype=float)
+    p1 = np.asarray(gps1[:2], dtype=float)
+
+    route = p1 - p0
+    norm = np.linalg.norm(route)
+
+    if norm < 1.0e-6:
+        center = p0.copy()
+        left_buoy = center + np.array([0.0, half_width_m])
+        right_buoy = center - np.array([0.0, half_width_m])
+    else:
+        e = route / norm
+
+        # 進行方向に対する左向き法線
+        n = np.array([-e[1], e[0]])
+
+        center = p0 + s_ratio * route
+        left_buoy = center + half_width_m * n
+        right_buoy = center - half_width_m * n
+
+    gate_center = (float(center[0]), float(center[1]))
+    buoys = [
+        (float(left_buoy[0]), float(left_buoy[1])),
+        (float(right_buoy[0]), float(right_buoy[1])),
+    ]
+
+    return gate_center, buoys
+
 class MPPItorch():
     def __init__(self,horizon,pred_dt,nb_sample,sigma,_lambda,umin,umax,loa,targU):
         self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -412,7 +532,7 @@ class MPPItorch():
 
         return new_path
 
-    def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, seed=None,straight_time = 0, debug=False):
+    def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, buoys=None, gate_center=None, buoy_cost_weight=120.0, gate_cost_weight=3.0, seed=None, straight_time=0, debug=False):
 
         predx, predy, predU, predpsi, predr, pred_rudders, pred_accs, predtimes = self.prediction(
             x, y, psi, U, r, rudders, accs, seed=seed, straight_time = straight_time
@@ -431,15 +551,41 @@ class MPPItorch():
         if len(others) == 0:
             cost_collision = torch.zeros_like(predy)
         else:
-            cost_collision = crm_torch.timedomaincrm(
-                predy,
-                predx, 
-                predtimes, # torch.sqrt((predy-y)**2+(predx-x)**2)/U,
-                [y, x, U, psi, loa],
+            # MPPI/ROS座標
+            # x: forward
+            # y: left
+            # psi: ccw deg
+
+            own_crm = [
+                -y,
+                x,
+                U,
+                (-psi) % 360.0,
+                loa,
+            ]
+
+            others_crm = [
                 [
-                    [oth.y, oth.x, oth.u, oth.yaw, loa]
-                    for oth in others
-                ], turn=torch.deg2rad(predpsi)
+                    -oth.y,
+                    oth.x,
+                    oth.u,
+                    (-oth.yaw) % 360.0,
+                    loa,
+                ]
+                for oth in others
+            ]
+
+            X_crm = -predy
+            Y_crm =  predx
+            turn_crm = torch.deg2rad(torch.remainder(-predpsi, 360.0))
+
+            cost_collision = crm_torch.timedomaincrm(
+                X_crm,
+                Y_crm,
+                predtimes,
+                own_crm,
+                others_crm,
+                turn=turn_crm
             )
             print('own:', [y, x, U, psi, loa],)
             print('other:', others)
@@ -474,6 +620,37 @@ class MPPItorch():
         speed_diff = torch.square( targ_u - predU )
         speed_diff = speed_diff.mean(axis=-1, keepdim=True)
 
+        # ------------------------------------------------------------
+        # Buoy / gate costs
+        # path[0], path[1] はMPPI座標系でのGPS直線として使う
+        # buoys は同じMPPI座標系のブイ座標リスト
+        # ------------------------------------------------------------
+        if buoys is None:
+            buoys = []
+
+        cost_buoy_map = buoy_outside_cost(
+            X=predx,
+            Y=predy,
+            gps0=path[0][:2],
+            gps1=path[1][:2],
+            buoys=buoys,
+            margin_m=1.0,
+            longitudinal_sigma_m=8.0,
+            weight=buoy_cost_weight,
+        )
+
+        # cost_buoy_map は [sample, time] なので、他のコストと同じ [sample, 1] にする
+        cost_buoy = cost_buoy_map.mean(axis=-1, keepdim=True)
+
+        if gate_center is not None:
+            gate_x = torch.as_tensor(gate_center[0], device=predx.device, dtype=predx.dtype)
+            gate_y = torch.as_tensor(gate_center[1], device=predy.device, dtype=predy.dtype)
+
+            # 予測軌道のどこか一箇所でもゲート中心に近づけばよい
+            gate_dist2 = (predx - gate_x) ** 2 + (predy - gate_y) ** 2
+            cost_gate = gate_cost_weight * torch.min(gate_dist2, dim=-1, keepdim=True).values
+        else:
+            cost_gate = torch.zeros_like(cost_buoy)
 
         if torch.isnan(cost_collision).any():
             print('[MPPI] cost計算が発散しています. cost for collision',)
@@ -487,6 +664,8 @@ class MPPItorch():
             costs = (
                 div_cost*diviation
                 + speed_cost*speed_diff
+                + cost_buoy
+                + cost_gate
             )
             # norm costs        
             norm_targ = ['input', 'min'][1]
@@ -531,6 +710,8 @@ class MPPItorch():
                 cost_collision
                 + div_cost*diviation
                 + speed_cost*speed_diff
+                + cost_buoy
+                + cost_gate
             )
             # norm costs        
             norm_targ = ['input', 'min'][0]
@@ -649,6 +830,15 @@ class MPPIPlanner():
         others = [] if other is None else [other]  # 他船がなければ衝突コストなし
         path = [waypoint1, waypoint2]
 
+        # GPS point で作った直線に対して、左右に仮想ブイを配置する
+        # half_width_m=4.0 ならブイ間隔は約8m
+        gate_center, buoys = make_virtual_gate_from_path(
+            waypoint1,
+            waypoint2,
+            half_width_m=4.0,
+            s_ratio=0.5,
+        )
+
         (
             predx,
             predy,
@@ -671,6 +861,10 @@ class MPPIPlanner():
             div_cost=self.div_cost,
             speed_cost=self.speed_cost,
             norm_cost=self.norm_cost,
+            buoys=buoys,
+            gate_center=gate_center,
+            buoy_cost_weight=120.0,
+            gate_cost_weight=3.0,
             debug=True
         )
 

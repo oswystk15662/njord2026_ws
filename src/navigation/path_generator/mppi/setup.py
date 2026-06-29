@@ -31,6 +31,7 @@ setup(
     tests_require=["pytest"],
     entry_points={
     "console_scripts": [
+            "path_pruner_node = asv_trajectory_planner.path_pruner_node:main",
         "planner_node = asv_trajectory_planner.planner_node:main",
         "follow_path_client_node = asv_trajectory_planner.follow_path_client_node:main",
         "task2_gps_waypoint_publisher = asv_trajectory_planner.task2_gps_waypoint_publisher:main",

@@ -38,18 +38,25 @@ def generate_launch_description():
     )
     nav2_delay_arg = DeclareLaunchArgument(
         "nav2_delay",
-        default_value="5.0",
+        default_value="2.0",
         description="Delay before launching Nav2",
     )
     goal_delay_arg = DeclareLaunchArgument(
         "goal_delay",
-        default_value="8.0",
+        default_value="3.0",
         description="Delay before launching goal/planner layer",
+    )
+
+    opponent_delay_arg = DeclareLaunchArgument(
+        "opponent_delay",
+        default_value="10.0",
+        description="Delay before launching opponent vessel layer",
     )
 
     driver_delay = LaunchConfiguration("driver_delay")
     nav2_delay = LaunchConfiguration("nav2_delay")
     goal_delay = LaunchConfiguration("goal_delay")
+    opponent_delay = LaunchConfiguration("opponent_delay")
 
     dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
@@ -175,8 +182,6 @@ def generate_launch_description():
             dynamics,
             sensor_noise_launch,
             task2_orchestrator,
-            opponent_vessel,
-            ideal_lidar,
             thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
@@ -234,6 +239,14 @@ def generate_launch_description():
         actions=[mppi_planner_launch],
     )
 
+    opponent_layer_timer = TimerAction(
+        period=opponent_delay,
+        actions=[
+            opponent_vessel,
+            ideal_lidar,
+        ],
+    )
+
     return LaunchDescription([
         LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
         use_dynamics,
@@ -245,8 +258,10 @@ def generate_launch_description():
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,
+        opponent_delay_arg,
         sensor_layer_timer,
         nav2_layer_timer,
         goal_layer_timer,
         mppi_layer_timer,
+        opponent_layer_timer,
     ])

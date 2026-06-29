@@ -46,7 +46,7 @@ def generate_launch_description():
                 "other_ship_twist_topic": "/other_ship/twist",
                 "waypoint1_topic": "/waypoint1_pose",
                 "waypoint2_topic": "/waypoint2_pose",
-                "path_topic": "/planned_path",
+                "path_topic": "/planned_path_pruned",
 
                 "own_frame": "base_link",
                 "other_ship_frame": "opponent_vessel",
@@ -63,17 +63,32 @@ def generate_launch_description():
                 # /other_ship/twist は map基準で出す
                 "other_twist_is_relative": False,
                 "opponent_use_distance_m": 20.0,
-                "opponent_passed_margin_m": 2.0,
+                "opponent_passed_margin_m": 10.0,
                 "reconnect_line_distance_m": 1.0,
-                "reconnect_ahead_length_m": 7.0,
+                "reconnect_ahead_length_m": 5.0,
                 "straight_path_spacing_m": 2.0,
                 "straight_path_length_m": 60.0,
-                "mppi_smoothing_window": 5,
-                "opponent_use_distance_m": 20.0,
-                "opponent_passed_margin_m": 2.0,
+                "mppi_smoothing_window": 3,
             }
         ],
     )
+    path_pruner_node = Node(
+        package="asv_trajectory_planner",
+        executable="path_pruner_node",
+        name="path_pruner_node",
+        output="screen",
+        parameters=[{
+            "input_path_topic": "/planned_path",
+            "output_path_topic": "/planned_path_pruned",
+            "skip_points_after_closest": 0,
+            "prepend_current_pose": True,
+            "min_output_points": 3,
+            "min_point_spacing_m": 0.5,
+            "odom_topic": "/odom",
+                                            }],
+    )
+
+
 
     follow_path_client_node = Node(
         package="asv_trajectory_planner",
@@ -82,15 +97,15 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "path_topic": "/planned_path",
-                "action_name": "follow_path",
+                "path_topic": "/planned_path_pruned",
+                "action_name": "/follow_path",
                 "controller_id": "FollowPath",
                 "goal_checker_id": "general_goal_checker",
                 "progress_checker_id": "progress_checker",
 
                 # goalを送り直しすぎるとNav2がabortしやすいので抑制
-                "send_frequency": 0.2,
-                "enable_replanning": False,
+                "send_frequency": 1.0,
+                "enable_replanning": True,
             }
         ],
     )
@@ -100,6 +115,7 @@ def generate_launch_description():
             task2_gps_waypoint_publisher,
             opponent_twist_from_tf_node,
             planner_node,
-            follow_path_client_node,
+            path_pruner_node,
+        follow_path_client_node,
         ]
     )

@@ -45,8 +45,8 @@ thruster_driver_node:
       deadzone_pos: 0.0
       deadzone_neg: 0.0
       wheels:
-        forward_gain: [1.0, 1.0, 1.0, 1.0]
-        reverse_gain: [1.0, 1.0, 1.0, 1.0]
+        forward_gain: [3.5, 3.5, 3.5, 3.5]
+        reverse_gain: [3.5, 3.5, 3.5, 3.5]
         offset: [0.0, 0.0, 0.0, 0.0]
 
     # URDF stores only the fixed pose for these links. Direction, reverse and
