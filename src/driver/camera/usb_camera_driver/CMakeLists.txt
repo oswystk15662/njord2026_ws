@@ -16,6 +16,28 @@ find_package(rclcpp_components REQUIRED) # Add rclcpp_components
 find_package(PkgConfig REQUIRED) # Gstreamer
 pkg_check_modules(GSTREAMER REQUIRED gstreamer-1.0 gstreamer-app-1.0)
 
+set(CV_BRIDGE_HEADER_SEARCH_PATHS
+  ${cv_bridge_INCLUDE_DIRS}
+  /opt/ros/$ENV{ROS_DISTRO}/include
+  /opt/ros/$ENV{ROS_DISTRO}/include/cv_bridge
+)
+find_path(CV_BRIDGE_HPP_HEADER
+  NAMES cv_bridge/cv_bridge.hpp
+  PATHS ${CV_BRIDGE_HEADER_SEARCH_PATHS}
+)
+find_path(CV_BRIDGE_H_HEADER
+  NAMES cv_bridge/cv_bridge.h
+  PATHS ${CV_BRIDGE_HEADER_SEARCH_PATHS}
+)
+if(CV_BRIDGE_HPP_HEADER)
+  set(CV_BRIDGE_HEADER_DEFINITION CV_BRIDGE_INCLUDE_HPP)
+elseif(CV_BRIDGE_H_HEADER)
+  set(CV_BRIDGE_HEADER_DEFINITION CV_BRIDGE_INCLUDE_H)
+else()
+  message(FATAL_ERROR "Could not find cv_bridge/cv_bridge.hpp or cv_bridge/cv_bridge.h")
+endif()
+message(STATUS "${PROJECT_NAME}: cv_bridge header define=${CV_BRIDGE_HEADER_DEFINITION}")
+
 # -----------------
 # GStreamer component
 # -----------------
@@ -27,6 +49,7 @@ target_include_directories(usb_camera_driver_component PUBLIC
   $<INSTALL_INTERFACE:include>
   ${GSTREAMER_INCLUDE_DIRS}
 )
+target_compile_definitions(usb_camera_driver_component PUBLIC ${CV_BRIDGE_HEADER_DEFINITION})
 
 # Link dependencies
 ament_target_dependencies(usb_camera_driver_component
@@ -68,6 +91,7 @@ target_include_directories(usb_camera_driver_mjpg_component PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
+target_compile_definitions(usb_camera_driver_mjpg_component PUBLIC ${CV_BRIDGE_HEADER_DEFINITION})
 
 ament_target_dependencies(usb_camera_driver_mjpg_component
   "rclcpp_components"  # Add rclcpp_components as a dependency
