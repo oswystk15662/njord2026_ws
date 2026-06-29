@@ -164,6 +164,34 @@ Foxy + ZED 既知の注意点として、`image_transport` は `v3.0.0` 系を�
 
 
 # aptで入れるパッケージ
+## Jetson Orin Nano Super + ROS Jazzy の OpenCV 注意点
+
+Jetson Orin Nano Super 上で ROS Jazzy を使う場合、OpenCV の apt パッケージが NVIDIA Jetson repo 版と Ubuntu noble 版で混在すると、`cv_bridge` の `find_package` 時に以下のような CMake エラーが出ることがあります。
+
+```shell
+The imported target "opencv_core" references the file
+  "/usr/lib/libopencv_core.so.4.8.0"
+but this file does not exist.
+```
+
+確認時点では、`libopencv-dev` だけが NVIDIA Jetson repo の `4.8.0-3-g6ef37b4` で、実体ライブラリは Ubuntu noble の `libopencv-core406t64 4.6.0+dfsg-13.1ubuntu1` になっていました。この状態では `/usr/lib/cmake/opencv4/OpenCVModules-release.cmake` が OpenCV 4.8 の `.so` を参照しますが、実体が存在しないため `camera_lidar_fusion` などのビルドが失敗します。
+
+当面は ROS Jazzy / Ubuntu noble 側との整合を優先し、OpenCV を Ubuntu 4.6 系に揃えてください。
+
+```shell
+sudo apt install -s libopencv-dev=4.6.0+dfsg-13.1ubuntu1 libopencv-core-dev=4.6.0+dfsg-13.1ubuntu1
+
+# simulation の内容に問題がなければ実行
+sudo apt install libopencv-dev=4.6.0+dfsg-13.1ubuntu1 libopencv-core-dev=4.6.0+dfsg-13.1ubuntu1
+sudo apt-mark hold libopencv-dev libopencv-core-dev
+
+cd ~/njord2026_ws
+rm -rf build install log
+colcon build
+```
+
+NVIDIA 版 OpenCV 4.8 に揃えるのは、`cv::cuda` など OpenCV の CUDA 機能を明示的に使う必要があり、runtime と dev パッケージを同じ系列で揃えられることを確認してからにしてください。通常の `cv_bridge`、`cv::Mat`、PCL/カメラ/LiDAR fusion のビルド安定性は Ubuntu 4.6 系に揃える方を優先します。
+
 for wit motion
 * ros-${ROS_DISTRO}-sophus
 * ros-${ROS_DISTRO}-tf2-geometry-msgs
