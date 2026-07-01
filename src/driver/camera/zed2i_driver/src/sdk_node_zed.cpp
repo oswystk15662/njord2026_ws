@@ -62,7 +62,7 @@ public:
     fy_ = calibration.left_cam.fy;
     cx_ = calibration.left_cam.cx;
     cy_ = calibration.left_cam.cy;
-    baseline_m_ = std::abs(calibration.T.x);
+    baseline_m_ = std::abs(calibration.stereo_transform.getTranslation().tx);
     if (baseline_m_ > 10.0) {
       baseline_m_ *= 0.001;
     }
