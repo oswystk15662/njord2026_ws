@@ -94,7 +94,7 @@ planner_server:
     use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
+      plugin: "nav2_theta_star_planner::ThetaStarPlanner"
       how_many_corners: 8        # 8-connected grid (diagonal movement allowed)
       w_euc_cost: 1.0            # Euclidean distance weight
       w_traversal_cost: 2.0      # Costmap traversal weight

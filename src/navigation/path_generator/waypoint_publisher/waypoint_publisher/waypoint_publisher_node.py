@@ -12,6 +12,7 @@ Supports:
 """
 
 import rclpy
+from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
@@ -90,7 +91,7 @@ class WaypointPublisher(Node):
         Returns: dict with task configuration
         """
         # Construct config file path
-        package_share_dir = Path(__file__).parent.parent / 'config'
+        package_share_dir = Path(get_package_share_directory('waypoint_publisher')) / 'config'
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
