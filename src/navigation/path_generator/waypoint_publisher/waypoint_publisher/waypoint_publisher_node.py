@@ -307,15 +307,15 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        node.get_logger().info("Shutting down...")
+        pass
     finally:
         try:
             node.destroy_node()
-        except Exception:
+        except (Exception, KeyboardInterrupt):
             pass
         try:
-            rclpy.shutdown()
-        except Exception:
+            rclpy.try_shutdown()
+        except (Exception, KeyboardInterrupt):
             pass
 
 if __name__ == '__main__':
