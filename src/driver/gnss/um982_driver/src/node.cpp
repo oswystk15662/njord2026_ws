@@ -5,6 +5,16 @@
 
 using namespace std::chrono_literals;
 
+namespace
+{
+std::string format_period(double period)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(2) << period;
+    return ss.str();
+}
+} // namespace
+
 namespace um982_driver
 {
 
@@ -84,6 +94,11 @@ void UM982Driver::init_parameters()
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
+    this->declare_parameter("NTRIP_Server", params_.ntrip_server);
+    this->declare_parameter("NTRIP_Port", params_.ntrip_port);
+    this->declare_parameter("NTRIP_Mountpoint", params_.mountpoint);
+    this->declare_parameter("NTRIP_Username", params_.username);
+    this->declare_parameter("NTRIP_Password", params_.password);
 
     // Get parameters
     params_.gnss_port = this->get_parameter("GNSS_SerialPort").as_string();
@@ -96,6 +111,11 @@ void UM982Driver::init_parameters()
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
+    params_.ntrip_server = this->get_parameter("NTRIP_Server").as_string();
+    params_.ntrip_port = this->get_parameter("NTRIP_Port").as_int();
+    params_.mountpoint = this->get_parameter("NTRIP_Mountpoint").as_string();
+    params_.username = this->get_parameter("NTRIP_Username").as_string();
+    params_.password = this->get_parameter("NTRIP_Password").as_string();
     
     RCLCPP_INFO(this->get_logger(), "Mode: %s", params_.uart_or_tcp.c_str());
 }
@@ -119,15 +139,28 @@ void UM982Driver::init_gnss_connection()
         RCLCPP_INFO(this->get_logger(), "Connected TCP: %s:%d", params_.tcp_ip.c_str(), params_.tcp_port);
     }
 
-    // Configure Device
-    double fix_p = 1.0 / params_.fix_freq;
-    double head_p = 1.0 / params_.heading_freq;
-
-    // write_to_gnss("OBSVMA " + std::to_string(fix_p) + "\r\n"); // Pythonコメントアウトされていたが有効化する場合
-    write_to_gnss("GPGGA " + std::to_string(fix_p) + "\r\n");
-    write_to_gnss("UNIHEADINGA " + std::to_string(head_p) + "\r\n");
+    configure_gnss_output();
 
     start_gnss_read();
+}
+
+void UM982Driver::configure_gnss_output()
+{
+    double fix_p = 1.0 / params_.fix_freq;
+    double head_p = 1.0 / params_.heading_freq;
+    std::string fix_period = format_period(fix_p);
+    std::string heading_period = format_period(head_p);
+
+    // Apply volatile startup configuration only. Do not send SAVECONFIG.
+    write_to_gnss("UNLOG\r\n");
+    write_to_gnss("MODE ROVER\r\n");
+    write_to_gnss("GPGGA " + fix_period + "\r\n");
+    write_to_gnss("UNIHEADINGA " + heading_period + "\r\n");
+    write_to_gnss("GPTHS " + heading_period + "\r\n");
+
+    RCLCPP_INFO(this->get_logger(),
+        "Configured volatile UM982 output: GPGGA=%ss, UNIHEADINGA/GPTHS=%ss",
+        fix_period.c_str(), heading_period.c_str());
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)
@@ -190,11 +223,13 @@ void UM982Driver::process_gnss_line(std::string line)
         line.pop_back();
     }
 
-    if (line.rfind("$GNGGA", 0) == 0) {
+    if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
     } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
         parse_uniheading(line);
+    } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
+        parse_ths(line);
     }
 }
 
@@ -239,6 +274,37 @@ void UM982Driver::parse_gga(const std::string& line)
         fix_pub_->publish(msg);
     }
     fix_debug_pub_->publish(msg);
+}
+
+void UM982Driver::parse_ths(const std::string& line)
+{
+    if (!utils::validate_checksum(line)) return;
+
+    std::string payload = line.substr(0, line.find('*'));
+    auto parts = utils::split(payload, ',');
+    if (parts.size() < 3 || parts[2] == "V") return;
+
+    try {
+        double heading_deg = std::stod(parts[1]);
+        double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+
+        tf2::Quaternion q;
+        q.setRPY(0, 0, yaw_rad);
+
+        geometry_msgs::msg::PoseWithCovarianceStamped msg;
+        msg.header.stamp = this->now();
+        msg.header.frame_id = params_.heading_frame_id;
+        msg.pose.pose.orientation = tf2::toMsg(q);
+
+        double var = utils::deg2rad(0.5);
+        msg.pose.covariance[35] = var * var;
+
+        if (!stop_publish_) {
+            heading_pub_->publish(msg);
+        }
+        heading_debug_pub_->publish(msg);
+    } catch (...) {
+    }
 }
 
 void UM982Driver::parse_uniheading(const std::string& line)
@@ -336,15 +402,15 @@ void UM982Driver::init_rtk_connection()
 
 void UM982Driver::connect_rtk_client()
 {
-    std::string auth_str = params_.username + ":" + params_.password;
-    std::string auth_base64 = utils::base64_encode(auth_str);
-
     std::stringstream request;
     request << "GET /" << params_.mountpoint << " HTTP/1.1\r\n";
     request << "Host: " << params_.ntrip_server << ":" << params_.ntrip_port << "\r\n";
     request << "Ntrip-Version: Ntrip/2.0\r\n";
     request << "User-Agent: NTRIP Client/1.0\r\n";
-    request << "Authorization: Basic " << auth_base64 << "\r\n";
+    if (!params_.username.empty() || !params_.password.empty()) {
+        std::string auth_str = params_.username + ":" + params_.password;
+        request << "Authorization: Basic " << utils::base64_encode(auth_str) << "\r\n";
+    }
     request << "Connection: close\r\n";
     request << "\r\n";
 
@@ -394,7 +460,8 @@ void UM982Driver::rtk_send_gga_callback()
         return;
     }
 
-    if (!last_gpgga_.empty() && last_gpgga_.rfind("$GNGGA", 0) == 0) {
+    if (!last_gpgga_.empty() &&
+        (last_gpgga_.rfind("$GNGGA", 0) == 0 || last_gpgga_.rfind("$GPGGA", 0) == 0)) {
         // GNGGAをRTKサーバーへ送信して位置を通知
         std::string msg = last_gpgga_ + "\r\n";
         boost::system::error_code ignored_error;

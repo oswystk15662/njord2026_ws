@@ -54,6 +54,31 @@ def generate_launch_description():
         default_value='true',
         description='Enable RTK (NTRIP client)'
     )
+    arg_ntrip_server = DeclareLaunchArgument(
+        'ntrip_server',
+        default_value='ntrip.ales-corp.co.jp',
+        description='NTRIP caster hostname'
+    )
+    arg_ntrip_port = DeclareLaunchArgument(
+        'ntrip_port',
+        default_value='2101',
+        description='NTRIP caster port'
+    )
+    arg_ntrip_mountpoint = DeclareLaunchArgument(
+        'ntrip_mountpoint',
+        default_value='RTCM32MSM7',
+        description='NTRIP mountpoint'
+    )
+    arg_ntrip_username = DeclareLaunchArgument(
+        'ntrip_username',
+        default_value='',
+        description='NTRIP username (leave empty for anonymous casters)'
+    )
+    arg_ntrip_password = DeclareLaunchArgument(
+        'ntrip_password',
+        default_value='',
+        description='NTRIP password (leave empty for anonymous casters)'
+    )
     arg_frame_id = DeclareLaunchArgument(
         'heading_frame_id',
         default_value='odom',
@@ -84,6 +109,11 @@ def generate_launch_description():
             'FIX_FREQ': LaunchConfiguration('fix_freq'),
             'HEADING_FREQ': LaunchConfiguration('heading_freq'),
             'GNSS_RTK_Enable': LaunchConfiguration('rtk_enable'),
+            'NTRIP_Server': LaunchConfiguration('ntrip_server'),
+            'NTRIP_Port': LaunchConfiguration('ntrip_port'),
+            'NTRIP_Mountpoint': LaunchConfiguration('ntrip_mountpoint'),
+            'NTRIP_Username': LaunchConfiguration('ntrip_username'),
+            'NTRIP_Password': LaunchConfiguration('ntrip_password'),
             'Heading_FrameID': LaunchConfiguration('heading_frame_id'),
             'log_file_name': LaunchConfiguration('log_file_name'),
         }]
@@ -98,6 +128,11 @@ def generate_launch_description():
         arg_fix_freq,
         arg_heading_freq,
         arg_rtk,
+        arg_ntrip_server,
+        arg_ntrip_port,
+        arg_ntrip_mountpoint,
+        arg_ntrip_username,
+        arg_ntrip_password,
         arg_frame_id,
         arg_log,
         um982_node

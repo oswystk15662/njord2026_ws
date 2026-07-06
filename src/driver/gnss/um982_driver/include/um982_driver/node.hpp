@@ -29,6 +29,7 @@ private:
     void init_parameters();
     void init_gnss_connection();
     void init_rtk_connection();
+    void configure_gnss_output();
 
     // --- 通信 (Boost.Asio) ---
     void start_gnss_read();
@@ -44,6 +45,7 @@ private:
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
     void parse_uniheading(const std::string& line);
+    void parse_ths(const std::string& line);
 
     // --- ROS Callbacks/Timers ---
     void ctrl_callback(const std_msgs::msg::String::SharedPtr msg);
@@ -97,12 +99,12 @@ private:
         std::string heading_frame_id;
         std::string log_file_name;
 
-        // RTK Settings (hardcoded in Python, but good to have structs)
+        // RTK/NTRIP Settings
         std::string ntrip_server = "ntrip.ales-corp.co.jp";
         int ntrip_port = 2101;
         std::string mountpoint = "RTCM32MSM7";
-        std::string username = "username"; // TODO: set real values
-        std::string password = "password";
+        std::string username;
+        std::string password;
     } params_;
 };
 

@@ -334,3 +334,24 @@ def callback(self, detection):
 4. **ルール適用:** 「仮想壁生成ノード」を作り、方位標識の特定方向をNav2上で通行止めにする。
 
 まずは **ステップ1と2**（GPSでの自律航行）を最優先で完了させることをお勧めします。これだけでTask 1の半分はクリアできます。
+
+## UM982 GNSS live-check notes
+
+UM982 driver live-check work is in branch `codex/um982-live-check`.
+The likely USB serial device observed on the test machine was `/dev/ttyUSB0`, also available as
+`/dev/serial/by-id/usb-FTDI_USB_HS_SERIAL_CONVERTER_FTRTKA7O-if00-port0`.
+
+At test time `/dev/ttyUSB0` produced data at 115200 bps, but it was a binary stream rather than
+NMEA/ASCII `$GNGGA` or `#UNIHEADINGA`. The driver therefore applies volatile startup configuration
+each time it opens the receiver and intentionally does not send `SAVECONFIG`:
+
+```text
+UNLOG
+MODE ROVER
+GPGGA <fix_period>
+UNIHEADINGA <heading_period>
+GPTHS <heading_period>
+```
+
+`$GNGGA` and `$GPGGA` are both accepted as fix input. `#UNIHEADINGA` remains the primary dual-antenna
+heading source, with `$GNTHS`/`$GPTHS` accepted as a fallback heading sentence.
