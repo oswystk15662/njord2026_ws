@@ -74,6 +74,7 @@ if(ZED2I_DRIVER_USE_ZED_SDK)
   target_include_directories(zed2i_sdk_node PRIVATE
     include
     ${ZED_INCLUDE_DIRS}
+    ${CUDAToolkit_INCLUDE_DIRS}
   )
   target_compile_definitions(zed2i_sdk_node PRIVATE
     ZED2I_DRIVER_HAS_ZED_SDK=1
