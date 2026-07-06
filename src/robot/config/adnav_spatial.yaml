@@ -2,12 +2,12 @@ adnav_driver:
   ros__parameters:
     log_path: "~/.ros/log/"
     comm_select: 0
-    baud_rate: 1000000
-    com_port: /dev/ttyUSB1
+    baud_rate: 115200
+    com_port: ttyUSB0
     publish_us: 20000
     read_us: 1000
 
     # Packet 20 supplies filtered INS/GNSS state. Packet 28 supplies raw
     # sensors for observation and logging, but is not fused initially.
-    packet_request: [20, 5, 28, 5]
+    packet_request: [20, 50, 28, 50]
     packet_timer_period: 1000
