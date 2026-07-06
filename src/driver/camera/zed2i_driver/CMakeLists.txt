@@ -12,6 +12,21 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
+find_package(CUDAToolkit QUIET)
+
+set(ZED2I_DRIVER_CUDA_VARIANT "none")
+if(CUDAToolkit_FOUND)
+  if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.0")
+    set(ZED2I_DRIVER_CUDA_VARIANT "cuda13")
+  elseif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.0")
+    set(ZED2I_DRIVER_CUDA_VARIANT "cuda12")
+  else()
+    set(ZED2I_DRIVER_CUDA_VARIANT "legacy")
+  endif()
+  message(STATUS "${PROJECT_NAME}: detected CUDA Toolkit ${CUDAToolkit_VERSION} (${ZED2I_DRIVER_CUDA_VARIANT})")
+else()
+  message(STATUS "${PROJECT_NAME}: CUDA Toolkit not found; SDK node will be disabled unless ZED SDK resolves without CUDA")
+endif()
 
 set(DEPENDENCIES
   rclcpp
@@ -38,9 +53,21 @@ target_link_libraries(zed2i_cpu_node
   ${OpenCV_LIBRARIES}
 )
 
+option(ZED2I_DRIVER_BUILD_SDK_NODE "Build the ZED SDK backed node when the Stereolabs SDK is available" ON)
+
 find_package(ZED QUIET)
-if(ZED_FOUND)
+set(ZED2I_DRIVER_USE_ZED_SDK OFF)
+if(ZED2I_DRIVER_BUILD_SDK_NODE AND ZED_FOUND)
+  set(ZED2I_DRIVER_USE_ZED_SDK ON)
+endif()
+
+if(ZED2I_DRIVER_USE_ZED_SDK)
   message(STATUS "${PROJECT_NAME}: ZED SDK found; building SDK node")
+  if(CUDAToolkit_FOUND AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.0")
+    message(STATUS "${PROJECT_NAME}: using CUDA 13.x compatible ZED SDK build path")
+  elseif(CUDAToolkit_FOUND AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.0")
+    message(STATUS "${PROJECT_NAME}: using CUDA 12.x compatible ZED SDK build path")
+  endif()
   add_executable(zed2i_sdk_node
     src/sdk_node_zed.cpp
   )
@@ -48,7 +75,10 @@ if(ZED_FOUND)
     include
     ${ZED_INCLUDE_DIRS}
   )
-  target_compile_definitions(zed2i_sdk_node PRIVATE ZED2I_DRIVER_HAS_ZED_SDK=1)
+  target_compile_definitions(zed2i_sdk_node PRIVATE
+    ZED2I_DRIVER_HAS_ZED_SDK=1
+    ZED2I_DRIVER_CUDA_VARIANT="${ZED2I_DRIVER_CUDA_VARIANT}"
+  )
   ament_target_dependencies(zed2i_sdk_node ${DEPENDENCIES})
   target_link_libraries(zed2i_sdk_node
     ${PROJECT_NAME}_common
@@ -56,7 +86,11 @@ if(ZED_FOUND)
     ${ZED_LIBRARIES}
   )
 else()
-  message(STATUS "${PROJECT_NAME}: ZED SDK not found; building SDK-mode stub")
+  if(NOT ZED2I_DRIVER_BUILD_SDK_NODE)
+    message(STATUS "${PROJECT_NAME}: SDK node disabled by ZED2I_DRIVER_BUILD_SDK_NODE=OFF; building SDK-mode stub")
+  else()
+    message(STATUS "${PROJECT_NAME}: ZED SDK not found; building SDK-mode stub")
+  endif()
   add_executable(zed2i_sdk_node
     src/sdk_node_stub.cpp
   )

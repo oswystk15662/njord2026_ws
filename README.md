@@ -204,8 +204,8 @@ for usb camera
 * gstreamer系の諸々(mjpg経由は動くけどgstreamer経由はうまく動かない可能性が高いが、依存の中に入れてしまってるので入れてください。すみません)
 
 for zed 2i
-* cuda 12.1(もしくはdockerでやる)
-* zed sdk
+* CUDA 12.x/13.x に対応する Stereolabs ZED SDK（colcon build 時に CMake が検出します）
+* CUDA 13.1 環境では CUDA 13.x 対応の ZED SDK を入れてから rebuild してください
 * ROS2 Foxyなら [setup_foxy_image_transport.sh](setup_foxy_image_transport.sh) で image_transport v3 系を source から固定する
 
 for localization
