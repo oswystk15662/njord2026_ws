@@ -16,8 +16,12 @@ from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point, PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
+from nav_msgs.msg import Path as PathMsg
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Header
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 from pathlib import Path
 from enum import Enum
@@ -68,6 +72,11 @@ class WaypointPublisher(Node):
         # Load configuration
         self.config = self._load_config()
         
+        transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.waypoints_pub = self.create_publisher(PathMsg, '/task_waypoints', transient_qos)
+        self.path_pub = self.create_publisher(PathMsg, '/task_waypoint_path', transient_qos)
+        self.marker_pub = self.create_publisher(MarkerArray, '/task_waypoint_markers', transient_qos)
+
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
         
@@ -83,6 +92,8 @@ class WaypointPublisher(Node):
         self.timer = self.create_timer(1.0 / self.publish_rate_hz, self._timer_callback)
         self.first_publish = True
         
+        self._publish_visualization()
+
         self.get_logger().info(f"WaypointPublisher initialized for task: {self.task_type.value}")
         
     def _load_config(self) -> dict:
@@ -121,6 +132,8 @@ class WaypointPublisher(Node):
     
     def _timer_callback(self):
         """Timer callback to publish waypoints"""
+        self._publish_visualization()
+
         if not self.first_publish:
             return
         
@@ -183,6 +196,96 @@ class WaypointPublisher(Node):
         
         return poses
     
+
+    def _publish_visualization(self):
+        """Publish Foxglove/RViz-friendly waypoint path and markers."""
+        poses = self._build_poses_from_config()
+        stamp = self.get_clock().now().to_msg()
+        header = Header()
+        header.frame_id = self.frame_id
+        header.stamp = stamp
+
+        waypoints_msg = PathMsg()
+        waypoints_msg.header = header
+        path_msg = PathMsg()
+        path_msg.header = header
+
+        marker_array = MarkerArray()
+        line_marker = Marker()
+        line_marker.header = header
+        line_marker.ns = "task_waypoint_path"
+        line_marker.id = 0
+        line_marker.type = Marker.LINE_STRIP
+        line_marker.action = Marker.ADD
+        line_marker.pose.orientation.w = 1.0
+        line_marker.scale.x = 0.25
+        line_marker.color.r = 0.0
+        line_marker.color.g = 0.65
+        line_marker.color.b = 1.0
+        line_marker.color.a = 1.0
+
+        delete_text = Marker()
+        delete_text.header = header
+        delete_text.ns = "task_waypoint_labels"
+        delete_text.action = Marker.DELETEALL
+        marker_array.markers.append(delete_text)
+
+        for idx, pose in enumerate(poses, start=1):
+            pose.header = header
+            waypoints_msg.poses.append(pose)
+            path_msg.poses.append(pose)
+
+            point = Point()
+            point.x = pose.pose.position.x
+            point.y = pose.pose.position.y
+            point.z = pose.pose.position.z
+            line_marker.points.append(point)
+
+            sphere = Marker()
+            sphere.header = header
+            sphere.ns = "task_waypoints"
+            sphere.id = idx
+            sphere.type = Marker.SPHERE
+            sphere.action = Marker.ADD
+            sphere.pose = pose.pose
+            sphere.pose.position.z = 0.2
+            sphere.scale.x = 0.8
+            sphere.scale.y = 0.8
+            sphere.scale.z = 0.4
+            if idx == 1:
+                sphere.color.g = 1.0
+            elif idx == len(poses):
+                sphere.color.r = 1.0
+                sphere.color.g = 0.2
+            else:
+                sphere.color.r = 1.0
+                sphere.color.g = 0.85
+            sphere.color.a = 1.0
+            marker_array.markers.append(sphere)
+
+            label = Marker()
+            label.header = header
+            label.ns = "task_waypoint_labels"
+            label.id = idx
+            label.type = Marker.TEXT_VIEW_FACING
+            label.action = Marker.ADD
+            label.pose.position.x = pose.pose.position.x
+            label.pose.position.y = pose.pose.position.y
+            label.pose.position.z = 1.2
+            label.pose.orientation.w = 1.0
+            label.scale.z = 1.0
+            label.color.r = 1.0
+            label.color.g = 1.0
+            label.color.b = 1.0
+            label.color.a = 1.0
+            label.text = str(idx)
+            marker_array.markers.append(label)
+
+        marker_array.markers.append(line_marker)
+        self.waypoints_pub.publish(waypoints_msg)
+        self.path_pub.publish(path_msg)
+        self.marker_pub.publish(marker_array)
+
     def _yaw_to_quaternion(self, yaw: float):
         """Convert yaw angle to quaternion"""
         from geometry_msgs.msg import Quaternion
