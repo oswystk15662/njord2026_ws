@@ -6,6 +6,8 @@
 #include <cmath>
 #include <sstream>
 #include <iomanip>
+#include <cstdint>
+#include <cstring>
 
 namespace um982_driver
 {
@@ -41,6 +43,34 @@ std::string base64_encode(const std::string & input);
  * @brief 度数法から弧度法への変換
  */
 inline double deg2rad(double deg) { return deg * M_PI / 180.0; }
+
+/**
+ * @brief Unicoreバイナリログのリトルエンディアン整数/浮動小数点読み出し
+ */
+inline uint16_t read_u16_le(const uint8_t * p)
+{
+    return static_cast<uint16_t>(p[0]) | (static_cast<uint16_t>(p[1]) << 8);
+}
+
+inline uint32_t read_u32_le(const uint8_t * p)
+{
+    return static_cast<uint32_t>(p[0]) | (static_cast<uint32_t>(p[1]) << 8) |
+           (static_cast<uint32_t>(p[2]) << 16) | (static_cast<uint32_t>(p[3]) << 24);
+}
+
+inline float read_f32_le(const uint8_t * p)
+{
+    uint32_t bits = read_u32_le(p);
+    float value;
+    std::memcpy(&value, &bits, sizeof(value));
+    return value;
+}
+
+/**
+ * @brief Unicoreバイナリログ用CRC32 (初期値0、終了XORなし、多項式0xEDB88320)
+ * Unicore Reference Commands Manual Appendix 1 準拠
+ */
+uint32_t calculate_unicore_crc32(const uint8_t * data, size_t len);
 
 } // namespace utils
 } // namespace um982_driver
