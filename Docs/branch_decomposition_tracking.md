@@ -60,7 +60,7 @@ confirmed.
 
 ## Known validation debt
 
-- `simple_sim` remains in the CI build set but is temporarily excluded from
-  `colcon test` because the pre-existing package has 63 flake8 violations.
-  Restore it to the test set after those violations are fixed in a dedicated
-  maintenance change.
+- `simple_sim` was an obsolete lightweight experiment for `/cmd_vel`, `/odom`,
+  and path-following checks. It was removed instead of restoring its old lint
+  test coverage because the maintained simulation work now lives under
+  `src/sim`.

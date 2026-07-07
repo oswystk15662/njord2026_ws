@@ -21,6 +21,28 @@
   <xacro:property name="gnss2_y" value="-0.4" />
   <xacro:property name="gnss2_z" value="1.0" />
 
+  <xacro:property name="thruster_front_x" value="0.1803" />
+  <xacro:property name="thruster_rear_x" value="-0.1803" />
+  <xacro:property name="thruster_right_y" value="-0.2500" />
+  <xacro:property name="thruster_left_y" value="0.2500" />
+  <xacro:property name="thruster_z" value="-0.1" />
+
+  <xacro:macro name="thruster_link" params="name x y z">
+    <link name="${name}">
+      <visual>
+        <geometry>
+          <cylinder radius="0.04" length="0.16"/>
+        </geometry>
+        <material name="black"/>
+      </visual>
+    </link>
+    <joint name="${name}_joint" type="fixed">
+      <parent link="base_link"/>
+      <child link="${name}"/>
+      <origin xyz="${x} ${y} ${z}" rpy="0 0 0"/>
+    </joint>
+  </xacro:macro>
+
 
   <link name="base_footprint"/>
 
@@ -111,5 +133,10 @@
     <child link="gnss_sub_link"/>
     <origin xyz="${gnss2_x} ${gnss2_y} ${gnss2_z}" rpy="0 0 0"/>
   </joint>
+
+  <xacro:thruster_link name="thruster_FR" x="${thruster_front_x}" y="${thruster_right_y}" z="${thruster_z}"/>
+  <xacro:thruster_link name="thruster_FL" x="${thruster_front_x}" y="${thruster_left_y}" z="${thruster_z}"/>
+  <xacro:thruster_link name="thruster_RR" x="${thruster_rear_x}" y="${thruster_right_y}" z="${thruster_z}"/>
+  <xacro:thruster_link name="thruster_RL" x="${thruster_rear_x}" y="${thruster_left_y}" z="${thruster_z}"/>
 
 </robot>
