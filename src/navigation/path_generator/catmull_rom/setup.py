@@ -1,6 +1,6 @@
 from setuptools import find_packages, setup
 
-package_name = "task1_sim"
+package_name = "catmull_rom_path_smoother"
 
 setup(
     name=package_name,
@@ -9,24 +9,19 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/task1_sim.launch.py"]),
-        ("share/" + package_name + "/behavior_trees", [
-            "behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml",
-        ]),
-        ("share/" + package_name + "/config", [
-            "config/task1_params.yaml",
-            "config/task1_nav2_params.yaml",
-        ]),
+        ("share/" + package_name + "/config", ["config/catmull_rom_params.yaml"]),
+        ("share/" + package_name + "/launch", ["launch/catmull_rom_path_smoother.launch.py"]),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
     maintainer="osw",
     maintainer_email="oswystk15662@keio.jp",
-    description="Task1 simulation orchestrator",
+    description="Catmull-Rom path smoother for nav_msgs/Path topics",
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
-            "task1_orchestrator = task1_sim.orchestrator:main",
+            "catmull_rom_path_smoother_node = "
+            "catmull_rom_path_smoother.catmull_rom_path_smoother_node:main",
         ],
     },
 )

@@ -12,19 +12,19 @@ Supports:
 """
 
 import rclpy
-from ament_index_python.packages import get_package_share_directory
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import Point, PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
 from nav_msgs.msg import Path as PathMsg
-from rclpy.qos import DurabilityPolicy, QoSProfile
-from std_msgs.msg import Header
+from std_msgs.msg import ColorRGBA, Header
 from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 from pathlib import Path
 from enum import Enum
+from ament_index_python.packages import get_package_share_directory
 
 class TaskType(Enum):
     """Enumeration for supported task types"""
@@ -71,6 +71,7 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
+        self.frame_id = self.frame_id or self.config.get('frame_id', 'map')
         
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.waypoints_pub = self.create_publisher(PathMsg, '/task_waypoints', transient_qos)
@@ -79,6 +80,9 @@ class WaypointPublisher(Node):
 
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
+        path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.path_publisher = self.create_publisher(PathMsg, '/plan', path_qos)
+        self.marker_publisher = self.create_publisher(MarkerArray, '/waypoint_markers', path_qos)
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -91,6 +95,7 @@ class WaypointPublisher(Node):
         # Create timer for periodic publishing
         self.timer = self.create_timer(1.0 / self.publish_rate_hz, self._timer_callback)
         self.first_publish = True
+        self.plan_published = False
         
         self._publish_visualization()
 
@@ -101,7 +106,6 @@ class WaypointPublisher(Node):
         Load waypoint configuration from YAML file
         Returns: dict with task configuration
         """
-        # Construct config file path
         package_share_dir = Path(get_package_share_directory('waypoint_publisher')) / 'config'
         
         config_mapping = {
@@ -134,6 +138,10 @@ class WaypointPublisher(Node):
         """Timer callback to publish waypoints"""
         self._publish_visualization()
 
+        if not self.plan_published:
+            self._publish_plan(self._build_poses_from_config())
+            self.plan_published = True
+
         if not self.first_publish:
             return
         
@@ -151,6 +159,7 @@ class WaypointPublisher(Node):
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
         waypoints = self._build_poses_from_config()
+        self._publish_plan(waypoints)
         self._send_navigate_through_poses_goal(waypoints)
         
         task_name = self.task_type.value
@@ -161,6 +170,7 @@ class WaypointPublisher(Node):
         waypoints = self._build_poses_from_config()
         if len(waypoints) >= 3:
             stage1 = waypoints[:3]
+            self._publish_plan(stage1)
             self._send_navigate_through_poses_goal(stage1)
             self.docking_state = DockingState.STAGE1_APPROACH
             if self.task_type == TaskType.TASK3_2:
@@ -379,6 +389,7 @@ class WaypointPublisher(Node):
         # indices 3=8_exit, 4=gps9, 5=berth2
         if len(waypoints) >= 6:
             stage2 = waypoints[3:6]  # 8_exit, gps9, berth2
+            self._publish_plan(stage2)
             self._send_navigate_through_poses_goal(stage2)
             self.get_logger().info("Task3: Stage 2 sent [gps8_exit -> gps9 -> berth2]")
         else:
@@ -398,10 +409,92 @@ class WaypointPublisher(Node):
         finish_index = 3 if self.task_type == TaskType.TASK3_2 else 6
         if len(waypoints) > finish_index:
             stage3 = [waypoints[finish_index]]
+            self._publish_plan(stage3)
             self._send_navigate_through_poses_goal(stage3)
             self.get_logger().info("Task3: Stage 3 sent [gps10 - finish]")
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 3")
+
+    def _publish_plan(self, poses: list):
+        """Publish the intended route for validators and GUI overlays."""
+        if not poses:
+            return
+
+        stamp = self.get_clock().now().to_msg()
+        path = PathMsg()
+        path.header.frame_id = self.frame_id
+        path.header.stamp = stamp
+
+        for pose in poses:
+            pose.header.stamp = stamp
+            path.poses.append(pose)
+
+        self.path_publisher.publish(path)
+        self._publish_waypoint_markers(poses, stamp)
+        self.get_logger().info(f"Published /plan with {len(path.poses)} poses")
+
+    def _publish_waypoint_markers(self, poses: list, stamp):
+        """Publish RViz markers that match the currently published path."""
+        marker_array = MarkerArray()
+        clear_marker = Marker()
+        clear_marker.action = Marker.DELETEALL
+        marker_array.markers.append(clear_marker)
+
+        waypoint_defs = self.config.get('waypoints', [])
+        for idx, pose in enumerate(poses):
+            wp = waypoint_defs[idx] if idx < len(waypoint_defs) else {}
+            marker_array.markers.append(self._make_waypoint_marker(idx, pose, wp, stamp))
+            marker_array.markers.append(self._make_waypoint_label_marker(idx, pose, wp, stamp))
+
+        self.marker_publisher.publish(marker_array)
+
+    def _waypoint_color(self, wp_type: str) -> ColorRGBA:
+        color = ColorRGBA()
+        color.a = 0.95
+        if wp_type == 'start':
+            color.r, color.g, color.b = 0.1, 0.9, 0.2
+        elif wp_type == 'goal':
+            color.r, color.g, color.b = 1.0, 0.1, 0.1
+        elif wp_type == 'gps':
+            color.r, color.g, color.b = 0.1, 0.35, 1.0
+        else:
+            color.r, color.g, color.b = 1.0, 0.85, 0.05
+        return color
+
+    def _make_waypoint_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
+        marker = Marker()
+        marker.header.frame_id = self.frame_id
+        marker.header.stamp = stamp
+        marker.ns = 'waypoints'
+        marker.id = idx
+        marker.type = Marker.SPHERE
+        marker.action = Marker.ADD
+        marker.pose.position.x = pose.pose.position.x
+        marker.pose.position.y = pose.pose.position.y
+        marker.pose.position.z = 0.3
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.8
+        marker.scale.y = 0.8
+        marker.scale.z = 0.8
+        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
+        return marker
+
+    def _make_waypoint_label_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
+        marker = Marker()
+        marker.header.frame_id = self.frame_id
+        marker.header.stamp = stamp
+        marker.ns = 'waypoint_labels'
+        marker.id = idx
+        marker.type = Marker.TEXT_VIEW_FACING
+        marker.action = Marker.ADD
+        marker.pose.position.x = pose.pose.position.x
+        marker.pose.position.y = pose.pose.position.y
+        marker.pose.position.z = 1.1
+        marker.pose.orientation.w = 1.0
+        marker.scale.z = 0.8
+        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
+        marker.text = str(wp.get('name', f'WP {idx + 1}'))
+        return marker
 
 def main(args=None):
     rclpy.init(args=args)
@@ -410,15 +503,15 @@ def main(args=None):
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
-        pass
+        node.get_logger().info("Shutting down...")
     finally:
         try:
             node.destroy_node()
-        except (Exception, KeyboardInterrupt):
+        except Exception:
             pass
         try:
-            rclpy.try_shutdown()
-        except (Exception, KeyboardInterrupt):
+            rclpy.shutdown()
+        except Exception:
             pass
 
 if __name__ == '__main__':

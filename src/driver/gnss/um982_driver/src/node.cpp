@@ -2,8 +2,24 @@
 #include <tf2/LinearMath/Quaternion.h>
 #include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
+#include <algorithm>
 
 using namespace std::chrono_literals;
+
+namespace
+{
+std::string format_period(double period)
+{
+    std::ostringstream ss;
+    ss << std::fixed << std::setprecision(2) << period;
+    return ss.str();
+}
+
+// Unicoreバイナリログの同期バイト (Table 7-47)
+constexpr uint8_t kBinarySync[3] = {0xAA, 0x44, 0xB5};
+constexpr std::size_t kBinaryHeaderLen = 24; // Table 7-48
+constexpr uint16_t kUniheadingMessageId = 972; // UNIHEADING (Message ID)
+} // namespace
 
 namespace um982_driver
 {
@@ -62,12 +78,35 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
 UM982Driver::~UM982Driver()
 {
+    // 非同期読み込みを止めてから、起動時に書き込んだ設定を元に戻す
+    // (UNLOG)。SAVECONFIGしていないためNVRAMには影響しないが、UNLOGを
+    // 送らないと次回接続時にこのノードが設定したログ(UNIHEADINGB等)を
+    // 出力し続けたままになる。
     io_context_.stop();
     if (io_thread_.joinable()) {
         io_thread_.join();
     }
+
+    revert_gnss_output();
+
     if (log_file_.is_open()) {
         log_file_.close();
+    }
+}
+
+void UM982Driver::revert_gnss_output()
+{
+    bool port_open = (serial_port_ && serial_port_->is_open()) ||
+        (tcp_socket_ && tcp_socket_->is_open());
+    if (!port_open) {
+        return;
+    }
+
+    try {
+        write_to_gnss("UNLOG\r\n");
+        RCLCPP_INFO(this->get_logger(), "Reverted UM982 output configuration (UNLOG)");
+    } catch (const std::exception & e) {
+        RCLCPP_ERROR(this->get_logger(), "Failed to revert UM982 output on shutdown: %s", e.what());
     }
 }
 
@@ -84,6 +123,11 @@ void UM982Driver::init_parameters()
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
+    this->declare_parameter("NTRIP_Server", params_.ntrip_server);
+    this->declare_parameter("NTRIP_Port", params_.ntrip_port);
+    this->declare_parameter("NTRIP_Mountpoint", params_.mountpoint);
+    this->declare_parameter("NTRIP_Username", params_.username);
+    this->declare_parameter("NTRIP_Password", params_.password);
 
     // Get parameters
     params_.gnss_port = this->get_parameter("GNSS_SerialPort").as_string();
@@ -96,6 +140,11 @@ void UM982Driver::init_parameters()
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
+    params_.ntrip_server = this->get_parameter("NTRIP_Server").as_string();
+    params_.ntrip_port = this->get_parameter("NTRIP_Port").as_int();
+    params_.mountpoint = this->get_parameter("NTRIP_Mountpoint").as_string();
+    params_.username = this->get_parameter("NTRIP_Username").as_string();
+    params_.password = this->get_parameter("NTRIP_Password").as_string();
     
     RCLCPP_INFO(this->get_logger(), "Mode: %s", params_.uart_or_tcp.c_str());
 }
@@ -119,15 +168,33 @@ void UM982Driver::init_gnss_connection()
         RCLCPP_INFO(this->get_logger(), "Connected TCP: %s:%d", params_.tcp_ip.c_str(), params_.tcp_port);
     }
 
-    // Configure Device
-    double fix_p = 1.0 / params_.fix_freq;
-    double head_p = 1.0 / params_.heading_freq;
-
-    // write_to_gnss("OBSVMA " + std::to_string(fix_p) + "\r\n"); // Pythonコメントアウトされていたが有効化する場合
-    write_to_gnss("GPGGA " + std::to_string(fix_p) + "\r\n");
-    write_to_gnss("UNIHEADINGA " + std::to_string(head_p) + "\r\n");
+    configure_gnss_output();
 
     start_gnss_read();
+}
+
+void UM982Driver::configure_gnss_output()
+{
+    double fix_p = 1.0 / params_.fix_freq;
+    double head_p = 1.0 / params_.heading_freq;
+    std::string fix_period = format_period(fix_p);
+    std::string heading_period = format_period(head_p);
+
+    // Apply volatile startup configuration only. Do not send SAVECONFIG.
+    // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
+    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII. UNIHEADING supports
+    // both ASCII (UNIHEADINGA) and binary (UNIHEADINGB) output; per policy, use the
+    // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
+    // fallback heading sentence.
+    write_to_gnss("UNLOG\r\n");
+    write_to_gnss("MODE ROVER\r\n");
+    write_to_gnss("GPGGA " + fix_period + "\r\n");
+    write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
+    write_to_gnss("GPTHS " + heading_period + "\r\n");
+
+    RCLCPP_INFO(this->get_logger(),
+        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, UNIHEADINGB(binary)/GPTHS(ASCII fallback)=%ss",
+        fix_period.c_str(), heading_period.c_str());
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)
@@ -149,30 +216,24 @@ void UM982Driver::write_to_gnss(const std::vector<uint8_t>& data)
 
 void UM982Driver::start_gnss_read()
 {
-    // 改行コードまで読み込む (Async)
+    // ASCII(NMEA)とバイナリ(UNIHEADINGB等)が混在するため、行区切りではなく
+    // 生バイトを読み込んでバッファ側でメッセージ境界を判定する。
     auto handler = std::bind(&UM982Driver::on_gnss_read, this, std::placeholders::_1, std::placeholders::_2);
 
     if (serial_port_) {
-        boost::asio::async_read_until(*serial_port_, gnss_read_buf_, "\n", handler);
+        serial_port_->async_read_some(boost::asio::buffer(gnss_read_chunk_), handler);
     } else if (tcp_socket_) {
-        boost::asio::async_read_until(*tcp_socket_, gnss_read_buf_, "\n", handler);
+        tcp_socket_->async_read_some(boost::asio::buffer(gnss_read_chunk_), handler);
     }
 }
 
 void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size_t bytes_transferred)
 {
     if (!error) {
-        std::istream is(&gnss_read_buf_);
-        std::string line;
-        std::getline(is, line);
-        
-        // ログ保存
-        if (log_file_.is_open()) {
-            log_file_ << line << std::endl;
-        }
+        gnss_parse_buf_.insert(
+            gnss_parse_buf_.end(), gnss_read_chunk_.begin(), gnss_read_chunk_.begin() + bytes_transferred);
 
-        // 処理
-        process_gnss_line(line);
+        process_gnss_buffer();
 
         // 次の読み込み
         start_gnss_read();
@@ -183,6 +244,73 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
     }
 }
 
+void UM982Driver::process_gnss_buffer()
+{
+    while (!gnss_parse_buf_.empty()) {
+        // --- バイナリログ (0xAA 0x44 0xB5 始まり) ---
+        if (gnss_parse_buf_.size() >= 3 &&
+            gnss_parse_buf_[0] == kBinarySync[0] &&
+            gnss_parse_buf_[1] == kBinarySync[1] &&
+            gnss_parse_buf_[2] == kBinarySync[2])
+        {
+            if (gnss_parse_buf_.size() < kBinaryHeaderLen) {
+                break; // ヘッダ全体がまだ届いていない
+            }
+
+            uint16_t msg_id = utils::read_u16_le(&gnss_parse_buf_[4]);
+            uint16_t msg_len = utils::read_u16_le(&gnss_parse_buf_[6]);
+            std::size_t total_len = kBinaryHeaderLen + msg_len + 4; // +4 = CRC32
+
+            if (total_len > gnss_parse_buf_.size()) {
+                if (total_len > 8192) {
+                    // ヘッダが壊れている可能性: 同期バイトを捨てて再同期
+                    gnss_parse_buf_.erase(gnss_parse_buf_.begin(), gnss_parse_buf_.begin() + 3);
+                    continue;
+                }
+                break; // フレーム全体がまだ届いていない
+            }
+
+            bool crc_ok = utils::calculate_unicore_crc32(gnss_parse_buf_.data(), total_len - 4) ==
+                utils::read_u32_le(&gnss_parse_buf_[total_len - 4]);
+
+            if (crc_ok && msg_id == kUniheadingMessageId) {
+                parse_uniheadingb(gnss_parse_buf_.data() + kBinaryHeaderLen, msg_len);
+            } else if (!crc_ok) {
+                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u)", msg_id);
+            }
+
+            gnss_parse_buf_.erase(gnss_parse_buf_.begin(), gnss_parse_buf_.begin() + total_len);
+            continue;
+        }
+
+        // --- ASCIIログ ($ または # 始まり、\n終端) ---
+        if (gnss_parse_buf_[0] == '$' || gnss_parse_buf_[0] == '#') {
+            auto nl_it = std::find(gnss_parse_buf_.begin(), gnss_parse_buf_.end(), '\n');
+            if (nl_it == gnss_parse_buf_.end()) {
+                if (gnss_parse_buf_.size() > 8192) {
+                    gnss_parse_buf_.erase(gnss_parse_buf_.begin()); // 異常に長い: 再同期
+                    continue;
+                }
+                break; // 行全体がまだ届いていない
+            }
+
+            std::string line(gnss_parse_buf_.begin(), nl_it);
+            std::size_t consumed = std::distance(gnss_parse_buf_.begin(), nl_it) + 1;
+
+            if (log_file_.is_open()) {
+                log_file_ << line << std::endl;
+            }
+            process_gnss_line(line);
+
+            gnss_parse_buf_.erase(gnss_parse_buf_.begin(), gnss_parse_buf_.begin() + consumed);
+            continue;
+        }
+
+        // 認識できない先頭バイト: 1バイト捨てて再同期
+        gnss_parse_buf_.erase(gnss_parse_buf_.begin());
+    }
+}
+
 void UM982Driver::process_gnss_line(std::string line)
 {
     // 末尾の \r などを除去
@@ -190,12 +318,14 @@ void UM982Driver::process_gnss_line(std::string line)
         line.pop_back();
     }
 
-    if (line.rfind("$GNGGA", 0) == 0) {
+    if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
-    } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
-        parse_uniheading(line);
+    } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
+        parse_ths(line);
     }
+    // UNIHEADINGはbinary(UNIHEADINGB)のみ要求しているため、ここには来ない。
+    // バイナリフレームはprocess_gnss_buffer()内でparse_uniheadingb()へ直接渡される。
 }
 
 // --------------------------------------------------------------------------
@@ -241,76 +371,84 @@ void UM982Driver::parse_gga(const std::string& line)
     fix_debug_pub_->publish(msg);
 }
 
-void UM982Driver::parse_uniheading(const std::string& line)
+void UM982Driver::parse_ths(const std::string& line)
 {
-    // #UNIHEADINGA,header;SOL_COMPUTED,TYPE,len,heading,pitch,...
-    // Pythonではsplit(";")してからsplit(",")
-    
-    auto main_parts = utils::split(line, ';');
-    if (main_parts.size() < 2) return;
+    if (!utils::validate_checksum(line)) return;
 
-    // チェックサム検証 (行全体で行う必要がある)
-    // ただしUNIHEADINGAのチェックサムはCRC32のケースもあるため、今回はPython同様簡易パース優先
-    
-    std::string data_part_str = main_parts[1].substr(0, main_parts[1].find('*'));
-    auto data = utils::split(data_part_str, ',');
+    std::string payload = line.substr(0, line.find('*'));
+    auto parts = utils::split(payload, ',');
+    if (parts.size() < 3 || parts[2] == "V") return;
 
-    if (data.size() < 12) return;
+    try {
+        double heading_deg = std::stod(parts[1]);
+        double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+
+        tf2::Quaternion q;
+        q.setRPY(0, 0, yaw_rad);
+
+        geometry_msgs::msg::PoseWithCovarianceStamped msg;
+        msg.header.stamp = this->now();
+        msg.header.frame_id = params_.heading_frame_id;
+        msg.pose.pose.orientation = tf2::toMsg(q);
+
+        double var = utils::deg2rad(0.5);
+        msg.pose.covariance[35] = var * var;
+
+        if (!stop_publish_) {
+            heading_pub_->publish(msg);
+        }
+        heading_debug_pub_->publish(msg);
+    } catch (...) {
+    }
+}
+
+void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
+{
+    // UNIHEADING Message Structure (Unicore Reference Commands Manual Table 7-115)
+    // body offset: 0=sol_stat(u32) 4=pos_type(u32) 8=length(f32) 12=heading(f32)
+    //              16=pitch(f32) 20=reserved(f32) 24=hdgstddev(f32) 28=ptchstddev(f32)
+    //              32=stn_id(char[4]) 36=#SVs 37=#solnSVs 38=#obs 39=#multi
+    //              40=reserved 41=ext_sol_stat 42=galileo/bds3 mask 43=gps/glonass/bds2 mask
+    if (body_len < 44) return;
+
+    // Position or Velocity Type (Table 0-4)
+    constexpr uint32_t kNarrowInt = 50;
+    constexpr uint32_t kInsRtkFixed = 56;
+    // Solution Status (Table 0-5)
+    constexpr uint32_t kSolComputed = 0;
+
+    uint32_t sol_stat = utils::read_u32_le(body + 0);
+    uint32_t pos_type = utils::read_u32_le(body + 4);
+    double heading_deg = utils::read_f32_le(body + 12);
+    double pitch_deg = utils::read_f32_le(body + 16);
+
+    double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+    double pitch_rad = utils::deg2rad(-1.0 * pitch_deg);
+
+    tf2::Quaternion q;
+    q.setRPY(0, pitch_rad, yaw_rad);
 
     geometry_msgs::msg::PoseWithCovarianceStamped msg;
     msg.header.stamp = this->now();
     msg.header.frame_id = params_.heading_frame_id;
+    msg.pose.pose.orientation = tf2::toMsg(q);
 
-    // data[3] = heading (deg), data[4] = pitch (deg)
-    // Python: yaw_rad = radians(90.0 - heading)
-    // Python: pitch_rad = radians(-1.0 * pitch)
-    
-    try {
-        double heading_deg = std::stod(data[3]);
-        double pitch_deg = std::stod(data[4]);
+    bool is_valid = (sol_stat == kSolComputed) &&
+        (pos_type == kNarrowInt || pos_type == kInsRtkFixed);
 
-        double yaw_rad = utils::deg2rad(90.0 - heading_deg);
-        double pitch_rad = utils::deg2rad(-1.0 * pitch_deg);
-
-        tf2::Quaternion q;
-        q.setRPY(0, pitch_rad, yaw_rad);
-        msg.pose.pose.orientation = tf2::toMsg(q);
-
-        // Covariance logic
-        std::string sol_status = data[0];
-        std::string pos_type = data[1];
-        
-        double std_dev = 0.0;
-        bool is_valid = false;
-
-        if (sol_status == "SOL_COMPUTED") {
-            if (pos_type == "NARROW_INT" || pos_type == "INS_RTKFIXED") { // FIXED
-                std_dev = 0.5;
-                is_valid = true;
-            } 
-            // INT, FLOAT等はPythonでコメントアウトされていたが、必要なら追加
-        }
-
-        if (is_valid) {
-            double var = utils::deg2rad(std_dev);
-            var = var * var;
-            msg.pose.covariance[28] = var; // rotation about Z (Yaw)
-            msg.pose.covariance[35] = var; // rotation about Y (Pitch)? 35 is Z in 6x6?
-            // index 35 is (5,5) -> theta_z (Yaw).
-            // index 28 is (4,4) -> theta_y (Pitch).
-            // Python code sets 28 and 35.
-        } else {
-            msg.pose.covariance[0] = -1; // invalid
-        }
-
-        if (!stop_publish_ && is_valid) {
-            heading_pub_->publish(msg);
-        }
-        heading_debug_pub_->publish(msg);
-
-    } catch (...) {
-        // 数値変換エラーなど
+    if (is_valid) {
+        double var = utils::deg2rad(0.5);
+        var = var * var;
+        msg.pose.covariance[28] = var; // rotation about Y (Pitch)
+        msg.pose.covariance[35] = var; // rotation about Z (Yaw)
+    } else {
+        msg.pose.covariance[0] = -1; // invalid
     }
+
+    if (!stop_publish_ && is_valid) {
+        heading_pub_->publish(msg);
+    }
+    heading_debug_pub_->publish(msg);
 }
 
 // --------------------------------------------------------------------------
@@ -336,15 +474,15 @@ void UM982Driver::init_rtk_connection()
 
 void UM982Driver::connect_rtk_client()
 {
-    std::string auth_str = params_.username + ":" + params_.password;
-    std::string auth_base64 = utils::base64_encode(auth_str);
-
     std::stringstream request;
     request << "GET /" << params_.mountpoint << " HTTP/1.1\r\n";
     request << "Host: " << params_.ntrip_server << ":" << params_.ntrip_port << "\r\n";
     request << "Ntrip-Version: Ntrip/2.0\r\n";
     request << "User-Agent: NTRIP Client/1.0\r\n";
-    request << "Authorization: Basic " << auth_base64 << "\r\n";
+    if (!params_.username.empty() || !params_.password.empty()) {
+        std::string auth_str = params_.username + ":" + params_.password;
+        request << "Authorization: Basic " << utils::base64_encode(auth_str) << "\r\n";
+    }
     request << "Connection: close\r\n";
     request << "\r\n";
 
@@ -394,7 +532,8 @@ void UM982Driver::rtk_send_gga_callback()
         return;
     }
 
-    if (!last_gpgga_.empty() && last_gpgga_.rfind("$GNGGA", 0) == 0) {
+    if (!last_gpgga_.empty() &&
+        (last_gpgga_.rfind("$GNGGA", 0) == 0 || last_gpgga_.rfind("$GPGGA", 0) == 0)) {
         // GNGGAをRTKサーバーへ送信して位置を通知
         std::string msg = last_gpgga_ + "\r\n";
         boost::system::error_code ignored_error;
