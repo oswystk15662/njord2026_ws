@@ -11,6 +11,8 @@
 #include <mutex>
 #include <fstream>
 #include <atomic>
+#include <array>
+#include <cstdint>
 
 // 前述のutilsをインクルード
 #include "um982_driver/utils.hpp"
@@ -30,6 +32,7 @@ private:
     void init_gnss_connection();
     void init_rtk_connection();
     void configure_gnss_output();
+    void revert_gnss_output(); // シャットダウン時に起動時設定を元に戻す(UNLOG)
 
     // --- 通信 (Boost.Asio) ---
     void start_gnss_read();
@@ -40,11 +43,14 @@ private:
     void connect_rtk_client();
     void start_rtk_read();
     void on_rtk_read(const boost::system::error_code& error, std::size_t bytes_transferred);
-    
+
     // --- データ処理 ---
+    // GNSSはASCII(NMEA/$,#行)とバイナリ(UNIHEADINGB等, 0xAA 0x44 0xB5始まり)が
+    // 混在するため、行区切りではなくバイトバッファを都度スキャンして分離する。
+    void process_gnss_buffer();
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
-    void parse_uniheading(const std::string& line);
+    void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
 
     // --- ROS Callbacks/Timers ---
@@ -61,7 +67,8 @@ private:
     // GNSS Device
     std::unique_ptr<boost::asio::serial_port> serial_port_;
     std::unique_ptr<boost::asio::ip::tcp::socket> tcp_socket_;
-    boost::asio::streambuf gnss_read_buf_;
+    std::array<uint8_t, 4096> gnss_read_chunk_;
+    std::vector<uint8_t> gnss_parse_buf_; // ASCII/バイナリ混在の受信バッファ
     std::mutex gnss_write_mutex_;
 
     // RTK Client
