@@ -3,6 +3,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, LogInfo
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -12,8 +13,10 @@ def generate_launch_description():
     pkg_robot      = get_package_share_directory("robot")
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
-    pkg_kinematics = get_package_share_directory("kinematics")
+    pkg_thruster   = get_package_share_directory("thruster_driver")
     pkg_buoy_pub   = get_package_share_directory("buoy_obstacle_publisher")
+    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
+    robot_description = open(robot_description_file, 'r').read()
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
@@ -43,11 +46,15 @@ def generate_launch_description():
     task_type_arg = DeclareLaunchArgument(
         'task_type', default_value='task3_1',
         description='Task type: task3_1 or task3_2')
+    enable_diagnostics_arg = DeclareLaunchArgument(
+        'enable_diagnostics', default_value='true',
+        description='Launch generic topic heartbeat diagnostics for Task3 simulation')
 
     driver_delay = LaunchConfiguration('driver_delay')
     nav2_delay   = LaunchConfiguration('nav2_delay')
     goal_delay   = LaunchConfiguration('goal_delay')
     task_type    = LaunchConfiguration('task_type')
+    enable_diagnostics = LaunchConfiguration('enable_diagnostics')
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
     # SimNode is the sole Task3 simulation TF authority.
@@ -78,31 +85,30 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Kinematics: cmd_vel → /thruster_command (Int16MultiArray)
-    kinematics_node = Node(
-        package="kinematics",
-        executable="kinematics_node",
-        name="kinematics_node",
+    # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
+    thruster_driver_node = Node(
+        package="thruster_driver",
+        executable="thruster_driver_node",
+        name="thruster_driver_node",
         parameters=[
-            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                # Hardware wiring reversals are not present in the physics simulator.
-                "thrusters.FL.reverse": False,
-                "thrusters.RL.reverse": False,
+                "robot_description": robot_description,
+                "transport_mode": "sim",
+                "control.dob.enable": False,
             },
         ],
         output="screen",
     )
 
     # Robot state publisher: URDF → base_link→{imu_link, livox_frame, gnss_link, …}
-    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
     robot_state_pub_node = Node(
         package='robot_state_publisher',
         executable='robot_state_publisher',
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': open(robot_description_file, 'r').read(),
+            'robot_description': robot_description,
             'use_sim_time': False
         }]
     )
@@ -188,7 +194,7 @@ def generate_launch_description():
             sim_dynamics,
             sensor_noise_launch,
             task3_orchestrator,
-            kinematics_node,
+            thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
@@ -207,6 +213,7 @@ def generate_launch_description():
             os.path.join(pkg_robot, "launch", "nav2.launch.py")),
         launch_arguments={
             'params_file': os.path.join(pkg_robot, 'config', 'nav2_params_task3.yaml'),
+            'enable_diagnostics': 'false',
         }.items()
     )
 
@@ -234,6 +241,13 @@ def generate_launch_description():
         actions=[waypoint_publisher]
     )
 
+    diagnostics_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, "launch", "diagnostics.launch.py")),
+        launch_arguments={'profile': 'task3'}.items(),
+        condition=IfCondition(enable_diagnostics),
+    )
+
     startup_message = LogInfo(msg='========== Task3 Sim Bringup Started ==========')
 
     return LaunchDescription([
@@ -242,7 +256,9 @@ def generate_launch_description():
         nav2_delay_arg,
         goal_delay_arg,
         task_type_arg,
+        enable_diagnostics_arg,
         sensor_layer_timer,
         nav2_layer_timer,
         goal_layer_timer,
+        diagnostics_launch,
     ])

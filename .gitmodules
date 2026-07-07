@@ -7,3 +7,6 @@
 [submodule "src/driver/lidar/livox_ros_driver2"]
 	path = src/driver/lidar/livox_ros_driver2
 	url = git@github.com:KeioRoboticsAssociation/livox_ros_driver2.git
+[submodule "src/detection/pcl_segmentation"]
+	path = src/detection/pcl_segmentation
+	url = git@github.com:IBO-ASV/pcl_segmentation.git

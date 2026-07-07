@@ -2,6 +2,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from nav2_common.launch import RewrittenYaml
@@ -37,6 +38,11 @@ def generate_launch_description():
         default_value=default_nav_through_poses_bt_xml,
         description='Full path to the NavigateThroughPoses behavior tree XML'
     )
+    enable_diagnostics_arg = DeclareLaunchArgument(
+        'enable_diagnostics',
+        default_value='true',
+        description='Launch generic topic heartbeat diagnostics for Nav2 topics'
+    )
 
     configured_params = RewrittenYaml(
         source_file=LaunchConfiguration('params_file'),
@@ -50,10 +56,19 @@ def generate_launch_description():
         convert_types=True,
     )
 
+    diagnostics_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, 'launch', 'diagnostics.launch.py')
+        ),
+        launch_arguments={'profile': 'nav2'}.items(),
+        condition=IfCondition(LaunchConfiguration('enable_diagnostics')),
+    )
+
     return LaunchDescription([
         params_file_arg,
         nav_to_pose_bt_xml_arg,
         nav_through_poses_bt_xml_arg,
+        enable_diagnostics_arg,
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 os.path.join(pkg_nav2_bringup, 'launch', 'navigation_launch.py')
@@ -63,5 +78,6 @@ def generate_launch_description():
                 'use_sim_time': 'false',
                 'autostart': 'true'
             }.items()
-        )
+        ),
+        diagnostics_launch,
     ])

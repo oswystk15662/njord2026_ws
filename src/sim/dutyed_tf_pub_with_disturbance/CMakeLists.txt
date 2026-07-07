@@ -17,6 +17,7 @@ add_library(${PROJECT_NAME}_models SHARED
   src/t200_model.cpp
   src/mmg_doyle_model.cpp
   src/disturbance_model.cpp
+  src/thruster_wrench.cpp
 )
 target_include_directories(${PROJECT_NAME}_models PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -61,6 +62,14 @@ install(DIRECTORY include/
 install(DIRECTORY launch config
   DESTINATION share/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  find_package(thruster_driver REQUIRED)
+  ament_add_gtest(test_thruster_mmg_consistency test/test_thruster_mmg_consistency.cpp)
+  target_link_libraries(test_thruster_mmg_consistency ${PROJECT_NAME}_models)
+  ament_target_dependencies(test_thruster_mmg_consistency thruster_driver)
+endif()
 
 ament_export_include_directories(include)
 ament_export_libraries(${PROJECT_NAME}_models)

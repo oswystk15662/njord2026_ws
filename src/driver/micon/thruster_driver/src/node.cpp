@@ -1,9 +1,14 @@
 #include "thruster_driver/node.hpp"
 
+#include "thruster_driver/allocation.hpp"
+
 #include <algorithm>
-#include <array>
 #include <cctype>
+#include <chrono>
 #include <cmath>
+#include <limits>
+#include <regex>
+#include <stdexcept>
 
 namespace njord
 {
@@ -12,183 +17,540 @@ namespace thruster_driver
 
 namespace
 {
-double clampNorm(double value)
+std::string captureFirst(const std::string & text, const std::regex & pattern)
 {
-  return std::clamp(value, -1.0, 1.0);
+  std::smatch match;
+  if (std::regex_search(text, match, pattern) && match.size() > 1U) {
+    return match[1].str();
+  }
+  return {};
+}
+
+std::vector<double> parseDoubleList(const std::string & text)
+{
+  std::vector<double> values;
+  const std::regex number_pattern(R"([-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?)");
+  for (auto it = std::sregex_iterator(text.begin(), text.end(), number_pattern);
+    it != std::sregex_iterator();
+    ++it)
+  {
+    values.push_back(std::stod(it->str()));
+  }
+  return values;
 }
 }  // namespace
 
 ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
-: Node("thruster_driver_node", options)
+: Node("thruster_driver_node", options),
+  last_cmd_time_(this->now()),
+  last_feedback_time_(this->now()),
+  last_control_time_(this->now())
 {
   input_mode_ = toLower(this->declare_parameter<std::string>("input_mode", "cmd_vel"));
-  transport_mode_ = toLower(this->declare_parameter<std::string>("transport_mode", "mros_usb"));
+  transport_mode_ = toLower(this->declare_parameter<std::string>("transport_mode", "sim"));
 
-  max_linear_x_ = this->declare_parameter<double>("max_linear_x", 1.0);
-  max_angular_z_ = this->declare_parameter<double>("max_angular_z", 1.0);
-  angular_coeff_ = this->declare_parameter<double>("angular_coeff", 0.5);
+  control_rate_hz_ = this->declare_parameter<double>("control.rate_hz", 50.0);
+  max_linear_x_ = this->declare_parameter<double>("input_scaling.max_linear_x", 1.0);
+  max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
+  max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
+  watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
+  feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
+  stop_on_feedback_timeout_ =
+    this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
+
+  kp_surge_ = this->declare_parameter<double>("control.p.surge", 1.0);
+  kp_sway_ = this->declare_parameter<double>("control.p.sway", 1.0);
+  kp_yaw_ = this->declare_parameter<double>("control.p.yaw", 1.0);
+
+  dob_enable_ = this->declare_parameter<bool>("control.dob.enable", false);
+  dob_observer_gain_ = this->declare_parameter<double>("control.dob.observer_gain", 1.0);
+  dob_filter_tau_ = this->declare_parameter<double>("control.dob.filter_tau_sec", 0.1);
+
+  mass_ = this->declare_parameter<double>("control.nominal.mass", 10.0);
+  iz_ = this->declare_parameter<double>("control.nominal.iz", 1.0);
+  damping_linear_surge_ = this->declare_parameter<double>(
+    "control.nominal.damping.linear.surge",
+    0.0);
+  damping_linear_sway_ =
+    this->declare_parameter<double>("control.nominal.damping.linear.sway", 0.0);
+  damping_linear_yaw_ = this->declare_parameter<double>("control.nominal.damping.linear.yaw", 0.0);
+  damping_quadratic_surge_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.surge", 0.0);
+  damping_quadratic_sway_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.sway", 0.0);
+  damping_quadratic_yaw_ = this->declare_parameter<double>(
+    "control.nominal.damping.quadratic.yaw",
+    0.0);
+
+  allocation_regularization_ = std::max(
+    1e-9,
+    this->declare_parameter<double>("allocation.regularization_lambda", 1e-4));
+  deadzone_pos_ = this->declare_parameter<double>("static_map.deadzone_pos", 0.0);
+  deadzone_neg_ = this->declare_parameter<double>("static_map.deadzone_neg", 0.0);
 
   duty_resolution_ = this->declare_parameter<int>("duty_resolution", 1000);
-
-  left_reverse_ = this->declare_parameter<bool>("left_reverse", false);
-  right_reverse_ = this->declare_parameter<bool>("right_reverse", false);
-
   u16_neutral_ = this->declare_parameter<int>("u16_neutral", 1000);
   u16_span_ = this->declare_parameter<int>("u16_span", 1000);
 
-  left_can_id_ = this->declare_parameter<int>("left_can_id", 0x301);
-  right_can_id_ = this->declare_parameter<int>("right_can_id", 0x302);
+  sim_output_enabled_ = (
+    transport_mode_ == "sim" ||
+    transport_mode_ == "sim_and_mros_usb" ||
+    transport_mode_ == "sim_and_can" ||
+    transport_mode_ == "sim_and_both");
+  mros_enabled_ = (
+    transport_mode_ == "mros_usb" ||
+    transport_mode_ == "both" ||
+    transport_mode_ == "sim_and_mros_usb" ||
+    transport_mode_ == "sim_and_both");
+  can_enabled_ = (
+    transport_mode_ == "can" ||
+    transport_mode_ == "both" ||
+    transport_mode_ == "sim_and_can" ||
+    transport_mode_ == "sim_and_both");
 
-  const std::string cmd_vel_topic = this->declare_parameter<std::string>("topics.cmd_vel", "cmd_vel");
-  const std::string duty_array_topic = this->declare_parameter<std::string>("topics.duty_array", "thruster_command");
-  const std::string left_mros_topic = this->declare_parameter<std::string>("topics.left_mros_cmd", "left_esp32/cmd_duty_u16");
-  const std::string right_mros_topic = this->declare_parameter<std::string>("topics.right_mros_cmd", "right_esp32/cmd_duty_u16");
-  const std::string left_can_topic = this->declare_parameter<std::string>("topics.left_can_tx", "left_esp32/can_tx");
-  const std::string right_can_topic = this->declare_parameter<std::string>("topics.right_can_tx", "right_esp32/can_tx");
-
-  can_enabled_ = (transport_mode_ == "can" || transport_mode_ == "both");
-  mros_enabled_ = (transport_mode_ == "mros_usb" || transport_mode_ == "both");
-
-  if (!can_enabled_ && !mros_enabled_) {
+  if (!sim_output_enabled_ && !mros_enabled_ && !can_enabled_) {
     RCLCPP_WARN(
       this->get_logger(),
-      "Invalid transport_mode='%s'. Falling back to mros_usb.",
+      "Invalid transport_mode='%s'. Falling back to sim.",
       transport_mode_.c_str());
-    transport_mode_ = "mros_usb";
-    mros_enabled_ = true;
+    transport_mode_ = "sim";
+    sim_output_enabled_ = true;
+  }
+
+  loadThrusterConfigs();
+  const std::string robot_description =
+    this->declare_parameter<std::string>("robot_description", "");
+  loadThrusterPosesFromUrdf(robot_description);
+  validateThrusterConfigs();
+
+  const std::string cmd_vel_topic =
+    this->declare_parameter<std::string>("topics.cmd_vel", "cmd_vel");
+  const std::string duty_array_topic =
+    this->declare_parameter<std::string>("topics.duty_array", "thruster_command");
+  const std::string odom_topic =
+    this->declare_parameter<std::string>("topics.feedback_odometry", "/odometry/filtered/local");
+  const std::string sim_command_topic =
+    this->declare_parameter<std::string>("topics.sim_thruster_command", "/thruster_command");
+
+  if (sim_output_enabled_) {
+    pub_thruster_command_ =
+      this->create_publisher<std_msgs::msg::Int16MultiArray>(sim_command_topic, 10);
   }
 
   if (mros_enabled_) {
-    pub_left_mros_ = this->create_publisher<std_msgs::msg::UInt16>(left_mros_topic, 10);
-    pub_right_mros_ = this->create_publisher<std_msgs::msg::UInt16>(right_mros_topic, 10);
+    pub_mros_.reserve(thrusters_.size());
+    for (const auto & thruster : thrusters_) {
+      pub_mros_.push_back(this->create_publisher<std_msgs::msg::UInt16>(thruster.mros_topic, 10));
+    }
   }
 
   if (can_enabled_) {
-    pub_left_can_ = this->create_publisher<can_msgs::msg::Frame>(left_can_topic, 10);
-    pub_right_can_ = this->create_publisher<can_msgs::msg::Frame>(right_can_topic, 10);
+    pub_can_.reserve(thrusters_.size());
+    for (const auto & thruster : thrusters_) {
+      pub_can_.push_back(this->create_publisher<can_msgs::msg::Frame>(thruster.can_topic, 10));
+    }
   }
+
+  pub_current_force_ =
+    this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/current_force", 10);
+  pub_dob_estimate_ =
+    this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/dob_estimate", 10);
 
   if (input_mode_ == "cmd_vel") {
     sub_cmd_vel_ = this->create_subscription<geometry_msgs::msg::Twist>(
       cmd_vel_topic,
       10,
       std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
+    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+      odom_topic,
+      10,
+      std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
+    control_timer_ = this->create_wall_timer(
+      std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::duration<double>(
+          period_sec)),
+      std::bind(&ThrusterDriverNode::controlTimerCallback, this));
   } else if (input_mode_ == "duty_array") {
     sub_duty_array_ = this->create_subscription<std_msgs::msg::Int16MultiArray>(
       duty_array_topic,
       10,
       std::bind(&ThrusterDriverNode::dutyArrayCallback, this, std::placeholders::_1));
   } else {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid input_mode='%s'. Falling back to cmd_vel.",
-      input_mode_.c_str());
-    input_mode_ = "cmd_vel";
-    sub_cmd_vel_ = this->create_subscription<geometry_msgs::msg::Twist>(
-      cmd_vel_topic,
-      10,
-      std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
+    throw std::runtime_error("input_mode must be 'cmd_vel' or 'duty_array'");
   }
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. input_mode=%s, transport_mode=%s",
-    input_mode_.c_str(), transport_mode_.c_str());
+    "thruster_driver started. mode=%s transport=%s thrusters=%zu dob=%s",
+    input_mode_.c_str(),
+    transport_mode_.c_str(),
+    thrusters_.size(),
+    dob_enable_ ? "on" : "off");
 }
 
 void ThrusterDriverNode::cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
-  const double surge = clampNorm(msg->linear.x / std::max(1e-6, max_linear_x_));
-  const double yaw = clampNorm((angular_coeff_ * msg->angular.z) / std::max(1e-6, max_angular_z_));
-
-  double left = clampNorm(surge - yaw);
-  double right = clampNorm(surge + yaw);
-
-  if (left_reverse_) {
-    left *= -1.0;
-  }
-  if (right_reverse_) {
-    right *= -1.0;
-  }
-
-  publishCommands(left, right);
+  latest_cmd_ = *msg;
+  last_cmd_time_ = this->now();
 }
 
 void ThrusterDriverNode::dutyArrayCallback(const std_msgs::msg::Int16MultiArray::SharedPtr msg)
 {
-  if (msg->data.size() < 2U) {
+  if (msg->data.size() != thrusters_.size()) {
     RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 2000,
-      "Received duty_array with size=%zu. Expected at least 2.",
-      msg->data.size());
+      this->get_logger(),
+      *this->get_clock(),
+      2000,
+      "Received duty_array with size=%zu. Expected %zu.",
+      msg->data.size(),
+      thrusters_.size());
     return;
   }
 
   const double resolution = std::max(1, duty_resolution_);
-  double left = clampNorm(static_cast<double>(msg->data[0]) / resolution);
-  double right = clampNorm(static_cast<double>(msg->data[1]) / resolution);
-
-  if (left_reverse_) {
-    left *= -1.0;
+  std::vector<double> commands;
+  commands.reserve(msg->data.size());
+  for (const auto value : msg->data) {
+    commands.push_back(clamp(static_cast<double>(value) / resolution, -1.0, 1.0));
   }
-  if (right_reverse_) {
-    right *= -1.0;
-  }
-
-  publishCommands(left, right);
+  publishCommands(commands);
 }
 
-void ThrusterDriverNode::publishCommands(double left_norm, double right_norm)
+void ThrusterDriverNode::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
 {
-  const std::uint16_t left_u16 = toUint16Command(left_norm);
-  const std::uint16_t right_u16 = toUint16Command(right_norm);
+  meas_surge_ = msg->twist.twist.linear.x;
+  meas_sway_ = msg->twist.twist.linear.y;
+  meas_yaw_ = msg->twist.twist.angular.z;
+  have_feedback_ = true;
+  last_feedback_time_ = this->now();
+}
+
+void ThrusterDriverNode::controlTimerCallback()
+{
+  const auto now = this->now();
+  const double dt = std::max(1e-4, (now - last_control_time_).seconds());
+  last_control_time_ = now;
+
+  const bool cmd_timeout = (now - last_cmd_time_).seconds() > watchdog_timeout_sec_;
+  const bool feedback_timeout =
+    !have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_;
+
+  if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
+    publishCommands(std::vector<double>(thrusters_.size(), 0.0));
+    have_prev_meas_ = false;
+    prev_wrench_ = {0.0, 0.0, 0.0};
+    return;
+  }
+
+  const std::vector<double> wrench = computeWrench(dt);
+  std::vector<double> commands = allocateWrench(wrench);
+
+  for (std::size_t i = 0; i < commands.size(); ++i) {
+    commands[i] = applyStaticMap(commands[i], thrusters_[i]);
+  }
+
+  publishCommands(commands);
+  prev_wrench_ = wrench;
+}
+
+void ThrusterDriverNode::loadThrusterConfigs()
+{
+  const std::vector<std::string> ids =
+    getStringVector("thrusters.ids", {"FR", "FL", "RR", "RL"});
+  const std::vector<std::string> links = getStringVector(
+    "thrusters.links",
+    {"thruster_FR", "thruster_FL", "thruster_RR", "thruster_RL"});
+  const std::vector<double> angle_rad = getDoubleVector(
+    "thrusters.angle_rad",
+    {0.785398, -0.785398, 2.356194, -2.356194});
+  const std::vector<double> force_per_duty =
+    getDoubleVector("thrusters.force_per_duty", std::vector<double>(ids.size(), 1.0));
+  const std::vector<bool> reverse =
+    getBoolVector("thrusters.reverse", std::vector<bool>(ids.size(), false));
+  const std::vector<double> forward_gain =
+    getDoubleVector("static_map.wheels.forward_gain", std::vector<double>(ids.size(), 1.0));
+  const std::vector<double> reverse_gain =
+    getDoubleVector("static_map.wheels.reverse_gain", std::vector<double>(ids.size(), 1.0));
+  const std::vector<double> offset =
+    getDoubleVector("static_map.wheels.offset", std::vector<double>(ids.size(), 0.0));
+  const std::vector<std::string> mros_topics = getStringVector(
+    "topics.mros_cmd",
+    {"FR_esp32/cmd_duty_u16", "FL_esp32/cmd_duty_u16", "RR_esp32/cmd_duty_u16",
+      "RL_esp32/cmd_duty_u16"});
+  const std::vector<std::string> can_topics = getStringVector(
+    "topics.can_tx",
+    {"FR_esp32/can_tx", "FL_esp32/can_tx", "RR_esp32/can_tx", "RL_esp32/can_tx"});
+  const std::vector<int64_t> can_ids =
+    getIntVector("thrusters.can_ids", {0x301, 0x302, 0x303, 0x304});
+
+  const std::size_t n = ids.size();
+  if (
+    links.size() != n || angle_rad.size() != n || force_per_duty.size() != n ||
+    reverse.size() != n || forward_gain.size() != n || reverse_gain.size() != n ||
+    offset.size() != n || mros_topics.size() != n || can_topics.size() != n ||
+    can_ids.size() != n)
+  {
+    throw std::runtime_error("All thruster config arrays must match thrusters.ids size");
+  }
+
+  thrusters_.clear();
+  thrusters_.reserve(n);
+  for (std::size_t i = 0; i < n; ++i) {
+    ThrusterConfig config;
+    config.id = ids[i];
+    config.link = links[i];
+    config.angle_rad = angle_rad[i];
+    config.force_per_duty = force_per_duty[i];
+    config.reverse = reverse[i];
+    config.forward_gain = forward_gain[i];
+    config.reverse_gain = reverse_gain[i];
+    config.offset = offset[i];
+    config.mros_topic = mros_topics[i];
+    config.can_topic = can_topics[i];
+    config.can_id = static_cast<int>(can_ids[i]);
+    thrusters_.push_back(config);
+  }
+}
+
+void ThrusterDriverNode::loadThrusterPosesFromUrdf(const std::string & robot_description)
+{
+  if (robot_description.empty()) {
+    throw std::runtime_error("robot_description parameter is required for thruster pose loading");
+  }
+
+  const std::regex joint_pattern(R"(<joint\b[^>]*>[\s\S]*?<\/joint>)");
+  const std::regex parent_pattern(R"(<parent\s+link=["']([^"']+)["'])");
+  const std::regex child_pattern(R"(<child\s+link=["']([^"']+)["'])");
+  const std::regex origin_pattern(R"(<origin\b[^>]*xyz=["']([^"']+)["'])");
+
+  std::vector<bool> found(thrusters_.size(), false);
+  for (auto it =
+    std::sregex_iterator(robot_description.begin(), robot_description.end(), joint_pattern);
+    it != std::sregex_iterator();
+    ++it)
+  {
+    const std::string joint_xml = it->str();
+    const std::string parent = captureFirst(joint_xml, parent_pattern);
+    const std::string child = captureFirst(joint_xml, child_pattern);
+    if (parent != "base_link" || child.empty()) {
+      continue;
+    }
+
+    for (std::size_t i = 0; i < thrusters_.size(); ++i) {
+      if (thrusters_[i].link != child) {
+        continue;
+      }
+      const std::string xyz_text = captureFirst(joint_xml, origin_pattern);
+      const std::vector<double> xyz = parseDoubleList(xyz_text);
+      if (xyz.size() < 2U) {
+        throw std::runtime_error("Thruster joint for " + child + " must include origin xyz");
+      }
+      thrusters_[i].x = xyz[0];
+      thrusters_[i].y = xyz[1];
+      found[i] = true;
+    }
+  }
+
+  for (std::size_t i = 0; i < thrusters_.size(); ++i) {
+    if (!found[i]) {
+      throw std::runtime_error(
+              "Missing fixed base_link joint for thruster link: " + thrusters_[i].link);
+    }
+  }
+}
+
+void ThrusterDriverNode::validateThrusterConfigs() const
+{
+  if (thrusters_.size() < 3U) {
+    throw std::runtime_error("At least three thrusters are required for surge/sway/yaw allocation");
+  }
+
+  for (std::size_t i = 0; i < thrusters_.size(); ++i) {
+    for (std::size_t j = i + 1U; j < thrusters_.size(); ++j) {
+      if (thrusters_[i].id == thrusters_[j].id || thrusters_[i].link == thrusters_[j].link) {
+        throw std::runtime_error("Thruster ids and links must be unique");
+      }
+    }
+  }
+}
+
+std::vector<double> ThrusterDriverNode::computeWrench(double dt)
+{
+  const double ref_surge = clamp(latest_cmd_.linear.x, -max_linear_x_, max_linear_x_);
+  const double ref_sway = clamp(latest_cmd_.linear.y, -max_linear_y_, max_linear_y_);
+  const double ref_yaw = clamp(latest_cmd_.angular.z, -max_angular_z_, max_angular_z_);
+
+  std::vector<double> wrench = {
+    kp_surge_ * (ref_surge - meas_surge_),
+    kp_sway_ * (ref_sway - meas_sway_),
+    kp_yaw_ * (ref_yaw - meas_yaw_)};
+
+  if (dob_enable_ && have_prev_meas_) {
+    const std::vector<double> meas = {meas_surge_, meas_sway_, meas_yaw_};
+    const std::vector<double> prev = {prev_meas_surge_, prev_meas_sway_, prev_meas_yaw_};
+    const std::vector<double> inertia = {mass_, mass_, iz_};
+    const std::vector<double> damping_linear = {
+      damping_linear_surge_, damping_linear_sway_, damping_linear_yaw_};
+    const std::vector<double> damping_quadratic = {
+      damping_quadratic_surge_, damping_quadratic_sway_, damping_quadratic_yaw_};
+
+    const double alpha = dt / (std::max(1e-6, dob_filter_tau_) + dt);
+    for (std::size_t i = 0; i < 3U; ++i) {
+      const double measured_dot = (meas[i] - prev[i]) / dt;
+      const double damping =
+        -(damping_linear[i] * meas[i] + damping_quadratic[i] * std::abs(meas[i]) * meas[i]);
+      dob_hat_[i] = inertia[i] * measured_dot - prev_wrench_[i] + damping;
+      dob_lpf_[i] += alpha * (dob_hat_[i] - dob_lpf_[i]);
+      wrench[i] = clamp(wrench[i] + dob_observer_gain_ * dob_lpf_[i], -1.0, 1.0);
+    }
+  } else {
+    for (double & value : wrench) {
+      value = clamp(value, -1.0, 1.0);
+    }
+  }
+
+  prev_meas_surge_ = meas_surge_;
+  prev_meas_sway_ = meas_sway_;
+  prev_meas_yaw_ = meas_yaw_;
+  have_prev_meas_ = true;
+
+  return wrench;
+}
+
+std::vector<double> ThrusterDriverNode::allocateWrench(const std::vector<double> & wrench) const
+{
+  std::vector<ThrusterGeometry> geometry;
+  geometry.reserve(thrusters_.size());
+  for (const auto & thruster : thrusters_) {
+    geometry.push_back(
+        {
+          thruster.x, thruster.y, thruster.angle_rad, thruster.force_per_duty, thruster.reverse});
+  }
+  return njord::thruster_driver::allocateWrench(geometry, wrench, allocation_regularization_);
+}
+
+double ThrusterDriverNode::applyStaticMap(double value, const ThrusterConfig & thruster) const
+{
+  double mapped = value;
+  if (mapped >= 0.0) {
+    mapped = applyDeadzone(mapped, deadzone_pos_);
+    mapped *= thruster.forward_gain;
+  } else {
+    mapped = applyDeadzone(mapped, deadzone_neg_);
+    mapped *= thruster.reverse_gain;
+  }
+  mapped += thruster.offset;
+  return clamp(mapped, -1.0, 1.0);
+}
+
+double ThrusterDriverNode::applyDeadzone(double value, double deadzone) const
+{
+  const double dz = std::max(0.0, deadzone);
+  if (std::abs(value) <= dz) {
+    return 0.0;
+  }
+  return std::copysign(std::abs(value), value);
+}
+
+void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
+{
+  if (sim_output_enabled_ && pub_thruster_command_) {
+    std_msgs::msg::Int16MultiArray msg;
+    msg.data.reserve(commands.size());
+    for (double command : commands) {
+      const int value = static_cast<int>(std::lround(clamp(command, -1.0, 1.0) * duty_resolution_));
+      msg.data.push_back(static_cast<int16_t>(std::clamp(value, -32768, 32767)));
+    }
+    pub_thruster_command_->publish(msg);
+  }
 
   if (mros_enabled_) {
-    std_msgs::msg::UInt16 left_msg;
-    left_msg.data = left_u16;
-    std_msgs::msg::UInt16 right_msg;
-    right_msg.data = right_u16;
-
-    pub_left_mros_->publish(left_msg);
-    pub_right_mros_->publish(right_msg);
+    for (std::size_t i = 0; i < commands.size() && i < pub_mros_.size(); ++i) {
+      std_msgs::msg::UInt16 msg;
+      msg.data = toUint16Command(commands[i]);
+      pub_mros_[i]->publish(msg);
+    }
   }
 
   if (can_enabled_) {
-    can_msgs::msg::Frame left_frame;
-    left_frame.id = static_cast<std::uint32_t>(left_can_id_);
-    left_frame.is_rtr = false;
-    left_frame.is_extended = false;
-    left_frame.is_error = false;
-    left_frame.dlc = 2;
-    left_frame.data[0] = static_cast<std::uint8_t>(left_u16 & 0xFFU);
-    left_frame.data[1] = static_cast<std::uint8_t>((left_u16 >> 8) & 0xFFU);
-
-    can_msgs::msg::Frame right_frame;
-    right_frame.id = static_cast<std::uint32_t>(right_can_id_);
-    right_frame.is_rtr = false;
-    right_frame.is_extended = false;
-    right_frame.is_error = false;
-    right_frame.dlc = 2;
-    right_frame.data[0] = static_cast<std::uint8_t>(right_u16 & 0xFFU);
-    right_frame.data[1] = static_cast<std::uint8_t>((right_u16 >> 8) & 0xFFU);
-
-    pub_left_can_->publish(left_frame);
-    pub_right_can_->publish(right_frame);
+    for (std::size_t i = 0; i < commands.size() && i < pub_can_.size(); ++i) {
+      const std::uint16_t value = toUint16Command(commands[i]);
+      can_msgs::msg::Frame frame;
+      frame.id = static_cast<std::uint32_t>(thrusters_[i].can_id);
+      frame.is_rtr = false;
+      frame.is_extended = false;
+      frame.is_error = false;
+      frame.dlc = 2;
+      frame.data[0] = static_cast<std::uint8_t>(value & 0xFFU);
+      frame.data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+      pub_can_[i]->publish(frame);
+    }
   }
+
+  std_msgs::msg::Float32MultiArray force_msg;
+  force_msg.data.reserve(commands.size());
+  for (double command : commands) {
+    force_msg.data.push_back(static_cast<float>(command));
+  }
+  pub_current_force_->publish(force_msg);
+
+  std_msgs::msg::Float32MultiArray dob_msg;
+  dob_msg.data = {
+    static_cast<float>(dob_lpf_[0]),
+    static_cast<float>(dob_lpf_[1]),
+    static_cast<float>(dob_lpf_[2])};
+  pub_dob_estimate_->publish(dob_msg);
 }
 
 std::uint16_t ThrusterDriverNode::toUint16Command(double normalized) const
 {
-  const double cmd = static_cast<double>(u16_neutral_) + clampNorm(normalized) * static_cast<double>(u16_span_);
+  const double cmd =
+    static_cast<double>(u16_neutral_) +
+    clamp(normalized, -1.0, 1.0) * static_cast<double>(u16_span_);
   const int cmd_i = static_cast<int>(std::lround(cmd));
   return static_cast<std::uint16_t>(std::clamp(cmd_i, 0, 65535));
 }
 
+double ThrusterDriverNode::clamp(double value, double min_value, double max_value) const
+{
+  return std::max(min_value, std::min(value, max_value));
+}
+
+std::vector<double> ThrusterDriverNode::getDoubleVector(
+  const std::string & name,
+  const std::vector<double> & defaults)
+{
+  return this->declare_parameter<std::vector<double>>(name, defaults);
+}
+
+std::vector<std::string> ThrusterDriverNode::getStringVector(
+  const std::string & name,
+  const std::vector<std::string> & defaults)
+{
+  return this->declare_parameter<std::vector<std::string>>(name, defaults);
+}
+
+std::vector<bool> ThrusterDriverNode::getBoolVector(
+  const std::string & name,
+  const std::vector<bool> & defaults)
+{
+  return this->declare_parameter<std::vector<bool>>(name, defaults);
+}
+
+std::vector<int64_t> ThrusterDriverNode::getIntVector(
+  const std::string & name,
+  const std::vector<int64_t> & defaults)
+{
+  return this->declare_parameter<std::vector<int64_t>>(name, defaults);
+}
+
 std::string ThrusterDriverNode::toLower(std::string value)
 {
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
+  std::transform(
+    value.begin(), value.end(), value.begin(), [](unsigned char c) {
+      return static_cast<char>(std::tolower(c));
+    });
   return value;
 }
 
