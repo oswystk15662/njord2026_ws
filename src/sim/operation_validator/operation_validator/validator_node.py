@@ -5,6 +5,7 @@ from pathlib import Path
 import rclpy
 from nav_msgs.msg import Odometry, Path as PathMsg
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool
 
 
@@ -36,7 +37,7 @@ class OperationValidatorNode(Node):
         summary_name = self.get_parameter("summary_csv").get_parameter_value().string_value
         ts_name = self.get_parameter("timeseries_csv").get_parameter_value().string_value
 
-        self.output_dir = Path(out_dir)
+        self.output_dir = Path(out_dir).expanduser()
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.summary_csv = self.output_dir / summary_name
         self.timeseries_csv = self.output_dir / ts_name
@@ -49,10 +50,11 @@ class OperationValidatorNode(Node):
         self.recovery_durations = []
         self.max_cte = 0.0
 
-        self.sub_path = self.create_subscription(PathMsg, "/plan", self.on_path, 10)
+        transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.sub_path = self.create_subscription(PathMsg, "/plan", self.on_path, transient_qos)
         self.sub_odom = self.create_subscription(Odometry, "/odom", self.on_odom, 30)
-        self.sub_start = self.create_subscription(Bool, "/sim/start", self.on_start, 10)
-        self.sub_goal = self.create_subscription(Bool, "/sim/goal_reached", self.on_goal, 10)
+        self.sub_start = self.create_subscription(Bool, "/sim/start", self.on_start, transient_qos)
+        self.sub_goal = self.create_subscription(Bool, "/sim/goal_reached", self.on_goal, transient_qos)
 
         self.get_logger().info(f"Operation validator started. Output dir: {self.output_dir}")
 
