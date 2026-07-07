@@ -25,4 +25,13 @@ Livox Mid360 動作確認手順
 - ケーブル未接続 + 静的IP未設定の状態で起動を試したところ、SDKが `192.168.1.5` へのUDPソケットbindに失敗し
   (`bind failed` / `Failed to init livox lidar sdk.`)、`/livox/lidar` 等のtopicは生成されなかった
   (`ros2 topic list` は `/parameter_events`, `/rosout` のみ)。
-- sudoはパスワード入力が必須のため、`set_static_ip.sh` の実行と実機接続は人手で行う必要がある
+- sudoはパスワード入力が必須のため、`set_static_ip.sh` / `set_dhcp.sh` の実行は人手で行う必要がある
+  （このシェル環境は非対話的で `sudo -n true` が失敗するため、パスワードを渡せない）
+- Mid360 (`192.168.1.151`) をケーブル接続し、host側を `192.168.1.5/24` に設定した状態で
+  `ros2 launch livox_ros_driver2 msg_MID360_launch.py` を実行したところ、
+  `/livox/lidar` (約10Hz, point_num=19968/msg), `/livox/imu` (約200Hz) とも正常にデータ配信を確認できた
+- スクリプトは `enP8p1s0` に既にバインドされているNetworkManager接続プロファイル
+  （このマシンではデフォルトの `Wired connection 1`）を再利用する。新規プロファイルを作らないよう、
+  `set_static_ip.sh` / `set_dhcp.sh` はデバイスにひもづく既存の connection 名を自動検出する
+- 検証中に前回実行分のdriverプロセスが複数残留・干渉した。再実行前に
+  `pkill -f livox_ros_driver2_node` などで確実にクリーンアップすること

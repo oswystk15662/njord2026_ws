@@ -5,10 +5,16 @@
 set -euo pipefail
 
 IFACE="enP8p1s0"
-CON_NAME="livox-mid360"
 STATIC_IP="192.168.1.5/24"
+FALLBACK_CON_NAME="livox-mid360"
 
-if ! nmcli -t -f NAME connection show | grep -qx "$CON_NAME"; then
+# Reuse whichever connection profile is already bound to the interface
+# (e.g. the default "Wired connection 1"), so we don't fight NetworkManager
+# with a second profile for the same device.
+CON_NAME=$(nmcli -t -f NAME,DEVICE connection show | awk -F: -v d="$IFACE" '$2==d{print $1; exit}')
+
+if [ -z "$CON_NAME" ]; then
+    CON_NAME="$FALLBACK_CON_NAME"
     sudo nmcli connection add type ethernet ifname "$IFACE" con-name "$CON_NAME" \
         ipv4.method manual ipv4.addresses "$STATIC_IP"
 else
@@ -17,5 +23,5 @@ fi
 
 sudo nmcli connection up "$CON_NAME"
 
-echo "== $IFACE now: =="
+echo "== $IFACE now (connection: $CON_NAME): =="
 ip -4 addr show "$IFACE"
