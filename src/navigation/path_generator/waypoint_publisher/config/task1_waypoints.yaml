@@ -30,6 +30,18 @@ task1_config:
       dms: '35°40''02.727"N 139°47''36.912"E'
       name: "GPS 2 - Survey Finish"
 
+    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
+    # Reference points only; no TaskType/route exists yet for task1-2.
+    # Diagonal A<->C of the same pool rectangle, shared with task2-1 (GPS5/GPS6).
+    - id: 3
+      latitude: 35.6675575459
+      longitude: 139.7933614800
+      name: "GPS 3 - Task1.2 diagonal start (corner C)"
+    - id: 4
+      latitude: 35.6674742121
+      longitude: 139.7938614790
+      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
+
   waypoints:
     - id: 1
       x: 0.0000
