@@ -2,9 +2,8 @@
 
 ## Current branch
 
-- Worktree: `_worktrees/spatial-v8-gnss-tight-coupling`
-- Branch: `codex/spatial-v8-gnss-tight-coupling`
-- Base integration: cherry-picked `90ff400 feat: integrate advanced navigation spatial ins`
+- Branch: `40-advanced-navigation-spatial-ins` (PR #41)
+- Base integration: `90ff400 feat: integrate advanced navigation spatial ins`
 
 ## Hardware connection verified
 
@@ -81,6 +80,32 @@ Not yet healthy:
 Conclusion: ROS can communicate with Spatial v8.0 and receive packet 20/28
 topics. GNSS tight-coupled navigation is not confirmed yet because GNSS fix and
 navigation filter initialization were not healthy during this indoor/bench test.
+
+## Test result on 2026-07-07
+
+Re-ran `adnav_driver` standalone (indoors, no sky view) to reconfirm ROS
+communication ahead of PR #41. Result matches 2026-07-06: hardware/driver/topic
+plumbing is confirmed working, GNSS fix is not (as expected indoors).
+
+Topics publishing at ~20 Hz (matches `packet_timer_period`/`packet_request`):
+
+- `/adnav_driver/imu` (orientation + angular velocity; `linear_acceleration` is
+  zero here because packet 20 does not carry raw accel)
+- `/adnav_driver/imu_raw` (full IMU incl. `linear_acceleration`, e.g.
+  `z: -9.37 m/s^2`)
+- `/adnav_driver/nav_sat_fix`, `/adnav_driver/filter_status`,
+  `/adnav_driver/system_status`
+
+`nav_sat_fix.status.status` is `-1` (`STATUS_NO_FIX`); lat/lon are the
+Advanced Navigation default placeholder coordinates, not a real fix.
+`filter_status` still reports `Navigation Filter NOT Initialised` and
+`Internal GNSS NOT Enabled`, with `Orientation Filter Initialised` and
+`Dual Antenna Heading Active` already up. `system_status` reports no faults
+(no `GNSS FAILURE`, no antenna fault, no serial overflow).
+
+Conclusion unchanged: GNSS/INS data is retrievable over ROS 2 today without
+RTK; a real position fix still requires an outdoor test with sky view per
+the checklist below.
 
 ## Next checks
 
