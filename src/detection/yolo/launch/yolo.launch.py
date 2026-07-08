@@ -5,47 +5,35 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
-def generate_launch_description():
-    if not os.environ.get('VIRTUAL_ENV'):
-        raise RuntimeError(
-            'YOLO launch requires the Jetson venv. Activate .venv and source export_python_path.sh '
-            'before running ros2 launch.'
-        )
 
+def generate_launch_description():
     pkg_name = 'yolo'
     pkg_share = get_package_share_directory(pkg_name)
 
-    # デフォルトのモデルパス
-    default_model_path = os.path.join(pkg_share, 'config', 'best.pt')
+    default_config_path = os.path.join(pkg_share, 'config', 'yolo_params.yaml')
 
-    # Launch引数の宣言
-    model_path_arg = DeclareLaunchArgument(
-        'model_path',
-        default_value=default_model_path,
-        description='Absolute path to the YOLO model file (.pt)'
-    )
-    
-    device_arg = DeclareLaunchArgument(
-        'device',
-        default_value='cpu',
-        description='Computation device (cpu or cuda:0)'
+    # 起動時に読み込む YAML。
+    # device を "cuda:0" にすれば GPU、"cpu" にすれば CPU で動く。
+    # model_path、camera_topic、ROI、debug_image の publish 周期も YAML 側で調整する。
+    config_file_arg = DeclareLaunchArgument(
+        'config_file',
+        default_value=default_config_path,
+        description='Path to YOLO parameter YAML'
     )
 
-    # ノードの定義
+    # yolo_node だけを使う。
+    # GPU/CPU の切り替えは executable を分けず、YAML の device で行う。
     yolo_node = Node(
         package=pkg_name,
         executable='yolo_node',
         name='yolo_detector',
         output='screen',
-        parameters=[{
-            'model_path': LaunchConfiguration('model_path'),
-            'device': LaunchConfiguration('device'),
-            'camera_topic': '/camera/image_raw'
-        }]
+        parameters=[
+            LaunchConfiguration('config_file'),
+        ]
     )
 
     return LaunchDescription([
-        model_path_arg,
-        device_arg,
-        yolo_node
+        config_file_arg,
+        yolo_node,
     ])

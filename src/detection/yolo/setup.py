@@ -4,10 +4,21 @@ from glob import glob
 
 package_name = 'yolo'
 
+
+def package_files(directory):
+    paths = []
+    for path, _, filenames in os.walk(directory):
+        for filename in filenames:
+            paths.append(os.path.relpath(os.path.join(path, filename), package_name))
+    return paths
+
 setup(
     name=package_name,
     version='0.0.0',
     packages=find_packages(exclude=['test']),
+    package_data={
+        package_name: package_files(os.path.join(package_name, 'yolov10-main')),
+    },
     data_files=[
         ('share/ament_index/resource_index/packages',
             ['resource/' + package_name]),
@@ -29,7 +40,6 @@ setup(
     entry_points={
         'console_scripts': [
             'yolo_node = yolo.main:main',
-            'yolo_cuda_node = yolo.main:cuda_main',
         ],
     },
 )
