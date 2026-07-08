@@ -1,45 +1,75 @@
 # Task 3: Docking Scenarios
-# Waypoint configuration for NJORD competition Task 3
-# Supports both normal docking (3.1) and parallel docking (3.2)
+# test07089 pool experiment (issues #48/#49): single physical dock, so task3_1
+# and task3_2 share the same GPS points (GPS7 == GPS9, GPS8 == GPS10).
 #
 # Full competition sequence (task3_1 → task3_2):
 #   gps7(start) → gps8(gate) → berth1(normal dock) → gps8(exit) → gps9(gate2) → berth2(parallel dock) → gps10(finish)
 #
-# Field geometry (point-symmetric about origin):
-#   Normal dock (3.1):   x=14~16, y=±2.0  (boat enters from west, heading=0)
-#   Parallel dock (3.2): x=-14~-16, y=±2.0 (boat enters from east, heading=π)
-#   Gate buoys 3.1:      x≈12, y=±4  (red/green)
-#   Gate buoys 3.2:      x≈-12, y=±4  (red/green)
+# Field geometry (single-dock centerline layout, pool corners in task1_waypoints.yaml):
+#   start   = GPS7/GPS9 = short-edge B-C midpoint
+#   dock    = GPS8/GPS10 = near short-edge A-D midpoint (2 m inset from the far wall);
+#             berth1 (normal) and berth2 (parallel) are the same physical spot
+#   gate    = on the start->dock centerline, 32 m from start (red/green buoy pass)
+#   heading = -0.7889 rad (constant, same bearing as task1's long-edge leg)
+#
+# Note: the competition's "exit forward past the dock to finish" does not fit in
+# this pool (dock sits 2 m from the wall); GPS10/finish below is a nominal point
+# inside the pool for the state-machine dry run, and may need on-site adjustment.
+# task3_2 (single dock, 4 waypoints) is the primary on-water config; task3_1
+# (7 waypoints, docks twice at the same physical berth) exercises the full
+# state machine but is not the primary water test.
 
 task3_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   scenario: "normal_docking_full"
 
+  origin:
+    latitude: 35.6676408786
+    longitude: 139.7934587022
+    name: "GPS 7/9 - Start (short-edge B-C midpoint)"
+  gps_points:
+    - id: 7
+      latitude: 35.6676408786
+      longitude: 139.7934587022
+      name: "GPS 7 - Start (BC midpoint)"
+    - id: 8
+      latitude: 35.6673908794
+      longitude: 139.7937642567
+      name: "GPS 8 - Dock (near AD midpoint)"
+    - id: 9
+      latitude: 35.6676408786
+      longitude: 139.7934587022
+      name: "GPS 9 - Start (BC midpoint, == GPS7)"
+    - id: 10
+      latitude: 35.6673908794
+      longitude: 139.7937642567
+      name: "GPS 10 - Dock (near AD midpoint, == GPS8)"
+
   waypoints:
-    # GPS 7: start (origin)
+    # GPS 7: start (origin, short-edge B-C midpoint)
     - id: 7
       x: 0.0
       y: 0.0
-      yaw: 0.0
+      yaw: -0.7889
       type: "start"
       name: "GPS 7 - Start"
       tolerance_m: 2.0
 
-    # GPS 8: gate approach to normal dock field, come from south heading north
+    # GPS 8: gate on the start->dock centerline (red/green buoy pass)
     - id: 8
-      x: 13.0
-      y: 11.0
-      yaw: 1.5708        # heading north (π/2)
+      x: 22.547
+      y: -22.707
+      yaw: -0.7889
       type: "gate"
       name: "GPS 8 - Normal Dock Gate"
       tolerance_m: 1.5
 
-    # Berth 1: normal docking (center berth, heading east into dock)
+    # Berth 1: normal docking (near short-edge A-D midpoint, 2 m inset)
     - id: "berth1"
-      x: 15.0
-      y: 1.065
-      yaw: 0.0           # heading east (into normal dock)
+      x: 26.226
+      y: -26.412
+      yaw: -0.7889       # heading into dock, same as approach bearing
       type: "dock"
       name: "Berth 1 - Normal Dock"
       tolerance_m: 0.8
@@ -47,37 +77,37 @@ task3_1_config:
 
     # GPS 8 again: undock and return to gate
     - id: "8_exit"
-      x: 13.0
-      y: 11.0
-      yaw: -1.5708       # heading south (back out)
+      x: 22.547
+      y: -22.707
+      yaw: 2.3527        # heading back out
       type: "undock_exit"
       name: "GPS 8 - Exit Normal Dock"
       tolerance_m: 1.5
 
-    # GPS 9: gate approach to parallel dock field (point-symmetric side)
+    # GPS 9: re-approach gate (same physical gate, one dock)
     - id: 9
-      x: -13.0
-      y: 11.0
-      yaw: -1.5708       # heading south toward parallel dock gate
+      x: 22.547
+      y: -22.707
+      yaw: -0.7889
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
 
-    # Berth 2: parallel docking (heading west into parallel dock)
+    # Berth 2: parallel docking (same physical berth as berth1)
     - id: "berth2"
-      x: -15.0
-      y: 0.0
-      yaw: 3.14159       # heading west (into parallel dock, π)
+      x: 26.226
+      y: -26.412
+      yaw: -0.7889
       type: "dock"
       name: "Berth 2 - Parallel Dock"
       tolerance_m: 0.8
       dock_type: "parallel"
 
-    # GPS 10: finish point (exit parallel dock, go south)
+    # GPS 10: nominal finish point inside the pool (see header note)
     - id: 10
-      x: -13.0
-      y: -11.0
-      yaw: -1.5708       # heading south
+      x: 27.380
+      y: -19.060
+      yaw: 1.4159
       type: "goal"
       name: "GPS 10 - Finish"
       tolerance_m: 2.0
@@ -92,46 +122,60 @@ task3_1_config:
     goal_tolerance: 1.0
 
 
-# Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
+# Task 3.2 only config (standalone single-dock run, robot starts from rest)
 task3_2_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   scenario: "parallel_docking_standalone"
 
+  origin:
+    latitude: 35.6676408786
+    longitude: 139.7934587022
+    name: "GPS 9 - Start (short-edge B-C midpoint, == GPS7)"
+  gps_points:
+    - id: 9
+      latitude: 35.6676408786
+      longitude: 139.7934587022
+      name: "GPS 9 - Start (BC midpoint, == GPS7)"
+    - id: 10
+      latitude: 35.6673908794
+      longitude: 139.7937642567
+      name: "GPS 10 - Dock (near AD midpoint, == GPS8)"
+
   waypoints:
-    # Start at origin
+    # Start at origin (short-edge B-C midpoint)
     - id: 9
       x: 0.0
       y: 0.0
-      yaw: 3.14159       # heading west
+      yaw: -0.7889
       type: "start"
       name: "GPS 9 - Start (standalone)"
       tolerance_m: 2.0
 
-    # Gate for parallel dock
+    # Gate on the start->dock centerline
     - id: "9_gate"
-      x: -13.0
-      y: 11.0
-      yaw: -1.5708
+      x: 22.547
+      y: -22.707
+      yaw: -0.7889
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
 
-    # Berth 2: parallel docking
+    # Berth 2: parallel docking (near short-edge A-D midpoint, 2 m inset)
     - id: "berth2"
-      x: -15.0
-      y: 0.0
-      yaw: 3.14159
+      x: 26.226
+      y: -26.412
+      yaw: -0.7889
       type: "dock"
       name: "Berth 2 - Parallel Dock"
       tolerance_m: 0.8
       dock_type: "parallel"
 
-    # GPS 10: finish
+    # GPS 10: nominal finish point inside the pool (see header note)
     - id: 10
-      x: -13.0
-      y: -11.0
-      yaw: -1.5708
+      x: 27.380
+      y: -19.060
+      yaw: 1.4159
       type: "goal"
       name: "GPS 10 - Finish"
       tolerance_m: 2.0
