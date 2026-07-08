@@ -164,6 +164,34 @@ Foxy + ZED 既知の注意点として、`image_transport` は `v3.0.0` 系を�
 
 
 # aptで入れるパッケージ
+## Jetson Orin Nano Super + ROS Jazzy の OpenCV 注意点
+
+Jetson Orin Nano Super 上で ROS Jazzy を使う場合、OpenCV の apt パッケージが NVIDIA Jetson repo 版と Ubuntu noble 版で混在すると、`cv_bridge` の `find_package` 時に以下のような CMake エラーが出ることがあります。
+
+```shell
+The imported target "opencv_core" references the file
+  "/usr/lib/libopencv_core.so.4.8.0"
+but this file does not exist.
+```
+
+確認時点では、`libopencv-dev` だけが NVIDIA Jetson repo の `4.8.0-3-g6ef37b4` で、実体ライブラリは Ubuntu noble の `libopencv-core406t64 4.6.0+dfsg-13.1ubuntu1` になっていました。この状態では `/usr/lib/cmake/opencv4/OpenCVModules-release.cmake` が OpenCV 4.8 の `.so` を参照しますが、実体が存在しないため `camera_lidar_fusion` などのビルドが失敗します。
+
+当面は ROS Jazzy / Ubuntu noble 側との整合を優先し、OpenCV を Ubuntu 4.6 系に揃えてください。
+
+```shell
+sudo apt install -s libopencv-dev=4.6.0+dfsg-13.1ubuntu1 libopencv-core-dev=4.6.0+dfsg-13.1ubuntu1
+
+# simulation の内容に問題がなければ実行
+sudo apt install libopencv-dev=4.6.0+dfsg-13.1ubuntu1 libopencv-core-dev=4.6.0+dfsg-13.1ubuntu1
+sudo apt-mark hold libopencv-dev libopencv-core-dev
+
+cd ~/njord2026_ws
+rm -rf build install log
+colcon build
+```
+
+NVIDIA 版 OpenCV 4.8 に揃えるのは、`cv::cuda` など OpenCV の CUDA 機能を明示的に使う必要があり、runtime と dev パッケージを同じ系列で揃えられることを確認してからにしてください。通常の `cv_bridge`、`cv::Mat`、PCL/カメラ/LiDAR fusion のビルド安定性は Ubuntu 4.6 系に揃える方を優先します。
+
 for wit motion
 * ros-${ROS_DISTRO}-sophus
 * ros-${ROS_DISTRO}-tf2-geometry-msgs
@@ -176,8 +204,8 @@ for usb camera
 * gstreamer系の諸々(mjpg経由は動くけどgstreamer経由はうまく動かない可能性が高いが、依存の中に入れてしまってるので入れてください。すみません)
 
 for zed 2i
-* cuda 12.1(もしくはdockerでやる)
-* zed sdk
+* CUDA 12.x/13.x に対応する Stereolabs ZED SDK（colcon build 時に CMake が検出します）
+* CUDA 13.1 環境では CUDA 13.x 対応の ZED SDK を入れてから rebuild してください
 * ROS2 Foxyなら [setup_foxy_image_transport.sh](setup_foxy_image_transport.sh) で image_transport v3 系を source から固定する
 
 for localization
@@ -334,3 +362,45 @@ def callback(self, detection):
 4. **ルール適用:** 「仮想壁生成ノード」を作り、方位標識の特定方向をNav2上で通行止めにする。
 
 まずは **ステップ1と2**（GPSでの自律航行）を最優先で完了させることをお勧めします。これだけでTask 1の半分はクリアできます。
+
+## UM982 GNSS live-check notes
+
+UM982 driver live-check work is in branch `codex/um982-live-check`.
+The likely USB serial device observed on the test machine was `/dev/ttyUSB0`, also available as
+`/dev/serial/by-id/usb-FTDI_USB_HS_SERIAL_CONVERTER_FTRTKA7O-if00-port0`.
+
+At test time `/dev/ttyUSB0` produced data at 115200 bps, but it was a binary stream rather than
+NMEA/ASCII `$GNGGA` or `#UNIHEADINGA`. The driver therefore applies volatile startup configuration
+each time it opens the receiver and intentionally does not send `SAVECONFIG`:
+
+```text
+UNLOG
+MODE ROVER
+GPGGA <fix_period>
+UNIHEADINGA <heading_period>
+GPTHS <heading_period>
+```
+
+`$GNGGA` and `$GPGGA` are both accepted as fix input. `#UNIHEADINGA` remains the primary dual-antenna
+heading source, with `$GNTHS`/`$GPTHS` accepted as a fallback heading sentence.
+
+### 2026-07-07 update: binary-only heading, revert-on-shutdown
+
+Live-checked against the actual UM982 (this time over a CH340 USB-serial adapter; the kernel
+lacked a `ch341` driver, which was built out-of-tree from upstream `drivers/usb/serial/ch341.c`
+and installed). Confirmed end-to-end at 20 Hz through the ROS driver:
+
+- `$GNGGA`/`$GPGGA` (position fix) — ASCII NMEA only. The receiver rejects `GPGGAB`
+  (`PARSING FAILED NO MATCHING FUNC`), so there is no binary counterpart; GPGGA stays ASCII.
+- `UNIHEADING` (dual-antenna heading) — the receiver accepts **both** `UNIHEADINGA` (ASCII) and
+  `UNIHEADINGB` (binary). Per policy, the driver now requests `UNIHEADINGB` only and parses the
+  Unicore binary frame directly (sync `0xAA 0x44 0xB5`, 24-byte header, message ID 972, CRC-32 per
+  the Unicore Reference Commands Manual). `GPTHS` has no binary counterpart (`GPTHSB` is also
+  rejected) and remains as the ASCII fallback heading sentence.
+- Serial reads are no longer line-delimited only: since binary frames can contain `\n` bytes,
+  `um982_driver_node` now reads raw chunks and scans the buffer for either an ASCII `$`/`#` line or
+  a binary sync+length+CRC frame.
+- On shutdown (SIGINT or the `shutdown` control command), the driver now sends `UNLOG` to revert
+  the volatile logging configuration it applied at startup, so the receiver doesn't keep streaming
+  our custom config (previously the cause of a stray binary stream from an earlier, un-reverted
+  session). Verified live: after node shutdown, the serial port goes silent.
