@@ -15,13 +15,15 @@ thruster_driver_node:
       feedback_timeout_sec: 0.5
       stop_on_feedback_timeout: true
       p:
-        surge: 0.8
-        sway: 0.8
+        surge: 28.29
+        sway: 28.29
         yaw: 12.17
-      # Yaw wrench is clamped to +/-max_yaw_wrench (instead of +/-1 like
-      # surge/sway) so button-driven yaw commands can reach a usable torque;
-      # tuned so manual_control.launch.py's default yaw button press
-      # (scale.angular_z=0.2) yields ~2N per thruster. See simple_manual/README.md.
+      # Wrench is clamped to +/-max_{surge,sway,yaw}_wrench instead of +/-1 so
+      # stick/button-driven manual commands can reach a usable thrust; tuned so
+      # manual_control.launch.py's default full-scale stick/button input
+      # yields ~2N per thruster. See simple_manual/README.md.
+      max_surge_wrench: 6.0
+      max_sway_wrench: 6.0
       max_yaw_wrench: 3.0
       dob:
         enable: false
