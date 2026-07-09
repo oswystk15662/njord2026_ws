@@ -61,6 +61,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   kp_surge_ = this->declare_parameter<double>("control.p.surge", 1.0);
   kp_sway_ = this->declare_parameter<double>("control.p.sway", 1.0);
   kp_yaw_ = this->declare_parameter<double>("control.p.yaw", 1.0);
+  max_yaw_wrench_ = std::max(
+    1.0, this->declare_parameter<double>("control.max_yaw_wrench", 1.0));
 
   dob_enable_ = this->declare_parameter<bool>("control.dob.enable", false);
   dob_observer_gain_ = this->declare_parameter<double>("control.dob.observer_gain", 1.0);
@@ -405,9 +407,9 @@ std::vector<double> ThrusterDriverNode::computeWrench(double dt)
       wrench[i] = clamp(wrench[i] + dob_observer_gain_ * dob_lpf_[i], -1.0, 1.0);
     }
   } else {
-    for (double & value : wrench) {
-      value = clamp(value, -1.0, 1.0);
-    }
+    wrench[0] = clamp(wrench[0], -1.0, 1.0);
+    wrench[1] = clamp(wrench[1], -1.0, 1.0);
+    wrench[2] = clamp(wrench[2], -max_yaw_wrench_, max_yaw_wrench_);
   }
 
   prev_meas_surge_ = meas_surge_;

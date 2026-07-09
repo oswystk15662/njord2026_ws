@@ -102,6 +102,7 @@ private:
   double kp_surge_{1.0};
   double kp_sway_{1.0};
   double kp_yaw_{1.0};
+  double max_yaw_wrench_{1.0};
 
   bool dob_enable_{false};
   double dob_observer_gain_{1.0};

@@ -22,6 +22,7 @@ def generate_launch_description():
 
     config_file = LaunchConfiguration("config_file")
     robot_description_file = LaunchConfiguration("robot_description_file")
+    stop_on_feedback_timeout = LaunchConfiguration("stop_on_feedback_timeout")
 
     return LaunchDescription(
         [
@@ -35,6 +36,13 @@ def generate_launch_description():
                 default_value=default_robot_description,
                 description="Path to robot URDF containing fixed thruster poses",
             ),
+            DeclareLaunchArgument(
+                "stop_on_feedback_timeout",
+                default_value="true",
+                description="Force zero thruster output when /odometry/filtered/local "
+                "is missing/stale. Set false for manual/bench testing without "
+                "localization running.",
+            ),
             Node(
                 package="thruster_driver",
                 executable="thruster_driver_node",
@@ -46,6 +54,10 @@ def generate_launch_description():
                         "robot_description": ParameterValue(
                             Command(["cat ", robot_description_file]),
                             value_type=str,
+                        ),
+                        "control.stop_on_feedback_timeout": ParameterValue(
+                            stop_on_feedback_timeout,
+                            value_type=bool,
                         ),
                     },
                 ],

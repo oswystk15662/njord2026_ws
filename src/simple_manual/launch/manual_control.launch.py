@@ -20,7 +20,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument('serial_port', default_value='/dev/ttyUSB0'),
+        DeclareLaunchArgument('serial_port', default_value='/dev/ttyUSB1'),
         DeclareLaunchArgument('baud', default_value='115200'),
         DeclareLaunchArgument('launch_gui', default_value='true'),
         Node(
@@ -38,6 +38,7 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(thruster_launch),
+            launch_arguments={'stop_on_feedback_timeout': 'false'}.items(),
         ),
         Node(
             package='micon_driver_fd',
