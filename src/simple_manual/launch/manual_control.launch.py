@@ -28,6 +28,7 @@ def generate_launch_description():
             executable='joy_node',
             name='joy_node',
             output='screen',
+            additional_env={'SDL_JOYSTICK_DEVICE': '/dev/input/js0'},
         ),
         Node(
             package='simple_manual',
@@ -45,11 +46,11 @@ def generate_launch_description():
             parameters=[{'serial_port': serial_port, 'baud': baud}],
             output='screen',
         ),
-        Node(
-            package='rqt_reconfigure',
-            executable='rqt_reconfigure',
-            name='manual_control_parameters',
-            condition=IfCondition(launch_gui),
-            output='screen',
-        ),
+        #Node(
+        #    package='rqt_reconfigure',
+        #    executable='rqt_reconfigure',
+        #    name='manual_control_parameters',
+        #    condition=IfCondition(launch_gui),
+        #    output='screen',
+        #),
     ])

@@ -75,7 +75,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Int16MultiArray>::SharedPtr sub_duty_array_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
 
-  rclcpp::Publisher<std_msgs::msg::Int16MultiArray>::SharedPtr pub_thruster_command_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_thruster_command_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_force_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_dob_estimate_;
   rclcpp::TimerBase::SharedPtr control_timer_;

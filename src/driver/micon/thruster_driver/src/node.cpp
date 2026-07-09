@@ -134,7 +134,7 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   if (sim_output_enabled_) {
     pub_thruster_command_ =
-      this->create_publisher<std_msgs::msg::Int16MultiArray>(sim_command_topic, 10);
+      this->create_publisher<std_msgs::msg::Float32MultiArray>(sim_command_topic, 10);
   }
 
   if (mros_enabled_) {
@@ -456,11 +456,11 @@ double ThrusterDriverNode::applyDeadzone(double value, double deadzone) const
 void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
 {
   if (sim_output_enabled_ && pub_thruster_command_) {
-    std_msgs::msg::Int16MultiArray msg;
+    std_msgs::msg::Float32MultiArray msg;
     msg.data.reserve(commands.size());
-    for (double command : commands) {
-      const int value = static_cast<int>(std::lround(clamp(command, -1.0, 1.0) * duty_resolution_));
-      msg.data.push_back(static_cast<int16_t>(std::clamp(value, -32768, 32767)));
+    for (std::size_t i = 0; i < commands.size(); ++i) {
+      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].force_per_duty;
+      msg.data.push_back(static_cast<float>(newtons));
     }
     pub_thruster_command_->publish(msg);
   }

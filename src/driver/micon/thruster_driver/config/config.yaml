@@ -57,7 +57,7 @@ thruster_driver_node:
       links: ["thruster_FR", "thruster_FL", "thruster_RR", "thruster_RL"]
       angle_rad: [0.785398, -0.785398, 2.356194, -2.356194]
       reverse: [false, false, false, false]
-      force_per_duty: [1.0, 1.0, 1.0, 1.0]
+      force_per_duty: [50.0, 50.0, 50.0, 50.0]
       can_ids: [769, 770, 771, 772]
 
     # ESP32 expects one UInt16 command per ESC.
