@@ -114,13 +114,12 @@ def generate_launch_description():
                 "zero_altitude": True,
                 "broadcast_utm_transform": True,
                 "publish_filtered_gps": True,
-                "use_odometry_yaw": False,
+                "use_odometry_yaw": True,
                 "wait_for_datum": False,
             }
         ],
         remappings=[
-            ("imu", "/wit/imu"),
-            ("gps/fix", "/gps/fix"),
+            ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
             ("odometry/filtered", "odometry/filtered/local"),
         ],
     )

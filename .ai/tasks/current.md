@@ -195,3 +195,80 @@ sim で成立しているハイレイヤ(cmd_vel / task / nav2 / localization)�
 - 2026-07-12 夕: **ZED完全復旧・完了**。(1)ユーザのL4T reinstall+reboot でGPU(ACR)復旧、(2)calibファイル `SN34432991.conf` を `/usr/local/zed/settings/` に配置(URL param は `SN=`)、(3)メインClaudeが `ros2 launch zed2i_driver zed2i.launch.py` で left/right/depth/points 実配信(~6-8Hz)確認。詳細=escalation更新。
 - Qiita備忘録: sonnet-coder が `qiita_draft.md` 作成(GPU復旧手順)。司令塔が内容検証済(実測値のみ・推測明記)。
 - **最終ステータス: back_cam・ZED ともに実機配信確認済み=完了。** 任意改善: ZED depth NEURAL化 / nvpmodel MAXN で fps 向上。
+
+---
+
+# サブタスク3 — Livox Mid-360 / Mid-360s 両対応
+
+最終更新: 2026-07-12 / 記録者: メインClaude(司令塔)
+ステータス: **設計フェーズ（実装前・Sol合意待ち）**
+
+## 要求
+Livox Mid-360 と Mid-360s の両方を robot bringup で使用可能にする。
+
+## 前提の想定（要確認）
+- 「両対応」= 搭載された1台を機種選択して使う（selectable）。同時2台運用は想定外。
+  根拠: 単一ASVでLivoxは1台構成。
+
+## 現状把握（コード調査）
+- SDK (Livox-SDK2) は両機種を既にサポート。
+  - device_type: `kLivoxLidarTypeMid360 = 9`, `kLivoxLidarTypeMid360s = 35` (include/livox_lidar_def.h)
+  - 機種判定は driver config の **トップレベルJSONキー**。`parse_cfg_file.cpp` の
+    `dev_type_map = {"HAP":.., "MID360":9, "Mid360s":35}`。
+  - ポートは両機種同一 (comm/define.h の kMid360* と kMid360s* 同値)。
+- ROS driver config `config/MID360_config.json`:
+  - `lidar_summary_info.lidar_type: 8`(=kLivoxLidarType, driverのSDK系フラグ, 機種非依存)
+  - net-infoブロックキー `"MID360"`
+  - `lidar_configs` 配列(extrinsic, 機種非依存)
+- Launch `launch_ROS2/msg_MID360_launch.py` は configパスをモジュール変数でハードコード, launch引数を受けない。
+- `real_bringup.launch.py` が `enable_mid360` 条件で include。CMakeは config/launch_ROS2 を丸ごと INSTALL_TO_SHARE。
+
+## 初期設計案（最小・加算的）
+1. `config/MID360S_config.json` 新規: `MID360_config.json` のコピーで
+   net-infoブロックキー `"MID360"` → `"Mid360s"` のみ変更(lidar_type=8, lidar_configs, ports, IP据え置き)。
+2. 機種選択を launch 引数化。案: (A)vendored launch複製 / (B)msg_MID360_launch.pyを引数化 /
+   (C)robot側に lidar.launch.py 新設しconfig切替(vendored無改変)。暫定推奨=(C)。
+3. `real_bringup.launch.py` に `lidar_model`(mid360既定|mid360s)引数を追加しconfig選択。
+
+## リスク／未解決
+- Mid-360s 実機デフォルトIPが .151 と異なる可能性 → config可変で吸収。
+- 実機テスト不可 → launch/JSON妥当性のスモークテストで代替。
+- frame_id/topic 両機種 `livox_frame` 共有(selectable前提で競合なし)。
+
+## 確定設計（案C修正版・レビュー2で合意）
+- config を submodule でなく **robot 側** `src/robot/config/livox/{MID360_config.json, MID360S_config.json}` に配置。
+  MID360S は net-info ブロックキー "MID360"→"Mid360s" のみ変更。lidar_type=8/lidar_configs/ports/IP 据え置き。
+- `src/robot/launch/lidar.launch.py` 新設: vendored `livox_ros_driver2_node` 直接起動。
+  `lidar_model`(mid360既定|mid360s, choices検証) で user_config_path 切替。9 param 完全転記。
+- `real_bringup.launch.py`: `lidar_model` 引数追加、include を lidar.launch.py へ差替、enable_mid360 コメント。
+- `robot/package.xml` に exec_depend livox_ros_driver2 追加。
+- `robot/test/test_livox_config.py`(pytest) で config 妥当性を担保。
+- 詳細: docs/ai-discussion.md, .ai/reviews/2026-07-12-review1/2-mid360s-design.md
+
+## 実装担当の選択
+- 選択: **sonnet-coder**（Codex 上限のため。native 書込・文脈保持。robot 単一pkg内の加算的変更＝中規模）。
+- レビュー: 実装後に Opus（司令塔）で独立検証。Codex 復帰後に Sol 追認。
+
+## 進行ログ
+- 2026-07-12: コード調査・初期案作成(メインClaude)。
+- 2026-07-12: Codex 利用上限(~20:48復帰) → ユーザ判断で Claude系暫定レビュー+Sol後追認に切替(.ai/escalations/)。
+- 2026-07-12: 設計レビュー R1(fable代役)→H1(submodule)/H2(param漏れ)/M1(lidar_type)ほか全採用。司令塔が submodule/glim/NIC を独立検証。案C修正版へ(.ai/reviews/review1)。
+- 2026-07-12: 設計レビュー R2(修正版)→**合意**。Med3点(choices/exec_depend/pytest)追記(.ai/reviews/review2)。往復2回で終了。docs/ai-discussion.md 保存。
+- 2026-07-12: sonnet-coder 実装完了（robot pkg 内6ファイル、submodule 無改変）。
+- 2026-07-12: 実装レビュー(Opus, 実装者と別)= **合格**。独立に build + 53 tests/0 failure + dry-run(show-args/fail-fast/config解決) 再確認(.ai/reviews/review-mid360s-impl.md)。
+- ステータス: **実装+レビュー完了**。テスト失敗ゼロで昇格なし。残: Codex 復帰後の Sol 設計追認(~20:48)。実HW通電は艇上工程。
+
+## 追加調査 — upstream取り込み + 実機検証(2026-07-12 夕)
+- ユーザ指示: 「公式最新版に対してbehindなら取り込め」「同様エラーのweb事例調査」。
+- Livox-SDK2: fork=公式v1.3.1と機能的に完全同一(パッケージング差分のみ)。**更新不要**。
+- livox_ros_driver2: fork は公式1.2.4相当、**1.2.6(commit 13eb05e)にbehind**。
+  実質差分= `src/comm/pub_handler.cpp` 1行(Mid-360sのline_num処理漏れ)。**submoduleに適用済み(未commit, ユーザ承認済み)**。
+- Web調査: GitHub Issue #240(Livox-SDK/livox_ros_driver2)が同一症状("Init lds lidar successfully!"だがトピック無し)を報告、公式回答が1.2.6修正で解決と明言。
+- 実機検証: 実機は config のプレースホルダIP(.151)と異なる `192.168.1.114` に存在すると判明(ハンドル値をIPデコードして特定)。
+  pub_handler.cpp修正 + 実IP補正の一時テストconfigで **完全解消**: `Can not get index`=0件、`/livox/lidar` `/livox/imu` トピック生成、`ros2 topic hz /livox/lidar`=**平均10.0Hz**実測。実機Mid-360s相当機とのe2e疎通を確認。
+- 詳細: `.ai/reviews/2026-07-12-mid360s-upstream-fix-and-live-verify.md`
+- **完了(ユーザ指示反映)**: MID360=`.151`既定維持、MID360S=`.114`既定へ変更。
+  livox_ros_driver2 submodule: masterをfast-forward後 `pub_handler.cpp` 修正をcommit(`e0382eb`)し
+  `KeioRoboticsAssociation/livox_ros_driver2` master へ push 済み(`95d96d3..e0382eb`)。
+  親repo側 submodule ポインタ更新は未commit(次のcommit時にまとめて)。
+  rebuild(`robot`,`livox_ros_driver2`)成功、robotテスト53件/0failure再確認。

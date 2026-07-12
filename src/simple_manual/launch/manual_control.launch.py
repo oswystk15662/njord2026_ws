@@ -23,19 +23,6 @@ def generate_launch_description():
         DeclareLaunchArgument('serial_port', default_value='/dev/ttyUSB1'),
         DeclareLaunchArgument('baud', default_value='115200'),
         DeclareLaunchArgument('launch_gui', default_value='true'),
-        Node(
-            package='joy',
-            executable='joy_node',
-            name='joy_node',
-            output='screen',
-            additional_env={'SDL_JOYSTICK_DEVICE': '/dev/input/js0'},
-        ),
-        Node(
-            package='simple_manual',
-            executable='joy_converter_node',
-            name='joy_converter',
-            output='screen',
-        ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(thruster_launch),
             launch_arguments={'stop_on_feedback_timeout': 'false'}.items(),

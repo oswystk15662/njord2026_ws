@@ -19,6 +19,7 @@ def include_launch(package_name, path_parts, condition, launch_arguments=None):
 
 def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
+    lidar_model = LaunchConfiguration("lidar_model")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_um982 = LaunchConfiguration("enable_um982")
@@ -32,9 +33,10 @@ def generate_launch_description():
     device = LaunchConfiguration("device")
 
     mid360_launch = include_launch(
-        "livox_ros_driver2",
-        ["launch_ROS2", "msg_MID360_launch.py"],
+        "robot",
+        ["launch", "lidar.launch.py"],
         IfCondition(enable_mid360),
+        {"lidar_model": lidar_model},
     )
 
     zed2i_launch = include_launch(
@@ -108,7 +110,13 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            # Livox LiDAR(mid360/mid360s)を起動するか
             DeclareLaunchArgument("enable_mid360", default_value="true"),
+            DeclareLaunchArgument(
+                "lidar_model",
+                default_value="mid360",
+                choices=["mid360", "mid360s"],
+            ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument("enable_back_cam", default_value="true"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
