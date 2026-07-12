@@ -118,7 +118,10 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_nav2", default_value="false"),
             DeclareLaunchArgument("serial_port", default_value="/dev/ttyUSB1"),
             DeclareLaunchArgument("baud", default_value="115200"),
-            DeclareLaunchArgument("device", default_value="/dev/video0"),
+            DeclareLaunchArgument(
+                "device",
+                default_value="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0",
+            ),
             mid360_launch,
             zed2i_launch,
             back_cam_launch,

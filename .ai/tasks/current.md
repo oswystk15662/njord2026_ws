@@ -123,3 +123,70 @@ sim で成立しているハイレイヤ(cmd_vel / task / nav2 / localization)�
 - 2026-07-12: 実装レビュー(Opus, 実装者と別モデル)= **合格**。独立に build + 44 tests/0 fail を再確認。
   残課題: SW E-stop 未接続(ユーザ確認事項)/ 実 HW 一括起動は艇上工程。→ .ai/reviews/2026-07-12-review-terra-impl.md
 - ステータス: **実装+レビュー完了**。テスト失敗ゼロのため Sol/Fable 昇格なし。
+
+---
+
+# サブタスク2 — カメラ実機bringup (zed2i / back_cam) 正常化
+
+最終更新: 2026-07-12 / 記録者: メインClaude(司令塔)
+
+## 背景
+実機bringupで zed2i と back_cam を「ちゃんと使える」状態にする。ユーザ仮説「両方USB2.0認識で本体設定が悪い」の検証を含む。
+
+## 現状把握(計測結果 2026-07-12)
+- USB実速度: **ZED 2i 映像=USB3.0 (5000M, Bus002) で正常**。HID制御IFは12M(正常)。
+  back_cam(Adesso CyberTrack H7)=USB2.0 (480M)。**Adessoは仕様上USB2.0のUVC機器**なので480Mは正常。
+  → **USB速度に関する本体設定不良は無し。sudoでのUSB修正は不要**(ユーザ仮説を計測で否定)。
+- 権限: user は video(44)/dialout(20) 所属済。ZED udev `/etc/udev/rules.d/99-slabs.rules` 存在。usb_cam 導入済。ZED SDK `/usr/local/zed` 存在。→ 権限系の追加sudoも不要。
+- 電源モード: nvpmodel=15W。Orin Nano Super は上位モード(MAXN 等)可 → **性能面の任意sudoのみ**。
+- デバイス実割当: ZED=`/dev/video0,1`, back_cam(Adesso)=`/dev/video2,3`。
+- **根本バグ(デバイス割当が逆)**:
+  - `robot/launch/back_cam.launch.py` 既定 `/dev/video0` = ZED左目(誤)。
+  - `robot/launch/real_bringup.launch.py` `device` 既定 `/dev/video0`(誤, back_camへ渡る)。
+  - `zed2i_driver/config/zed2i_cpu.yaml` / `zed2i_jetson_orin_nano.yaml` = `/dev/video2,3` = Adesso(誤)。
+  - `/dev/videoN` は挿抜/再起動で不安定 → by-id 安定パスへ。
+- cpu_stereo_node は `cv::VideoCapture.open(std::string, CAP_ANY)` = パス文字列OK → by-id 使用可。SDKモードは /dev/video を使わない。
+- Adesso 対応フォーマット: MJPG 640x480@30 対応 → `pixel_format: mjpeg2rgb` 妥当。
+
+### 確定 by-id パス
+- ZED 左: `/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0`
+- ZED 右: `/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index1`
+- back_cam: `/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0`
+
+## 要求(Requirements)
+- CR1[必須]: back_cam は Adesso(背面webカメラ)を開く。ZEDを掴まない。
+- CR2[必須]: zed2i cpu系config は ZED センサを指す。Adessoを掴まない。
+- CR3[必須]: 両カメラのデバイス指定を `/dev/v4l/by-id/` 安定パス既定にする(引数で上書き可)。
+- CR4[必須]: real_bringup が zed2i(sdkモード)+back_cam を正しい device で配線。
+- CR5[必須]: back_cam の pixel_format/解像度/fps が Adesso 対応値。
+- CR6[推奨]: by-id を使う理由の短いコメント/メモを残す。
+
+## 受け入れ条件(Acceptance)
+- CAC1: `colcon build --packages-select robot zed2i_driver` 成功(config/launch install)。
+- CAC2: `ros2 launch robot back_cam.launch.py --show-args` と real_bringup の device 既定が Adesso by-id。
+- CAC3: zed2i cpu/orin yaml の left/right_device が ZED by-id。
+- CAC4: sim 経路(task*_sim / manual_control)非破壊。
+- CAC5: 実HW通電(実映像トピック確認)は艇上工程 or 別途(本タスク完了ラインはcode/build/dryrunまで)。
+
+## sudo必要リスト(ユーザ実行・任意)
+- カメラ動作に**必須のsudoは無し**(権限/udev/導入すべて充足)。
+- 任意(性能): `sudo nvpmodel -m 0`(MAXN) + `sudo jetson_clocks`。ZED SDK/深度演算・点群の余裕確保。
+  ※電源/放熱の許容内で。艇上運用の消費電力方針に依存するためユーザ判断。
+
+## ルーティング判断
+- Sol設計レビュー: **省略**(config/launchのデバイスパス修正のみで設計論点が無い軽微タスク)。
+- 実装担当: 環境制約(Codex書込=bwrap不可, danger-full-access要再承認)を踏まえ、急ピッチ優先で **sonnet-coder**(native書込, 文脈保持)。規模的にはterra相当だが環境ブロッカー回避。
+- レビュー: 実装者と別モデル(Codex Sol read-only もしくは Opus)。
+
+## ログ
+- 2026-07-12: 計測・要求整理(メインClaude)。USB仮説を否定、根本原因=デバイス割当逆+/dev/videoN不安定 と特定。sonnet-coder へ実装依頼。
+- 2026-07-12: sonnet-coder 実装完了(4ファイル: back_cam.launch.py / real_bringup.launch.py / zed2i_cpu.yaml / zed2i_jetson_orin_nano.yaml を by-id 化)。colcon build(robot, zed2i_driver)成功、--show-args で既定値一致。
+- 2026-07-12: Codex Sol(gpt-5.5, read-only)レビュー = **合格**(ブロッカーなし, Low指摘2=SN0001一意性/SDKモードyaml未使用)。司令塔が差分独立確認。→ .ai/reviews/2026-07-12-review-camera-sonnet-impl.md
+- ステータス: **サブタスク2 実装+レビュー完了**。昇格なし。CAC5(実映像通電)=艇上工程。任意sudo(nvpmodel MAXN)はユーザ判断待ち。
+
+### 実機起動確認 (2026-07-12, ユーザ指示)
+- **back_cam: 合格**。by-id 既定で usb_cam が `/dev/../../video2` 化して起動失敗するバグを発見 → sonnet-coder が launch時 os.path.realpath 解決で修正 → 司令塔独立確認で `/back_cam/image_raw` ~26-30Hz 配信。**完了**。
+- **ZED SDK(既定): ブロッカー**。GPU/CUDA 未検出でクラッシュ(`NO GPU DETECTED`)。nvidia-smi も `No devices found`、`/proc/driver/nvidia/gpus/` 空、`/dev/nvgpu/igpu0` に power ノードのみ、nvidia(open)+nvgpu(legacy)混在。**ホスト側GPUドライバ問題=要sudo/ホスト作業**。→ .ai/escalations/2026-07-12-zed-gpu-cuda-blocker.md
+- **ZED CPU: 不適**。ZED は単一UVCデバイスのため cpu_stereo_node(左右別デバイス前提)で right open 失敗。node改修は別タスク。SDK が本線。
+- README 整備を sonnet-coder に依頼中(zed2i_driver / robot)。
+- **ユーザ待ち**: escalation 記載の sudo 手順1(dmesg採取)+手順2(reboot)→ 出力共有で次手判断。
