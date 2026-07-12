@@ -190,3 +190,5 @@ sim で成立しているハイレイヤ(cmd_vel / task / nav2 / localization)�
 - **ZED CPU: 不適**。ZED は単一UVCデバイスのため cpu_stereo_node(左右別デバイス前提)で right open 失敗。node改修は別タスク。SDK が本線。
 - README 整備を sonnet-coder に依頼中(zed2i_driver / robot)。
 - **ユーザ待ち**: escalation 記載の sudo 手順1(dmesg採取)+手順2(reboot)→ 出力共有で次手判断。
+- 2026-07-12: dmesg採取で根本原因確定 = **nvgpu ACR bootstrap failure**(iGPU firmware セキュア初期化失敗, 毎ブート決定的)。Codex Sol 相談 → 「再起動だけでは直らない/非sudo・コード側は対処不能/打ち切り妥当」。是正は L4T再導入→reboot、最悪reflash(要sudo・ホスト工程)。→ escalation 更新。
+- ステータス: **カメラ実装+レビュー+READMEは完了しコミット/push済(eae1e97)**。ZED実配信のみGPU firmwareブロッカーで保留。ユーザがsudo是正+reboot後にZED確認を再開。**本タスクはここで区切り(打ち切り)**。
