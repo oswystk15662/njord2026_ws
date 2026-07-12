@@ -10,7 +10,7 @@
 #     → With rotate_to_heading_min_angle removed (use_rotate_to_heading=false),
 #       RPP drives toward the lookahead point without pure-spin phases.
 #   - velocity_smoother: y-axis velocity enabled (was incorrectly set to 0.0)
-#     → Omni robots produce linear.y from the kinematics node; clamping it to 0
+#     → Omni robots produce linear.y; clamping it to 0
 #       discards all sway commands before they reach the thrusters.
 
 amcl:

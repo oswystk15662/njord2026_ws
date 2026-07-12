@@ -47,7 +47,6 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   last_control_time_(this->now())
 {
   input_mode_ = toLower(this->declare_parameter<std::string>("input_mode", "cmd_vel"));
-  transport_mode_ = toLower(this->declare_parameter<std::string>("transport_mode", "sim"));
 
   control_rate_hz_ = this->declare_parameter<double>("control.rate_hz", 50.0);
   max_linear_x_ = this->declare_parameter<double>("input_scaling.max_linear_x", 1.0);
@@ -95,33 +94,6 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   deadzone_neg_ = this->declare_parameter<double>("static_map.deadzone_neg", 0.0);
 
   duty_resolution_ = this->declare_parameter<int>("duty_resolution", 1000);
-  u16_neutral_ = this->declare_parameter<int>("u16_neutral", 1000);
-  u16_span_ = this->declare_parameter<int>("u16_span", 1000);
-
-  sim_output_enabled_ = (
-    transport_mode_ == "sim" ||
-    transport_mode_ == "sim_and_mros_usb" ||
-    transport_mode_ == "sim_and_can" ||
-    transport_mode_ == "sim_and_both");
-  mros_enabled_ = (
-    transport_mode_ == "mros_usb" ||
-    transport_mode_ == "both" ||
-    transport_mode_ == "sim_and_mros_usb" ||
-    transport_mode_ == "sim_and_both");
-  can_enabled_ = (
-    transport_mode_ == "can" ||
-    transport_mode_ == "both" ||
-    transport_mode_ == "sim_and_can" ||
-    transport_mode_ == "sim_and_both");
-
-  if (!sim_output_enabled_ && !mros_enabled_ && !can_enabled_) {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid transport_mode='%s'. Falling back to sim.",
-      transport_mode_.c_str());
-    transport_mode_ = "sim";
-    sim_output_enabled_ = true;
-  }
 
   loadThrusterConfigs();
   const std::string robot_description =
@@ -138,24 +110,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   const std::string sim_command_topic =
     this->declare_parameter<std::string>("topics.sim_thruster_command", "/thruster_command");
 
-  if (sim_output_enabled_) {
-    pub_thruster_command_ =
-      this->create_publisher<std_msgs::msg::Float32MultiArray>(sim_command_topic, 10);
-  }
-
-  if (mros_enabled_) {
-    pub_mros_.reserve(thrusters_.size());
-    for (const auto & thruster : thrusters_) {
-      pub_mros_.push_back(this->create_publisher<std_msgs::msg::UInt16>(thruster.mros_topic, 10));
-    }
-  }
-
-  if (can_enabled_) {
-    pub_can_.reserve(thrusters_.size());
-    for (const auto & thruster : thrusters_) {
-      pub_can_.push_back(this->create_publisher<can_msgs::msg::Frame>(thruster.can_topic, 10));
-    }
-  }
+  pub_thruster_command_ =
+    this->create_publisher<std_msgs::msg::Float32MultiArray>(sim_command_topic, 10);
 
   pub_current_force_ =
     this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/current_force", 10);
@@ -188,9 +144,9 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. mode=%s transport=%s thrusters=%zu dob=%s",
+    "thruster_driver started. mode=%s output=%s thrusters=%zu dob=%s",
     input_mode_.c_str(),
-    transport_mode_.c_str(),
+    sim_command_topic.c_str(),
     thrusters_.size(),
     dob_enable_ ? "on" : "off");
 }
@@ -280,22 +236,12 @@ void ThrusterDriverNode::loadThrusterConfigs()
     getDoubleVector("static_map.wheels.reverse_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> offset =
     getDoubleVector("static_map.wheels.offset", std::vector<double>(ids.size(), 0.0));
-  const std::vector<std::string> mros_topics = getStringVector(
-    "topics.mros_cmd",
-    {"FR_esp32/cmd_duty_u16", "FL_esp32/cmd_duty_u16", "RR_esp32/cmd_duty_u16",
-      "RL_esp32/cmd_duty_u16"});
-  const std::vector<std::string> can_topics = getStringVector(
-    "topics.can_tx",
-    {"FR_esp32/can_tx", "FL_esp32/can_tx", "RR_esp32/can_tx", "RL_esp32/can_tx"});
-  const std::vector<int64_t> can_ids =
-    getIntVector("thrusters.can_ids", {0x301, 0x302, 0x303, 0x304});
 
   const std::size_t n = ids.size();
   if (
     links.size() != n || angle_rad.size() != n || force_per_duty.size() != n ||
     reverse.size() != n || forward_gain.size() != n || reverse_gain.size() != n ||
-    offset.size() != n || mros_topics.size() != n || can_topics.size() != n ||
-    can_ids.size() != n)
+    offset.size() != n)
   {
     throw std::runtime_error("All thruster config arrays must match thrusters.ids size");
   }
@@ -312,9 +258,6 @@ void ThrusterDriverNode::loadThrusterConfigs()
     config.forward_gain = forward_gain[i];
     config.reverse_gain = reverse_gain[i];
     config.offset = offset[i];
-    config.mros_topic = mros_topics[i];
-    config.can_topic = can_topics[i];
-    config.can_id = static_cast<int>(can_ids[i]);
     thrusters_.push_back(config);
   }
 }
@@ -461,7 +404,7 @@ double ThrusterDriverNode::applyDeadzone(double value, double deadzone) const
 
 void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
 {
-  if (sim_output_enabled_ && pub_thruster_command_) {
+  if (pub_thruster_command_) {
     std_msgs::msg::Float32MultiArray msg;
     msg.data.reserve(commands.size());
     for (std::size_t i = 0; i < commands.size(); ++i) {
@@ -469,29 +412,6 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
       msg.data.push_back(static_cast<float>(newtons));
     }
     pub_thruster_command_->publish(msg);
-  }
-
-  if (mros_enabled_) {
-    for (std::size_t i = 0; i < commands.size() && i < pub_mros_.size(); ++i) {
-      std_msgs::msg::UInt16 msg;
-      msg.data = toUint16Command(commands[i]);
-      pub_mros_[i]->publish(msg);
-    }
-  }
-
-  if (can_enabled_) {
-    for (std::size_t i = 0; i < commands.size() && i < pub_can_.size(); ++i) {
-      const std::uint16_t value = toUint16Command(commands[i]);
-      can_msgs::msg::Frame frame;
-      frame.id = static_cast<std::uint32_t>(thrusters_[i].can_id);
-      frame.is_rtr = false;
-      frame.is_extended = false;
-      frame.is_error = false;
-      frame.dlc = 2;
-      frame.data[0] = static_cast<std::uint8_t>(value & 0xFFU);
-      frame.data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-      pub_can_[i]->publish(frame);
-    }
   }
 
   std_msgs::msg::Float32MultiArray force_msg;
@@ -507,15 +427,6 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
     static_cast<float>(dob_lpf_[1]),
     static_cast<float>(dob_lpf_[2])};
   pub_dob_estimate_->publish(dob_msg);
-}
-
-std::uint16_t ThrusterDriverNode::toUint16Command(double normalized) const
-{
-  const double cmd =
-    static_cast<double>(u16_neutral_) +
-    clamp(normalized, -1.0, 1.0) * static_cast<double>(u16_span_);
-  const int cmd_i = static_cast<int>(std::lround(cmd));
-  return static_cast<std::uint16_t>(std::clamp(cmd_i, 0, 65535));
 }
 
 double ThrusterDriverNode::clamp(double value, double min_value, double max_value) const
@@ -542,13 +453,6 @@ std::vector<bool> ThrusterDriverNode::getBoolVector(
   const std::vector<bool> & defaults)
 {
   return this->declare_parameter<std::vector<bool>>(name, defaults);
-}
-
-std::vector<int64_t> ThrusterDriverNode::getIntVector(
-  const std::string & name,
-  const std::vector<int64_t> & defaults)
-{
-  return this->declare_parameter<std::vector<int64_t>>(name, defaults);
 }
 
 std::string ThrusterDriverNode::toLower(std::string value)

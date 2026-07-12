@@ -34,6 +34,95 @@ TEST(SerialPacket, EncodesFloatsAndFlags)
   EXPECT_EQ(packet.back(), 0x0D);
 }
 
+TEST(RxParser, DecodesValidBmsFrame)
+{
+  micon_driver_fd::RxParser parser;
+  const auto frame = micon_driver_fd::encode_bms_rx_frame({3700, 3710, 3720, 3730});
+  const auto decoded = parser.push(frame);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 3.7F);
+  EXPECT_FLOAT_EQ(decoded[0].volts[1], 3.71F);
+  EXPECT_FLOAT_EQ(decoded[0].volts[2], 3.72F);
+  EXPECT_FLOAT_EQ(decoded[0].volts[3], 3.73F);
+}
+
+TEST(RxParser, HandlesSplitRead)
+{
+  micon_driver_fd::RxParser parser;
+  const auto frame = micon_driver_fd::encode_bms_rx_frame({4100, 4110, 4120, 4130});
+  EXPECT_TRUE(parser.push(frame.data(), 4).empty());
+  const auto decoded = parser.push(frame.data() + 4, frame.size() - 4);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 4.1F);
+  EXPECT_FLOAT_EQ(decoded[0].volts[3], 4.13F);
+}
+
+TEST(RxParser, HandlesConcatenatedFrames)
+{
+  micon_driver_fd::RxParser parser;
+  auto stream = micon_driver_fd::encode_bms_rx_frame({3600, 3610, 3620, 3630});
+  const auto second = micon_driver_fd::encode_bms_rx_frame({3800, 3810, 3820, 3830});
+  stream.insert(stream.end(), second.begin(), second.end());
+  const auto decoded = parser.push(stream);
+  ASSERT_EQ(decoded.size(), 2U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 3.6F);
+  EXPECT_FLOAT_EQ(decoded[1].volts[0], 3.8F);
+}
+
+TEST(RxParser, DropsLeadingGarbage)
+{
+  micon_driver_fd::RxParser parser;
+  std::vector<uint8_t> stream{0x00, 0x55, 0x10, 0xAA, 0xAA};
+  const auto frame = micon_driver_fd::encode_bms_rx_frame({3900, 3910, 3920, 3930});
+  stream.insert(stream.end(), frame.begin(), frame.end());
+  const auto decoded = parser.push(stream);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 3.9F);
+}
+
+TEST(RxParser, DropsCrcNgAndResynchronizes)
+{
+  micon_driver_fd::RxParser parser;
+  auto bad = micon_driver_fd::encode_bms_rx_frame({3700, 3710, 3720, 3730});
+  bad.back() ^= 0x5AU;
+  const auto good = micon_driver_fd::encode_bms_rx_frame({4000, 4010, 4020, 4030});
+  bad.insert(bad.end(), good.begin(), good.end());
+  const auto decoded = parser.push(bad);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 4.0F);
+}
+
+TEST(RxParser, DropsLengthNgAndResynchronizes)
+{
+  micon_driver_fd::RxParser parser;
+  std::vector<uint8_t> stream{micon_driver_fd::kRxStart, 0x01, 0xFF};
+  const auto good = micon_driver_fd::encode_bms_rx_frame({3500, 3510, 3520, 3530});
+  stream.insert(stream.end(), good.begin(), good.end());
+  const auto decoded = parser.push(stream);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 3.5F);
+}
+
+TEST(RxParser, DropsBmsWrongLengthAndResynchronizes)
+{
+  micon_driver_fd::RxParser parser;
+  std::vector<uint8_t> stream{
+    micon_driver_fd::kRxStart,
+    micon_driver_fd::kRxTypeBms,
+    2,
+    0x34,
+    0x12,
+  };
+  const std::uint16_t crc = micon_driver_fd::crc16_rx_frame(stream.data() + 1, 4);
+  stream.push_back(static_cast<uint8_t>(crc & 0xFFU));
+  stream.push_back(static_cast<uint8_t>((crc >> 8) & 0xFFU));
+  const auto good = micon_driver_fd::encode_bms_rx_frame({3550, 3560, 3570, 3580});
+  stream.insert(stream.end(), good.begin(), good.end());
+  const auto decoded = parser.push(stream);
+  ASSERT_EQ(decoded.size(), 1U);
+  EXPECT_FLOAT_EQ(decoded[0].volts[0], 3.55F);
+}
+
 TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
 {
   int master_fd = -1;
@@ -79,7 +168,7 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
     std::memcpy(&decoded, packet + i * sizeof(float), sizeof(float));
     EXPECT_FLOAT_EQ(decoded, thrust.data[i]);
   }
-  EXPECT_EQ(packet[micon_driver_fd::kPacketSize - 1], 0x0D);
+  EXPECT_EQ(packet[micon_driver_fd::kPacketSize - 1], 0x05);
 
   close(master_fd);
   executor.remove_node(publisher_node);

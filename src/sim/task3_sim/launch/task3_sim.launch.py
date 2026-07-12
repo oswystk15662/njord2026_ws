@@ -85,7 +85,7 @@ def generate_launch_description():
         output="screen",
     )
 
-    # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
+    # Thruster driver: cmd_vel -> /thruster_command (Float32MultiArray, Newton)
     thruster_driver_node = Node(
         package="thruster_driver",
         executable="thruster_driver_node",
@@ -94,7 +94,6 @@ def generate_launch_description():
             os.path.join(pkg_thruster, "config", "config.yaml"),
             {
                 "robot_description": robot_description,
-                "transport_mode": "sim",
                 "control.dob.enable": False,
             },
         ],

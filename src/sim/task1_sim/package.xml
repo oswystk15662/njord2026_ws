@@ -21,7 +21,8 @@
   <depend>waypoint_publisher</depend>
   <depend>operation_validator</depend>
   <depend>dutyed_tf_pub_with_disturbance</depend>
-  <depend>kinematics</depend>
+  <depend>thruster_driver</depend>
+  <depend>robot</depend>
   <depend>launch_ros</depend>
 
   <test_depend>ament_flake8</test_depend>

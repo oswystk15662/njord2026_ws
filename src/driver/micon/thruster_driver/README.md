@@ -1,21 +1,21 @@
 # thruster_driver
 
-ESP32向けスラスタ指令ブリッジです。通常の自律航行経路では、このノードが
-`cmd_vel` から4スラスタ分の指令までを一貫して生成します。
+`cmd_vel` と feedback odometry から船体 wrench を計算し、URDF 上の
+4スラスタ配置に配分して `/thruster_command` へ publish します。
 
 - 入力:
   - `cmd_vel` (`geometry_msgs/msg/Twist`)
   - feedback odometry (`nav_msgs/msg/Odometry`)
   - または `thruster_command` (`std_msgs/msg/Int16MultiArray`) を直接受ける
 - 出力:
-  - simulation: `/thruster_command` (`std_msgs/msg/Int16MultiArray`, 4要素)
-  - mROS(USB): 各ESC向け `std_msgs/msg/UInt16`
-  - CAN: 各ESC向け `can_msgs/msg/Frame` (2byte payload, little-endian)
+  - `/thruster_command` (`std_msgs/msg/Float32MultiArray`, 4要素, Newton)
+
+`/thruster_command` は常に Newton です。実機では `micon_driver_fd/serial_writer`
+がこの値を再スケールせず、そのまま 4×`float32` として ESP32 へ送ります。
 
 ## ポイント
 
-- GPIO(libgpiod)制御は含みません。
+- CAN や per-thruster ROS topic への出力は持ちません。
 - URDFはスラスタの固定poseだけを持ち、推力方向・反転・ゲインはconfigで切替えます。
 - `control.dob.enable` でP+DOBとP-onlyを切替できます。
-- `transport_mode` パラメータで `sim` / `mros_usb` / `can` / `both` を切替できます。
-- ESP32 1台にESC 1台の前提で、1トピックに1つの `UInt16` を送ります。
+- 起動時、cmd timeout、feedback timeout時は 0N を publish します。

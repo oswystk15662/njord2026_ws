@@ -1,7 +1,6 @@
 thruster_driver_node:
   ros__parameters:
     input_mode: "cmd_vel"       # cmd_vel or duty_array
-    transport_mode: "sim"       # sim, mros_usb, can, both, sim_and_mros_usb, sim_and_can, sim_and_both
 
     duty_resolution: 1000
 
@@ -66,25 +65,9 @@ thruster_driver_node:
       reverse: [false, false, false, false]
       # BlueRobotics T200 @16V max thrust ~40N
       force_per_duty: [40.0, 40.0, 40.0, 40.0]
-      can_ids: [769, 770, 771, 772]
-
-    # ESP32 expects one UInt16 command per ESC.
-    # command = u16_neutral + normalized[-1,1] * u16_span
-    u16_neutral: 1000
-    u16_span: 1000
 
     topics:
       cmd_vel: "cmd_vel"
       duty_array: "thruster_command"
       feedback_odometry: "/odometry/filtered/local"
       sim_thruster_command: "/thruster_command"
-      mros_cmd:
-        - "FR_esp32/cmd_duty_u16"
-        - "FL_esp32/cmd_duty_u16"
-        - "RR_esp32/cmd_duty_u16"
-        - "RL_esp32/cmd_duty_u16"
-      can_tx:
-        - "FR_esp32/can_tx"
-        - "FL_esp32/can_tx"
-        - "RR_esp32/can_tx"
-        - "RL_esp32/can_tx"

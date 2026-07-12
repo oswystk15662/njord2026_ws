@@ -3,14 +3,11 @@
 
 #include <rclcpp/rclcpp.hpp>
 
-#include <can_msgs/msg/frame.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/int16_multi_array.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
-#include <std_msgs/msg/u_int16.hpp>
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -37,9 +34,6 @@ private:
     double reverse_gain{1.0};
     double offset{0.0};
     bool reverse{false};
-    int can_id{0};
-    std::string mros_topic;
-    std::string can_topic;
   };
 
   void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
@@ -56,7 +50,6 @@ private:
   double applyStaticMap(double value, const ThrusterConfig & thruster) const;
   double applyDeadzone(double value, double deadzone) const;
   void publishCommands(const std::vector<double> & commands);
-  std::uint16_t toUint16Command(double normalized) const;
   double clamp(double value, double min_value, double max_value) const;
   std::vector<double> getDoubleVector(
     const std::string & name,
@@ -65,9 +58,6 @@ private:
     const std::string & name,
     const std::vector<std::string> & defaults);
   std::vector<bool> getBoolVector(const std::string & name, const std::vector<bool> & defaults);
-  std::vector<int64_t> getIntVector(
-    const std::string & name,
-    const std::vector<int64_t> & defaults);
   static std::string toLower(std::string value);
 
   // Input subscriptions
@@ -80,14 +70,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_dob_estimate_;
   rclcpp::TimerBase::SharedPtr control_timer_;
 
-  // mROS(USB) outputs (one ESP32 -> one ESC -> one UInt16)
-  std::vector<rclcpp::Publisher<std_msgs::msg::UInt16>::SharedPtr> pub_mros_;
-
-  // CAN outputs
-  std::vector<rclcpp::Publisher<can_msgs::msg::Frame>::SharedPtr> pub_can_;
-
   std::string input_mode_;
-  std::string transport_mode_;
 
   std::vector<ThrusterConfig> thrusters_;
 
@@ -123,14 +106,6 @@ private:
   double deadzone_neg_{0.0};
 
   int duty_resolution_{1000};
-
-  bool sim_output_enabled_{true};
-  bool can_enabled_{false};
-  bool mros_enabled_{false};
-
-  // Encoding to UInt16 for ESP32
-  int u16_neutral_{1000};
-  int u16_span_{1000};
 
   geometry_msgs::msg::Twist latest_cmd_;
   double meas_surge_{0.0};
