@@ -191,4 +191,7 @@ sim で成立しているハイレイヤ(cmd_vel / task / nav2 / localization)�
 - README 整備を sonnet-coder に依頼中(zed2i_driver / robot)。
 - **ユーザ待ち**: escalation 記載の sudo 手順1(dmesg採取)+手順2(reboot)→ 出力共有で次手判断。
 - 2026-07-12: dmesg採取で根本原因確定 = **nvgpu ACR bootstrap failure**(iGPU firmware セキュア初期化失敗, 毎ブート決定的)。Codex Sol 相談 → 「再起動だけでは直らない/非sudo・コード側は対処不能/打ち切り妥当」。是正は L4T再導入→reboot、最悪reflash(要sudo・ホスト工程)。→ escalation 更新。
-- ステータス: **カメラ実装+レビュー+READMEは完了しコミット/push済(eae1e97)**。ZED実配信のみGPU firmwareブロッカーで保留。ユーザがsudo是正+reboot後にZED確認を再開。**本タスクはここで区切り(打ち切り)**。
+- ステータス: **カメラ実装+レビュー+READMEは完了しコミット/push済(eae1e97)**。ZED実配信のみGPU firmwareブロッカーで保留。ユーザがsudo是正+reboot後にZED確認を再開。
+- 2026-07-12 夕: **ZED完全復旧・完了**。(1)ユーザのL4T reinstall+reboot でGPU(ACR)復旧、(2)calibファイル `SN34432991.conf` を `/usr/local/zed/settings/` に配置(URL param は `SN=`)、(3)メインClaudeが `ros2 launch zed2i_driver zed2i.launch.py` で left/right/depth/points 実配信(~6-8Hz)確認。詳細=escalation更新。
+- Qiita備忘録: sonnet-coder が `qiita_draft.md` 作成(GPU復旧手順)。司令塔が内容検証済(実測値のみ・推測明記)。
+- **最終ステータス: back_cam・ZED ともに実機配信確認済み=完了。** 任意改善: ZED depth NEURAL化 / nvpmodel MAXN で fps 向上。

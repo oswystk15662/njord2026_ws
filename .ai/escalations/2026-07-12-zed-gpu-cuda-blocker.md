@@ -77,7 +77,30 @@ BSPは dpkg 上すべて 39.2.0 で揃うが、実行 kernel `6.8.12-1021-tegra`
   5. 最終手段: JetPack 7 / L4T R39.2 **reflash**(破壊的, rootfsバックアップ後)。
 - 是正後に `/proc/driver/nvidia/gpus/` と `nvidia-smi` が復活してから ZED 作業へ戻る。
 
+## 追加診断 (2026-07-12, reinstall試行後)
+- `update-initramfs` はL4Tに存在せず → 正しくは `sudo nv-update-initrd`(`nvidia-l4t-initrd`提供)。`/boot/initrd` は reinstall で自動再生成済(mtime 当日12:47)。
+- kernel `6.8.12-1021-tegra` と `/lib/modules/6.8.12-1021-tegra` は**整合(矛盾なし)**。nvgpu module は running kernel に合致してロード済。
+- `apt install --reinstall nvidia-l4t-firmware-nvgpu` は **同一 39.2.0 firmware を戻すのみ**(`/lib/firmware/nvidia/ga10b/acr-*` 内容不変, Jun2)。→ **再起動しても同じACRエラーの見込み**。
+- cmdline `firmware_class.path=/etc/firmware` だが **`/etc/firmware` 不在** → `/lib/firmware` に正常フォールバック(firmwareは発見できている=「未検出」ではない)。
+- 従い ACR `invalid mem acr_falcon2_sysmem_desc` は **ブートローダ(MB2/UEFI)側 GPU carveout/WPR 記述子の不正** = **ブート/フラッシュ層**の問題。rootfs(apt)では是正不可。
+- **本命の是正 = JetPack 7 / L4T R39.2 の再フラッシュ**(破壊的, rootfsバックアップ必須)。apt reinstall/reboot は確認ステップに留まる。
+
+## 解決 (2026-07-12 夕方) — GPU復旧 + calib配置でZED実配信成功
+1. **GPU復旧**: ユーザが `sudo apt install --reinstall nvidia-l4t-{core,kernel,kernel-dtbs,firmware,firmware-nvgpu,firmware-openrm}` → `sudo reboot`。
+   ※ `update-initramfs` はL4Tに無く `nv-update-initrd` が正だが、reinstallで /boot/initrd 自動再生成のため手動不要。
+   再起動後 `nvidia-smi -L` = `GPU 0: Orin (nvgpu)`、`/dev/nvgpu/igpu0/` に計算ノードフル出現、ACRエラー消滅。
+   → 当初「reinstallは同一firmwareで再起動しても直らない」の予想に反し、reinstall+クリーン再起動で解消(過去rebootが非クリーンだった可能性/推測)。
+2. **第2ブロッカー=calibファイル欠落**: GPU復旧後 ZED は `Camera successfully opened`(HD720@15, SN34432991)まで到達も、
+   `CALIBRATION FILE NOT AVAILABLE`(起動時ネット未接続でDL失敗、EEPROM fallbackも不可)。
+   → 正しいDL URL は パラメータ `SN=`(not `serial=`): `https://calib.stereolabs.com/?SN=34432991`。
+   `/usr/local/zed/settings/`(root:zed, 要sudo)に `SN34432991.conf` を配置(ユーザ実行)。
+   (恒久策: `sudo usermod -aG zed <user>` でSDK自動DL/キャッシュがsudo不要に)。
+3. **ZED実配信確認(メインClaude)**: 再起動後 `ros2 launch zed2i_driver zed2i.launch.py` で以下を実測:
+   - `/zed2i/left/image_rect` ~8Hz, `/zed2i/right/image_rect` ~7Hz, `/zed2i/depth/image` ~7Hz, `/zed2i/points` ~6Hz, camera_info 左右。
+   - ログ: `Camera successfully opened` クリーン。警告2(非致命): depth mode QUALITY 非推奨→NEURAL推奨 / self-calib skip(被写体テクスチャ不足)。
+   - 実測 ~7-8Hz < 設定15fps: Orin Nanoの深度/点群演算スループット。性能面(任意 `nvpmodel -m 0`+`jetson_clocks`)で改善余地。ブロッカーではない。
+
 ## ステータス (最終)
-- back_cam: **完了(実機配信確認済み)**。カメラプロセス全停止済 → ユーザが単独確認可能。
-- ZED: **コード側完了。実機はGPU firmware(ACR)ブロッカーで、コード/非sudo層では対処不能 → 打ち切り**。
-  復旧は上記sudo是正(reinstall→reboot、最悪reflash)を要する **ホスト/BSP工程**。復旧後にメインClaudeがZED実配信確認を実施する。
+- back_cam: **完了(実機配信 ~26-30Hz 確認済み)**。
+- ZED: **完全復旧・完了**。GPU(ACR)ブロッカー=ユーザのL4T reinstall+reboot で解消。calib欠落=calibファイル配置で解消。全トピック実配信をメインClaudeが確認。
+- 残(任意): depth mode を NEURAL 化、電源 MAXN 化で fps 改善。いずれも必須ではない。
