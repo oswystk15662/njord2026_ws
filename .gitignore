@@ -13,3 +13,23 @@ log/
 
 # temporary backups
 *.bak*
+
+.env
+*.pem
+id_rsa
+credentials.json
+token.json
+
+build/
+install/
+log/
+
+__pycache__/
+*.pyc
+
+runs/
+datasets/
+weights/
+*.pt
+*.onnx
+*.engine
