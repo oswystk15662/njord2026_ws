@@ -37,6 +37,17 @@ def generate_launch_description():
         parameters=[{"robot_description": robot_description}],
     )
 
+    spatial_driver = Node(
+        package="adnav_driver",
+        executable="adnav_driver",
+        name="adnav_driver",
+        output="screen",
+        emulate_tty=True,
+        parameters=[
+            PathJoinSubstitution([robot_share, "config", "adnav_spatial.yaml"])
+        ],
+    )
+
     # The UM982 driver is launched separately because its transport settings
     # are deployment-specific.
     um982_static_tf = Node(
@@ -124,6 +135,31 @@ def generate_launch_description():
         ],
     )
 
+    spatial_navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="spatial_navsat_transform_node",
+        output="screen",
+        parameters=[
+            {
+                "frequency": 10.0,
+                "magnetic_declination_radians": 0.0,
+                "yaw_offset": 0.0,
+                "zero_altitude": True,
+                "broadcast_utm_transform": False,
+                "publish_filtered_gps": False,
+                "use_odometry_yaw": False,
+                "wait_for_datum": False,
+            }
+        ],
+        remappings=[
+            ("imu", "/adnav_driver/imu"),
+            ("gps/fix", "/adnav_driver/nav_sat_fix"),
+            ("odometry/filtered", "odometry/filtered/local"),
+            ("odometry/gps", "/odometry/gps/spatial"),
+        ],
+    )
+
     diagnostics_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
@@ -136,11 +172,13 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
+            spatial_driver,
             um982_static_tf,
             glim_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,
+            spatial_navsat_transform_node,
             diagnostics_launch,
         ]
     )

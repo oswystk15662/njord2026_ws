@@ -37,6 +37,20 @@ sudo apt install ros-humble-ecl* ros-humble-robot-localization
 
 ビルドが成功したら環境構築はうまく行っていると思います。
 
+## Advanced Navigation Spatial v8.0
+
+GNSSアンテナを接続した Spatial v8.0 は `src/driver/ins/ros2-driver`
+の `adnav_driver` で扱います。現物確認では `/dev/ttyUSB0` を
+`ttyUSB0` として指定し、115200 baud で Device Information packet を取得できました。
+`/dev/` prefix は driver 側が内部で付けるため、設定ファイルには入れません。
+
+現在の設定は `src/robot/config/adnav_spatial.yaml` です。packet 20
+（filtered INS/GNSS state）と packet 28（raw sensors）を 20 Hz で要求します。
+115200 baud で高い packet rate にすると `SERIAL PORT DATA OVERFLOW` が出るため、
+この rate に落としています。
+
+引き継ぎと実機確認結果は `Docs/spatial_v8_handoff.md` を参照してください。
+
 ## ディレクトリ構成について
 
 colcon buildしたあとは以下のようなディレクトリ構造になっていると思います。
