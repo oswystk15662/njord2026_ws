@@ -77,7 +77,7 @@ def generate_launch_description():
 
     glim_node = Node(
         package="glim_ros",
-        executable="glim_node",
+        executable="glim_rosnode",
         name="glim_node",
         output="screen",
         parameters=[
@@ -88,6 +88,7 @@ def generate_launch_description():
                 "use_sim_time": False,
             }
         ],
+        remappings=[("/glim_node/odom", "/odom")],
     )
 
     local_ekf_node = Node(

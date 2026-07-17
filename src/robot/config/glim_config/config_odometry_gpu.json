@@ -47,6 +47,7 @@
     "isam2_relinearize_skip": 1,
     "isam2_relinearize_thresh": 0.1,
     "fix_imu_bias": false,
+    "compute_covs": false,
     // Voxel params
     "voxel_resolution": 0.25,
     "voxel_resolution_max": 0.5,
@@ -64,6 +65,7 @@
     "keyframe_delta_rot": 0.5,
     "keyframe_entropy_thresh": 0.99,
     // MISC
+    "validate_imu": true,
     "save_imu_rate_trajectory": true,
     "num_threads": 2
   }

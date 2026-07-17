@@ -8,7 +8,7 @@ from launch_ros.substitutions import FindPackageShare
 
 # Livox ROS driver parameters, transcribed from
 # livox_ros_driver2/launch_ROS2/msg_MID360_launch.py.
-XFER_FORMAT = 1  # 0-Pointcloud2(PointXYZRTL), 1-customized pointcloud format
+XFER_FORMAT = 0  # 0-Pointcloud2(PointXYZRTL), 1-customized pointcloud format
 MULTI_TOPIC = 0  # 0-All LiDARs share the same topic, 1-One LiDAR one topic
 DATA_SRC = 0  # 0-lidar, others-Invalid data src
 PUBLISH_FREQ = 10.0  # frequency of publish, 5.0, 10.0, 20.0, 50.0, etc.

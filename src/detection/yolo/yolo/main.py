@@ -1,6 +1,7 @@
 import os
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from njord_interfaces.msg import BuoyRoi
 import cv2
@@ -73,7 +74,7 @@ class YoloDetectorNode(Node):
 
         # ROS通信設定
         self.sub_img = self.create_subscription(
-            Image, cam_topic, self.image_callback, 10)
+            Image, cam_topic, self.image_callback, qos_profile_sensor_data)
         
         # デバッグ用画像出力
         self.pub_debug_img = self.create_publisher(Image, 'yolo/debug_image', 10)
