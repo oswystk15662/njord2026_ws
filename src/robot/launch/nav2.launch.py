@@ -5,7 +5,6 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
-from nav2_common.launch import RewrittenYaml
 
 def generate_launch_description():
     pkg_nav2_bringup = get_package_share_directory('nav2_bringup')
@@ -44,18 +43,6 @@ def generate_launch_description():
         description='Launch generic topic heartbeat diagnostics for Nav2 topics'
     )
 
-    configured_params = RewrittenYaml(
-        source_file=LaunchConfiguration('params_file'),
-        root_key=None,
-        param_rewrites={
-            'bt_navigator.ros__parameters.default_nav_to_pose_bt_xml':
-                LaunchConfiguration('nav_to_pose_bt_xml'),
-            'bt_navigator.ros__parameters.default_nav_through_poses_bt_xml':
-                LaunchConfiguration('nav_through_poses_bt_xml'),
-        },
-        convert_types=True,
-    )
-
     diagnostics_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_robot, 'launch', 'diagnostics.launch.py')
@@ -74,7 +61,7 @@ def generate_launch_description():
                 os.path.join(pkg_nav2_bringup, 'launch', 'navigation_launch.py')
             ),
             launch_arguments={
-                'params_file': configured_params,
+                'params_file': LaunchConfiguration('params_file'),
                 'use_sim_time': 'false',
                 'autostart': 'true'
             }.items()
