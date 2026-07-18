@@ -1,5 +1,5 @@
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -8,12 +8,20 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def include_launch(package_name, path_parts, condition, launch_arguments=None):
-    return IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            PathJoinSubstitution([FindPackageShare(package_name)] + path_parts)
-        ),
+    # Included launch files commonly declare generic argument names such as
+    # ``serial_port``. Keep those configurations local to the include so a
+    # GNSS launch cannot overwrite the Micon serial port (or vice versa).
+    return GroupAction(
+        scoped=True,
         condition=condition,
-        launch_arguments=(launch_arguments or {}).items(),
+        actions=[
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    PathJoinSubstitution([FindPackageShare(package_name)] + path_parts)
+                ),
+                launch_arguments=(launch_arguments or {}).items(),
+            )
+        ],
     )
 
 
@@ -163,7 +171,10 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_localization", default_value="true"),
             DeclareLaunchArgument("enable_thruster", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="true"),
-            DeclareLaunchArgument("serial_port", default_value="/dev/ttyUSB1"),
+            DeclareLaunchArgument(
+                "serial_port",
+                default_value="/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_c82421728a9aef118808b29061ce3355-if00-port0",
+            ),
             DeclareLaunchArgument("baud", default_value="115200"),
             DeclareLaunchArgument("um982_transport", default_value="uart"),
             DeclareLaunchArgument("um982_port", default_value="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"),

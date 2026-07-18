@@ -3,7 +3,7 @@ adnav_driver:
     log_path: "~/.ros/log/"
     comm_select: 0
     baud_rate: 115200
-    com_port: ttyUSB0
+    com_port: serial/by-id/usb-FTDI_USB_HS_SERIAL_CONVERTER_FTRTKA7O-if00-port0
     publish_us: 20000
     read_us: 1000
 
