@@ -16,6 +16,7 @@ def generate_launch_description():
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     pkg_waypoint = get_package_share_directory("waypoint_publisher")
     pkg_thruster = get_package_share_directory("thruster_driver")
+    pkg_asv_planner = get_package_share_directory("asv_trajectory_planner")
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
     opponent_config = os.path.join(pkg_task2, "config", "task2_opponent_sim.yaml")
@@ -24,9 +25,12 @@ def generate_launch_description():
 
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
-    use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="true")
+    use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="false")
+    use_mppi = DeclareLaunchArgument("use_mppi", default_value="true")
+
     params_arg = DeclareLaunchArgument("params", default_value=config)
     opponent_params_arg = DeclareLaunchArgument("opponent_params", default_value=opponent_config)
+
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
         default_value="0.0",
@@ -34,18 +38,25 @@ def generate_launch_description():
     )
     nav2_delay_arg = DeclareLaunchArgument(
         "nav2_delay",
-        default_value="5.0",
+        default_value="2.0",
         description="Delay before launching Nav2",
     )
     goal_delay_arg = DeclareLaunchArgument(
         "goal_delay",
-        default_value="8.0",
-        description="Delay before launching waypoint_publisher",
+        default_value="3.0",
+        description="Delay before launching goal/planner layer",
+    )
+
+    opponent_delay_arg = DeclareLaunchArgument(
+        "opponent_delay",
+        default_value="10.0",
+        description="Delay before launching opponent vessel layer",
     )
 
     driver_delay = LaunchConfiguration("driver_delay")
     nav2_delay = LaunchConfiguration("nav2_delay")
     goal_delay = LaunchConfiguration("goal_delay")
+    opponent_delay = LaunchConfiguration("opponent_delay")
 
     dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
@@ -101,6 +112,10 @@ def generate_launch_description():
             },
         ],
         output="screen",
+        remappings=[
+            ('/cmd_vel', '/cmd_vel_thruster'),
+            ('cmd_vel', '/cmd_vel_thruster'),
+        ]
     )
 
     robot_state_pub_node = Node(
@@ -166,8 +181,6 @@ def generate_launch_description():
             dynamics,
             sensor_noise_launch,
             task2_orchestrator,
-            opponent_vessel,
-            ideal_lidar,
             thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
@@ -177,7 +190,9 @@ def generate_launch_description():
     )
 
     nav2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(pkg_robot, "launch", "nav2.launch.py")),
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, "launch", "nav2.launch.py")
+        ),
         launch_arguments={
             "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2.yaml"),
             "enable_diagnostics": "false",
@@ -185,7 +200,10 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )
 
-    nav2_layer_timer = TimerAction(period=nav2_delay, actions=[nav2_launch])
+    nav2_layer_timer = TimerAction(
+        period=nav2_delay,
+        actions=[nav2_launch],
+    )
 
     waypoint_publisher = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -199,19 +217,50 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_waypoints")),
     )
 
-    goal_layer_timer = TimerAction(period=goal_delay, actions=[waypoint_publisher])
+    goal_layer_timer = TimerAction(
+        period=goal_delay,
+        actions=[waypoint_publisher],
+    )
+
+    mppi_planner_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                pkg_asv_planner,
+                "launch",
+                "planner_with_follow_path.launch.py",
+            )
+        ),
+        condition=IfCondition(LaunchConfiguration("use_mppi")),
+    )
+
+    mppi_layer_timer = TimerAction(
+        period=goal_delay,
+        actions=[mppi_planner_launch],
+    )
+
+    opponent_layer_timer = TimerAction(
+        period=opponent_delay,
+        actions=[
+            opponent_vessel,
+            ideal_lidar,
+        ],
+    )
 
     return LaunchDescription([
         LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
         use_dynamics,
         use_nav2,
         use_waypoints,
+        use_mppi,
         params_arg,
         opponent_params_arg,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,
+        opponent_delay_arg,
         sensor_layer_timer,
         nav2_layer_timer,
         goal_layer_timer,
+        mppi_layer_timer,
+        opponent_layer_timer,
     ])

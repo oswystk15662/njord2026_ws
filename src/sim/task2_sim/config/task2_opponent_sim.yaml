@@ -5,15 +5,20 @@ opponent_vessel_node:
     footprint_topic: "/sim/opponent_vessel_footprint"
     marker_topic: "/sim/opponent_vessel_outline"
     gps_marker_topic: "/sim/task2_gps_markers"
-    start_label: "GPS point 6"
-    goal_label: "GPS point 5"
+    start_label: "Opponent start"
+    goal_label: "Opponent goal"
     publish_rate_hz: 10.0
-    start_delay_s: 3.0
-    speed_mps: 1.0289
+    start_delay_s: 0.0
+    # speed_mps: 1.0289
+    speed_mps: 1.2861
     start_xy: [60.0, 0.0]
+    opponent_start_xy: [90.0, 0.0]
     goal_xy: [0.0, 0.0]
+    opponent_goal_xy: [0.0, 0.0]
     disturbance_amp_m: 0.3
     disturbance_freq_hz: 0.1
+    # disturbance_amp_m: 0.3
+    # disturbance_freq_hz: 0.1
     vessel_height_m: 3.0
     marker_line_width_m: 0.08
     footprint_vertices:
