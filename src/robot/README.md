@@ -29,21 +29,29 @@ ros2 launch robot back_cam.launch.py video_device:=/dev/videoN
 ros2 launch robot real_bringup.launch.py
 ```
 
-`enable_*` 引数(既定はすべて `true`、`enable_nav2` のみ `false`):
+`enable_*` 引数(`enable_imu` のみ既定 `false`、それ以外は `true`):
 
 - `enable_mid360`
 - `enable_zed2i`
 - `enable_back_cam`
 - `enable_um982`
+- `enable_drogger_rzs`
 - `enable_imu`
 - `enable_localization`
 - `enable_thruster`
-- `enable_nav2`(既定 `false`)
+- `enable_nav2`(既定 `true`)
 
 その他の引数:
 
+- `lidar_model`(既定 `mid360s`、`mid360` または `mid360s`)
 - `serial_port`(既定 `/dev/ttyUSB1`)
 - `baud`(既定 `115200`)
+- `um982_transport`(既定 `uart`)
+- `um982_port`(既定 `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0`)
+- `enable_um982_rtk`(既定 `false`)
+- `drogger_rzs_port`(既定 `/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_ACCQg146B12-if00-port0`)
+- `drogger_rzs_baud`(既定 `115200`)
+- `drogger_rzs_fix_topic`(既定 `/gnss/fix`)
 - `device`(back_cam の by-id パス)
 
 使用例(back_cam のみ起動):

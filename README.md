@@ -1,3 +1,12 @@
+# GitHub運用上の重要ルール
+
+このワークスペースに関するGitHubへの書き込みは、`IBO-ASV` または `oswystk15662` がownerのリポジトリに限定します。
+
+- 他ownerのリポジトリへpush、Pull Request、Issue、コメント、レビューなどを送らないでください。
+- `IBO-ASV`／`oswystk15662` 配下のforkから、外部upstreamへPull Requestを作ることも禁止です。
+- 外部コードの変更が必要な場合は、許可owner配下へforkし、そのfork内のbranchへpushするところまでにしてください。
+- clone、fetch、参照などのread-only操作は対象外です。
+
 # 環境について
 ## 環境構築
 まずはros2 humbleが入っているubuntu22.04を起動し、以下のコマンドでこのワークスペースをクローンしてください。

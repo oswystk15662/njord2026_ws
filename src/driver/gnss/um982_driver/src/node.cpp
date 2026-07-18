@@ -3,6 +3,7 @@
 #include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 #include <algorithm>
+#include <termios.h>
 
 using namespace std::chrono_literals;
 
@@ -187,6 +188,20 @@ void UM982Driver::configure_gnss_output()
     // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
     // fallback heading sentence.
     write_to_gnss("UNLOG\r\n");
+
+    // UNLOG can stop a binary message halfway through transmission.  If that
+    // fragment remains in the UART receive queue, appending the command reply
+    // and the first newly configured message produces one apparent CRC error
+    // at every startup.  No asynchronous read is active yet, so wait for the
+    // receiver to process UNLOG and discard only this stale startup input.
+    if (serial_port_ && serial_port_->is_open()) {
+        std::this_thread::sleep_for(100ms);
+        if (::tcflush(serial_port_->native_handle(), TCIFLUSH) != 0) {
+            RCLCPP_WARN(this->get_logger(), "Failed to flush stale UM982 UART input");
+        }
+        gnss_parse_buf_.clear();
+    }
+
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
     write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
@@ -273,10 +288,17 @@ void UM982Driver::process_gnss_buffer()
             bool crc_ok = utils::calculate_unicore_crc32(gnss_parse_buf_.data(), total_len - 4) ==
                 utils::read_u32_le(&gnss_parse_buf_[total_len - 4]);
 
-            if (crc_ok && msg_id == kUniheadingMessageId) {
+            if (!crc_ok) {
+                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
+                // The declared length may span bytes belonging to a following
+                // valid frame.  Drop only the first sync byte and let the
+                // normal scanner find the next complete 0xAA 0x44 0xB5.
+                gnss_parse_buf_.erase(gnss_parse_buf_.begin());
+                continue;
+            }
+
+            if (msg_id == kUniheadingMessageId) {
                 parse_uniheadingb(gnss_parse_buf_.data() + kBinaryHeaderLen, msg_len);
-            } else if (!crc_ok) {
-                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u)", msg_id);
             }
 
             gnss_parse_buf_.erase(gnss_parse_buf_.begin(), gnss_parse_buf_.begin() + total_len);

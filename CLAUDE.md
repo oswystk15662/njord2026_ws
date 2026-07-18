@@ -1,5 +1,15 @@
 # モデル・エージェントルーティング規則
 
+## GitHub外部書き込み禁止
+
+GitHubへのwrite操作は、リポジトリownerが `IBO-ASV` または `oswystk15662` の場合に限る。
+
+- 許可owner以外へのpush、Pull Request、Issue、コメント、レビュー、release、tag、workflow dispatch、設定変更を禁止する。
+- 許可owner配下のforkを使用していても、別ownerのupstreamへPull RequestやIssueを送ってはならない。
+- 操作前にremote URLまたはGitHub APIで実際のownerを確認する。`origin`、`upstream` などのremote名だけで判断しない。
+- ownerが不明または許可外の場合は、ローカル作業か許可owner配下へのfork・pushまでで停止する。
+- clone、fetch、閲覧などのread-only操作は許可する。
+
 ## 基本方針
 
 メインClaudeは司令塔として、要求整理、タスク分割、担当選択、結果統合を行う。

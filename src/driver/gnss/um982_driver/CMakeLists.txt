@@ -98,4 +98,11 @@ install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
 
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_um982_utils test/test_utils.cpp)
+  target_include_directories(test_um982_utils PRIVATE include)
+  target_link_libraries(test_um982_utils um982_driver_component)
+endif()
+
 ament_package()

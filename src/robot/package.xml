@@ -12,6 +12,7 @@
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>adnav_driver</exec_depend>
   <exec_depend>diagnostic_monitors</exec_depend>
+  <exec_depend>drogger_wired_flex</exec_depend>
   <exec_depend>glim_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
@@ -22,6 +23,7 @@
   <exec_depend>robot_state_publisher</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>usb_cam</exec_depend>
+  <exec_depend>witmotion_imu_driver</exec_depend>
   <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
