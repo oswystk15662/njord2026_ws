@@ -64,8 +64,29 @@ def generate_launch_description():
         name="dutyed_tf_pub_with_disturbance_node",
         parameters=[
             os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {"publish_tf": True},
+            {
+                "publish_tf": True,
+                # Sim-only: duty counts come from sim_thruster_command_adapter,
+                # not from the real Float32MultiArray /thruster_command.
+                "topic_thruster_command": "/sim/thruster_duty",
+            },
         ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_dynamics")),
+    )
+
+    # Sim-only bridge: /thruster_command (Float32MultiArray, N) -> duty counts.
+    # Keeps the real chain thruster_driver -> /thruster_command untouched.
+    sim_thruster_adapter = Node(
+        package="task2_sim",
+        executable="sim_thruster_command_adapter",
+        name="sim_thruster_command_adapter",
+        parameters=[{
+            "input_topic": "/thruster_command",
+            "output_topic": "/sim/thruster_duty",
+            "force_per_duty": [40.0, 40.0, 40.0, 40.0],
+            "duty_resolution": 1000,
+        }],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_dynamics")),
     )
@@ -179,6 +200,7 @@ def generate_launch_description():
         period=driver_delay,
         actions=[
             dynamics,
+            sim_thruster_adapter,
             sensor_noise_launch,
             task2_orchestrator,
             thruster_driver_node,
@@ -189,13 +211,16 @@ def generate_launch_description():
         ],
     )
 
+    # Include the Task 2 Nav2 launch directly so robot/nav2.launch.py can stay
+    # on the standard nav2_bringup navigation_launch.py for the real vessel.
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_robot, "launch", "nav2.launch.py")
+            os.path.join(pkg_robot, "launch", "navigation_launch_task2.py")
         ),
         launch_arguments={
             "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2.yaml"),
-            "enable_diagnostics": "false",
+            "use_sim_time": "false",
+            "autostart": "true",
         }.items(),
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )

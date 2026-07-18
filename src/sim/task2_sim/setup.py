@@ -26,6 +26,7 @@ setup(
             "task2_orchestrator = task2_sim.orchestrator:main",
             "opponent_vessel_node = task2_sim.opponent_vessel:main",
             "ideal_lidar_pointcloud_node = task2_sim.ideal_lidar_pointcloud:main",
+            "sim_thruster_command_adapter = task2_sim.sim_thruster_command_adapter:main",
         ],
     },
 )
