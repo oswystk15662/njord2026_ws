@@ -1,0 +1,90 @@
+# Task 2 perception parameters.
+#
+# IMPORTANT: every value marked "HUMAN: measure on vessel" is a nominal
+# placeholder and MUST be verified on the real boat before trusting the
+# perception output.
+#
+# The upside-down LiDAR correction is applied ONLY in the URDF
+# (robot.urdf.xacro lidar_joint, roll = pi). The nodes here just consume the
+# TF livox_frame -> base_link and never re-rotate the cloud themselves.
+
+task2_cloud_filter:
+  ros__parameters:
+    input_topic: "/livox/lidar"             # Livox driver PointCloud2 (~10 Hz)
+    output_topic: "/task2/points_filtered"  # feed for the submodule preprocessing
+    output_frame: "base_link"
+    min_range_m: 0.5        # [m] drop returns closer than this (near-field noise)
+    max_range_m: 60.0       # [m] drop returns farther than this
+    voxel_leaf_size_m: 0.0  # [m] 0 = off; the downstream pcl_preprocessing
+                            # node voxelizes at 0.1 m — do not double-voxelize
+    accumulation_frames: 1  # [frames] 1 = off; the submodule accumulates 3
+                            # frames downstream — do not double-accumulate
+    # Emergency manual pre-rotation applied BEFORE TF. Default no-op.
+    # If any of these is active the node warns at startup: the URDF TF is the
+    # authoritative inversion correction — do not double-apply.
+    lidar_inverted: false
+    lidar_roll_deg: 0.0
+    lidar_pitch_deg: 0.0
+    lidar_yaw_deg: 0.0
+    # Water surface height in base_link z. HUMAN: measure on vessel
+    # (depends on draft and LiDAR mount height).
+    waterline_z_m: 0.0
+    water_remove_min_z_m: -0.3   # [m] removal band lower edge, relative to waterline
+    water_remove_max_z_m: 0.15   # [m] removal band upper edge, relative to waterline
+    water_plane_distance_threshold_m: 0.05  # [m] RANSAC plane inlier distance
+    water_plane_normal_z_min: 0.9   # only near-horizontal planes are water
+                                    # candidates (vertical quay walls survive)
+    water_plane_max_height_error_m: 0.3  # [m] plane height tolerance around
+                                         # waterline (a deck 2 m above survives)
+    use_water_plane_ransac: true
+    # Self crop-box (base_link AABB, points INSIDE are removed).
+    # HUMAN: measure hull + mast extents on vessel.
+    self_crop_min_x: -1.2   # [m]
+    self_crop_max_x: 1.2    # [m]
+    self_crop_min_y: -0.8   # [m]
+    self_crop_max_y: 0.8    # [m]
+    self_crop_min_z: -0.5   # [m]
+    self_crop_max_z: 1.5    # [m]
+    object_min_z_m: -0.2    # [m] object height band lower edge (base_link)
+    object_max_z_m: 4.0     # [m] object height band upper edge
+    publish_debug: false    # enables /task2/debug/* clouds
+
+opponent_selector:
+  ros__parameters:
+    tracked_objects_topic: "/tracked_objects"   # submodule tracker output
+    ego_odom_topic: "/odometry/filtered/local"  # ego odometry (twist in base_link)
+    twist_topic: "/other_ship/twist"    # MPPI input (map frame, ABSOLUTE velocity)
+    map_frame: "map"
+    base_frame: "base_link"
+    opponent_frame: "opponent_vessel"   # TF child frame broadcast to MPPI
+    confirmed_only: true      # only CONFIRMED tracks are eligible
+    max_distance_m: 60.0      # [m] horizontal distance gate
+    selection_policy: "nearest"   # "nearest" | "min_tcpa" | "track_id"
+    target_track_id: -1       # used only with selection_policy: "track_id"
+    min_length_m: 0.5         # [m] reject tracks with a smaller length (dimensions.x)
+    max_length_m: 30.0        # [m] reject tracks with a larger length
+    min_point_count: 5        # [pts] cluster size gate
+    stale_timeout_sec: 2.0    # [s] tracks older than this are ignored
+    publish_rate_hz: 10.0     # [Hz] output rate
+    twist_lowpass_alpha: 0.3  # first-order IIR low-pass factor (0..1)
+    max_speed_mps: 5.0        # [m/s] spike-rejection gate on opponent speed
+
+quay_wall_detector:
+  ros__parameters:
+    input_topic: "/pcl/nonground"   # submodule ground_remover output (base_link)
+    map_frame: "map"
+    base_frame: "base_link"
+    wall_min_points: 30             # [pts] min inliers per wall segment
+                                    # HUMAN: measure on vessel (depends on point density)
+    wall_min_length_m: 2.0          # [m] reject shorter segments
+    wall_max_distance_m: 40.0       # [m] reject segments farther from the boat
+    wall_line_distance_threshold_m: 0.15  # [m] 2D RANSAC line inlier distance
+    wall_normal_z_max: 0.3          # plane-normal z gate: a vertical wall face
+                                    # has a near-horizontal normal
+    wall_temporal_confirmations: 3  # [frames] recurrences needed to confirm
+    wall_timeout_sec: 2.0           # [s] unseen tracks are dropped after this
+    quay_safety_margin_m: 5.0       # [m] costmap inflation around wall segments
+    publish_wall_markers: true      # /quay_wall/markers (MarkerArray)
+    publish_wall_costmap: true      # /quay_wall/costmap (OccupancyGrid, map)
+    costmap_resolution_m: 0.5       # [m/cell]
+    costmap_size_m: 100.0           # [m] square grid edge, centered on the boat
