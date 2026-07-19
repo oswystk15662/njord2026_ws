@@ -102,7 +102,18 @@ RIGHT_AX_GAIN = 3.2
 LEFT_AX_GAIN  = 1.6
 FORE_AX_GAIN  = 6.4
 AFT_AX_GAIN   = 1.6
-def timedomaincrm(X, Y, T, own, others, turn=None, ):
+def timedomaincrm(X, Y, T, own, others, turn=None, ax_gains=None):
+    # ax_gains: optional (right, left, fore, aft) bumper axis gains in LOA
+    # multiples. None keeps the historical module-level constants, so existing
+    # callers are behaviorally unchanged.
+    if ax_gains is None:
+        right_ax_gain = RIGHT_AX_GAIN
+        left_ax_gain = LEFT_AX_GAIN
+        fore_ax_gain = FORE_AX_GAIN
+        aft_ax_gain = AFT_AX_GAIN
+    else:
+        right_ax_gain, left_ax_gain, fore_ax_gain, aft_ax_gain = ax_gains
+
     relx = X - own[0]
     rely = Y - own[1]
     # dt = np.sqrt( relx**2 + rely**2 )/own[2]
@@ -134,11 +145,11 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ):
             1 - torch.sqrt(
                 torch.where(
                     pred_relx>0,
-                    (pred_relx/own[4]/RIGHT_AX_GAIN),
-                    (pred_relx/own[4]/LEFT_AX_GAIN),
+                    (pred_relx/own[4]/right_ax_gain),
+                    (pred_relx/own[4]/left_ax_gain),
                 )**2 + torch.where(
-                    pred_rely>0, (pred_rely/own[4]/FORE_AX_GAIN),
-                    (pred_rely/own[4]/AFT_AX_GAIN),
+                    pred_rely>0, (pred_rely/own[4]/fore_ax_gain),
+                    (pred_rely/own[4]/aft_ax_gain),
                 )**2
             ), 0, 1,
         )
@@ -161,12 +172,12 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ):
                     1 - torch.sqrt(
                         torch.where(
                             pred_relx_oth>0,
-                            (pred_relx_oth/oth[4]/RIGHT_AX_GAIN),
-                            (pred_relx_oth/oth[4]/LEFT_AX_GAIN),
+                            (pred_relx_oth/oth[4]/right_ax_gain),
+                            (pred_relx_oth/oth[4]/left_ax_gain),
                         )**2 + torch.where(
                             pred_rely_oth>0,
-                            (pred_rely_oth/oth[4]/FORE_AX_GAIN),
-                            (pred_rely_oth/oth[4]/AFT_AX_GAIN),
+                            (pred_rely_oth/oth[4]/fore_ax_gain),
+                            (pred_rely_oth/oth[4]/aft_ax_gain),
                         )**2
                     ), 0, 1,
                 )
