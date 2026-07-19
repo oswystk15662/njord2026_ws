@@ -17,15 +17,14 @@ setup(
     maintainer="IBO-ASV",
     maintainer_email="pigleteshima@gmail.com",
     description="Task 2 LiDAR perception glue: cloud filtering for the "
-                "pcl_segmentation pipeline, opponent-ship selection for the "
-                "MPPI planner, and quay wall detection.",
+                "pcl_segmentation pipeline and opponent-ship selection for "
+                "the MPPI planner.",
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
         "console_scripts": [
             "task2_cloud_filter_node = task2_perception.cloud_filter_node:main",
             "opponent_selector_node = task2_perception.opponent_selector_node:main",
-            "quay_wall_detector_node = task2_perception.quay_wall_detector_node:main",
         ],
     },
 )

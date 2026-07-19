@@ -4,6 +4,7 @@
 - 各表の記号: 「人が調整」 ◎=実測/実機調整**必須**(公称値のまま信用しない)、○=実機で調整が想定される、−=通常は触らない。
 - 「Jetson確認」「実機確認」: ✓=その段階で値の妥当性を確認すべき項目(手順は `Docs/task2_jetson_validation.md`)。**現時点ではいずれも未確認**。
 - デフォルト値はすべてコード/YAML から転記(静的確認済み)。
+- 岸壁認識はTask 2の対象外となったため、feature/quay-perceptionブランチへ保存し、task2-experimentの認識・計画・制御ループから除外した。
 
 ---
 
@@ -16,7 +17,6 @@
 | ◎ 実測必須 | URDF LiDAR 取付角 `lidar_roll/pitch/yaw`・位置 `lidar_x/y/z` | `src/robot/urdf/robot.urdf.xacro` | roll=π, z=0.8 m | 上下逆さま補正の唯一の場所。実測せずに認識/GLIM を信用しない |
 | ◎ 実測必須 | `waterline_z_m` | task2_perception_params.yaml | 0.0 m | 喫水と LiDAR 高さに依存 |
 | ◎ 実測必須 | `self_crop_min/max_x/y/z`(6 値) | 同上 | x±1.2, y±0.8, z −0.5〜1.5 m | 船体・マスト実寸で決める |
-| ◎ 実測必須 | `wall_min_points` | 同上 | 30 点 | 実際の点密度に依存 |
 | ◎ 配置必須 | YOLO11s 重み(`model_path` / `yolo_model_path`) | yolo11s_params.yaml / launch 引数 | リポジトリ非含有 | 学習済み .pt / .engine を人が配置 |
 | ◎ 現地確定 | `task2_waypoints.yaml` の x/y(map 座標・オフライン事前計算) | waypoint_publisher/config | プール C→A 対角 約46 m | 実験水域の GPS で再生成 |
 | ○ 実機調整 | MPPI `mppi.*` 全般(特に target_speed, horizon, num_samples, CRM ゲイン) | mppi_params.yaml | 旧ハードコード値 | 変更時は値+日付+理由を YAML に記録する運用 |
@@ -78,24 +78,9 @@
 
 (コード内定数: スパイクゲートの yaw rate 上限 `max_yaw_rate_rps` = 1.5 rad/s、`TwistSmoother` の既定値でパラメータ非公開)
 
-## 4. quay_wall_detector(パッケージ: task2_perception)
+## 4. 岸壁認識(Task 2 対象外)
 
-| パラメータ名 | 型 | 単位 | デフォルト | 説明 | 人が調整 | Jetson確認 | 実機確認 |
-|---|---|---|---|---|---|---|---|
-| `input_topic` | string | − | `/pcl/nonground` | 入力(サブモジュール ground remover 出力) | − | ✓ | |
-| `map_frame` / `base_frame` | string | − | `map` / `base_link` | frame 名 | − | ✓ | |
-| `wall_min_points` | int | 点 | 30 | 壁セグメント最小インライア数。**実測必須**(点密度依存) | ◎ | | ✓ |
-| `wall_min_length_m` | double | m | 2.0 | これより短いセグメントを棄却 | ○ | | ✓ |
-| `wall_max_distance_m` | double | m | 40.0 | これより遠いセグメントを棄却 | ○ | | ✓ |
-| `wall_line_distance_threshold_m` | double | m | 0.15 | 2D RANSAC 直線インライア距離 | ○ | | ✓ |
-| `wall_normal_z_max` | double | − | 0.3 | 面法線 \|z\| 上限(鉛直壁面のみ通す) | − | | ✓ |
-| `wall_temporal_confirmations` | int | frame | 3 | confirmed までの再出現回数 | ○ | | ✓ |
-| `wall_timeout_sec` | double | s | 2.0 | 未観測トラック破棄時間 | ○ | | |
-| `quay_safety_margin_m` | double | m | 5.0 | `/quay_wall/costmap` の膨張マージン | ○ | | ✓ |
-| `publish_wall_markers` | bool | − | true | `/quay_wall/markers` 出力 | − | | |
-| `publish_wall_costmap` | bool | − | true | `/quay_wall/costmap` 出力 | − | | |
-| `costmap_resolution_m` | double | m/cell | 0.5 | costmap 解像度 | − | | |
-| `costmap_size_m` | double | m | 100.0 | costmap 一辺(自船中心) | − | | |
+岸壁認識のパラメータ群は feature/quay-perception ブランチに保存されており、本リファレンスの対象外(§冒頭の注記参照)。
 
 ## 5. yolo11_detector = yolo11_node(パッケージ: yolo)
 
@@ -158,8 +143,6 @@
 | `mppi.gate_half_width_m` | double | m | 4.0 | 仮想ゲート半幅(ブイ間隔=2 倍) | ○ | | ✓ |
 | `mppi.buoy_margin_m` | double | m | 1.0 | 仮想ブイ外側マージン | ○ | | |
 | `mppi.buoy_longitudinal_sigma_m` | double | m | 8.0 | ブイコストの縦方向ゲート σ | ○ | | |
-| `mppi.quay_cost_weight` | double | − | 50.0 | **実験的** quay cost 重み(新規パラメータ・履歴なし) | ○ | | ✓ |
-| `mppi.quay_safety_margin_m` | double | m | 3.0 | **実験的** quay cost マージン | ○ | | ✓ |
 
 ### 6.2 planner のその他パラメータ
 
@@ -184,8 +167,6 @@
 | `reconnect_ahead_length_m` | double | m | 8.0 | 5.0 | 復帰先読み長 | ○ |
 | `straight_path_spacing_m` / `straight_path_length_m` | double | m | 2.0 / 60.0 | 2.0 / 60.0 | 直進 Path の間隔・長さ | − |
 | `mppi_smoothing_window` | int | 点 | 5 | 3 | 出力経路平滑化窓 | ○ |
-| `enable_mppi_quay_cost` | bool | − | **false** | false(YAML) | **実験的** quay cost 有効化。false で歴史的挙動と同一。一次安全経路は Nav2 costmap | ○ |
-| `quay_markers_topic` | string | − | `/quay_wall/markers` | 同左(YAML) | quay cost 入力 topic | − |
 
 ### 6.3 task2_waypoint_pose_publisher(同パッケージ)
 
@@ -204,7 +185,6 @@
 | `enable_yolo` | true | yolo11s.launch.py 起動。**venv 必須**(なければ `enable_yolo:=false`) | ○ |
 | `enable_lidar` | true | Mid360 + task2_perception 起動 | ○ |
 | `enable_ship_tracking` | true | サブモジュール classical_pipeline + opponent_selector 起動 | ○ |
-| `enable_quay_detection` | true | quay_wall_detector 起動 | ○ |
 | `enable_mppi` | true | planner_real.launch.py 起動 | ○ |
 | `enable_nav2` | true | Task2 Nav2 スタック起動 | ○ |
 | `enable_thrusters` | true | 三重ゲートの第 1 条件(単独ではスラスタは起動しない) | − |
@@ -247,7 +227,7 @@
 | velocity_smoother `max_accel` / `max_decel` | [1.50, 0, 0.25] / [−1.50, 0, −0.25] | |
 | local costmap | 30×30 m, 0.1 m, global_frame odom | rolling |
 | global costmap | 100×60 m, 0.2 m, origin (−20, −30), global_frame map | |
-| obstacle_layer sources | `pointcloud`(/pointcloud, clearing+marking), `quay`(/quay_wall/points, **marking のみ**, max_obstacle_height 4.0, range 40 m) | 両 costmap 共通 |
+| obstacle_layer sources | `pointcloud`(/pointcloud, clearing+marking) | 両 costmap 共通 |
 | inflation_layer | cost_scaling_factor 2.5, inflation_radius 1.2 m | |
 | goal_checker | xy 1.0 m, yaw 0.6 rad | |
 | bt_navigator `odom_topic` | `/odometry/filtered/global` | |

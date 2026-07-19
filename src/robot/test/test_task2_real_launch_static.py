@@ -7,7 +7,9 @@ No `launch` / ROS imports: safe to run on machines without ROS 2. Asserts:
   (b) the dry_run / send_thruster_commands arguments exist with SAFE defaults
       ('true' / 'false'),
   (c) the thruster enable condition references all three gates
-      (enable_thrusters, dry_run, send_thruster_commands).
+      (enable_thrusters, dry_run, send_thruster_commands),
+  (d) quay-wall perception stays removed from the Task 2 integration
+      (it is preserved on the feature/quay-perception branch).
 """
 
 import ast
@@ -15,10 +17,33 @@ import io
 import os
 import tokenize
 
+import yaml
+
 LAUNCH_FILE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "launch",
     "task2_real.launch.py",
+)
+
+REPO_ROOT = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
+
+NAV2_PARAMS_FILE = os.path.join(
+    REPO_ROOT, "src", "robot", "config", "nav2_params_task2.yaml"
+)
+PLANNER_NODE_FILE = os.path.join(
+    REPO_ROOT,
+    "src", "navigation", "path_generator", "mppi",
+    "asv_trajectory_planner", "planner_node.py",
+)
+MPPI_PARAMS_FILE = os.path.join(
+    REPO_ROOT,
+    "src", "navigation", "path_generator", "mppi",
+    "config", "mppi_params.yaml",
+)
+RECORD_BAG_SCRIPT = os.path.join(
+    REPO_ROOT, "scripts", "task2", "record_task2_bag.sh"
 )
 
 SIM_ONLY_EXECUTABLES = [
@@ -230,4 +255,81 @@ def test_thruster_expression_is_used_for_enable_thruster():
     assert wired, (
         "enable_thruster must be wired to the thruster_allowed expression in "
         "the real_bringup launch_arguments dict"
+    )
+
+
+# ----------------------------------------------------------------------
+# Quay-wall removal guards: quay perception was moved out of Task 2 (it is
+# preserved on the feature/quay-perception branch) and must not silently
+# reappear in the integration files.
+# ----------------------------------------------------------------------
+
+def _contains_quay_key(node):
+    """Recursively check a yaml.safe_load result for keys containing 'quay'."""
+    if isinstance(node, dict):
+        for key, value in node.items():
+            if isinstance(key, str) and "quay" in key.lower():
+                return True
+            if _contains_quay_key(value):
+                return True
+    elif isinstance(node, list):
+        for item in node:
+            if _contains_quay_key(item):
+                return True
+    return False
+
+
+def test_launch_file_has_no_quay_references():
+    source = _read_source()
+    for needle in ("quay_wall_detector", "enable_quay_detection", "/quay_wall"):
+        assert needle not in source, (
+            f"task2_real.launch.py must not reference '{needle}' (quay "
+            "perception was removed from Task 2)"
+        )
+
+
+def test_nav2_params_have_no_quay_source():
+    with open(NAV2_PARAMS_FILE, "r", encoding="utf-8") as f:
+        params = yaml.safe_load(f)
+
+    for costmap in ("local_costmap", "global_costmap"):
+        ros_params = params[costmap][costmap]["ros__parameters"]
+        obstacle_layer = ros_params["obstacle_layer"]
+
+        sources = obstacle_layer["observation_sources"]
+        assert "quay" not in sources, (
+            f"{costmap} observation_sources must not include a quay source"
+        )
+        assert not _contains_quay_key(obstacle_layer), (
+            f"{costmap} obstacle_layer must not contain a quay block"
+        )
+
+
+def test_planner_node_has_no_quay_subscription():
+    with open(PLANNER_NODE_FILE, "r", encoding="utf-8") as f:
+        source = f.read()
+
+    assert "/quay_wall" not in source, (
+        "planner_node.py must not subscribe to any /quay_wall topic"
+    )
+    assert "enable_mppi_quay_cost" not in source, (
+        "planner_node.py must not declare enable_mppi_quay_cost"
+    )
+
+
+def test_mppi_params_have_no_quay_keys():
+    with open(MPPI_PARAMS_FILE, "r", encoding="utf-8") as f:
+        params = yaml.safe_load(f)
+
+    assert not _contains_quay_key(params), (
+        "mppi_params.yaml must not contain any quay parameter"
+    )
+
+
+def test_record_bag_script_has_no_quay_topics():
+    with open(RECORD_BAG_SCRIPT, "r", encoding="utf-8") as f:
+        script = f.read()
+
+    assert "/quay_wall" not in script, (
+        "record_task2_bag.sh must not record /quay_wall topics"
     )

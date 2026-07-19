@@ -5,8 +5,8 @@ copy-pasted from them:
 
     real_bringup.launch.py        sensors, GLIM/EKF localization, (thrusters)
     yolo11s.launch.py             camera buoy detection        [enable_yolo]
-    task2_perception.launch.py    cloud filter / opponent selector /
-                                  quay detection               [enable_lidar]
+    task2_perception.launch.py    cloud filter / opponent selector
+                                                               [enable_lidar]
     classical_pipeline.launch.py  ship tracking (/other_ship/twist,
                                   map->opponent_vessel TF)     [enable_ship_tracking]
     planner_real.launch.py        MPPI planner + waypoint source
@@ -80,7 +80,6 @@ def generate_launch_description():
     enable_yolo = LaunchConfiguration("enable_yolo")
     enable_lidar = LaunchConfiguration("enable_lidar")
     enable_ship_tracking = LaunchConfiguration("enable_ship_tracking")
-    enable_quay_detection = LaunchConfiguration("enable_quay_detection")
     enable_mppi = LaunchConfiguration("enable_mppi")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_thrusters = LaunchConfiguration("enable_thrusters")
@@ -156,7 +155,6 @@ def generate_launch_description():
         launch_arguments={
             "enable_cloud_filter": "true",
             "enable_opponent_selector": enable_ship_tracking,
-            "enable_quay_detection": enable_quay_detection,
         },
     )
 
@@ -213,7 +211,6 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_yolo", default_value="true"),
             DeclareLaunchArgument("enable_lidar", default_value="true"),
             DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
-            DeclareLaunchArgument("enable_quay_detection", default_value="true"),
             DeclareLaunchArgument("enable_mppi", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="true"),
             DeclareLaunchArgument("enable_thrusters", default_value="true"),

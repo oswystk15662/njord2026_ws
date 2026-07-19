@@ -4,6 +4,7 @@
 - 前提: 本ブランチのコードは **Mac 上で静的確認のみ**。以下の 18 段階を順に実施し、各段階の合格条件を満たしてから次へ進む。
 - 記法: `<ws>` = ワークスペースルート。ROS 2 環境は毎シェルで `source /opt/ros/<distro>/setup.bash && source install/setup.bash`。
 - 段階 14 までは水上に出さない。段階 15 以降は係留または安全確保された水域で行う。
+- 岸壁認識はTask 2の対象外となったため、feature/quay-perceptionブランチへ保存し、task2-experimentの認識・計画・制御ループから除外した。
 
 ---
 
@@ -28,7 +29,7 @@ colcon build --symlink-install --packages-up-to \
 colcon test --packages-select robot task2_perception && colcon test-result --verbose
 ```
 
-- **合格条件**: colcon build エラーなし(C++ サブモジュール含む)。static check の FAIL 0 件。pytest 37 件(perception 29 + launch 静的 8)全通過。
+- **合格条件**: colcon build エラーなし(C++ サブモジュール含む)。static check の FAIL 0 件。pytest 40 件(perception 26 + launch 静的 14)全通過。
 - **失敗時**: `ship_perception_msgs` を先にビルドしたか(`opponent_selector` の import 失敗は大抵これ)。rosdep 未解決(torch は pip 管理)。
 
 ## 段階 3: LiDAR 単体
@@ -36,7 +37,7 @@ colcon test --packages-select robot task2_perception && colcon test-result --ver
 ```bash
 ros2 launch robot task2_real.launch.py \
     enable_camera:=false enable_yolo:=false enable_ship_tracking:=false \
-    enable_quay_detection:=false enable_mppi:=false enable_nav2:=false
+    enable_mppi:=false enable_nav2:=false
 # 別シェル
 ros2 topic hz /livox/lidar
 ros2 topic echo /task2/points_filtered --field header.frame_id --once
@@ -62,8 +63,7 @@ ros2 topic echo /task2/debug/rejected_water --once
 
 ```bash
 ros2 launch robot task2_real.launch.py \
-    enable_camera:=false enable_yolo:=false enable_mppi:=false enable_nav2:=false \
-    enable_quay_detection:=false
+    enable_camera:=false enable_yolo:=false enable_mppi:=false enable_nav2:=false
 # 別シェル(他船役のボートまたは移動物体を用意)
 ros2 topic echo /tracked_objects
 ros2 topic echo /other_ship/twist
@@ -74,24 +74,16 @@ ros2 run tf2_ros tf2_echo map opponent_vessel
 - **合格条件**: 移動物体が CONFIRMED トラックになり、`/other_ship/twist` が **map 系の絶対対地速度**として妥当(静止物体で ≈ 0 m/s、移動物体で実速度と符号・大きさが一致)。物体を隠すと 2 s 以内に出力が沈黙する。
 - **失敗時**: 速度の向き・大きさが不自然 → **ship_tracker の twist frame 規約(物体 body frame・相対)の実データ確認**が必要(既知の要確認事項)。`/tracked_objects` が空 → 段階 4 のフィルタで消えすぎていないか `/task2/points_filtered` を確認。ゲートで落ちる → `opponent_selector` の distance/size/point ゲートを緩める。
 
-## 段階 6: 岸壁認識
+## 段階 6: 岸壁認識(対象外)
 
-```bash
-# 段階 5 と同構成 + enable_quay_detection:=true (既定)
-ros2 topic echo /quay_wall/markers --once
-ros2 topic hz /quay_wall/points
-```
-
-- **確認 topic**: `/quay_wall/points`, `/quay_wall/markers`, `/quay_wall/costmap`。
-- **合格条件**: 実在の岸壁位置に LINE_LIST マーカーが安定して出る(3 フレーム確認後)。他船・ブイが壁と誤認されない。壁が視野から外れて 2 s で消える。
-- **失敗時**: 壁が出ない → `wall_min_points`(実測必須)を下げる、`/pcl/nonground` の点密度を確認。誤検出 → `wall_min_length_m` / `wall_normal_z_max` を調整。
+別Taskへ移行したため対象外。
 
 ## 段階 7: カメラ単体
 
 ```bash
 ros2 launch robot task2_real.launch.py \
     enable_yolo:=false enable_lidar:=false enable_ship_tracking:=false \
-    enable_quay_detection:=false enable_mppi:=false enable_nav2:=false
+    enable_mppi:=false enable_nav2:=false
 ros2 topic hz /camera/image_raw
 ```
 
@@ -106,7 +98,7 @@ cp <学習済み>/yolo11s.pt src/detection/yolo/config/yolo11s.pt
 colcon build --packages-select yolo
 source ~/venvs/yolo11/bin/activate   # venv ガード必須
 ros2 launch robot task2_real.launch.py \
-    enable_lidar:=false enable_ship_tracking:=false enable_quay_detection:=false \
+    enable_lidar:=false enable_ship_tracking:=false \
     enable_mppi:=false enable_nav2:=false \
     yolo_model_path:=$(pwd)/src/detection/yolo/config/yolo11s.pt
 # 別シェル
@@ -227,7 +219,7 @@ ros2 launch robot task2_real.launch.py \
 ```
 
 - 事前に: `task2_waypoints.yaml` を実験水域の GPS で再生成し、直進コース(他船なし)→ 他船ありの順で実施。
-- **合格条件**: 他船なしで基準線を target_speed ≈ 1.03 m/s で直進。他船接近で MPPI が回避経路を生成し、CRM 楕円(右 3.2 LOA 等)を尊重した回避。他船喪失時に直進へ安全に復帰。岸壁に `quay_safety_margin` 相当以上接近しない。
+- **合格条件**: 他船なしで基準線を target_speed ≈ 1.03 m/s で直進。他船接近で MPPI が回避経路を生成し、CRM 楕円(右 3.2 LOA 等)を尊重した回避。他船喪失時に直進へ安全に復帰。
 - **失敗時**: 即 E-stop → rosbag(段階 17)を解析。MPPI パラメータ調整はすべて `mppi_params.yaml` に記録。
 
 ## 段階 17: rosbag 記録
@@ -237,8 +229,8 @@ ros2 launch robot task2_real.launch.py \
 ./scripts/task2/record_task2_bag.sh --all      # 問題調査時は全 topic
 ```
 
-- **合格条件**: 記録 topic(/livox/lidar, /odom, /task2/points_filtered, /tracked_objects, /other_ship/twist, /quay_wall/*, /planned_path_pruned, /cmd_vel_thruster, /thruster_command, /tf ほか)がすべて含まれ、ディスク残量警告が出ない。
-- **注**: `/quay_wall/costmap` と `/pcl/nonground` は既定リストに含まれない。岸壁デバッグ時は `--all` を使うこと。
+- **合格条件**: 記録 topic(/livox/lidar, /odom, /task2/points_filtered, /tracked_objects, /other_ship/twist, /pcl/nonground, /planned_path_pruned, /cmd_vel_thruster, /thruster_command, /tf ほか)がすべて含まれ、ディスク残量警告が出ない。
+- **注**: 既定リストにない topic の調査時は `--all` を使うこと。
 
 ## 段階 18: E-stop 総合確認
 

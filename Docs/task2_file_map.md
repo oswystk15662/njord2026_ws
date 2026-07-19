@@ -4,6 +4,7 @@
 - 取得コマンド: `git diff --name-status 834f433 HEAD`(計 74 ファイル、+10576 / −44 行)
 - 区分: A=新規、M=変更。「対象」: 実機 / シミュ / 両方 / 開発(Mac 等の開発環境用)。
 - サブモジュール `src/detection/pcl_segmentation` はポインタ `db84af9` のまま**変更なし**(diff に現れない)。
+- 岸壁認識はTask 2の対象外となったため、feature/quay-perceptionブランチへ保存し、task2-experimentの認識・計画・制御ループから除外した。
 
 ---
 
@@ -13,28 +14,26 @@
 |---|---|---|---|---|---|---|
 | `src/robot/launch/task2_real.launch.py` | A | 実機 Task 2 統合エントリポイント。三重ゲート dry-run 実装 | 実機用統合 launch が未存在だった | 実機 | robot, yolo, task2_perception, ship_perception_bringup, asv_trajectory_planner | real_bringup / yolo11s / task2_perception / classical_pipeline / planner_real / navigation_launch_task2 / diagnostics |
 | `src/robot/launch/navigation_launch_task2.py` | A | Task 2 専用 Nav2 起動(nav2_bringup navigation_launch.py 相当。velocity_smoother 出力を `/cmd_vel_thruster` にリマップ) | 実機用 `nav2.launch.py` を無変更に保つため分離 | 両方 | nav2_* 各種 | task2_real / task2_sim、`nav2_params_task2.yaml` |
-| `src/robot/config/nav2_params_task2.yaml` | M | Task 2 用 Nav2 パラメータ | mppi ブランチ版へ更新+obstacle layer に第 2 ソース `quay`(/quay_wall/points, marking のみ)を追加 | 両方 | nav2_costmap_2d ほか | navigation_launch_task2.py |
+| `src/robot/config/nav2_params_task2.yaml` | M | Task 2 用 Nav2 パラメータ | mppi ブランチ版へ更新(obstacle layer ソースは `pointcloud` のみ) | 両方 | nav2_costmap_2d ほか | navigation_launch_task2.py |
 | `src/robot/urdf/robot.urdf.xacro` | M | ロボットモデル | `lidar_joint` に roll=π(公称・**要実測**)を設定 — 上下逆さま Mid360 補正の唯一の場所 | 両方 | robot_state_publisher | localization.launch.py |
 | `src/robot/urdf/robot.urdf_modified.urdf` | M | 展開済み URDF(シミュが直接読む) | xacro と同じ roll=π を反映 | シミュ | robot_state_publisher | task2_sim.launch.py |
 | `src/robot/CMakeLists.txt` | M | ビルド定義 | `test_task2_real_launch_static` を pytest テストとして登録 | 開発 | ament_cmake_pytest | − |
-| `src/robot/test/test_task2_real_launch_static.py` | A | 静的テスト 8 件(launch 構文 / シミュ専用ノード非混入 / 安全既定値 / 三重ゲート式) | dry-run 安全性を CI 的に固定 | 開発 | pytest | task2_real.launch.py |
+| `src/robot/test/test_task2_real_launch_static.py` | A | 静的テスト 14 件(launch 構文 / シミュ専用ノード非混入 / 安全既定値 / 三重ゲート式 / 岸壁認識の非再混入) | dry-run 安全性を CI 的に固定 | 開発 | pytest | task2_real.launch.py |
 
 ## 2. task2_perception(新規パッケージ)
 
 | パス | 状態 | 役割 | 対象 | 依存 | 関連 |
 |---|---|---|---|---|---|
-| `src/detection/task2_perception/package.xml` / `setup.py` / `setup.cfg` / `resource/task2_perception` / `task2_perception/__init__.py` | A | パッケージ定義(ament_python)。3 executable を登録 | 実機 | rclpy, sensor_msgs, tf2_ros, ship_perception_msgs(サブモジュール) | task2_perception.launch.py |
+| `src/detection/task2_perception/package.xml` / `setup.py` / `setup.cfg` / `resource/task2_perception` / `task2_perception/__init__.py` | A | パッケージ定義(ament_python)。2 executable を登録 | 実機 | rclpy, sensor_msgs, tf2_ros, ship_perception_msgs(サブモジュール) | task2_perception.launch.py |
 | `src/detection/task2_perception/README.md` | A | パッケージ設計・チェーン・要実測パラメータの説明 | − | − | − |
-| `src/detection/task2_perception/config/task2_perception_params.yaml` | A | 3 ノードの全パラメータ(`HUMAN: measure on vessel` 注記付き) | 実機 | − | task2_perception.launch.py |
-| `src/detection/task2_perception/launch/task2_perception.launch.py` | A | 3 ノード起動(enable_cloud_filter / enable_opponent_selector / enable_quay_detection) | 実機 | − | task2_real.launch.py から include |
+| `src/detection/task2_perception/config/task2_perception_params.yaml` | A | 2 ノードの全パラメータ(`HUMAN: measure on vessel` 注記付き) | 実機 | − | task2_perception.launch.py |
+| `src/detection/task2_perception/launch/task2_perception.launch.py` | A | 2 ノード起動(enable_cloud_filter / enable_opponent_selector) | 実機 | − | task2_real.launch.py から include |
 | `src/detection/task2_perception/task2_perception/cloud_filter_node.py` | A | `task2_cloud_filter`: /livox/lidar → TF 変換+フィルタ → /task2/points_filtered | 実機 | tf2_ros, sensor_msgs_py | 上記 YAML |
 | `src/detection/task2_perception/task2_perception/opponent_selector_node.py` | A | `opponent_selector`: /tracked_objects → ゲート/選択/ego 補償/平滑化 → /other_ship/twist + TF | 実機 | ship_perception_msgs | 上記 YAML |
-| `src/detection/task2_perception/task2_perception/quay_wall_detector_node.py` | A | `quay_wall_detector`: /pcl/nonground → RANSAC 直線+時間確認 → /quay_wall/* | 実機 | visualization_msgs, nav_msgs | 上記 YAML |
 | `src/detection/task2_perception/task2_perception/cloud_ops.py` | A | 点群操作の純 numpy モジュール(変換・クロップ・水面除去 RANSAC 等) | 実機 | numpy のみ | pytest |
-| `src/detection/task2_perception/task2_perception/wall_fit.py` | A | 壁候補抽出・2D RANSAC・時間トラッカ・OccupancyGrid 生成(純 numpy) | 実機 | numpy のみ | pytest |
 | `src/detection/task2_perception/task2_perception/tracking_glue.py` | A | Track データクラス・body→base 回転・ego 補償・CPA/TCPA・選択ロジック(純 Python) | 実機 | numpy のみ | pytest |
 | `src/detection/task2_perception/task2_perception/smoothing.py` | A | TwistSmoother(IIR ローパス+スパイク棄却。opponent_twist_from_tf_node の移植) | 実機 | − | pytest |
-| `src/detection/task2_perception/test/`(`__init__.py`, `conftest.py`, `test_cloud_ops.py`, `test_tracking_glue.py`, `test_wall_fit.py`) | A | 合成データによる pytest 29 件(ROS 不要、Mac で全通過) | 開発 | pytest, numpy | task2_static_check.sh |
+| `src/detection/task2_perception/test/`(`__init__.py`, `conftest.py`, `test_cloud_ops.py`, `test_tracking_glue.py`) | A | 合成データによる pytest 26 件(ROS 不要、Mac で全通過) | 開発 | pytest, numpy | task2_static_check.sh |
 
 ## 3. YOLO11s(既存 yolo パッケージへ並置追加)
 
@@ -52,12 +51,11 @@
 | パス | 状態 | 役割 | 対象 | 関連 |
 |---|---|---|---|---|
 | `src/navigation/path_generator/mppi/package.xml` / `setup.py` / `setup.cfg` / `resource/` / `asv_trajectory_planner/__init__.py` | A | パッケージ定義(mppi マージで取込+依存宣言追加) | 両方 | − |
-| `.../asv_trajectory_planner/planner_node.py` | A | MPPI プランナノード。**今回 `mppi.*` パラメータ化(デフォルト=旧ハードコード値)+実験的 quay cost フック追加** | 両方 | mppi_params.yaml |
+| `.../asv_trajectory_planner/planner_node.py` | A | MPPI プランナノード。**今回 `mppi.*` パラメータ化(デフォルト=旧ハードコード値)** | 両方 | mppi_params.yaml |
 | `.../asv_trajectory_planner/mppi_torch.py` | A | MPPI コア(torch)。パラメータ注入対応(デフォルト挙動不変を 25/25 テストで確認) | 両方 | − |
 | `.../asv_trajectory_planner/crm_torch.py` | A | CRM 衝突リスクモデル(バンパ楕円) | 両方 | − |
 | `.../asv_trajectory_planner/trajectory_generator.py` | A | planner_node と MPPIPlanner の仲介(直進経路・復帰・平滑化) | 両方 | − |
 | `.../asv_trajectory_planner/vessel_state.py` | A | 船体状態データクラス | 両方 | − |
-| `.../asv_trajectory_planner/quay_cost.py` | A | **新規**: 実験的 quay 線分距離ペナルティ(enable_mppi_quay_cost 時のみ使用) | 実機 | /quay_wall/markers |
 | `.../asv_trajectory_planner/task2_waypoint_pose_publisher.py` | A | **新規**: 実機用 waypoint 供給(共有 task2_waypoints.yaml の start/goal を 2 Hz 配信) | 実機 | planner_real.launch.py |
 | `.../asv_trajectory_planner/path_pruner_node.py` | A | 経路プルーナ(現配線では実質バイパス) | 両方 | − |
 | `.../asv_trajectory_planner/follow_path_client_node.py` | A | Nav2 FollowPath action クライアント(1 Hz 再送) | 両方 | − |

@@ -12,7 +12,7 @@ test07089 実機ハードウェアスタック上に Task 2(避航)一式を統�
 
 1. mppi ブランチの MPPI プランナを取込・パラメータ化(デフォルト挙動不変)
 2. YOLO11s 検出ノード(標準 Ultralytics・.pt/.engine 両対応)を既存ノードに並置追加
-3. LiDAR 認識パイプライン(前段フィルタ+水面除去 → サブモジュール追跡再利用 → MPPI グルー → 岸壁検出)を新規実装
+3. LiDAR 認識パイプライン(前段フィルタ+水面除去 → サブモジュール追跡再利用 → MPPI グルー)を新規実装
 4. 実機統合 launch `task2_real.launch.py`(dry-run 三重ゲート)を新設
 5. Jetson 検証用スクリプト・ドキュメント一式を整備
 
@@ -78,13 +78,11 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 |---|---|---|
 | task2_cloud_filter | `cloud_filter_node.py` + `cloud_ops.py` | TF 変換・レンジ・自船クロップ・高さバンド・水面除去。純 numpy 部はテスト済み |
 | opponent_selector | `opponent_selector_node.py` + `tracking_glue.py` + `smoothing.py` | ゲーティング(confirmed/距離/寸法/点数/鮮度)、policy(nearest / min_tcpa / track_id)、body→base 回転、ego 補償、map 変換、平滑化 |
-| quay_wall_detector | `quay_wall_detector_node.py` + `wall_fit.py` | 鉛直候補 → 2D RANSAC 直線 → 法線ゲート → 時間確認 → points/markers/costmap |
 | yolo11_node | `yolo/yolo11_node.py` | 標準 Ultralytics のみ(vendored fork なし)。重み欠如は fatal + クリーン終了 |
-| MPPI パラメータ化 | `planner_node.py`, `mppi_params.yaml` | `mppi.*` 23 個+実験フック。デフォルト=旧ハードコード値 |
-| quay cost(実験的) | `quay_cost.py` | 線分距離二乗ペナルティ。`enable_mppi_quay_cost`(既定 false)時のみ |
+| MPPI パラメータ化 | `planner_node.py`, `mppi_params.yaml` | `mppi.*` 23 個。デフォルト=旧ハードコード値 |
 | task2_waypoint_pose_publisher | 同名 .py | 共有 task2_waypoints.yaml の start/goal を `/waypoint1_pose` `/waypoint2_pose` 2 Hz 配信 |
 | 実機 launch | `task2_real.launch.py`, `planner_real.launch.py` | 三重ゲート dry-run、シミュノード排除 |
-| 検証基盤 | `scripts/task2/*`, `scripts/yolo/*`, `test_task2_real_launch_static.py`, pytest 29 件 | ROS 不要で回る静的・ベンチ・記録ツール |
+| 検証基盤 | `scripts/task2/*`, `scripts/yolo/*`, `test_task2_real_launch_static.py`, pytest 26 件 | ROS 不要で回る静的・ベンチ・記録ツール |
 
 ## 8. YOLO 軽量化
 
@@ -115,11 +113,9 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 - トラック喪失時は出力沈黙 → MPPI 直進(`require_other_ship: False`)という安全縮退。
 - **要実データ確認**: twist frame 規約の解釈は実データで未確認(§20)。
 
-## 12. 岸壁認識
+## 12. 岸壁認識(Task 2 対象外)
 
-- `/pcl/nonground` から鉛直壁面を直線として抽出し、3 フレームの時間確認を経て出力。
-- 一次安全経路は **Nav2 obstacle layer**(`/quay_wall/points` を第 2 ソース `quay` として local/global 両 costmap に追加。marking のみ・clearing なし → シミュ等で沈黙しても無影響)。
-- `/quay_wall/costmap`(margin 5 m 膨張)は可視化・将来用。MPPI 内 quay cost は実験的(既定オフ)。
+岸壁認識はTask 2の対象外となったため、feature/quay-perceptionブランチへ保存し、task2-experimentの認識・計画・制御ループから除外した。
 
 ## 13. MPPI 接続
 
@@ -132,7 +128,7 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 
 - Task 2 専用スタック(`navigation_launch_task2.py` + `nav2_params_task2.yaml`)を `enable_nav2` でゲートして起動。real_bringup の Nav2 は常に無効化(`enable_nav2:=false` 固定)し、実機汎用 `nav2.launch.py` / `nav2_params.yaml` は無変更。
 - controller は RegulatedPurePursuit(desired 1.10 m/s)。velocity_smoother 出力を `/cmd_vel_thruster` にリマップ(max_velocity [1.20, 0, 0.18])。
-- costmap への変更は quay ソース追加のみ。
+- costmap の obstacle_layer ソースは `pointcloud`(/pointcloud)のみ。
 
 ## 15. 実機 launch
 
@@ -142,8 +138,8 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 
 | テスト | 結果 |
 |---|---|
-| task2_perception pytest(cloud_ops 15 / tracking_glue 9 / wall_fit 5) | **29/29 PASS** |
-| robot 静的 launch テスト(`test_task2_real_launch_static.py`) | **8/8 PASS** |
+| task2_perception pytest(cloud_ops 15 / tracking_glue 11) | **26/26 PASS** |
+| robot 静的 launch テスト(`test_task2_real_launch_static.py`) | **14/14 PASS** |
 | MPPI デフォルト不変性検証 | **25/25 一致**(パラメータ化前後で挙動同一) |
 | `benchmark_mppi.py`(Mac CPU, torch 2.7.0, 実構成 225×5000) | **≈ 9.25 Hz**(1 solve ≈ 108 ms) |
 | `task2_static_check.sh`(py_compile / YAML / XML) | FAIL 0 |
@@ -174,12 +170,10 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 | LiDAR 取付角 roll/pitch/yaw・位置 x/y/z | robot.urdf.xacro | π / 0 / 0 rad、(0, 0, 0.8) m | **実測必須** |
 | `waterline_z_m` | task2_perception_params.yaml | 0.0 m | **実測必須** |
 | `self_crop_{min,max}_{x,y,z}` | 同上 | ±1.2 / ±0.8 / −0.5〜1.5 m | **実測必須** |
-| `wall_min_points` | 同上 | 30 点 | **実測必須**(点密度依存) |
 | YOLO11s 重み | yolo_model_path / model_path | 非同梱 | **配置必須** |
 | task2_waypoints.yaml の x/y | waypoint_publisher/config | プール C→A 対角 ≈46 m | **現地再生成** |
 | 水面除去帯・RANSAC しきい値 | task2_perception_params.yaml | −0.3/+0.15/0.05/0.9/0.3 m | 実機調整 |
 | opponent ゲート(距離 60 m、長さ 0.5–30 m、点数 5、鮮度 2 s)・α 0.3・スパイク 5 m/s | 同上 | 左記 | 実機調整 |
-| 岸壁(長さ 2 m、距離 40 m、RANSAC 0.15 m、確認 3 回、margin 5 m) | 同上 | 左記 | 実機調整 |
 | MPPI 全 `mppi.*`(target_speed 1.02889 m/s、horizon 225×0.1 s、samples 5000、λ 12、CRM 3.2/1.6/6.4/1.6 LOA ほか) | mppi_params.yaml | 左記 | 実機調整(変更を YAML に記録) |
 | YOLO [TUNE](conf 0.25、iou 0.45、imgsz 640、inference_hz 5、class_names、buoy_class_names、camera_fov_deg 90、fixed_range_m 5) | yolo11s_params.yaml | 左記 | 実映像調整 |
 | Nav2(desired 1.10 m/s、max_velocity [1.20, 0, 0.18]、lookahead 3.0 m) | nav2_params_task2.yaml | 左記 | 実艇確認 |
@@ -194,10 +188,10 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 4. **公称パラメータ群**: waterline / self_crop / wall / クラスタ関連は実測前提の placeholder。
 5. **ship_tracker twist frame 規約**: 「物体 body frame・相対速度」というコード解釈は実データ未確認。誤りなら opponent_selector の回転・補償の修正が必要。
 6. **ego 補償はグルー側**: tracker 内部の no-op スタブは触っていない(サブモジュール無改造方針)。将来サブモジュール側で補償が実装されたら**二重補償に注意**。
-7. **【最重要・実験前の人間判断事項】現状の既定設定では岸壁回避が制御に効いていない**: セーフティレビュー(Codex Sol 役)で確認。Task2 Nav2 の FollowPath(RegulatedPurePursuit)は `use_collision_detection: false`・cost-regulated scaling 無効で costmap を参照せず、planner_server は FollowPath アクション直送でバイパス、behavior_server の cmd_vel は未使用トピックへ迂回。よって `/quay_wall/points` を costmap にマーキングしても**制御へは伝搬しない**。岸壁近傍で `dry_run:=false` にする前に、(a) FollowPath の `use_collision_detection: true`(水上での停止挙動は未検証)または (b) `enable_mppi_quay_cost: true`(実験的コスト)の**どちらかを人間が選択して有効化すること**。コード内コメント(quay_cost.py / mppi_params.yaml)にも同旨を明記済み。
+7. **【岸壁回避の制御非伝搬問題 — 岸壁認識分離により Task 2 では解消】**: セーフティレビュー(Codex Sol 役)で「Task2 Nav2 の FollowPath(RegulatedPurePursuit)は `use_collision_detection: false`・cost-regulated scaling 無効で costmap を参照せず、costmap への quay マーキングは制御へ伝搬しない」ことが確認されていた。岸壁認識自体を Task 2 から分離(feature/quay-perception へ保存)したため、本問題は **Task 2 に対しては moot(対象外)** となった。ただし、feature/quay-perception を採用する Task では**この問題が未解決のまま残っている**ため、採用時に必ず再検討すること((a) FollowPath の `use_collision_detection: true` 有効化、または (b) MPPI quay cost 有効化のいずれかを人間が選択する必要がある)。詳細は feature/quay-perception ブランチの `Docs/quay_perception_handoff.md` を参照(**同ファイルは feature/quay-perception ブランチにのみ存在し、本ブランチには存在しない**)。
 8. **`use_int8` は予約・未使用**: 宣言のみで何も消費しない。
 9. **カメラ選定未解決**: ZED2i CPU フォールバック vs USB カメラは上流課題のまま。
-10. **実機の Nav2 `pointcloud` ソースは空**: `/pointcloud` はシミュ専用。実機 costmap の障害物は現状 quay ソースのみ(他船は MPPI の CRM が担当)。
+10. **実機の Nav2 `pointcloud` ソースは空**: `/pointcloud` はシミュ専用。実機 costmap に障害物を供給するソースは現状存在しない(他船は MPPI の CRM が担当)。
 11. **yolo11s.launch.py の venv ガード**: venv 未活性だと launch 記述生成時に例外 → `enable_yolo:=true` の統合 launch 全体が落ちる。venv なしでは `enable_yolo:=false` にする。
 12. **classical_pipeline の `ego_odom_topic` 未転送**: task2_real.launch.py は `/odometry/filtered/local` を渡すが、サブモジュール側 launch が tracker include へ転送しないため tracker は `/ego/odometry`(実機に存在しない)を購読し続ける。現状 tracker の ego 補償は no-op スタブのため**機能的影響ゼロ**(補償は opponent_selector 側で実施)。サブモジュール改修時に転送追加+二重補償防止を必ず確認。
 
@@ -208,7 +202,7 @@ CLAUDE.md のフローに従い、実装とは別のレビュー担当(Codex Sol
 | # | 深刻度 | 指摘 | 対応 |
 |---|---|---|---|
 | 1 | MAJOR | `/other_ship/twist` の自船運動補償に回転項 ω×r が欠落(base_link は回転系。自船 0.2 rad/s 旋回+20 m 横距離で最大 ~4 m/s の見かけ速度が混入) | **修正済み**: `tracking_glue.ego_compensate` に ω×r 項を追加、`opponent_selector_node` が ego yaw rate と対象位置を渡す。ユニットテスト 2 件追加(静止目標が旋回中に速度ゼロへ復元されること等) |
-| 2 | MAJOR | 「Nav2 costmap が岸壁安全の一次経路」という前提が現行 Task2 設定では不成立(上記 §20-7) | **文書・コメント修正済み**+有効化は人間判断事項として明示(挙動変更は自律実施せず) |
+| 2 | MAJOR | 「Nav2 costmap が岸壁安全の一次経路」という前提が現行 Task2 設定では不成立(上記 §20-7) | **解消**: 岸壁認識自体をTask 2から分離(feature/quay-perceptionへ保存)。採用側 Task での再検討事項として §20-7 に明記 |
 | 3 | MINOR | スラスタ三重ゲートの静的テストが極性・演算子の退行を検出しない | **修正済み**: 式を再構成して 8 通り全評価する真理値表テストを追加(TTF のみ True) |
 | 4 | MINOR | classical_pipeline が `ego_odom_topic` を tracker へ未転送(上記 §20-12) | サブモジュール無改造方針のため**文書化のみ**(現状機能影響ゼロ) |
 | 5 | MINOR | opponent の map 変換 TF を最新時刻で引いており、最大 stale_timeout_sec(2 s)古いトラックと不整合 | **修正済み**: トラックのスタンプ時刻で lookup、失敗時のみ最新へフォールバック |
@@ -222,9 +216,7 @@ CLAUDE.md のフローに従い、実装とは別のレビュー担当(Codex Sol
 - YOLO 検出と LiDAR 追跡の fusion(現状 YOLO 出力は制御ループ未接続)
 - 複数他船対応(opponent_selector の ranked list は既に複数返せる設計)
 - tracker 側 ego 補償の本実装(サブモジュール側課題)+ グルー側補償の撤去
-- MPPI quay cost の実データ検証 → 有効化判断
 - `/pointcloud` 相当の実機障害物ソース(フィルタ済み点群の costmap 直結)検討
-- record_task2_bag.sh の既定リストへ costmap/nonground 追加
 - INT8 パス(`use_int8`)の実配線とキャリブレーションデータ整備
 - ROS 2 ディストリビューションの最終確定(preflight は ROS_DISTRO を検査するのみ)
 
