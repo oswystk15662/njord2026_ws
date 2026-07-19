@@ -91,7 +91,7 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        observation_sources: pointcloud
+        observation_sources: pointcloud quay
         pointcloud:
           topic: /pointcloud
           max_obstacle_height: 2.0
@@ -100,6 +100,16 @@ local_costmap:
           data_type: "PointCloud2"
           raytrace_max_range: 35.0
           obstacle_max_range: 30.0
+        # Quay wall points from task2_perception quay_wall_detector.
+        # Marking only (no clearing): the wall must not erase other obstacles,
+        # and when the topic is silent (e.g. in sim) it contributes nothing.
+        quay:
+          topic: /quay_wall/points
+          max_obstacle_height: 4.0
+          clearing: false
+          marking: true
+          data_type: "PointCloud2"
+          obstacle_max_range: 40.0
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -127,7 +137,7 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: true
-        observation_sources: pointcloud
+        observation_sources: pointcloud quay
         pointcloud:
           topic: /pointcloud
           max_obstacle_height: 2.0
@@ -136,6 +146,16 @@ global_costmap:
           data_type: "PointCloud2"
           raytrace_max_range: 85.0
           obstacle_max_range: 80.0
+        # Quay wall points from task2_perception quay_wall_detector.
+        # Marking only (no clearing): the wall must not erase other obstacles,
+        # and when the topic is silent (e.g. in sim) it contributes nothing.
+        quay:
+          topic: /quay_wall/points
+          max_obstacle_height: 4.0
+          clearing: false
+          marking: true
+          data_type: "PointCloud2"
+          obstacle_max_range: 40.0
 
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
