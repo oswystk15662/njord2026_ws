@@ -12,3 +12,6 @@ rosbag2*
 
 # temporary backups
 *.bak*
+
+# Claude agent worktrees (local only)
+.claude/worktrees/

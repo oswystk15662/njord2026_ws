@@ -21,6 +21,8 @@ TASK2_TOPICS=(
     /other_ship/twist
     /quay_wall/markers
     /quay_wall/points
+    /quay_wall/costmap
+    /pcl/nonground
     /planned_path
     /planned_path_pruned
     /cmd_vel_thruster

@@ -268,8 +268,6 @@ class PlannerNode(Node):
         self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
         self.get_logger().info(f"Reconnect line distance  : {reconnect_line_distance_m} m")
         self.get_logger().info(f"Reconnect ahead length   : {reconnect_ahead_length_m} m")
-        self.get_logger().info(f"Opponent use distance    : {opponent_use_distance_m} m")
-        self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
 
     def own_odom_callback(self, msg: Odometry):
         self.latest_own_odom = msg

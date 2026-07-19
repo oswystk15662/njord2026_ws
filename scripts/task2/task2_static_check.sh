@@ -47,7 +47,7 @@ done < <(
     {
         find src/navigation/path_generator/mppi -name '*.py' 2>/dev/null
         find src/navigation/path_generator/waypoint_publisher -name '*.py' 2>/dev/null
-        find src/perception/task2_perception -name '*.py' 2>/dev/null
+        find src/detection/task2_perception -name '*.py' 2>/dev/null
         find src -maxdepth 4 -type d -name 'task2_perception' 2>/dev/null \
             | while IFS= read -r d; do find "$d" -name '*.py' 2>/dev/null; done
         ls src/robot/launch/task2_real.launch.py 2>/dev/null

@@ -157,6 +157,58 @@ def test_thruster_condition_references_all_three_gates():
         )
 
 
+def test_thruster_gate_truth_table():
+    # Reconstruct the PythonExpression fragment list and evaluate it for all
+    # eight gate combinations. Only (enable=true, dry_run=false, send=true)
+    # may enable thrusters — this pins operators and polarity, not just the
+    # presence of the three names.
+    tree = ast.parse(_read_source())
+
+    fragments = None
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if getattr(target, "id", None) == "thruster_allowed":
+                    call = node.value
+                    assert isinstance(call, ast.Call), (
+                        "thruster_allowed must be a PythonExpression(...) call"
+                    )
+                    assert isinstance(call.args[0], ast.List)
+                    fragments = call.args[0].elts
+
+    assert fragments is not None, "thruster_allowed assignment not found"
+
+    import itertools
+
+    for et, dr, stc in itertools.product(("true", "false"), repeat=3):
+        values = {
+            "enable_thrusters": et,
+            "dry_run": dr,
+            "send_thruster_commands": stc,
+        }
+        parts = []
+        for frag in fragments:
+            if isinstance(frag, ast.Constant):
+                parts.append(str(frag.value))
+            elif isinstance(frag, ast.Name):
+                assert frag.id in values, (
+                    f"Unexpected name '{frag.id}' in thruster gate expression"
+                )
+                parts.append(values[frag.id])
+            else:
+                raise AssertionError(
+                    "Thruster gate expression must consist only of string "
+                    "constants and the three gate LaunchConfiguration names"
+                )
+        result = eval("".join(parts))  # noqa: S307 - reconstructed literal
+        expected = et == "true" and dr == "false" and stc == "true"
+        assert result == expected, (
+            f"Gate truth table mismatch for enable_thrusters={et}, "
+            f"dry_run={dr}, send_thruster_commands={stc}: "
+            f"got {result}, expected {expected}"
+        )
+
+
 def test_thruster_expression_is_used_for_enable_thruster():
     # The real_bringup include must receive enable_thruster from the gated
     # thruster_allowed expression, not a constant.

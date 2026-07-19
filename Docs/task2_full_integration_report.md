@@ -194,12 +194,28 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 4. **公称パラメータ群**: waterline / self_crop / wall / クラスタ関連は実測前提の placeholder。
 5. **ship_tracker twist frame 規約**: 「物体 body frame・相対速度」というコード解釈は実データ未確認。誤りなら opponent_selector の回転・補償の修正が必要。
 6. **ego 補償はグルー側**: tracker 内部の no-op スタブは触っていない(サブモジュール無改造方針)。将来サブモジュール側で補償が実装されたら**二重補償に注意**。
-7. **MPPI quay cost は実験的**(既定オフ)。一次安全経路は Nav2 costmap。
+7. **【最重要・実験前の人間判断事項】現状の既定設定では岸壁回避が制御に効いていない**: セーフティレビュー(Codex Sol 役)で確認。Task2 Nav2 の FollowPath(RegulatedPurePursuit)は `use_collision_detection: false`・cost-regulated scaling 無効で costmap を参照せず、planner_server は FollowPath アクション直送でバイパス、behavior_server の cmd_vel は未使用トピックへ迂回。よって `/quay_wall/points` を costmap にマーキングしても**制御へは伝搬しない**。岸壁近傍で `dry_run:=false` にする前に、(a) FollowPath の `use_collision_detection: true`(水上での停止挙動は未検証)または (b) `enable_mppi_quay_cost: true`(実験的コスト)の**どちらかを人間が選択して有効化すること**。コード内コメント(quay_cost.py / mppi_params.yaml)にも同旨を明記済み。
 8. **`use_int8` は予約・未使用**: 宣言のみで何も消費しない。
 9. **カメラ選定未解決**: ZED2i CPU フォールバック vs USB カメラは上流課題のまま。
 10. **実機の Nav2 `pointcloud` ソースは空**: `/pointcloud` はシミュ専用。実機 costmap の障害物は現状 quay ソースのみ(他船は MPPI の CRM が担当)。
 11. **yolo11s.launch.py の venv ガード**: venv 未活性だと launch 記述生成時に例外 → `enable_yolo:=true` の統合 launch 全体が落ちる。venv なしでは `enable_yolo:=false` にする。
-12. 細部: `task2_static_check.sh` に旧パス `src/perception/task2_perception` の探索行が残る(後続の `find` で実パスを拾うため実害なし)。`planner_node.py` の起動ログに同一 2 行の重複あり(表示のみ)。`record_task2_bag.sh` の既定リストに `/quay_wall/costmap` `/pcl/nonground` が無い。
+12. **classical_pipeline の `ego_odom_topic` 未転送**: task2_real.launch.py は `/odometry/filtered/local` を渡すが、サブモジュール側 launch が tracker include へ転送しないため tracker は `/ego/odometry`(実機に存在しない)を購読し続ける。現状 tracker の ego 補償は no-op スタブのため**機能的影響ゼロ**(補償は opponent_selector 側で実施)。サブモジュール改修時に転送追加+二重補償防止を必ず確認。
+
+## 20b. セーフティレビュー結果と対応(2026-07-19)
+
+CLAUDE.md のフローに従い、実装とは別のレビュー担当(Codex Sol 役)が診断。指摘と対応:
+
+| # | 深刻度 | 指摘 | 対応 |
+|---|---|---|---|
+| 1 | MAJOR | `/other_ship/twist` の自船運動補償に回転項 ω×r が欠落(base_link は回転系。自船 0.2 rad/s 旋回+20 m 横距離で最大 ~4 m/s の見かけ速度が混入) | **修正済み**: `tracking_glue.ego_compensate` に ω×r 項を追加、`opponent_selector_node` が ego yaw rate と対象位置を渡す。ユニットテスト 2 件追加(静止目標が旋回中に速度ゼロへ復元されること等) |
+| 2 | MAJOR | 「Nav2 costmap が岸壁安全の一次経路」という前提が現行 Task2 設定では不成立(上記 §20-7) | **文書・コメント修正済み**+有効化は人間判断事項として明示(挙動変更は自律実施せず) |
+| 3 | MINOR | スラスタ三重ゲートの静的テストが極性・演算子の退行を検出しない | **修正済み**: 式を再構成して 8 通り全評価する真理値表テストを追加(TTF のみ True) |
+| 4 | MINOR | classical_pipeline が `ego_odom_topic` を tracker へ未転送(上記 §20-12) | サブモジュール無改造方針のため**文書化のみ**(現状機能影響ゼロ) |
+| 5 | MINOR | opponent の map 変換 TF を最新時刻で引いており、最大 stale_timeout_sec(2 s)古いトラックと不整合 | **修正済み**: トラックのスタンプ時刻で lookup、失敗時のみ最新へフォールバック |
+
+レビューで**問題なし**と確認された領域: スラスタ三重ゲートの式・既定値・fail-closed 挙動、シミュ専用ノード 6 種の非混入(include 先まで全ノード検証)、MPPI パラメータ化の数値等価性(全既定値=旧リテラル、quay cost オフ時に完全不活性)、task2_perception のフレーム数学(body→base 回転は tracker の出力規約と正確に逆変換)、水面除去ガード(既定パラメータでは鉛直壁・高所デッキを構造的に除去不能)、yolo11_node の ROI 座標復元・方位角計算(旧 main.py と文字単位で一致)、waypoint 選択(シミュ publisher・YAML と整合)。
+
+13. 細部(修正済み): `task2_static_check.sh` の旧パス探索行 → 実パスへ修正。`planner_node.py` の起動ログ重複 2 行 → 削除。`record_task2_bag.sh` に `/quay_wall/costmap` `/pcl/nonground` を追加。`task2_real.launch.py` の `yolo_backend` 既定 `onnx` → `pytorch`(統合時修正)。
 
 ## 21. 今後の改善
 

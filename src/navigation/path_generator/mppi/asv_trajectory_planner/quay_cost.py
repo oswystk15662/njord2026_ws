@@ -1,11 +1,21 @@
 """EXPERIMENTAL quay wall distance penalty for the Task2 MPPI planner.
 
-Nav2 costmap (fed by /quay_wall/costmap from task2_perception) is the PRIMARY
-quay safety path. This module adds an optional, additional soft penalty inside
-the MPPI rollout cost so sampled trajectories are biased away from detected
-quay wall segments. It is only active when the planner_node parameter
-``enable_mppi_quay_cost`` is true; otherwise this module is never invoked and
-the MPPI behavior is identical to the historical implementation.
+CAUTION: in the CURRENT Task2 Nav2 configuration the quay observation
+sources marked into the costmaps do NOT influence control: FollowPath
+(RegulatedPurePursuit) runs with use_collision_detection=false and
+cost-regulated velocity scaling off, planner_server is bypassed by the
+FollowPath action client, and behavior_server cmd_vel is rerouted to an
+unused topic. Until either RPP collision checking is enabled and
+water-validated, or this MPPI quay cost is enabled, THERE IS NO ACTIVE
+QUAY-WALL AVOIDANCE in the control chain. This is a deliberate,
+human-decision item before any run with dry_run:=false (see
+Docs/task2_full_integration_report.md, known issues).
+
+This module adds an optional soft penalty inside the MPPI rollout cost so
+sampled trajectories are biased away from detected quay wall segments. It
+is only active when the planner_node parameter ``enable_mppi_quay_cost``
+is true; otherwise this module is never invoked and the MPPI behavior is
+identical to the historical implementation.
 
 Inputs are quay wall line segments (from /quay_wall/markers, a
 visualization_msgs/MarkerArray of LINE_LIST markers) expressed in the SAME

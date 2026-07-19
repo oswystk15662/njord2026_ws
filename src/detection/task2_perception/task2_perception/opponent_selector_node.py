@@ -113,6 +113,7 @@ class OpponentSelectorNode(Node):
 
         self.tracks: list[Track] = []
         self.ego_vel_base = np.zeros(3)  # ego twist linear, base_link (odom child frame)
+        self.ego_yaw_rate = 0.0          # ego twist angular z, base_link [rad/s]
         self.selected_id = None
 
         period = 1.0 / max(float(gp("publish_rate_hz")), 1e-6)
@@ -150,6 +151,7 @@ class OpponentSelectorNode(Node):
     def ego_callback(self, msg: Odometry):
         lin = msg.twist.twist.linear
         self.ego_vel_base = np.array([lin.x, lin.y, lin.z])
+        self.ego_yaw_rate = float(msg.twist.twist.angular.z)
 
     # ------------------------------------------------------------------
     def timer_callback(self):
@@ -171,8 +173,16 @@ class OpponentSelectorNode(Node):
         selected = ranked[0]  # top-1; the ranked list is future multi-ship
 
         try:
-            tf_msg = self.tf_buffer.lookup_transform(
-                self.map_frame, self.base_frame, Time())
+            # Look up map<-base_link at the track's own stamp so an up-to-
+            # stale_timeout_sec old track is composed with the matching ego
+            # pose, not the latest one; fall back to latest if unavailable.
+            try:
+                tf_msg = self.tf_buffer.lookup_transform(
+                    self.map_frame, self.base_frame,
+                    Time(seconds=selected.stamp_sec))
+            except TransformException:
+                tf_msg = self.tf_buffer.lookup_transform(
+                    self.map_frame, self.base_frame, Time())
         except TransformException as e:
             self.get_logger().warning(
                 f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
@@ -192,9 +202,13 @@ class OpponentSelectorNode(Node):
             cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w),
             [t.x, t.y, t.z])
 
-        # Body-frame relative twist -> base_link axes -> + ego -> map frame.
+        # Body-frame relative twist -> base_link axes -> + ego (linear AND
+        # omega x r; the tracker measures in the rotating base_link frame)
+        # -> map frame.
         vel_rel_base = selected.velocity_base
-        vel_abs_base = tracking_glue.ego_compensate(vel_rel_base, self.ego_vel_base)
+        vel_abs_base = tracking_glue.ego_compensate(
+            vel_rel_base, self.ego_vel_base,
+            ego_yaw_rate=self.ego_yaw_rate, pos_base=selected.position)
         pos_map, vel_map = tracking_glue.to_map_frame(
             selected.position, vel_abs_base, t_map_base)
 

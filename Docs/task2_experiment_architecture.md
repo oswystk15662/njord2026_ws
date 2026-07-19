@@ -436,7 +436,7 @@ TF が引けない場合: cloud stamp の TF → 最新 TF へフォールバッ
   - `own_odom_topic:=/odom`(GLIM)、`other_ship_frame: opponent_vessel`、`require_other_ship: False`、`other_twist_is_relative: False`(認識側が map 絶対速度を出すため)。
   - MPPI ハイパーパラメータは `config/mppi_params.yaml` から読む。**全デフォルト = 旧ハードコード値**(horizon 225、dt 0.1 s、num_samples 5000、lambda 12.0、sigma [35, 0]、target_speed 1.02889 m/s = 2 kn、path_cost_weight 150、collision_cost_min/max 10/50、gate 3.0、buoy 120、speed 0.1、control 0.2、CRM 楕円ゲイン 右/左/前/後 = 3.2/1.6/6.4/1.6 LOA、loa 2.0、gate_half_width 4.0 m)。デフォルト値不変はテストで 25/25 確認済み。
   - topic 配線は `planner_with_follow_path.launch.py`(シミュ検証済み)と同一: planner が直接 `/planned_path_pruned` に publish し、`path_pruner_node` は起動されるが実質バイパス。
-- **実験的 quay cost**: `enable_mppi_quay_cost`(既定 **false**)を true にすると `/quay_wall/markers` を購読し、`quay_cost.quay_segment_cost()`(マージン内の二乗ペナルティ)をロールアウトコストに加算する。false のままなら planner は歴史的実装と挙動同一。**岸壁の一次安全経路はあくまで Nav2 costmap**。
+- **実験的 quay cost**: `enable_mppi_quay_cost`(既定 **false**)を true にすると `/quay_wall/markers` を購読し、`quay_cost.quay_segment_cost()`(マージン内の二乗ペナルティ)をロールアウトコストに加算する。false のままなら planner は歴史的実装と挙動同一。**注意**: 現行 Task2 Nav2 設定(RPP `use_collision_detection: false`)では costmap の quay マーキングは制御へ伝搬しないため、岸壁近傍の実走行前に RPP 衝突検出の有効化か本コストの有効化のどちらかを人間が選択すること(統合レポート §20-7 参照)。
 - 縮退: 他船情報なし → 直進経路(straight_path_length_m 60 m)を生成し続ける。
 
 ## 18. Nav2 接続
@@ -482,7 +482,7 @@ enable_thrusters == true  AND  dry_run == false  AND  send_thruster_commands == 
 その他の fail-safe:
 
 - **他船喪失** → `/other_ship/twist` 沈黙 → MPPI 直進(安全縮退)。opponent_selector のスパイクゲートで異常速度サンプルは棄却。
-- **岸壁** → Nav2 obstacle layer(marking のみ)が一次安全経路。MPPI quay cost は実験的で既定オフ。
+- **岸壁** → Nav2 obstacle layer へ marking されるが、現行 Task2 の RPP 設定(collision detection 無効)では制御に**効かない**。実走行前に RPP 衝突検出または MPPI quay cost(実験的・既定オフ)の有効化を人間が判断すること(統合レポート §20-7)。
 - **E-stop**: `/emg` ソフト E-stop + ハードウェア E-stop(test07089 既存・無変更)。thruster_driver は feedback timeout(0.5 s)で停止(`stop_on_feedback_timeout: true`)。watchdog_timeout_sec 0.5。
 - **YOLO 重み欠如** → fatal ログ + クリーン終了(他ノードは継続)。
 - **TF 欠如** → cloud_filter はフレーム破棄、opponent_selector / quay costmap はそのサイクルをスキップ(警告スロットル)。

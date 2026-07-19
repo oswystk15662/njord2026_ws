@@ -61,10 +61,26 @@ class Track:
         return float(np.hypot(p[0], p[1]))
 
 
-def ego_compensate(rel_vel_base: np.ndarray, ego_lin_vel_base: np.ndarray) -> np.ndarray:
-    """Relative velocity (base_link axes) + ego linear velocity (base_link axes)
-    -> absolute ground velocity expressed in base_link axes."""
-    return np.asarray(rel_vel_base, dtype=float) + np.asarray(ego_lin_vel_base, dtype=float)
+def ego_compensate(
+    rel_vel_base: np.ndarray,
+    ego_lin_vel_base: np.ndarray,
+    ego_yaw_rate: float = 0.0,
+    pos_base: np.ndarray = None,
+) -> np.ndarray:
+    """Relative velocity (base_link axes) -> absolute ground velocity (base_link axes).
+
+    The upstream tracker estimates in the moving base_link frame with ego
+    compensation stubbed out, so its velocity contains the full apparent
+    motion: -v_ego - omega x r. Restoring ground velocity therefore needs
+    both the ego linear velocity AND the rotation-induced term omega x r
+    at the target position r (omitting it injects ~omega*range of phantom
+    tangential speed while the own ship turns).
+    """
+    v = np.asarray(rel_vel_base, dtype=float) + np.asarray(ego_lin_vel_base, dtype=float)
+    if ego_yaw_rate != 0.0 and pos_base is not None:
+        p = np.asarray(pos_base, dtype=float)
+        v = v + np.array([-ego_yaw_rate * p[1], ego_yaw_rate * p[0], 0.0])
+    return v
 
 
 def to_map_frame(pos_base: np.ndarray, vel_base: np.ndarray, t_map_base: np.ndarray):

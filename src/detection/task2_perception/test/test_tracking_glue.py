@@ -49,6 +49,30 @@ class TestEgoCompensation:
         np.testing.assert_allclose(vel_map, [-0.5, 1.0, 0.0], atol=1e-12)
         np.testing.assert_allclose(pos_map, [100.0, 60.0, 0.0], atol=1e-12)
 
+    def test_yaw_rate_restores_omega_cross_r_term(self):
+        # Own ship spinning at wz=0.2 rad/s with zero linear velocity; a
+        # physically stationary target at r=(0, 20, 0) appears to move at
+        # -omega x r = -(-4, 0, 0) = (+4, 0, 0) in the rotating base_link
+        # frame. Compensation adds omega x r back, restoring zero ground
+        # velocity.
+        ego_vel_base = np.zeros(3)
+        ego_wz = 0.2
+        pos = np.array([0.0, 20.0, 0.0])
+        apparent = np.array([4.0, 0.0, 0.0])
+        track = make_track(position=pos, velocity_body=apparent)
+        vel_abs = tracking_glue.ego_compensate(
+            track.velocity_base, ego_vel_base,
+            ego_yaw_rate=ego_wz, pos_base=pos)
+        # omega x r = (-0.2*20, 0.2*0, 0) = (-4, 0, 0); 4 + (-4) = 0.
+        np.testing.assert_allclose(vel_abs, np.zeros(3), atol=1e-12)
+
+    def test_yaw_rate_ignored_without_position(self):
+        # Backwards-compatible: no pos_base -> pure linear compensation.
+        v = tracking_glue.ego_compensate(
+            np.array([1.0, 0.0, 0.0]), np.array([0.5, 0.0, 0.0]),
+            ego_yaw_rate=0.3, pos_base=None)
+        np.testing.assert_allclose(v, [1.5, 0.0, 0.0], atol=1e-12)
+
     def test_stationary_target_gets_zero_ground_speed(self):
         # A physically stationary target appears to move at -v_ego relative to
         # us; after compensation its ground velocity must vanish.
