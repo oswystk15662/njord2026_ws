@@ -76,15 +76,9 @@ class TrajectoryGenerator:
         other_twist: Optional[TwistStamped],
         waypoint1_pose: PoseStamped,
         waypoint2_pose: PoseStamped,
-        quay_segments_map: Optional[List[Tuple[float, float, float, float]]] = None,
     ) -> Path:
         """
         planningはbase_link基準で行い、最後にmap基準Pathへ変換する。
-
-        quay_segments_map:
-            EXPERIMENTAL. map基準のquay wall線分 [(x0, y0, x1, y1), ...]。
-            MPPIPlanner側で enable_quay_cost が有効な場合のみ使用される。
-            Noneなら従来と完全に同一の挙動。
         """
 
         # --------------------------------------------------
@@ -143,28 +137,12 @@ class TrajectoryGenerator:
         # 5. Path生成
         # --------------------------------------------------
         if other_state_base is not None:
-            # EXPERIMENTAL: map基準のquay線分をbase_link基準へ変換してMPPIへ渡す
-            quay_segments_base = None
-            if quay_segments_map:
-                quay_segments_base = []
-                for x0_m, y0_m, x1_m, y1_m in quay_segments_map:
-                    x0_b, y0_b = self._map_to_base_link(
-                        x_m=x0_m, y_m=y0_m,
-                        own_x=own_map_x, own_y=own_map_y, own_yaw=own_map_yaw,
-                    )
-                    x1_b, y1_b = self._map_to_base_link(
-                        x_m=x1_m, y_m=y1_m,
-                        own_x=own_map_x, own_y=own_map_y, own_yaw=own_map_yaw,
-                    )
-                    quay_segments_base.append((x0_b, y0_b, x1_b, y1_b))
-
             # 他船あり: MPPI避航Path
             points_base = self.planner.plan(
                 own=own_state_base,
                 other=other_state_base,
                 waypoint1=waypoint1_base,
                 waypoint2=waypoint2_base,
-                quay_segments=quay_segments_base,
             )
 
             points_base = self._smooth_points(

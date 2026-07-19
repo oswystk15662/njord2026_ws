@@ -68,23 +68,3 @@ opponent_selector:
     publish_rate_hz: 10.0     # [Hz] output rate
     twist_lowpass_alpha: 0.3  # first-order IIR low-pass factor (0..1)
     max_speed_mps: 5.0        # [m/s] spike-rejection gate on opponent speed
-
-quay_wall_detector:
-  ros__parameters:
-    input_topic: "/pcl/nonground"   # submodule ground_remover output (base_link)
-    map_frame: "map"
-    base_frame: "base_link"
-    wall_min_points: 30             # [pts] min inliers per wall segment
-                                    # HUMAN: measure on vessel (depends on point density)
-    wall_min_length_m: 2.0          # [m] reject shorter segments
-    wall_max_distance_m: 40.0       # [m] reject segments farther from the boat
-    wall_line_distance_threshold_m: 0.15  # [m] 2D RANSAC line inlier distance
-    wall_normal_z_max: 0.3          # plane-normal z gate: a vertical wall face
-                                    # has a near-horizontal normal
-    wall_temporal_confirmations: 3  # [frames] recurrences needed to confirm
-    wall_timeout_sec: 2.0           # [s] unseen tracks are dropped after this
-    quay_safety_margin_m: 5.0       # [m] costmap inflation around wall segments
-    publish_wall_markers: true      # /quay_wall/markers (MarkerArray)
-    publish_wall_costmap: true      # /quay_wall/costmap (OccupancyGrid, map)
-    costmap_resolution_m: 0.5       # [m/cell]
-    costmap_size_m: 100.0           # [m] square grid edge, centered on the boat

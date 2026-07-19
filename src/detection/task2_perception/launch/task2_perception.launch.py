@@ -1,6 +1,6 @@
 """Task 2 perception launch.
 
-Starts the three task2_perception nodes with task2_perception_params.yaml.
+Starts the two task2_perception nodes with task2_perception_params.yaml.
 
 NOTE: the pcl_segmentation submodule pipeline (classical_pipeline.launch.py
 with lidar_topic:=/task2/points_filtered and
@@ -10,7 +10,6 @@ the real-robot integration launch owns that composition.
 Arguments (all default true):
   enable_cloud_filter       start task2_cloud_filter
   enable_opponent_selector  start opponent_selector
-  enable_quay_detection     start quay_wall_detector
 """
 
 from launch import LaunchDescription
@@ -35,10 +34,6 @@ def generate_launch_description():
             "enable_opponent_selector", default_value="true",
             description="Start opponent_selector (/tracked_objects -> "
                         "/other_ship/twist + opponent TF)"),
-        DeclareLaunchArgument(
-            "enable_quay_detection", default_value="true",
-            description="Start quay_wall_detector (/pcl/nonground -> "
-                        "/quay_wall/*)"),
 
         Node(
             package="task2_perception",
@@ -56,13 +51,5 @@ def generate_launch_description():
             parameters=[params_file],
             condition=IfCondition(
                 LaunchConfiguration("enable_opponent_selector")),
-        ),
-        Node(
-            package="task2_perception",
-            executable="quay_wall_detector_node",
-            name="quay_wall_detector",
-            output="screen",
-            parameters=[params_file],
-            condition=IfCondition(LaunchConfiguration("enable_quay_detection")),
         ),
     ])

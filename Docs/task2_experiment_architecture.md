@@ -18,11 +18,12 @@ Task 2(避航・衝突回避)を test07089 実機ハードウェアスタック�
 | LiDAR 前段フィルタ | `task2_cloud_filter`(task2_perception パッケージ) | 新規・合成データテスト済み |
 | 他船追跡 | `pcl_segmentation` サブモジュール classical pipeline(**無改造・ポインタ db84af9 のまま**) | 既存再利用 |
 | 追跡→MPPI グルー | `opponent_selector`(task2_perception) | 新規・合成データテスト済み |
-| 岸壁認識 | `quay_wall_detector`(task2_perception) | 新規・合成データテスト済み |
 | 経路計画 | MPPI (`planner_node`, asv_trajectory_planner)。パラメータ化済み・デフォルトは旧ハードコード値と同一 | 既存(mppi ブランチ由来)+パラメータ化 |
-| 経路追従・安全 | Nav2(`navigation_launch_task2.py` + `nav2_params_task2.yaml`、RegulatedPurePursuit) | 既存+岸壁ソース追加 |
+| 経路追従・安全 | Nav2(`navigation_launch_task2.py` + `nav2_params_task2.yaml`、RegulatedPurePursuit) | 既存 |
 | スラスタ | `thruster_driver` → `serial_writer` → ESP32 → T200×4(test07089 とバイト単位で同一) | 既存・無変更 |
-| 実機統合 launch | `task2_real.launch.py`(dry-run 三重ゲート付き) | 新規・静的テスト 8 件済み |
+| 実機統合 launch | `task2_real.launch.py`(dry-run 三重ゲート付き) | 新規・静的テスト 14 件済み |
+
+岸壁認識はTask 2の対象外となったため、feature/quay-perceptionブランチへ保存し、task2-experimentの認識・計画・制御ループから除外した。
 
 設計原則:
 
@@ -59,7 +60,6 @@ flowchart TB
         CL[cluster_node]
         ST["ship_tracker_node<br/>(EKF + Hungarian)"]
         OS[opponent_selector]
-        QW[quay_wall_detector]
     end
 
     subgraph plan[経路計画]
@@ -89,15 +89,12 @@ flowchart TB
     CF -->|/task2/points_filtered| PRE
     PRE -->|/pcl/preprocessed| GR
     GR -->|/pcl/nonground| CL
-    GR -->|/pcl/nonground| QW
     CL -->|/pcl/cluster_centroids| ST
     ST -->|/tracked_objects| OS
     EKFL -->|/odometry/filtered/local| OS
     EKFL -->|/odometry/filtered/local| ST
 
     OS -->|"/other_ship/twist<br/>+ TF map→opponent_vessel"| MPPI
-    QW -->|/quay_wall/points| CTRL
-    QW -.->|"/quay_wall/markers<br/>(実験的 quay cost)"| MPPI
     WPP -->|"/waypoint1_pose<br/>/waypoint2_pose"| MPPI
 
     MPPI -->|/planned_path_pruned| FPC
@@ -153,11 +150,11 @@ flowchart TB
 src/
 ├── detection/
 │   ├── task2_perception/            # 新規パッケージ (Python)
-│   │   ├── task2_perception/        #   cloud_filter_node.py, opponent_selector_node.py,
-│   │   │                            #   quay_wall_detector_node.py + 純Python 4 モジュール
+│   │   ├── task2_perception/        #   cloud_filter_node.py, opponent_selector_node.py
+│   │   │                            #   + 純Python 3 モジュール
 │   │   ├── config/task2_perception_params.yaml
 │   │   ├── launch/task2_perception.launch.py
-│   │   └── test/                    #   pytest 29 件 (ROS 不要)
+│   │   └── test/                    #   pytest 26 件 (ROS 不要)
 │   ├── yolo/                        # 既存パッケージへ並置追加
 │   │   ├── yolo/yolo11_node.py      #   新規 YOLO11s ノード (main.py は無変更)
 │   │   ├── config/yolo11s_params.yaml
@@ -167,16 +164,16 @@ src/
 ├── navigation/path_generator/
 │   ├── mppi/                        # asv_trajectory_planner (mppi ブランチ由来)
 │   │   ├── asv_trajectory_planner/  #   planner_node.py, mppi_torch.py, crm_torch.py,
-│   │   │                            #   quay_cost.py(新規), task2_waypoint_pose_publisher.py(新規)
+│   │   │                            #   task2_waypoint_pose_publisher.py(新規)
 │   │   ├── config/mppi_params.yaml  #   新規 (デフォルト=旧ハードコード値)
 │   │   └── launch/planner_real.launch.py(新規), planner_with_follow_path.launch.py
 │   └── waypoint_publisher/          # task2_gate_midpoint_publisher 追加 (未接続の代替案)
 ├── robot/
 │   ├── launch/task2_real.launch.py  # 新規 実機統合エントリポイント
 │   ├── launch/navigation_launch_task2.py
-│   ├── config/nav2_params_task2.yaml  # quay ソース追加
+│   ├── config/nav2_params_task2.yaml
 │   ├── urdf/robot.urdf.xacro        # lidar_joint roll=π (公称・要実測)
-│   └── test/test_task2_real_launch_static.py  # 静的テスト 8 件
+│   └── test/test_task2_real_launch_static.py  # 静的テスト 14 件
 └── sim/task2_sim/                   # シミュ (MPPI 統合時の構成のまま)
 scripts/
 ├── task2/  # task2_jetson_preflight.sh, task2_static_check.sh,
@@ -194,7 +191,6 @@ scripts/
 | `cluster_node` | pcl_segmentation (サブモジュール) | クラスタリング → `/pcl/cluster_centroids` (PoseArray) |
 | `ship_tracker_node` | ship_tracking (サブモジュール) | EKF + Hungarian 対応付け → `/tracked_objects` + TF `base_link→tracked_obj_{id}`。**twist は物体 body frame・相対速度**(内部の ego 補償は no-op スタブ) |
 | `opponent_selector` (`opponent_selector_node`) | task2_perception | トラックのゲーティング(confirmed / 距離 / 寸法 / 点数 / 鮮度)→ policy 選択 → body→base_link 回転 → ego 補償 → map 変換 → ローパス+スパイク除去 → `/other_ship/twist` + TF `map→opponent_vessel` |
-| `quay_wall_detector` (`quay_wall_detector_node`) | task2_perception | `/pcl/nonground` から鉛直壁候補抽出 → 2D RANSAC 直線 → 時間的確認 → `/quay_wall/points` `/quay_wall/markers` `/quay_wall/costmap` |
 | `yolo11_detector` (`yolo11_node`) | yolo | YOLO11s 推論(pytorch/.pt または tensorrt/.engine)→ `/yolo/detections` + `/buoy_roi` + `yolo/debug_image` |
 | `task2_waypoint_pose_publisher` | asv_trajectory_planner | `share/waypoint_publisher/config/task2_waypoints.yaml`(map 座標 x/y は事前計算済み・lat/lon はメタデータ)の start/goal を `/waypoint1_pose` `/waypoint2_pose` として 2 Hz 配信 |
 | `planner_node` | asv_trajectory_planner | MPPI(horizon 225 × dt 0.1 s、5000 サンプル)で避航経路を生成 → `/planned_path_pruned` |
@@ -214,15 +210,13 @@ scripts/
 | livox_ros_driver2 | `/livox/lidar` | task2_cloud_filter, glim_rosnode |
 | task2_cloud_filter | `/task2/points_filtered` | preprocessing_node(launch 引数 `lidar_topic` で接続) |
 | preprocessing_node | `/pcl/preprocessed` | ground_remover_node |
-| ground_remover_node | `/pcl/nonground` | cluster_node, quay_wall_detector |
+| ground_remover_node | `/pcl/nonground` | cluster_node |
 | cluster_node | `/pcl/cluster_centroids` | ship_tracker_node |
 | ship_tracker_node | `/tracked_objects` | opponent_selector |
 | ekf_filter_node_local | `/odometry/filtered/local` | opponent_selector, ship_tracker_node(`ego_odom_topic`) |
 | opponent_selector | `/other_ship/twist` + TF `map→opponent_vessel` | planner_node |
 | task2_waypoint_pose_publisher | `/waypoint1_pose`, `/waypoint2_pose` | planner_node |
 | glim_rosnode | `/odom` | planner_node(`own_odom_topic`), path_pruner_node, velocity_smoother |
-| quay_wall_detector | `/quay_wall/points` | Nav2 obstacle_layer(local/global、ソース名 `quay`) |
-| quay_wall_detector | `/quay_wall/markers` | planner_node(`enable_mppi_quay_cost: true` 時のみ・実験的) |
 | planner_node | `/planned_path_pruned` | follow_path_client_node |
 | follow_path_client_node | `/follow_path` (FollowPath action) | controller_server |
 | controller_server | `cmd_vel`→`cmd_vel_nav` リマップ | velocity_smoother |
@@ -241,16 +235,13 @@ scripts/
 | `/task2/points_filtered` | sensor_msgs/PointCloud2 | base_link | task2_cloud_filter | preprocessing_node | フィルタ済み雲 |
 | `/task2/debug/raw_transformed` ほか `/task2/debug/*` | sensor_msgs/PointCloud2 | base_link | task2_cloud_filter | (デバッグ) | `publish_debug: true` 時のみ。raw_transformed / self_filtered / water_removed / rejected_water |
 | `/pcl/preprocessed` | sensor_msgs/PointCloud2 | base_link | preprocessing_node | ground_remover_node | サブモジュール |
-| `/pcl/nonground` | sensor_msgs/PointCloud2 | base_link | ground_remover_node | cluster_node, quay_wall_detector | サブモジュール |
+| `/pcl/nonground` | sensor_msgs/PointCloud2 | base_link | ground_remover_node | cluster_node | サブモジュール |
 | `/pcl/cluster_centroids` | geometry_msgs/PoseArray | base_link | cluster_node | ship_tracker_node | サブモジュール |
 | `/tracked_objects` | ship_perception_msgs/TrackedObjectArray | base_link(pose)/body(twist) | ship_tracker_node | opponent_selector | twist は相対・物体 body frame |
 | `/odometry/filtered/local` | nav_msgs/Odometry | odom (child: base_link) | ekf_filter_node_local | opponent_selector, tracker | ego 補償に使用 |
 | `/odometry/filtered/global` | nav_msgs/Odometry | map | ekf_filter_node_global | bt_navigator | |
 | `/odom` | nav_msgs/Odometry | odom | glim_rosnode(リマップ) | planner_node ほか | 実機の own_odom |
 | `/other_ship/twist` | geometry_msgs/TwistStamped | map | opponent_selector | planner_node | **絶対**対地速度。トラック喪失時は沈黙 |
-| `/quay_wall/points` | sensor_msgs/PointCloud2 | base_link | quay_wall_detector | Nav2 obstacle_layer | marking のみ(clearing なし) |
-| `/quay_wall/markers` | visualization_msgs/MarkerArray | base_link | quay_wall_detector | planner_node(実験的)・RViz | LINE_LIST |
-| `/quay_wall/costmap` | nav_msgs/OccupancyGrid | map | quay_wall_detector | (可視化・将来用) | quay_safety_margin_m で膨張 |
 | `/waypoint1_pose`, `/waypoint2_pose` | geometry_msgs/PoseStamped | map | task2_waypoint_pose_publisher | planner_node | 2 Hz |
 | `/planned_path_pruned` | nav_msgs/Path | map | planner_node | follow_path_client_node | pruner はバイパス |
 | `/planned_path` | nav_msgs/Path | map | (発行者なし・実機/シミュとも) | path_pruner_node | 予約配線 |
@@ -278,8 +269,7 @@ scripts/
 | geometry_msgs/PoseArray | geometry_msgs | `/pcl/cluster_centroids` |
 | nav_msgs/Odometry | nav_msgs | `/odom`, `/odometry/filtered/*` |
 | nav_msgs/Path | nav_msgs | `/planned_path*` |
-| nav_msgs/OccupancyGrid | nav_msgs | `/quay_wall/costmap` |
-| visualization_msgs/Marker, MarkerArray | visualization_msgs | `/quay_wall/markers` |
+| visualization_msgs/MarkerArray | visualization_msgs | `/sim/task2_gps_markers`(シミュのみ) |
 | vision_msgs/Detection2DArray, Detection2D, ObjectHypothesisWithPose | vision_msgs | YOLO 検出 |
 | njord_interfaces/BuoyRoi | njord_interfaces | `/buoy_roi` |
 | ship_perception_msgs/TrackedObjectArray, TrackedObject | ship_perception_msgs(**サブモジュール提供**) | `/tracked_objects`。`colcon build --packages-up-to ship_perception_msgs` を先に行うこと |
@@ -326,8 +316,7 @@ task2_real.launch.py
 │   └── nav2.launch.py                (起動しない: enable_nav2=false)
 ├── yolo11s.launch.py                 [enable_yolo]  ※venv ガードあり
 ├── task2_perception.launch.py        [enable_lidar]
-│     (enable_opponent_selector ← enable_ship_tracking,
-│      enable_quay_detection ← enable_quay_detection)
+│     (enable_opponent_selector ← enable_ship_tracking)
 ├── classical_pipeline.launch.py      [enable_ship_tracking]
 │     lidar_topic:=/task2/points_filtered
 │     ego_odom_topic:=/odometry/filtered/local
@@ -339,7 +328,7 @@ task2_real.launch.py
 └── diagnostics.launch.py             [enable_debug_topics] (profile:=localization)
 ```
 
-launch 引数(既定値): `enable_camera=true`, `enable_yolo=true`, `enable_lidar=true`, `enable_ship_tracking=true`, `enable_quay_detection=true`, `enable_mppi=true`, `enable_nav2=true`, `enable_thrusters=true`, `enable_debug_topics=false`, `lidar_model=mid360s`, `yolo_backend=pytorch`, `yolo_model_path=<yolo share>/config/best.pt`, `use_tensorrt=false`, `use_int8=false`(予約・未使用), **`dry_run=true`**, **`send_thruster_commands=false`**。
+launch 引数(既定値): `enable_camera=true`, `enable_yolo=true`, `enable_lidar=true`, `enable_ship_tracking=true`, `enable_mppi=true`, `enable_nav2=true`, `enable_thrusters=true`, `enable_debug_topics=false`, `lidar_model=mid360s`, `yolo_backend=pytorch`, `yolo_model_path=<yolo share>/config/best.pt`, `use_tensorrt=false`, `use_int8=false`(予約・未使用), **`dry_run=true`**, **`send_thruster_commands=false`**。
 
 注意点:
 
@@ -359,8 +348,6 @@ TimerAction による段階起動:
 | `nav2_delay` (2 s) | `navigation_launch_task2.py`(nav2_params_task2.yaml)[use_nav2] |
 | `goal_delay` (3 s) | `planner_with_follow_path.launch.py`[use_mppi](シミュブリッジ 2 ノード込み)、waypoint_publisher[use_waypoints=false] |
 | `opponent_delay` (10 s) | opponent_vessel_node、ideal_lidar_pointcloud_node |
-
-`/quay_wall/points` はシミュで誰も発行しないが、Nav2 の `quay` ソースは marking のみなので**沈黙時は無影響**(シミュ互換性維持)。
 
 ## 12. YOLO 処理フロー
 
@@ -416,18 +403,9 @@ TF が引けない場合: cloud stamp の TF → 最新 TF へフォールバッ
   5. 出力: `/other_ship/twist`(TwistStamped, map frame, **絶対**対地速度)+ TF `map→opponent_vessel`。
 - **縮退動作**: 有効トラックが無いときは何も publish しない(警告のみ)。MPPI は `require_other_ship: False` のため直進経路を出し続ける。
 
-## 16. 岸壁認識処理
+## 16. 岸壁認識(Task 2 対象外)
 
-`quay_wall_detector`(`/pcl/nonground` 入力):
-
-1. `wall_fit.extract_wall_candidates()` で鉛直方向の広がりを持つセル候補を抽出。
-2. 2D RANSAC 直線当てはめ(`wall_line_distance_threshold_m` 0.15、`wall_min_points` 30、`wall_min_length_m` 2.0、`wall_max_distance_m` 40)。
-3. 面法線ゲート: インライア点群の最小分散方向の |z| ≤ `wall_normal_z_max`(0.3)→ 鉛直壁面のみ通す。
-4. 時間的確認: `wall_temporal_confirmations`(3 フレーム)出現で confirmed、`wall_timeout_sec`(2.0 s)未観測で破棄。
-5. 出力:
-   - `/quay_wall/points`(confirmed 壁インライア点、base_link)→ **Nav2 obstacle layer の第 2 ソース `quay`(marking のみ・clearing なし)**。これが主たる安全経路。
-   - `/quay_wall/markers`(LINE_LIST)→ 可視化 + 実験的 MPPI quay cost の入力。
-   - `/quay_wall/costmap`(OccupancyGrid, map frame, `quay_safety_margin_m` 5 m 膨張、自船中心 100 m 四方)→ 可視化・将来用。
+岸壁認識は Task 2 の対象外となり、実装一式(検出ノード・MPPI quay cost・Nav2 quay ソース)は feature/quay-perception ブランチに保存されている(§1 の注記参照)。
 
 ## 17. MPPI 接続
 
@@ -436,7 +414,6 @@ TF が引けない場合: cloud stamp の TF → 最新 TF へフォールバッ
   - `own_odom_topic:=/odom`(GLIM)、`other_ship_frame: opponent_vessel`、`require_other_ship: False`、`other_twist_is_relative: False`(認識側が map 絶対速度を出すため)。
   - MPPI ハイパーパラメータは `config/mppi_params.yaml` から読む。**全デフォルト = 旧ハードコード値**(horizon 225、dt 0.1 s、num_samples 5000、lambda 12.0、sigma [35, 0]、target_speed 1.02889 m/s = 2 kn、path_cost_weight 150、collision_cost_min/max 10/50、gate 3.0、buoy 120、speed 0.1、control 0.2、CRM 楕円ゲイン 右/左/前/後 = 3.2/1.6/6.4/1.6 LOA、loa 2.0、gate_half_width 4.0 m)。デフォルト値不変はテストで 25/25 確認済み。
   - topic 配線は `planner_with_follow_path.launch.py`(シミュ検証済み)と同一: planner が直接 `/planned_path_pruned` に publish し、`path_pruner_node` は起動されるが実質バイパス。
-- **実験的 quay cost**: `enable_mppi_quay_cost`(既定 **false**)を true にすると `/quay_wall/markers` を購読し、`quay_cost.quay_segment_cost()`(マージン内の二乗ペナルティ)をロールアウトコストに加算する。false のままなら planner は歴史的実装と挙動同一。**注意**: 現行 Task2 Nav2 設定(RPP `use_collision_detection: false`)では costmap の quay マーキングは制御へ伝搬しないため、岸壁近傍の実走行前に RPP 衝突検出の有効化か本コストの有効化のどちらかを人間が選択すること(統合レポート §20-7 参照)。
 - 縮退: 他船情報なし → 直進経路(straight_path_length_m 60 m)を生成し続ける。
 
 ## 18. Nav2 接続
@@ -444,9 +421,8 @@ TF が引けない場合: cloud stamp の TF → 最新 TF へフォールバッ
 - Task 2 専用スタックを `navigation_launch_task2.py`(nav2_bringup の navigation_launch.py 相当を robot パッケージに保持)+ `nav2_params_task2.yaml` で起動。実機汎用の `nav2.launch.py` / `nav2_params.yaml` は**無変更**。
 - 経路は planner(GridBased/ThetaStar)ではなく、`follow_path_client_node` からの `FollowPath` action で MPPI 経路を直接追従する。
 - controller: `nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController`(desired_linear_vel 1.10、lookahead 3.0(1.2–6.0)、collision detection off)。
-- costmap: local(rolling 30×30 m, 0.1 m)/ global(100×60 m, 0.2 m)ともに obstacle_layer の `observation_sources: pointcloud quay`。
+- costmap: local(rolling 30×30 m, 0.1 m)/ global(100×60 m, 0.2 m)ともに obstacle_layer の `observation_sources: pointcloud`。
   - `pointcloud`: `/pointcloud`(シミュの ideal LiDAR。実機では現状発行者なし = 空)。
-  - `quay`: `/quay_wall/points`(marking のみ、max_obstacle_height 4.0、obstacle_max_range 40)。
 - velocity_smoother: max_velocity [1.20, 0.0, 0.18]、`cmd_vel_smoothed`→`/cmd_vel_thruster`。
 - bt_navigator の odom_topic は `/odometry/filtered/global`。
 
@@ -482,10 +458,9 @@ enable_thrusters == true  AND  dry_run == false  AND  send_thruster_commands == 
 その他の fail-safe:
 
 - **他船喪失** → `/other_ship/twist` 沈黙 → MPPI 直進(安全縮退)。opponent_selector のスパイクゲートで異常速度サンプルは棄却。
-- **岸壁** → Nav2 obstacle layer へ marking されるが、現行 Task2 の RPP 設定(collision detection 無効)では制御に**効かない**。実走行前に RPP 衝突検出または MPPI quay cost(実験的・既定オフ)の有効化を人間が判断すること(統合レポート §20-7)。
 - **E-stop**: `/emg` ソフト E-stop + ハードウェア E-stop(test07089 既存・無変更)。thruster_driver は feedback timeout(0.5 s)で停止(`stop_on_feedback_timeout: true`)。watchdog_timeout_sec 0.5。
 - **YOLO 重み欠如** → fatal ログ + クリーン終了(他ノードは継続)。
-- **TF 欠如** → cloud_filter はフレーム破棄、opponent_selector / quay costmap はそのサイクルをスキップ(警告スロットル)。
-- 静的テスト(8 件)が安全既定値(dry_run true / send_thruster_commands false)と三重ゲート式、シミュ専用ノード非混入を CI 的に固定している。
+- **TF 欠如** → cloud_filter はフレーム破棄、opponent_selector はそのサイクルをスキップ(警告スロットル)。
+- 静的テスト(14 件)が安全既定値(dry_run true / send_thruster_commands false)と三重ゲート式、シミュ専用ノード非混入、岸壁認識の非再混入を CI 的に固定している。
 
 **注意: 本書のすべての動作記述はコード静的解析に基づく。実行時挙動は Jetson/実機で未確認**(検証手順は `Docs/task2_jetson_validation.md`)。

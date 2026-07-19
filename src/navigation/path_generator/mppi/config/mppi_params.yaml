@@ -80,20 +80,3 @@ planner_node:
       # (code: margin_m / longitudinal_sigma_m literals in buoy_outside_cost).
       buoy_margin_m: 1.0            # current default - human tuning expected; record any change
       buoy_longitudinal_sigma_m: 8.0  # current default - human tuning expected; record any change
-
-      # ---- EXPERIMENTAL quay wall cost (only used when
-      # enable_mppi_quay_cost is true). NOTE: with the current Task2 Nav2
-      # config (RPP use_collision_detection=false), the quay costmap feed
-      # does NOT affect control - enabling this cost OR enabling RPP
-      # collision detection is a required human decision before running
-      # near a quay with dry_run:=false. These two are NEW parameters with
-      # no historical hardcoded counterpart. ----
-      quay_cost_weight: 50.0        # experimental default - human tuning expected; record any change
-      quay_safety_margin_m: 3.0     # experimental default - human tuning expected; record any change
-
-    # EXPERIMENTAL master switch for the MPPI quay cost term. false keeps the
-    # planner behaviorally identical to the historical implementation.
-    enable_mppi_quay_cost: false
-
-    # Topic providing quay wall LINE_LIST markers (task2_perception contract).
-    quay_markers_topic: "/quay_wall/markers"

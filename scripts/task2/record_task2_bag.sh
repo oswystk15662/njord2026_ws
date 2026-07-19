@@ -19,9 +19,6 @@ TASK2_TOPICS=(
     /pcl/cluster_centroids
     /tracked_objects
     /other_ship/twist
-    /quay_wall/markers
-    /quay_wall/points
-    /quay_wall/costmap
     /pcl/nonground
     /planned_path
     /planned_path_pruned

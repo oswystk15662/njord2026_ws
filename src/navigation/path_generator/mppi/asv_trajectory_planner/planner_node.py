@@ -4,11 +4,8 @@ import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 
-import math
-
 from geometry_msgs.msg import PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry, Path
-from visualization_msgs.msg import Marker, MarkerArray
 
 from tf2_ros import Buffer, TransformListener
 
@@ -102,15 +99,6 @@ class PlannerNode(Node):
         self.declare_parameter("mppi.buoy_margin_m", 1.0)
         self.declare_parameter("mppi.buoy_longitudinal_sigma_m", 8.0)
 
-        # EXPERIMENTAL quay wall cost hook.
-        # Nav2 costmap (/quay_wall/costmap) is the PRIMARY quay safety path.
-        # When false (default) the planner is behaviorally identical to the
-        # historical implementation.
-        self.declare_parameter("enable_mppi_quay_cost", False)
-        self.declare_parameter("mppi.quay_cost_weight", 50.0)
-        self.declare_parameter("mppi.quay_safety_margin_m", 3.0)
-        self.declare_parameter("quay_markers_topic", "/quay_wall/markers")
-
         self.own_odom_topic = self.get_parameter("own_odom_topic").value
         self.other_ship_twist_topic = self.get_parameter("other_ship_twist_topic").value
         self.waypoint1_topic = self.get_parameter("waypoint1_topic").value
@@ -134,11 +122,6 @@ class PlannerNode(Node):
         mppi_smoothing_window = self.get_parameter("mppi_smoothing_window").value
         opponent_use_distance_m = self.get_parameter("opponent_use_distance_m").value
         opponent_passed_margin_m = self.get_parameter("opponent_passed_margin_m").value
-
-        self.enable_mppi_quay_cost = bool(
-            self.get_parameter("enable_mppi_quay_cost").value
-        )
-        self.quay_markers_topic = self.get_parameter("quay_markers_topic").value
 
         # Keyword names match MPPIPlanner's constructor arguments.
         mppi_params = {
@@ -175,11 +158,6 @@ class PlannerNode(Node):
             "buoy_longitudinal_sigma_m": float(
                 self.get_parameter("mppi.buoy_longitudinal_sigma_m").value
             ),
-            "enable_quay_cost": self.enable_mppi_quay_cost,
-            "quay_cost_weight": float(self.get_parameter("mppi.quay_cost_weight").value),
-            "quay_safety_margin_m": float(
-                self.get_parameter("mppi.quay_safety_margin_m").value
-            ),
         }
 
         self.trajectory_generator = TrajectoryGenerator(
@@ -202,7 +180,6 @@ class PlannerNode(Node):
         self.latest_other_ship_twist = None
         self.latest_waypoint1_pose = None
         self.latest_waypoint2_pose = None
-        self.latest_quay_markers = None
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -234,18 +211,6 @@ class PlannerNode(Node):
             self.waypoint2_callback,
             10,
         )
-
-        # EXPERIMENTAL: quay wall markers subscription, only when the quay
-        # cost hook is enabled. Markers are LINE_LIST segments in base_link
-        # (task2_perception contract); endpoints are transformed to map via TF.
-        self.quay_markers_sub = None
-        if self.enable_mppi_quay_cost:
-            self.quay_markers_sub = self.create_subscription(
-                MarkerArray,
-                self.quay_markers_topic,
-                self.quay_markers_callback,
-                10,
-            )
 
         self.path_pub = self.create_publisher(
             Path,
@@ -280,73 +245,6 @@ class PlannerNode(Node):
 
     def waypoint2_callback(self, msg: PoseStamped):
         self.latest_waypoint2_pose = msg
-
-    def quay_markers_callback(self, msg: MarkerArray):
-        self.latest_quay_markers = msg
-
-    def _extract_quay_segments_map(self):
-        """
-        EXPERIMENTAL: /quay_wall/markers (LINE_LIST, base_link) の各線分端点を
-        TFでmap基準に変換し、[(x0, y0, x1, y1), ...] を返す。
-
-        変換できない/データがない場合はNoneを返し、planner挙動は
-        quay costなしと同一になる。
-        """
-        if self.latest_quay_markers is None:
-            return None
-
-        segments = []
-
-        for marker in self.latest_quay_markers.markers:
-            if marker.type != Marker.LINE_LIST:
-                continue
-
-            if len(marker.points) < 2:
-                continue
-
-            source_frame = marker.header.frame_id or self.own_frame
-
-            try:
-                tf_msg = self.tf_buffer.lookup_transform(
-                    self.frame_id,
-                    source_frame,
-                    Time(),
-                )
-            except TransformException as e:
-                self.get_logger().warn(
-                    f"Quay cost: cannot lookup TF {self.frame_id} -> "
-                    f"{source_frame}: {e}",
-                    throttle_duration_sec=2.0,
-                )
-                return None
-
-            t = tf_msg.transform.translation
-            q = tf_msg.transform.rotation
-
-            siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
-            cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
-            yaw = math.atan2(siny_cosp, cosy_cosp)
-
-            c = math.cos(yaw)
-            s = math.sin(yaw)
-
-            def to_map(p):
-                return (
-                    t.x + c * p.x - s * p.y,
-                    t.y + s * p.x + c * p.y,
-                )
-
-            # LINE_LIST: 点は (p0, p1), (p2, p3), ... の線分ペア
-            n_pairs = len(marker.points) // 2
-            for i in range(n_pairs):
-                x0, y0 = to_map(marker.points[2 * i])
-                x1, y1 = to_map(marker.points[2 * i + 1])
-                segments.append((x0, y0, x1, y1))
-
-        if len(segments) == 0:
-            return None
-
-        return segments
 
     def timer_callback(self):
         if self.latest_own_odom is None:
@@ -387,17 +285,12 @@ class PlannerNode(Node):
 
                 other_transform = None
 
-        quay_segments_map = None
-        if self.enable_mppi_quay_cost:
-            quay_segments_map = self._extract_quay_segments_map()
-
         path = self.trajectory_generator.generate(
             own_odom=self.latest_own_odom,
             other_transform=other_transform,
             other_twist=self.latest_other_ship_twist,
             waypoint1_pose=self.latest_waypoint1_pose,
             waypoint2_pose=self.latest_waypoint2_pose,
-            quay_segments_map=quay_segments_map,
         )
 
         now = self.get_clock().now().to_msg()

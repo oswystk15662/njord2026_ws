@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 from asv_trajectory_planner import crm_torch
-from asv_trajectory_planner import quay_cost
 import math
 from typing import List, Tuple, Optional
 from asv_trajectory_planner.vessel_state import VesselState
@@ -536,13 +535,11 @@ class MPPItorch():
         return new_path
 
     def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, buoys=None, gate_center=None, buoy_cost_weight=120.0, gate_cost_weight=3.0, seed=None, straight_time=0, debug=False,
-                buoy_margin_m=1.0, buoy_longitudinal_sigma_m=8.0, ax_gains=None,
-                quay_segments=None, quay_cost_weight=0.0, quay_safety_margin_m=0.0):
+                buoy_margin_m=1.0, buoy_longitudinal_sigma_m=8.0, ax_gains=None):
         # All new keyword defaults reproduce the previously hardcoded behavior:
         #   buoy_margin_m=1.0 / buoy_longitudinal_sigma_m=8.0 were literals in the
-        #   buoy_outside_cost() call, ax_gains=None falls back to the crm_torch
-        #   module constants, and quay_segments=None skips the (EXPERIMENTAL)
-        #   quay cost term entirely.
+        #   buoy_outside_cost() call, and ax_gains=None falls back to the
+        #   crm_torch module constants.
 
         predx, predy, predU, predpsi, predr, pred_rudders, pred_accs, predtimes = self.prediction(
             x, y, psi, U, r, rudders, accs, seed=seed, straight_time = straight_time
@@ -663,23 +660,6 @@ class MPPItorch():
         else:
             cost_gate = torch.zeros_like(cost_buoy)
 
-        # ------------------------------------------------------------
-        # EXPERIMENTAL quay wall cost.
-        # Nav2 costmap remains the primary quay safety path; this term is an
-        # optional extra penalty and is completely inert (cost_quay is None,
-        # nothing is added to costs) unless quay_segments is provided.
-        # ------------------------------------------------------------
-        if quay_segments is not None and len(quay_segments) > 0:
-            cost_quay = quay_cost.quay_segment_cost(
-                X=predx,
-                Y=predy,
-                segments=quay_segments,
-                margin_m=quay_safety_margin_m,
-                weight=quay_cost_weight,
-            ).mean(axis=-1, keepdim=True)
-        else:
-            cost_quay = None
-
         if torch.isnan(cost_collision).any():
             print('[MPPI] cost計算が発散しています. cost for collision',)
         if torch.isnan(diviation).any():
@@ -695,8 +675,6 @@ class MPPItorch():
                 + cost_buoy
                 + cost_gate
             )
-            if cost_quay is not None:
-                costs = costs + cost_quay
             # norm costs
             norm_targ = ['input', 'min'][1]
             if norm_targ == 'input':
@@ -743,8 +721,6 @@ class MPPItorch():
                 + cost_buoy
                 + cost_gate
             )
-            if cost_quay is not None:
-                costs = costs + cost_quay
             # norm costs
             norm_targ = ['input', 'min'][0]
             if norm_targ == 'input':
@@ -847,11 +823,6 @@ class MPPIPlanner():
         safe_distance_left_loa: float = 1.6,
         safe_distance_fore_loa: float = 6.4,
         safe_distance_aft_loa: float = 1.6,
-        # --- EXPERIMENTAL quay wall cost (Nav2 costmap is the primary quay
-        # safety path; this stays fully inert unless explicitly enabled) ---
-        enable_quay_cost: bool = False,
-        quay_cost_weight: float = 50.0,
-        quay_safety_margin_m: float = 3.0,
     ):
         self.point_spacing = point_spacing
         self.avoid_radius = avoid_radius
@@ -878,10 +849,6 @@ class MPPIPlanner():
             safe_distance_fore_loa,
             safe_distance_aft_loa,
         )
-
-        self.enable_quay_cost = enable_quay_cost
-        self.quay_cost_weight = quay_cost_weight
-        self.quay_safety_margin_m = quay_safety_margin_m
 
         self.path_spacing_m = 2.0 #waypoint 分割距離[m]
         simdt = dt
@@ -910,7 +877,6 @@ class MPPIPlanner():
         other: Optional[VesselState],
         waypoint1: Tuple[float, float],
         waypoint2: Tuple[float, float],
-        quay_segments: Optional[List[Tuple[float, float, float, float]]] = None,
     ) -> List[Tuple[float, float]]:
 
         others = [] if other is None else [other]  # 他船がなければ衝突コストなし
@@ -924,14 +890,6 @@ class MPPIPlanner():
             half_width_m=self.gate_half_width_m,
             s_ratio=0.5,
         )
-
-        # EXPERIMENTAL: quay cost is only active when explicitly enabled AND
-        # quay segments were supplied. Otherwise get_opt receives None and the
-        # code path is identical to the historical behavior.
-        if self.enable_quay_cost and quay_segments:
-            quay_segments_arg = quay_segments
-        else:
-            quay_segments_arg = None
 
         (
             predx,
@@ -962,9 +920,6 @@ class MPPIPlanner():
             buoy_margin_m=self.buoy_margin_m,
             buoy_longitudinal_sigma_m=self.buoy_longitudinal_sigma_m,
             ax_gains=self.ax_gains,
-            quay_segments=quay_segments_arg,
-            quay_cost_weight=self.quay_cost_weight,
-            quay_safety_margin_m=self.quay_safety_margin_m,
             debug=True
         )
 
