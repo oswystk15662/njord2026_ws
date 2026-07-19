@@ -225,8 +225,9 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "yolo_backend",
-                default_value="onnx",
-                description="YOLO backend when use_tensorrt is false",
+                default_value="pytorch",
+                description="YOLO backend when use_tensorrt is false; "
+                "yolo11_node accepts 'pytorch' (.pt) or 'tensorrt' (.engine)",
             ),
             DeclareLaunchArgument(
                 "yolo_model_path",

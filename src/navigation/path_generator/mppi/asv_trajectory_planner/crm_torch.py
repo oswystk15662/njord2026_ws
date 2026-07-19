@@ -19,15 +19,15 @@ def _EntryCriteria(own, oth):
             alpha_180 = alpha_360-360
         else:
             alpha_180 = alpha_360
-        
+
         beta_360 = (-rel_owncog)%360
         if beta_360>180:
             beta_180 = beta_360-360
         else:
             beta_180 = beta_360
-        
+
         # print('alpha_360 : ', alpha_360, '\nbeta_360 : ', beta_360)
-        
+
         if (beta_360>112.5) and (beta_360<247.5) and (abs(alpha_180)<alpha13crit):
             # rule13/17 stand-on
             return 0
@@ -37,7 +37,7 @@ def _EntryCriteria(own, oth):
             return 1
 
         elif (abs(beta_180)<alpha14crit) and (abs(alpha_180)<alpha14crit):
-            # rule14 
+            # rule14
             return 2
 
         elif (beta_360>0) and (beta_360<112.5) and (alpha_180>-112.50) and (alpha_180<alpha15crit):
@@ -126,7 +126,7 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ax_gains=None):
 
     crms = torch.zeros_like(X)
     for oth in others:
-        
+
         Vtx = oth[2]*np.sin(np.deg2rad(oth[3]))
         Vty = oth[2]*np.cos(np.deg2rad(oth[3]))
 
@@ -153,8 +153,8 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ax_gains=None):
                 )**2
             ), 0, 1,
         )
-        
-        
+
+
         # CRM(相手船のバンパーへ侵入する領域)
         if (EntryNo in  _EntryCriteria_GIVE_WAY_No):
             pred_x_oth = X - pred_x
@@ -182,12 +182,12 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ax_gains=None):
                     ), 0, 1,
                 )
             )
-        
+
         gain = CPAgain(own, oth)
         # print(gain)
         # crms = 1 - (1-crms)*(1-_s*gain)
         crms = 1 - (1-crms)*(1-_s)
-    
+
     return crms
 
 def timedomaincrm_numpy(X, Y, T, own, others,):
@@ -202,7 +202,7 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
 
     crms = np.zeros_like(X)
     for oth in others:
-        
+
         Vtx = oth[2]*np.sin(np.deg2rad(oth[3]))
         Vty = oth[2]*np.cos(np.deg2rad(oth[3]))
 
@@ -229,8 +229,8 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
                 )**2
             ), 0, 1,
         )
-        
-        
+
+
         # CRM(相手船のバンパーへ侵入する領域)
         if (EntryNo in  _EntryCriteria_GIVE_WAY_No):
             pred_x_oth = X - pred_x
@@ -258,7 +258,7 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
                     ), 0, 1,
                 )
             )
-            
+
         crms = 1 - (1-crms)*(1-_s)
-    
+
     return crms
