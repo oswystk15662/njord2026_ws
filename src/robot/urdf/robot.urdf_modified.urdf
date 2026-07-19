@@ -43,10 +43,15 @@
 			<inertia ixx="1." ixy="0." ixz="0." iyx="0." iyy="1." iyz="0." izx="0." izy="0." izz="1."/>
 		</inertial>
 	</link>
+	<!--
+		NOMINAL 180-deg roll for upside-down Mid360 mounting - MEASURE and update
+		before trusting perception/GLIM; this URDF is the ONLY inversion
+		correction point; do not re-rotate in nodes.
+	-->
 	<joint name="lidar_joint" type="fixed">
 		<parent link="base_link"/>
 		<child link="livox_frame"/>
-		<origin rpy="0 0 0" xyz="0.5 0.0 0.8"/>
+		<origin rpy="3.14159265358979 0 0" xyz="0.5 0.0 0.8"/>
 	</joint>
 	<link name="imu_link">
 		<visual>
