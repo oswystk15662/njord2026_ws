@@ -1,0 +1,13 @@
+# Jetson YOLO11 venv 用 requirements
+#
+# 方針 (README_jetson_yolo11.md 参照):
+# - ROS 2 / cv_bridge はシステム Python を使う (venv には入れない)
+# - venv は --system-site-packages で作成し、YOLO 関連だけを venv に入れる
+# - ★torch はこのファイルに入れない★
+#   Jetson 用 torch は NVIDIA 提供の wheel (JetPack バージョン対応品) を
+#   個別にインストールする。pip の PyPI torch で上書きすると CUDA が使えなくなる。
+# - numpy は 1.26 系に固定 (2 系は cv_bridge / ROS Python と非互換なので禁止)
+# - ultralytics は 8.3.x 系 (YOLO11 対応)
+
+ultralytics>=8.3.0,<8.4.0
+numpy>=1.26.0,<2.0.0
