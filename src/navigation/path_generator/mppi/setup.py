@@ -21,6 +21,10 @@ setup(
             os.path.join("share", package_name, "launch"),
             glob("launch/*.launch.py"),
         ),
+        (
+            os.path.join("share", package_name, "config"),
+            glob("config/*.yaml"),
+        ),
     ],
     install_requires=["setuptools"],
     zip_safe=True,
@@ -36,6 +40,7 @@ setup(
         "follow_path_client_node = asv_trajectory_planner.follow_path_client_node:main",
         "task2_gps_waypoint_publisher = asv_trajectory_planner.task2_gps_waypoint_publisher:main",
                 "opponent_twist_from_tf_node = asv_trajectory_planner.opponent_twist_from_tf_node:main",
+        "task2_waypoint_pose_publisher = asv_trajectory_planner.task2_waypoint_pose_publisher:main",
 ],
     },
 )
