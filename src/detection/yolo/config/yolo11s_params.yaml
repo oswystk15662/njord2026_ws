@@ -1,0 +1,81 @@
+/**:
+  ros__parameters:
+    # ─── Model / Input（モデルと入力）────────────────────────────
+    # model_path（YOLO11s 重みファイルのパス）。
+    # 空文字 "" の場合は <yolo pkg share>/config/yolo11s.pt を使う。
+    #
+    # ★重要★ yolo11s.pt / yolo11s.engine はリポジトリに含まれていない。
+    #   学習済み重み (.pt) または TensorRT engine (.engine) を人が
+    #   src/detection/yolo/config/ に配置してから colcon build するか、
+    #   絶対パスをここ (または launch 引数 model_path) で指定すること。
+    # .engine を指定すると Ultralytics の TensorRT バックエンドで動く。
+    model_path: ""
+
+    # device（推論デバイス）。"cpu" または "cuda:0"。
+    # .engine 使用時は無視される (engine は build したデバイスで動く)。
+    device: "cuda:0"
+
+    # backend（記録用メタ情報: "pytorch" | "tensorrt"）。
+    # 実際の切替は model_path の拡張子で自動判別される。
+    backend: "pytorch"
+
+    # imgsz（推論入力サイズ）。engine の場合は export 時の imgsz と揃えること。
+    imgsz: 640
+
+    # conf_threshold / iou_threshold / max_det（検出しきい値と最大検出数）
+    conf_threshold: 0.25
+    iou_threshold: 0.45
+    max_det: 20
+
+    # classes（推論対象クラス id のフィルタ）。空リスト [] = 全クラス。
+    # 例: [0, 2] にすると id 0 と 2 のみ検出する。
+    classes: []
+
+    # use_half（PyTorch backend で FP16 推論するか）。CUDA デバイス時のみ有効。
+    use_half: true
+
+    # ─── Topics ─────────────────────────────────────────────────
+    camera_topic: "/camera/image_raw"
+    camera_info_topic: "/camera/camera_info"
+    detections_topic: "/yolo/detections"
+    buoy_roi_topic: "/buoy_roi"
+
+    # ─── Rate Limit（処理周期を落として軽くする）────────────────
+    # inference_hz（YOLO 推論周期）。0.0 = 画像が来るたびに推論（重い）。
+    inference_hz: 5.0
+    # debug_image_hz（yolo/debug_image の publish 周期）。
+    debug_image_hz: 2.0
+    # publish_debug_image（false にすると描画処理ごとスキップして軽くなる）。
+    publish_debug_image: true
+
+    # ─── ROI crop（画像内の監視領域、0.0-1.0 比率）───────────────
+    # use_roi_crop=true のとき指定範囲だけ YOLO に渡す。
+    # bbox は元画像座標へ戻して publish される。
+    use_roi_crop: false
+    roi_x_min: 0.0
+    roi_x_max: 1.0
+    roi_y_min: 0.0
+    roi_y_max: 1.0
+    # draw_roi_rect（debug_image に ROI 枠を描くか）
+    draw_roi_rect: true
+
+    # ─── BuoyRoi（/buoy_roi 出力、現行 main.py の値を踏襲）───────
+    roi_frame_id: "base_link"
+    # fixed_range_m（距離の固定推定値 [m]。カメラ単眼では距離が出ないため仮置き）
+    fixed_range_m: 5.0
+    # roi_range_half（BuoyRoi.r_range: 距離方向の探索半幅 [m]）
+    roi_range_half: 2.0
+    # camera_fov_deg（水平 FOV。画素中心 → 方位角の変換に使用）
+    camera_fov_deg: 90.0
+    # roi_theta_min_deg（BuoyRoi.theta_range の最小値 [deg]）
+    roi_theta_min_deg: 2.0
+
+    # ─── Color estimation（HSV 色推定）───────────────────────────
+    enable_color_estimation: true
+    # class_names（クラス id → 名前の上書きリスト。[''] = モデル内蔵の names を使う）。
+    # 学習済みモデルのクラス構成に合わせて設定する。
+    # 例: ["red_buoy", "green_buoy", "yellow_buoy", "north_cardinal"]
+    class_names: [""]
+    # color_class_map（クラス名にこの色キーワードが含まれる場合、
+    # HSV 推定を省略してその色を採用する）
+    color_class_map: ["red", "green", "yellow", "black", "white", "blue", "orange"]
