@@ -722,6 +722,10 @@ event-driven topicである。試験時は画角内に認識対象のブイが�
 深度・点群とCUDA YOLO 2本の同時実行で計算資源が飽和しており、ZED2iとback_camが
 設定周波数を満たさない主因と考えられる。
 
+今後の軽量化項目と実装状況は
+[`Docs/sensor_pipeline_performance_roadmap.md`](Docs/sensor_pipeline_performance_roadmap.md)
+を参照する。
+
 UM982は`/dev/ttyUSB2`を開いて連続受信できているため、USBハブ帯域が直接の原因とは
 考えにくい。driverはGPGGA/UNIHEADINGを0.05秒周期に設定したと記録しているが、実出力は
 1 Hzで、binary message ID 972のCRC mismatchも1件記録された。受信機がvolatileな

@@ -34,6 +34,13 @@ int normalize_block_size(int value)
   return value;
 }
 
+template<typename MessageT>
+bool has_subscribers(const std::shared_ptr<rclcpp::Publisher<MessageT>> & publisher)
+{
+  return publisher->get_subscription_count() > 0 ||
+         publisher->get_intra_process_subscription_count() > 0;
+}
+
 }  // namespace
 
 class CpuStereoNode : public rclcpp::Node
@@ -106,38 +113,67 @@ private:
 
   void capture_and_publish()
   {
-    if (!left_capture_.isOpened() || !right_capture_.isOpened()) {
+    const bool publish_left = has_subscribers(left_image_pub_);
+    const bool publish_right = has_subscribers(right_image_pub_);
+    const bool publish_left_info = has_subscribers(left_info_pub_);
+    const bool publish_right_info = has_subscribers(right_info_pub_);
+    const bool publish_depth = has_subscribers(depth_pub_);
+    const bool publish_points = publish_pointcloud_ && has_subscribers(pointcloud_pub_);
+    const bool needs_depth = publish_depth || publish_points;
+    const bool needs_left_frame = publish_left || needs_depth;
+    const bool needs_right_frame = publish_right || needs_depth;
+
+    if (!needs_left_frame && !needs_right_frame && !publish_left_info && !publish_right_info) {
+      return;
+    }
+
+    if ((needs_left_frame && !left_capture_.isOpened()) ||
+      (needs_right_frame && !right_capture_.isOpened()))
+    {
       RCLCPP_ERROR_THROTTLE(
         get_logger(), *get_clock(), 5000,
-        "CPU stereo mode needs both left_device and right_device to be readable");
+        "A camera device required by an active ZED output is not readable");
       return;
     }
 
     cv::Mat left_bgr;
     cv::Mat right_bgr;
-    if (!left_capture_.read(left_bgr) || !right_capture_.read(right_bgr) ||
-      left_bgr.empty() || right_bgr.empty())
-    {
+    const bool left_ok = !needs_left_frame ||
+      (left_capture_.read(left_bgr) && !left_bgr.empty());
+    const bool right_ok = !needs_right_frame ||
+      (right_capture_.read(right_bgr) && !right_bgr.empty());
+    if (!left_ok || !right_ok) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Failed to read a stereo frame");
       return;
     }
 
-    if (left_bgr.size() != right_bgr.size()) {
+    if (needs_depth && left_bgr.size() != right_bgr.size()) {
       cv::resize(right_bgr, right_bgr, left_bgr.size());
     }
 
     const auto stamp = now();
-    const auto width = left_bgr.cols;
-    const auto height = left_bgr.rows;
-    const auto left_info = make_camera_info_msg(width, height, fx_, fy_, cx_, cy_, 0.0,
-        left_frame_id_, stamp);
-    const auto right_info =
-      make_camera_info_msg(width, height, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp);
+    const auto width = !left_bgr.empty() ? left_bgr.cols :
+      (!right_bgr.empty() ? right_bgr.cols : image_width_);
+    const auto height = !left_bgr.empty() ? left_bgr.rows :
+      (!right_bgr.empty() ? right_bgr.rows : image_height_);
 
-    left_image_pub_->publish(mat_to_image_msg(left_bgr, "bgr8", left_frame_id_, stamp));
-    right_image_pub_->publish(mat_to_image_msg(right_bgr, "bgr8", right_frame_id_, stamp));
-    left_info_pub_->publish(left_info);
-    right_info_pub_->publish(right_info);
+    if (publish_left) {
+      left_image_pub_->publish(mat_to_image_msg(left_bgr, "bgr8", left_frame_id_, stamp));
+    }
+    if (publish_right) {
+      right_image_pub_->publish(mat_to_image_msg(right_bgr, "bgr8", right_frame_id_, stamp));
+    }
+    if (publish_left_info) {
+      left_info_pub_->publish(make_camera_info_msg(
+          width, height, fx_, fy_, cx_, cy_, 0.0, left_frame_id_, stamp));
+    }
+    if (publish_right_info) {
+      right_info_pub_->publish(make_camera_info_msg(
+          width, height, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp));
+    }
+    if (!needs_depth) {
+      return;
+    }
 
     cv::Mat left_gray;
     cv::Mat right_gray;
@@ -163,9 +199,11 @@ private:
       }
     }
 
-    depth_pub_->publish(mat_to_image_msg(depth, "32FC1", depth_frame_id_, stamp));
+    if (publish_depth) {
+      depth_pub_->publish(mat_to_image_msg(depth, "32FC1", depth_frame_id_, stamp));
+    }
 
-    if (publish_pointcloud_) {
+    if (publish_points) {
       pointcloud_pub_->publish(
         depth_to_point_cloud_msg(
           depth, fx_, fy_, cx_, cy_, pointcloud_stride_, depth_min_m_, depth_max_m_,
