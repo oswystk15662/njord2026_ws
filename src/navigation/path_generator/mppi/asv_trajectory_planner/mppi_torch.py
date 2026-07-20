@@ -180,8 +180,10 @@ def diviation2infinite_line(predx, predy, wp0, wp1, eps=1e-6):
 
     return diviation
 
-def get_traj(x, y, psi, U, r, opt_rudder, opt_acc, loa, pred_dt):
-    task2_speed_mps = 2.0 * 1852.0 / 3600.0
+def get_traj(x, y, psi, U, r, opt_rudder, opt_acc, loa, pred_dt,
+             target_speed_mps=2.0 * 1852.0 / 3600.0):
+    # target_speed_mps default keeps the historical hardcoded Task2 speed (2 kn).
+    task2_speed_mps = target_speed_mps
     _ship = ship(loa)
     _ship.reset(x, y, task2_speed_mps, psi, r)
     opts_traj = [_ship.data]
@@ -532,7 +534,12 @@ class MPPItorch():
 
         return new_path
 
-    def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, buoys=None, gate_center=None, buoy_cost_weight=120.0, gate_cost_weight=3.0, seed=None, straight_time=0, debug=False):
+    def get_opt(self, x, y, psi, U, r, rudders, accs, loa, others, path, col_cost_min, col_cost_max, div_cost, speed_cost, norm_cost, buoys=None, gate_center=None, buoy_cost_weight=120.0, gate_cost_weight=3.0, seed=None, straight_time=0, debug=False,
+                buoy_margin_m=1.0, buoy_longitudinal_sigma_m=8.0, ax_gains=None):
+        # All new keyword defaults reproduce the previously hardcoded behavior:
+        #   buoy_margin_m=1.0 / buoy_longitudinal_sigma_m=8.0 were literals in the
+        #   buoy_outside_cost() call, and ax_gains=None falls back to the
+        #   crm_torch module constants.
 
         predx, predy, predU, predpsi, predr, pred_rudders, pred_accs, predtimes = self.prediction(
             x, y, psi, U, r, rudders, accs, seed=seed, straight_time = straight_time
@@ -585,7 +592,8 @@ class MPPItorch():
                 predtimes,
                 own_crm,
                 others_crm,
-                turn=turn_crm
+                turn=turn_crm,
+                ax_gains=ax_gains,
             )
             print('own:', [y, x, U, psi, loa],)
             print('other:', others)
@@ -634,8 +642,8 @@ class MPPItorch():
             gps0=path[0][:2],
             gps1=path[1][:2],
             buoys=buoys,
-            margin_m=1.0,
-            longitudinal_sigma_m=8.0,
+            margin_m=buoy_margin_m,
+            longitudinal_sigma_m=buoy_longitudinal_sigma_m,
             weight=buoy_cost_weight,
         )
 
@@ -667,7 +675,7 @@ class MPPItorch():
                 + cost_buoy
                 + cost_gate
             )
-            # norm costs        
+            # norm costs
             norm_targ = ['input', 'min'][1]
             if norm_targ == 'input':
                 rudders_norm = torch.tensor(rudders).to(self._device)
@@ -713,7 +721,7 @@ class MPPItorch():
                 + cost_buoy
                 + cost_gate
             )
-            # norm costs        
+            # norm costs
             norm_targ = ['input', 'min'][0]
             if norm_targ == 'input':
                 rudders_norm = torch.tensor(rudders).to(self._device)
@@ -784,36 +792,80 @@ class MPPIPlanner():
         point_spacing: float = 0.5,
         avoid_radius: float = 2.0,
         avoid_offset: float = 3.0,
+        # ------------------------------------------------------------
+        # MPPI core hyperparameters.
+        # Every default below is the literal that used to be hardcoded in
+        # this constructor / in get_traj / in the get_opt call, so a no-arg
+        # MPPIPlanner() is behaviorally identical to the previous version.
+        # ------------------------------------------------------------
+        horizon: int = 225,
+        dt: float = 0.1,                       # was: simdt = 0.1 (pred_dt)
+        num_samples: int = 5000,               # was: nb_sample = 5000
+        lambda_: float = 12.0,                 # was: _lambda = 12.0
+        control_noise_sigma=(35.0, 0.0),       # was: sigma = [35, 0.0] (rudder deg, acc m/s^2)
+        target_speed: float = 2.0 * 1852.0 / 3600.0,  # was: targU = 2 kn
+        # --- cost weights (names on the left are the historical attribute names) ---
+        path_cost_weight: float = 150.0,       # was: self.div_cost
+        speed_cost_weight: float = 0.1,        # was: self.speed_cost
+        control_cost_weight: float = 0.2,      # was: self.norm_cost
+        collision_cost_min: float = 10.0,      # was: self.col_cost_min
+        collision_cost_max: float = 50.0,      # was: self.col_cost_max
+        buoy_cost_weight: float = 120.0,       # was: literal in get_opt call
+        gate_cost_weight: float = 3.0,         # was: literal in get_opt call
+        # --- safe distances / geometry ---
+        loa: float = 2.0,
+        gate_half_width_m: float = 4.0,        # was: literal in make_virtual_gate_from_path call
+        buoy_margin_m: float = 1.0,            # was: margin_m literal in buoy_outside_cost call
+        buoy_longitudinal_sigma_m: float = 8.0,  # was: longitudinal_sigma_m literal
+        # CRM bumper safe distances (multiples of LOA).
+        # Defaults mirror crm_torch.{RIGHT,LEFT,FORE,AFT}_AX_GAIN.
+        safe_distance_right_loa: float = 3.2,
+        safe_distance_left_loa: float = 1.6,
+        safe_distance_fore_loa: float = 6.4,
+        safe_distance_aft_loa: float = 1.6,
     ):
         self.point_spacing = point_spacing
         self.avoid_radius = avoid_radius
         self.avoid_offset = avoid_offset
 
-        self.loa = 2.0
-        targU = 2.0*1852/3600
+        self.loa = loa
+        self.target_speed = target_speed
 
-        self.speed_cost = 0.1
-        self.div_cost = 150.0
-        self.norm_cost = 0.2
-        self.col_cost_min = 10
-        self.col_cost_max = 50
+        self.speed_cost = speed_cost_weight
+        self.div_cost = path_cost_weight
+        self.norm_cost = control_cost_weight
+        self.col_cost_min = collision_cost_min
+        self.col_cost_max = collision_cost_max
+        self.buoy_cost_weight = buoy_cost_weight
+        self.gate_cost_weight = gate_cost_weight
+
+        self.gate_half_width_m = gate_half_width_m
+        self.buoy_margin_m = buoy_margin_m
+        self.buoy_longitudinal_sigma_m = buoy_longitudinal_sigma_m
+
+        self.ax_gains = (
+            safe_distance_right_loa,
+            safe_distance_left_loa,
+            safe_distance_fore_loa,
+            safe_distance_aft_loa,
+        )
 
         self.path_spacing_m = 2.0 #waypoint 分割距離[m]
-        simdt = 0.1
+        simdt = dt
 
         self.mppi_controller = MPPItorch(
-            horizon = 225,
+            horizon = horizon,
             pred_dt = simdt,
             # nb_sample = 10000,
-            nb_sample = 5000,
+            nb_sample = num_samples,
             # sigma = [20, 0.10],
-            sigma = [35, 0.0],
+            sigma = list(control_noise_sigma),
             # _lambda = 0.1,
-            _lambda = 12.0,
+            _lambda = lambda_,
             umin = [-20,-0.1],
             umax = [ 20, 0.1],
             loa = self.loa,
-            targU=2.0 * 1852.0 / 3600.0,
+            targU = target_speed,
         )
 
         self.opt_rudder = np.zeros((self.mppi_controller.horizon,))
@@ -835,7 +887,7 @@ class MPPIPlanner():
         gate_center, buoys = make_virtual_gate_from_path(
             waypoint1,
             waypoint2,
-            half_width_m=4.0,
+            half_width_m=self.gate_half_width_m,
             s_ratio=0.5,
         )
 
@@ -852,10 +904,10 @@ class MPPIPlanner():
             self.opt_rudder,
             self.opt_acc,
             _
-                
+
         ) = self.mppi_controller.get_opt(
             own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc,
-            self.loa, others, path, 
+            self.loa, others, path,
             col_cost_min=self.col_cost_min,
             col_cost_max=self.col_cost_max,
             div_cost=self.div_cost,
@@ -863,13 +915,17 @@ class MPPIPlanner():
             norm_cost=self.norm_cost,
             buoys=buoys,
             gate_center=gate_center,
-            buoy_cost_weight=120.0,
-            gate_cost_weight=3.0,
+            buoy_cost_weight=self.buoy_cost_weight,
+            gate_cost_weight=self.gate_cost_weight,
+            buoy_margin_m=self.buoy_margin_m,
+            buoy_longitudinal_sigma_m=self.buoy_longitudinal_sigma_m,
+            ax_gains=self.ax_gains,
             debug=True
         )
 
         opttraj = get_traj(
-            own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc, self.loa, self.mppi_controller.pred_dt
+            own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc, self.loa, self.mppi_controller.pred_dt,
+            target_speed_mps=self.target_speed,
         )
 
         points_base = resample_traj_by_distance(

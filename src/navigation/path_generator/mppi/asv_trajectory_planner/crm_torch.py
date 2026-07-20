@@ -19,15 +19,15 @@ def _EntryCriteria(own, oth):
             alpha_180 = alpha_360-360
         else:
             alpha_180 = alpha_360
-        
+
         beta_360 = (-rel_owncog)%360
         if beta_360>180:
             beta_180 = beta_360-360
         else:
             beta_180 = beta_360
-        
+
         # print('alpha_360 : ', alpha_360, '\nbeta_360 : ', beta_360)
-        
+
         if (beta_360>112.5) and (beta_360<247.5) and (abs(alpha_180)<alpha13crit):
             # rule13/17 stand-on
             return 0
@@ -37,7 +37,7 @@ def _EntryCriteria(own, oth):
             return 1
 
         elif (abs(beta_180)<alpha14crit) and (abs(alpha_180)<alpha14crit):
-            # rule14 
+            # rule14
             return 2
 
         elif (beta_360>0) and (beta_360<112.5) and (alpha_180>-112.50) and (alpha_180<alpha15crit):
@@ -102,7 +102,18 @@ RIGHT_AX_GAIN = 3.2
 LEFT_AX_GAIN  = 1.6
 FORE_AX_GAIN  = 6.4
 AFT_AX_GAIN   = 1.6
-def timedomaincrm(X, Y, T, own, others, turn=None, ):
+def timedomaincrm(X, Y, T, own, others, turn=None, ax_gains=None):
+    # ax_gains: optional (right, left, fore, aft) bumper axis gains in LOA
+    # multiples. None keeps the historical module-level constants, so existing
+    # callers are behaviorally unchanged.
+    if ax_gains is None:
+        right_ax_gain = RIGHT_AX_GAIN
+        left_ax_gain = LEFT_AX_GAIN
+        fore_ax_gain = FORE_AX_GAIN
+        aft_ax_gain = AFT_AX_GAIN
+    else:
+        right_ax_gain, left_ax_gain, fore_ax_gain, aft_ax_gain = ax_gains
+
     relx = X - own[0]
     rely = Y - own[1]
     # dt = np.sqrt( relx**2 + rely**2 )/own[2]
@@ -115,7 +126,7 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ):
 
     crms = torch.zeros_like(X)
     for oth in others:
-        
+
         Vtx = oth[2]*np.sin(np.deg2rad(oth[3]))
         Vty = oth[2]*np.cos(np.deg2rad(oth[3]))
 
@@ -134,16 +145,16 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ):
             1 - torch.sqrt(
                 torch.where(
                     pred_relx>0,
-                    (pred_relx/own[4]/RIGHT_AX_GAIN),
-                    (pred_relx/own[4]/LEFT_AX_GAIN),
+                    (pred_relx/own[4]/right_ax_gain),
+                    (pred_relx/own[4]/left_ax_gain),
                 )**2 + torch.where(
-                    pred_rely>0, (pred_rely/own[4]/FORE_AX_GAIN),
-                    (pred_rely/own[4]/AFT_AX_GAIN),
+                    pred_rely>0, (pred_rely/own[4]/fore_ax_gain),
+                    (pred_rely/own[4]/aft_ax_gain),
                 )**2
             ), 0, 1,
         )
-        
-        
+
+
         # CRM(相手船のバンパーへ侵入する領域)
         if (EntryNo in  _EntryCriteria_GIVE_WAY_No):
             pred_x_oth = X - pred_x
@@ -161,22 +172,22 @@ def timedomaincrm(X, Y, T, own, others, turn=None, ):
                     1 - torch.sqrt(
                         torch.where(
                             pred_relx_oth>0,
-                            (pred_relx_oth/oth[4]/RIGHT_AX_GAIN),
-                            (pred_relx_oth/oth[4]/LEFT_AX_GAIN),
+                            (pred_relx_oth/oth[4]/right_ax_gain),
+                            (pred_relx_oth/oth[4]/left_ax_gain),
                         )**2 + torch.where(
                             pred_rely_oth>0,
-                            (pred_rely_oth/oth[4]/FORE_AX_GAIN),
-                            (pred_rely_oth/oth[4]/AFT_AX_GAIN),
+                            (pred_rely_oth/oth[4]/fore_ax_gain),
+                            (pred_rely_oth/oth[4]/aft_ax_gain),
                         )**2
                     ), 0, 1,
                 )
             )
-        
+
         gain = CPAgain(own, oth)
         # print(gain)
         # crms = 1 - (1-crms)*(1-_s*gain)
         crms = 1 - (1-crms)*(1-_s)
-    
+
     return crms
 
 def timedomaincrm_numpy(X, Y, T, own, others,):
@@ -191,7 +202,7 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
 
     crms = np.zeros_like(X)
     for oth in others:
-        
+
         Vtx = oth[2]*np.sin(np.deg2rad(oth[3]))
         Vty = oth[2]*np.cos(np.deg2rad(oth[3]))
 
@@ -218,8 +229,8 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
                 )**2
             ), 0, 1,
         )
-        
-        
+
+
         # CRM(相手船のバンパーへ侵入する領域)
         if (EntryNo in  _EntryCriteria_GIVE_WAY_No):
             pred_x_oth = X - pred_x
@@ -247,7 +258,7 @@ def timedomaincrm_numpy(X, Y, T, own, others,):
                     ), 0, 1,
                 )
             )
-            
+
         crms = 1 - (1-crms)*(1-_s)
-    
+
     return crms

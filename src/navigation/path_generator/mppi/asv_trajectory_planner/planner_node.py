@@ -66,6 +66,39 @@ class PlannerNode(Node):
         self.declare_parameter("opponent_use_distance_m", 20.0)
         self.declare_parameter("opponent_passed_margin_m", 2.0)
 
+        # ------------------------------------------------------------
+        # MPPI hyperparameters.
+        # Defaults equal the values that were hardcoded in
+        # asv_trajectory_planner/mppi_torch.py, so leaving these untouched
+        # keeps the planner behaviorally identical to the previous version.
+        # See config/mppi_params.yaml for the parameter -> code mapping.
+        # ------------------------------------------------------------
+        self.declare_parameter("mppi.horizon", 225)
+        self.declare_parameter("mppi.dt", 0.1)
+        self.declare_parameter("mppi.num_samples", 5000)
+        self.declare_parameter("mppi.lambda", 12.0)
+        self.declare_parameter("mppi.control_noise_sigma", [35.0, 0.0])
+        self.declare_parameter("mppi.target_speed", 2.0 * 1852.0 / 3600.0)
+        self.declare_parameter("mppi.path_cost_weight", 150.0)
+        # collision cost is a (min, max) scaling pair in the code
+        # (col_cost_min / col_cost_max), not a single weight.
+        self.declare_parameter("mppi.collision_cost_min", 10.0)
+        self.declare_parameter("mppi.collision_cost_max", 50.0)
+        self.declare_parameter("mppi.gate_cost_weight", 3.0)
+        self.declare_parameter("mppi.buoy_cost_weight", 120.0)
+        self.declare_parameter("mppi.speed_cost_weight", 0.1)
+        self.declare_parameter("mppi.control_cost_weight", 0.2)
+        # "safe distance" in the code is the CRM bumper ellipse, expressed as
+        # per-side gains in multiples of LOA, plus buoy/gate geometry.
+        self.declare_parameter("mppi.loa", 2.0)
+        self.declare_parameter("mppi.safe_distance_right_loa", 3.2)
+        self.declare_parameter("mppi.safe_distance_left_loa", 1.6)
+        self.declare_parameter("mppi.safe_distance_fore_loa", 6.4)
+        self.declare_parameter("mppi.safe_distance_aft_loa", 1.6)
+        self.declare_parameter("mppi.gate_half_width_m", 4.0)
+        self.declare_parameter("mppi.buoy_margin_m", 1.0)
+        self.declare_parameter("mppi.buoy_longitudinal_sigma_m", 8.0)
+
         self.own_odom_topic = self.get_parameter("own_odom_topic").value
         self.other_ship_twist_topic = self.get_parameter("other_ship_twist_topic").value
         self.waypoint1_topic = self.get_parameter("waypoint1_topic").value
@@ -90,6 +123,43 @@ class PlannerNode(Node):
         opponent_use_distance_m = self.get_parameter("opponent_use_distance_m").value
         opponent_passed_margin_m = self.get_parameter("opponent_passed_margin_m").value
 
+        # Keyword names match MPPIPlanner's constructor arguments.
+        mppi_params = {
+            "horizon": int(self.get_parameter("mppi.horizon").value),
+            "dt": float(self.get_parameter("mppi.dt").value),
+            "num_samples": int(self.get_parameter("mppi.num_samples").value),
+            "lambda_": float(self.get_parameter("mppi.lambda").value),
+            "control_noise_sigma": [
+                float(v) for v in self.get_parameter("mppi.control_noise_sigma").value
+            ],
+            "target_speed": float(self.get_parameter("mppi.target_speed").value),
+            "path_cost_weight": float(self.get_parameter("mppi.path_cost_weight").value),
+            "collision_cost_min": float(self.get_parameter("mppi.collision_cost_min").value),
+            "collision_cost_max": float(self.get_parameter("mppi.collision_cost_max").value),
+            "gate_cost_weight": float(self.get_parameter("mppi.gate_cost_weight").value),
+            "buoy_cost_weight": float(self.get_parameter("mppi.buoy_cost_weight").value),
+            "speed_cost_weight": float(self.get_parameter("mppi.speed_cost_weight").value),
+            "control_cost_weight": float(self.get_parameter("mppi.control_cost_weight").value),
+            "loa": float(self.get_parameter("mppi.loa").value),
+            "safe_distance_right_loa": float(
+                self.get_parameter("mppi.safe_distance_right_loa").value
+            ),
+            "safe_distance_left_loa": float(
+                self.get_parameter("mppi.safe_distance_left_loa").value
+            ),
+            "safe_distance_fore_loa": float(
+                self.get_parameter("mppi.safe_distance_fore_loa").value
+            ),
+            "safe_distance_aft_loa": float(
+                self.get_parameter("mppi.safe_distance_aft_loa").value
+            ),
+            "gate_half_width_m": float(self.get_parameter("mppi.gate_half_width_m").value),
+            "buoy_margin_m": float(self.get_parameter("mppi.buoy_margin_m").value),
+            "buoy_longitudinal_sigma_m": float(
+                self.get_parameter("mppi.buoy_longitudinal_sigma_m").value
+            ),
+        }
+
         self.trajectory_generator = TrajectoryGenerator(
             frame_id=self.frame_id,
             point_spacing=point_spacing,
@@ -103,6 +173,7 @@ class PlannerNode(Node):
             straight_path_spacing_m=straight_path_spacing_m,
             straight_path_length_m=straight_path_length_m,
             mppi_smoothing_window=mppi_smoothing_window,
+            mppi_params=mppi_params,
         )
 
         self.latest_own_odom = None
@@ -162,8 +233,6 @@ class PlannerNode(Node):
         self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
         self.get_logger().info(f"Reconnect line distance  : {reconnect_line_distance_m} m")
         self.get_logger().info(f"Reconnect ahead length   : {reconnect_ahead_length_m} m")
-        self.get_logger().info(f"Opponent use distance    : {opponent_use_distance_m} m")
-        self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
 
     def own_odom_callback(self, msg: Odometry):
         self.latest_own_odom = msg

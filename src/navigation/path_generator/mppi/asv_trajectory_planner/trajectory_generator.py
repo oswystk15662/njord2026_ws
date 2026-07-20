@@ -40,6 +40,7 @@ class TrajectoryGenerator:
         straight_path_spacing_m: float = 2.0,
         straight_path_length_m: float = 60.0,
         mppi_smoothing_window: int = 5,
+        mppi_params: Optional[dict] = None,
     ):
         self.frame_id = frame_id
         self.other_twist_is_relative = other_twist_is_relative
@@ -57,10 +58,15 @@ class TrajectoryGenerator:
         self.straight_path_length_m = float(straight_path_length_m)
         self.mppi_smoothing_window = int(mppi_smoothing_window)
 
+        # mppi_params: optional keyword overrides forwarded verbatim to
+        # MPPIPlanner (e.g. horizon, dt, num_samples, cost weights...).
+        # None / {} keeps every MPPIPlanner default, i.e. the historical
+        # hardcoded values.
         self.planner = MPPIPlanner(
             point_spacing=point_spacing,
             avoid_radius=avoid_radius,
             avoid_offset=avoid_offset,
+            **(mppi_params or {}),
         )
 
     def generate(
