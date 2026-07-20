@@ -1,20 +1,4 @@
-"""YOLO11s detector node (standard Ultralytics only).
-
-Parallel implementation next to the existing main.py node (which stays
-untouched). Design points:
-- Uses only the standard Ultralytics ``YOLO`` class. No sys.path insertion,
-  no vendored forks.
-- Inference rate limiting / debug image rate limiting (ported from the
-  camera-yolo-lidar-fusion branch) so slow hardware never builds up a queue.
-- Optional image ROI crop (fractions 0.0-1.0); detection bboxes are mapped
-  back to full-image coordinates before publishing.
-- Outputs: vision_msgs/Detection2DArray, njord_interfaces/BuoyRoi (same
-  bearing-from-pixel-center + fixed-range semantics as main.py), and a
-  rate-limited debug image.
-- HSV color estimation (ported from the fusion branch). Class-name to color
-  mapping is fully parameterized - no hardcoded class-name logic.
-- Passing a ``.engine`` model_path runs the Ultralytics TensorRT backend.
-"""
+"""Run YOLO11 inference and publish ROS 2 detection messages."""
 
 import math
 import os
@@ -35,8 +19,10 @@ import numpy as np
 
 # Point ultralytics config/cache at /tmp so it never fails trying to write
 # outside the home directory (e.g. when launched from a systemd service).
-os.environ.setdefault('MPLCONFIGDIR', os.path.join('/tmp', 'njord_yolo_matplotlib'))
-os.environ.setdefault('YOLO_CONFIG_DIR', os.path.join('/tmp', 'njord_yolo_ultralytics'))
+os.environ.setdefault('MPLCONFIGDIR', os.path.join(
+    '/tmp', 'njord_yolo_matplotlib'))
+os.environ.setdefault('YOLO_CONFIG_DIR', os.path.join(
+    '/tmp', 'njord_yolo_ultralytics'))
 
 try:
     from cv_bridge import CvBridge
@@ -81,7 +67,8 @@ class Yolo11DetectorNode(Node):
         self.pub_detections = self.create_publisher(
             Detection2DArray, self.detections_topic, 10)
         self.pub_roi = self.create_publisher(BuoyRoi, self.buoy_roi_topic, 10)
-        self.pub_debug_img = self.create_publisher(Image, 'yolo/debug_image', 10)
+        self.pub_debug_img = self.create_publisher(
+            Image, 'yolo/debug_image', 10)
 
         self.bridge = CvBridge()
         self.camera_info = None
@@ -206,42 +193,61 @@ class Yolo11DetectorNode(Node):
 
     def _read_parameters(self):
         gp = self.get_parameter
-        self.model_path_param = gp('model_path').get_parameter_value().string_value
+        self.model_path_param = gp(
+            'model_path').get_parameter_value().string_value
         self.device = gp('device').get_parameter_value().string_value
         self.imgsz = gp('imgsz').get_parameter_value().integer_value
-        self.conf_threshold = gp('conf_threshold').get_parameter_value().double_value
-        self.iou_threshold = gp('iou_threshold').get_parameter_value().double_value
+        self.conf_threshold = gp(
+            'conf_threshold').get_parameter_value().double_value
+        self.iou_threshold = gp(
+            'iou_threshold').get_parameter_value().double_value
         self.max_det = gp('max_det').get_parameter_value().integer_value
-        self.classes = list(gp('classes').get_parameter_value().integer_array_value)
+        self.classes = list(
+            gp('classes').get_parameter_value().integer_array_value)
         self.use_half = gp('use_half').get_parameter_value().bool_value
         self.backend = gp('backend').get_parameter_value().string_value
 
-        self.inference_hz = gp('inference_hz').get_parameter_value().double_value
-        self.debug_image_hz = gp('debug_image_hz').get_parameter_value().double_value
-        self.publish_debug_image = gp('publish_debug_image').get_parameter_value().bool_value
+        self.inference_hz = gp(
+            'inference_hz').get_parameter_value().double_value
+        self.debug_image_hz = gp(
+            'debug_image_hz').get_parameter_value().double_value
+        self.publish_debug_image = gp(
+            'publish_debug_image').get_parameter_value().bool_value
 
         self.use_roi_crop = gp('use_roi_crop').get_parameter_value().bool_value
         self.roi_x_min = gp('roi_x_min').get_parameter_value().double_value
         self.roi_x_max = gp('roi_x_max').get_parameter_value().double_value
         self.roi_y_min = gp('roi_y_min').get_parameter_value().double_value
         self.roi_y_max = gp('roi_y_max').get_parameter_value().double_value
-        self.draw_roi_rect = gp('draw_roi_rect').get_parameter_value().bool_value
+        self.draw_roi_rect = gp(
+            'draw_roi_rect').get_parameter_value().bool_value
 
-        self.camera_topic = gp('camera_topic').get_parameter_value().string_value
-        self.camera_info_topic = gp('camera_info_topic').get_parameter_value().string_value
-        self.detections_topic = gp('detections_topic').get_parameter_value().string_value
-        self.buoy_roi_topic = gp('buoy_roi_topic').get_parameter_value().string_value
+        self.camera_topic = gp(
+            'camera_topic').get_parameter_value().string_value
+        self.camera_info_topic = gp(
+            'camera_info_topic').get_parameter_value().string_value
+        self.detections_topic = gp(
+            'detections_topic').get_parameter_value().string_value
+        self.buoy_roi_topic = gp(
+            'buoy_roi_topic').get_parameter_value().string_value
 
-        self.roi_frame_id = gp('roi_frame_id').get_parameter_value().string_value
-        self.fixed_range_m = gp('fixed_range_m').get_parameter_value().double_value
-        self.roi_range_half = gp('roi_range_half').get_parameter_value().double_value
-        self.camera_fov_deg = gp('camera_fov_deg').get_parameter_value().double_value
-        self.roi_theta_min_deg = gp('roi_theta_min_deg').get_parameter_value().double_value
+        self.roi_frame_id = gp(
+            'roi_frame_id').get_parameter_value().string_value
+        self.fixed_range_m = gp(
+            'fixed_range_m').get_parameter_value().double_value
+        self.roi_range_half = gp(
+            'roi_range_half').get_parameter_value().double_value
+        self.camera_fov_deg = gp(
+            'camera_fov_deg').get_parameter_value().double_value
+        self.roi_theta_min_deg = gp(
+            'roi_theta_min_deg').get_parameter_value().double_value
 
-        self.enable_color_estimation = gp('enable_color_estimation').get_parameter_value().bool_value
+        self.enable_color_estimation = gp(
+            'enable_color_estimation').get_parameter_value().bool_value
         # [''] is treated as a "not set" placeholder (ROS 2 YAML cannot
         # express a typed empty string array).
-        class_names = list(gp('class_names').get_parameter_value().string_array_value)
+        class_names = list(
+            gp('class_names').get_parameter_value().string_array_value)
         self.class_names = [n for n in class_names if n]
         buoy_class_names = list(
             gp('buoy_class_names').get_parameter_value().string_array_value)
@@ -250,12 +256,7 @@ class Yolo11DetectorNode(Node):
             c.lower() for c in gp('color_class_map').get_parameter_value().string_array_value if c]
 
     def _resolve_model_path(self):
-        """Resolve the model_path parameter.
-
-        Empty string falls back to <pkg share>/config/yolo11s.pt. Missing
-        files raise FileNotFoundError, which main() turns into a fatal log
-        and a clean shutdown (weights are never fabricated or downloaded).
-        """
+        """Resolve and validate the configured model path."""
         model_path = self.model_path_param
         if not model_path:
             try:
@@ -308,7 +309,8 @@ class Yolo11DetectorNode(Node):
             if not self.is_tensorrt_engine:
                 self.model.to(self.device)
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f'Failed to load model from {model_path}: {exc}')
+            self.get_logger().error(
+                f'Failed to load model from {model_path}: {exc}')
             raise
 
         if self.is_tensorrt_engine and self.backend != 'tensorrt':
@@ -447,13 +449,7 @@ class Yolo11DetectorNode(Node):
         return now - self.last_debug_image_time >= self.min_debug_image_interval
 
     def crop_image_roi(self, image):
-        """Crop the monitored region out of the image (fractions 0.0-1.0).
-
-        Returns:
-          roi_image: image handed to YOLO (the original array when crop is off)
-          offset_x/y: full-image coordinates of the ROI top-left corner
-          roi_rect: (x1, y1, x2, y2) for drawing on the debug image
-        """
+        """Crop the image to the configured ROI and return pixel offsets."""
         h, w = image.shape[:2]
         if not self.use_roi_crop:
             return image, 0, 0, (0, 0, w - 1, h - 1)
@@ -501,12 +497,7 @@ class Yolo11DetectorNode(Node):
             return str(class_id)
 
     def create_detection_msg(self, header, xyxy, label, confidence, color_name):
-        """Pack bbox/class/confidence/color into vision_msgs/Detection2D.
-
-        The standard message has no color field, so the color goes into
-        detection.id (the fusion consumer reads
-        detection.results[0].hypothesis.class_id and detection.id).
-        """
+        """Create a ROS 2 detection message from one model result."""
         x1, y1, x2, y2 = [float(v) for v in xyxy]
         width = max(1.0, x2 - x1)
         height = max(1.0, y2 - y1)
@@ -527,12 +518,7 @@ class Yolo11DetectorNode(Node):
         return detection
 
     def estimate_detection_color(self, image_bgr, xyxy, label):
-        """Estimate the apparent color from the HSV pixels inside the bbox.
-
-        If the class name contains one of the color_class_map keywords, that
-        color wins and HSV estimation is skipped (ported from the fusion
-        branch, with the keyword list moved into a parameter).
-        """
+        """Estimate the detection color from its image region."""
         label_lower = str(label).lower()
         for name in self.color_class_map:
             if name in label_lower:

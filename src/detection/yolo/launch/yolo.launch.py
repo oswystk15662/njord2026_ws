@@ -5,10 +5,12 @@ from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+
 def generate_launch_description():
     if not os.environ.get('VIRTUAL_ENV'):
         raise RuntimeError(
-            'YOLO launch requires the Jetson venv. Activate .venv and source export_python_path.sh '
+            'YOLO launch requires the Jetson venv. Activate .venv and source '
+            'export_python_path.sh '
             'before running ros2 launch.'
         )
 
@@ -24,7 +26,7 @@ def generate_launch_description():
         default_value=default_model_path,
         description='Absolute path to the YOLO model file (.pt)'
     )
-    
+
     device_arg = DeclareLaunchArgument(
         'device',
         default_value='cpu',
