@@ -478,7 +478,8 @@ cd /home/ibo_asv/njord2026_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
-ros2 launch robot lidar.launch.py lidar_model:=mid360s
+ros2 launch robot lidar.launch.py \
+  lidar_model:=mid360s enable_buoy_detection:=true
 ros2 launch zed2i_driver zed2i.launch.py mode:=sdk
 ros2 launch robot back_cam.launch.py
 ros2 launch um982_driver um982.launch.py \
@@ -486,11 +487,11 @@ ros2 launch um982_driver um982.launch.py \
 ros2 run micon_driver_fd serial_writer --ros-args \
   -p serial_port:=/dev/ttyUSB1 -p baud:=115200
 ros2 launch robot localization.launch.py
-ros2 launch pcl_det pcl_bouy_det.launch.py \
-  input_pointcloud_topic:=/livox/lidar \
-  roi_topic:=/buoy_roi \
-  output_topic:=/buoy_detections
 ```
+
+`enable_buoy_detection:=true`ではLivox driverと点群ブイ検出を同じ
+`component_container_mt`へロードし、`/livox/lidar`区間でintra-process通信を使う。
+個別起動が必要な場合は従来どおり`pcl_bouy_det.launch.py`も使用できる。
 
 `localization.launch.py`は`glim_ros`がインストールされていないためlaunch全体を完遂
 できなかった。残りのlocal/global EKFとNavSat Transformは、同launchファイルと同じ

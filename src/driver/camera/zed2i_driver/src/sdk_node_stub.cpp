@@ -2,10 +2,13 @@
 
 #include <chrono>
 
-class Zed2iSdkStubNode : public rclcpp::Node
+namespace zed2i_driver
+{
+
+class SdkNode : public rclcpp::Node
 {
 public:
-  explicit Zed2iSdkStubNode(const rclcpp::NodeOptions & options)
+  explicit SdkNode(const rclcpp::NodeOptions & options)
   : Node("zed2i_sdk_node", options)
   {
     timer_ = create_wall_timer(
@@ -23,10 +26,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<Zed2iSdkStubNode>(rclcpp::NodeOptions()));
-  rclcpp::shutdown();
-  return 1;
-}
+}  // namespace zed2i_driver
+
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(zed2i_driver::SdkNode)

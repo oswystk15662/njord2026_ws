@@ -27,6 +27,7 @@ def include_launch(package_name, path_parts, condition, launch_arguments=None):
 
 def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
+    enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     lidar_model = LaunchConfiguration("lidar_model")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
@@ -55,7 +56,10 @@ def generate_launch_description():
         "robot",
         ["launch", "lidar.launch.py"],
         IfCondition(enable_mid360),
-        {"lidar_model": lidar_model},
+        {
+            "lidar_model": lidar_model,
+            "enable_buoy_detection": enable_pcl_buoy_detection,
+        },
     )
 
     zed2i_launch = include_launch(
@@ -158,6 +162,7 @@ def generate_launch_description():
         [
             # Livox LiDAR(mid360/mid360s)を起動するか
             DeclareLaunchArgument("enable_mid360", default_value="true"),
+            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="false"),
             DeclareLaunchArgument(
                 "lidar_model",
                 default_value="mid360s",

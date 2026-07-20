@@ -70,7 +70,8 @@ public:
     left_image_pub_ = create_publisher<sensor_msgs::msg::Image>("left/image_rect", image_qos);
     right_image_pub_ = create_publisher<sensor_msgs::msg::Image>("right/image_rect", image_qos);
     left_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("left/camera_info", image_qos);
-    right_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("right/camera_info", image_qos);
+    right_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("right/camera_info",
+        image_qos);
     depth_pub_ = create_publisher<sensor_msgs::msg::Image>("depth/image", image_qos);
     pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", image_qos);
 
@@ -128,7 +129,8 @@ private:
     const auto stamp = now();
     const auto width = left_bgr.cols;
     const auto height = left_bgr.rows;
-    const auto left_info = make_camera_info_msg(width, height, fx_, fy_, cx_, cy_, 0.0, left_frame_id_, stamp);
+    const auto left_info = make_camera_info_msg(width, height, fx_, fy_, cx_, cy_, 0.0,
+        left_frame_id_, stamp);
     const auto right_info =
       make_camera_info_msg(width, height, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp);
 
@@ -204,10 +206,5 @@ private:
 
 }  // namespace zed2i_driver
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<zed2i_driver::CpuStereoNode>(rclcpp::NodeOptions()));
-  rclcpp::shutdown();
-  return 0;
-}
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(zed2i_driver::CpuStereoNode)

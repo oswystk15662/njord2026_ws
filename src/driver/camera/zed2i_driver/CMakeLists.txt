@@ -10,6 +10,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit QUIET)
@@ -36,6 +37,7 @@ set(DEPENDENCIES
 add_library(${PROJECT_NAME}_common
   src/message_utils.cpp
 )
+set_target_properties(${PROJECT_NAME}_common PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(${PROJECT_NAME}_common PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
@@ -43,14 +45,18 @@ target_include_directories(${PROJECT_NAME}_common PUBLIC
 ament_target_dependencies(${PROJECT_NAME}_common ${DEPENDENCIES})
 target_link_libraries(${PROJECT_NAME}_common ${OpenCV_LIBRARIES})
 
-add_executable(zed2i_cpu_node
+add_library(zed2i_cpu_component SHARED
   src/cpu_stereo_node.cpp
 )
-target_include_directories(zed2i_cpu_node PRIVATE include)
-ament_target_dependencies(zed2i_cpu_node ${DEPENDENCIES})
-target_link_libraries(zed2i_cpu_node
+target_include_directories(zed2i_cpu_component PRIVATE include)
+ament_target_dependencies(zed2i_cpu_component ${DEPENDENCIES} rclcpp_components)
+target_link_libraries(zed2i_cpu_component
   ${PROJECT_NAME}_common
   ${OpenCV_LIBRARIES}
+)
+rclcpp_components_register_node(zed2i_cpu_component
+  PLUGIN "zed2i_driver::CpuStereoNode"
+  EXECUTABLE zed2i_cpu_node
 )
 
 option(ZED2I_DRIVER_BUILD_SDK_NODE "Build the ZED SDK backed node when the Stereolabs SDK is available" ON)
@@ -68,20 +74,20 @@ if(ZED2I_DRIVER_USE_ZED_SDK)
   elseif(CUDAToolkit_FOUND AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.0")
     message(STATUS "${PROJECT_NAME}: using CUDA 12.x compatible ZED SDK build path")
   endif()
-  add_executable(zed2i_sdk_node
+  add_library(zed2i_sdk_component SHARED
     src/sdk_node_zed.cpp
   )
-  target_include_directories(zed2i_sdk_node PRIVATE
+  target_include_directories(zed2i_sdk_component PRIVATE
     include
     ${ZED_INCLUDE_DIRS}
     ${CUDAToolkit_INCLUDE_DIRS}
   )
-  target_compile_definitions(zed2i_sdk_node PRIVATE
+  target_compile_definitions(zed2i_sdk_component PRIVATE
     ZED2I_DRIVER_HAS_ZED_SDK=1
     ZED2I_DRIVER_CUDA_VARIANT="${ZED2I_DRIVER_CUDA_VARIANT}"
   )
-  ament_target_dependencies(zed2i_sdk_node ${DEPENDENCIES})
-  target_link_libraries(zed2i_sdk_node
+  ament_target_dependencies(zed2i_sdk_component ${DEPENDENCIES} rclcpp_components)
+  target_link_libraries(zed2i_sdk_component
     ${PROJECT_NAME}_common
     ${OpenCV_LIBRARIES}
     ${ZED_LIBRARIES}
@@ -92,17 +98,22 @@ else()
   else()
     message(STATUS "${PROJECT_NAME}: ZED SDK not found; building SDK-mode stub")
   endif()
-  add_executable(zed2i_sdk_node
+  add_library(zed2i_sdk_component SHARED
     src/sdk_node_stub.cpp
   )
-  target_include_directories(zed2i_sdk_node PRIVATE include)
-  ament_target_dependencies(zed2i_sdk_node ${DEPENDENCIES})
+  target_include_directories(zed2i_sdk_component PRIVATE include)
+  ament_target_dependencies(zed2i_sdk_component ${DEPENDENCIES} rclcpp_components)
 endif()
+
+rclcpp_components_register_node(zed2i_sdk_component
+  PLUGIN "zed2i_driver::SdkNode"
+  EXECUTABLE zed2i_sdk_node
+)
 
 install(TARGETS
   ${PROJECT_NAME}_common
-  zed2i_cpu_node
-  zed2i_sdk_node
+  zed2i_cpu_component
+  zed2i_sdk_component
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
