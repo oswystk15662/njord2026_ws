@@ -118,6 +118,15 @@ def generate_launch_description():
                 executable='joy_converter_node',
                 name='joy_converter',
                 output='screen',
+                parameters=[
+                    {
+                        'button.yaw_positive': 4,
+                        'button.yaw_negative': 5,
+                        'scale.linear_x': 1.0,
+                        'scale.linear_y': 1.0,
+                        'scale.angular_z': 1.0,
+                    }
+                ],
             ),
             thruster_driver,
             Node(

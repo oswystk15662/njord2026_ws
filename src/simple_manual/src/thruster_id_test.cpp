@@ -7,7 +7,7 @@
 namespace
 {
 constexpr size_t kNumThrusters = 4;
-constexpr std::chrono::seconds kHoldDuration{3};
+constexpr std::chrono::seconds kHoldDuration{10};
 }  // namespace
 
 class ThrusterIdTest : public rclcpp::Node
