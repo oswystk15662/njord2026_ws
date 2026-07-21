@@ -27,6 +27,12 @@ ros2 launch zed2i_driver zed2i.launch.py params_file:=/path/to.yaml
 
 既定のパラメータファイルは `config/zed2i_jetson_orin_nano.yaml`。
 
+SDK/CPUノードはいずれもROS 2 componentとして登録され、上記launchでは
+`component_container_mt`内に`use_intra_process_comms=true`でロードされる。
+大容量のImage/PointCloud2は`UniquePtr`でpublishするため、同じcontainerへC++の
+購読componentを追加した場合はintra-process通信を利用できる。Pythonノードなど
+container外の購読者との通信は従来どおりDDS経由になる。
+
 ## 発行トピック(SDKモードで確認済み)
 
 - `/zed2i/left/image_rect`

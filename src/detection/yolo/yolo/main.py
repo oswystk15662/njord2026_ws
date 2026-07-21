@@ -1,7 +1,8 @@
 import os
+import threading
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image, PointCloud2, PointField
 from njord_interfaces.msg import BuoyRoi
 import cv2
@@ -23,6 +24,41 @@ try:
 except Exception as exc:
     YOLO = None
     _ultralytics_import_error = exc
+
+
+class _LatestFrameBuffer:
+    """Single-slot blocking buffer that replaces stale, unprocessed frames."""
+
+    def __init__(self):
+        self._condition = threading.Condition()
+        self._latest = None
+        self._stopping = False
+
+    def put(self, frame):
+        with self._condition:
+            if self._stopping:
+                return False
+            self._latest = frame
+            self._condition.notify()
+            return True
+
+    def take(self):
+        with self._condition:
+            self._condition.wait_for(
+                lambda: self._stopping or self._latest is not None
+            )
+            if self._stopping:
+                return None
+            frame = self._latest
+            self._latest = None
+            return frame
+
+    def stop(self):
+        with self._condition:
+            self._stopping = True
+            self._latest = None
+            self._condition.notify_all()
+
 
 class YoloDetectorNode(Node):
     def __init__(self, node_name='yolo_detector', device_default='cpu'):
@@ -72,9 +108,16 @@ class YoloDetectorNode(Node):
             # self.model = YOLO("yolov8n.pt") 
             raise e # 起動失敗させる
 
+        self._frames = _LatestFrameBuffer()
+
         # ROS通信設定
+        image_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+        )
         self.sub_img = self.create_subscription(
-            Image, cam_topic, self.image_callback, qos_profile_sensor_data)
+            Image, cam_topic, self.image_callback, image_qos)
         
         # デバッグ用画像出力
         self.pub_debug_img = self.create_publisher(Image, 'yolo/debug_image', 10)
@@ -85,6 +128,12 @@ class YoloDetectorNode(Node):
         self.pub_roi = self.create_publisher(BuoyRoi, self.roi_topic, 10)
 
         self.bridge = CvBridge()
+        self._inference_thread = threading.Thread(
+            target=self._inference_loop,
+            name=f'{node_name}_inference',
+            daemon=True,
+        )
+        self._inference_thread.start()
         self.get_logger().info('YoloDetectorNode Initialized.')
 
     def _validate_runtime_dependencies(self):
@@ -134,6 +183,20 @@ class YoloDetectorNode(Node):
         if not self.enable_virtual_wall and not self.enable_roi:
             return
 
+        # Replace an unprocessed frame instead of queueing stale camera data.
+        self._frames.put(msg)
+
+    def _inference_loop(self):
+        while True:
+            msg = self._frames.take()
+            if msg is None:
+                return
+            try:
+                self._process_image(msg)
+            except Exception as exc:
+                self.get_logger().error(f'YOLO inference failed: {exc}')
+
+    def _process_image(self, msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
@@ -149,6 +212,7 @@ class YoloDetectorNode(Node):
         best_conf = 0.0
         fov_rad = math.radians(self.camera_fov_deg)
         min_theta_rad = math.radians(self.roi_theta_min_deg)
+        publish_debug = self.pub_debug_img.get_subscription_count() > 0
 
         # 検出結果のループ
         for box in result.boxes:
@@ -182,7 +246,8 @@ class YoloDetectorNode(Node):
                     virtual_obstacles.extend(wall_points)
 
                     # デバッグ描画: 壁の方向へ線を引く
-                    cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
+                    if publish_debug:
+                        cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
 
             if self.enable_roi and conf > best_conf:
                 bbox_width = max(1.0, float(xyxy[2] - xyxy[0]))
@@ -200,9 +265,23 @@ class YoloDetectorNode(Node):
                 best_conf = conf
 
             # デバッグ描画: BBox
-            cv2.rectangle(cv_image, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
-            cv2.putText(cv_image, f'{label} {conf:.2f}', (int(xyxy[0]), int(xyxy[1])-10), 
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+            if publish_debug:
+                cv2.rectangle(
+                    cv_image,
+                    (int(xyxy[0]), int(xyxy[1])),
+                    (int(xyxy[2]), int(xyxy[3])),
+                    (0, 255, 0),
+                    2,
+                )
+                cv2.putText(
+                    cv_image,
+                    f'{label} {conf:.2f}',
+                    (int(xyxy[0]), int(xyxy[1])-10),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.5,
+                    (0, 255, 0),
+                    2,
+                )
 
         # 仮想壁（点群）のPublish
         if self.enable_virtual_wall:
@@ -218,7 +297,13 @@ class YoloDetectorNode(Node):
             self.pub_roi.publish(best_roi)
 
         # デバッグ画像のPublish
-        self.pub_debug_img.publish(self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8'))
+        if publish_debug:
+            self.pub_debug_img.publish(self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8'))
+
+    def destroy_node(self):
+        self._frames.stop()
+        self._inference_thread.join()
+        return super().destroy_node()
 
     def generate_virtual_wall(self, label, bx, by):
         """
