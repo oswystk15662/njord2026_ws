@@ -85,7 +85,8 @@ class YoloDetectorNode(Node):
 
         # 4. パラメータ取得
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
-        device = self.get_parameter('device').get_parameter_value().string_value
+        self.device = self.get_parameter('device').get_parameter_value().string_value
+        self.imgsz = 512
         cam_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
         self.enable_virtual_wall = self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value
         self.enable_roi = self.get_parameter('enable_roi').get_parameter_value().bool_value
@@ -98,15 +99,30 @@ class YoloDetectorNode(Node):
 
         self.get_logger().info(f'Loading YOLO model from: {model_path}')
 
-        # YOLOモデルのロード
+        # 拡張子は使用する前に取得する
+        model_ext = os.path.splitext(model_path)[1].lower()
+
         try:
-            self.model = YOLO(model_path)
-            self.model.to(device)
+            self.model = YOLO(model_path, task='detect')
+
+            # model.to()はPyTorch形式だけで使用可能
+            if model_ext == '.pt':
+                self.model.to(self.device)
+                self.get_logger().info(
+                    f'PyTorch model moved to device: {self.device}'
+                )
+            else:
+                self.get_logger().info(
+                    f'Exported model detected: {model_ext}. '
+                    f'Skipping model.to({self.device})'
+                )
+
         except Exception as e:
-            self.get_logger().error(f'Failed to load model from {model_path}: {e}')
-            # フォールバック (必要なら)
-            # self.model = YOLO("yolov8n.pt")
-            raise e # 起動失敗させる
+            self.get_logger().error(
+                f'Failed to load model from {model_path}: {e}'
+            )
+            raise e  # 起動失敗させる
+
 
         self._frames = _LatestFrameBuffer()
 
@@ -204,7 +220,12 @@ class YoloDetectorNode(Node):
             return
 
         # --- YOLO推論 ---
-        results = self.model.predict(cv_image, verbose=False)
+        results = self.model.predict(
+                source=cv_image,
+                device=self.device,
+                imgsz=self.imgsz,
+                verbose=False,
+            )
         result = results[0]
 
         virtual_obstacles = [] # 生成する点のリスト [[x, y, z], ...]

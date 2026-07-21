@@ -18,3 +18,4 @@ rosbag2*
 
 # Local YOLO model artifact
 src/detection/yolo/config/best.pt
+src/detection/yolo/config/*.onnx
