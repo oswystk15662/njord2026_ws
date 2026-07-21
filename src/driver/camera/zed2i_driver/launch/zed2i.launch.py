@@ -37,6 +37,7 @@ def launch_setup(context, *args, **kwargs):
                         {
                             "enable_gpu_perception": LaunchConfiguration("enable_gpu_perception"),
                             "engine_path": LaunchConfiguration("engine_path"),
+                            "camera_resolution": LaunchConfiguration("camera_resolution"),
                         },
                     ],
                     extra_arguments=[{"use_intra_process_comms": True}],
@@ -57,6 +58,11 @@ def generate_launch_description():
             DeclareLaunchArgument("params_file", default_value=default_params_file),
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
             DeclareLaunchArgument("engine_path", default_value=""),
+            DeclareLaunchArgument(
+                "camera_resolution",
+                default_value="HD720",
+                description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
+            ),
             OpaqueFunction(function=launch_setup),
         ]
     )

@@ -5,6 +5,7 @@ zed2i:
     left_frame_id: zed2i_left_camera_frame
     right_frame_id: zed2i_right_camera_frame
     depth_frame_id: zed2i_left_camera_frame
+    camera_resolution: HD720
     image_width: 1280
     image_height: 720
     framerate: 15

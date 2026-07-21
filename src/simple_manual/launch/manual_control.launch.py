@@ -48,6 +48,7 @@ def generate_launch_description():
             'enable_mid360': 'true',
             'lidar_model': 'mid360s',
             'enable_zed2i': 'false',
+            'camera_resolution': 'VGA',
             'enable_back_cam': 'false',
             'enable_um982': 'true',
             'enable_drogger_rzs': 'true',

@@ -29,6 +29,7 @@ def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
     enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     lidar_model = LaunchConfiguration("lidar_model")
+    camera_resolution = LaunchConfiguration("camera_resolution")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_um982 = LaunchConfiguration("enable_um982")
@@ -66,7 +67,7 @@ def generate_launch_description():
         "zed2i_driver",
         ["launch", "zed2i.launch.py"],
         IfCondition(enable_zed2i),
-        {"mode": "sdk"},
+        {"mode": "sdk", "camera_resolution": camera_resolution},
     )
 
     back_cam_launch = include_launch(
@@ -169,6 +170,11 @@ def generate_launch_description():
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
+            DeclareLaunchArgument(
+                "camera_resolution",
+                default_value="HD720",
+                description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
+            ),
             DeclareLaunchArgument("enable_back_cam", default_value="true"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
             DeclareLaunchArgument("enable_drogger_rzs", default_value="true"),

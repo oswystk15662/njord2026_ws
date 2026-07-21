@@ -17,10 +17,25 @@
 #include <memory>
 #include <limits>
 #include <string>
+#include <stdexcept>
 #include <vector>
 
 namespace zed2i_driver
 {
+
+namespace
+{
+
+sl::RESOLUTION parse_camera_resolution(const std::string & value)
+{
+  if (value == "HD2K") return sl::RESOLUTION::HD2K;
+  if (value == "HD1080") return sl::RESOLUTION::HD1080;
+  if (value == "HD720") return sl::RESOLUTION::HD720;
+  if (value == "VGA") return sl::RESOLUTION::VGA;
+  throw std::invalid_argument("camera_resolution must be one of HD2K, HD1080, HD720, or VGA");
+}
+
+}  // namespace
 
 class SdkNode : public rclcpp::Node
 {
@@ -36,6 +51,7 @@ public:
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
     engine_path_ = declare_parameter<std::string>("engine_path", "");
+    const auto camera_resolution = declare_parameter<std::string>("camera_resolution", "HD720");
     const bool enable_gpu_perception = declare_parameter<bool>("enable_gpu_perception", false);
     if (enable_gpu_perception) {
 #ifndef ZED2I_DRIVER_HAS_GPU_PERCEPTION
@@ -73,7 +89,13 @@ public:
     pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", image_qos);
 
     sl::InitParameters init_params;
-    init_params.camera_resolution = sl::RESOLUTION::HD720;
+    try {
+      init_params.camera_resolution = parse_camera_resolution(camera_resolution);
+    } catch (const std::invalid_argument & error) {
+      RCLCPP_FATAL(get_logger(), "%s", error.what());
+      rclcpp::shutdown();
+      return;
+    }
     init_params.camera_fps = framerate_;
     init_params.depth_mode = sl::DEPTH_MODE::QUALITY;
     init_params.coordinate_units = sl::UNIT::METER;
