@@ -17,12 +17,12 @@
   <exec_depend>sensor_msgs</exec_depend>
   <exec_depend>std_msgs</exec_depend>
   <depend>geometry_msgs</depend>
-  <exec_depend>joy</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>micon_driver_fd</exec_depend>
+  <exec_depend>robot</exec_depend>
+  <exec_depend>ship_perception_bringup</exec_depend>
   <exec_depend>thruster_driver</exec_depend>
-  <exec_depend>rqt_reconfigure</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

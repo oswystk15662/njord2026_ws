@@ -141,10 +141,8 @@ sudo apt update
 sudo apt install -y python3-venv
 
 # YOLO専用venv
-python3 -m venv --prompt njord2026_ws .venv
-source .venv/bin/activate
+# .venvがなければuv venv（uv未導入時はpython3 -m venv）で自動作成される
 source ./export_python_path.sh
-
 # Jetson専用requirementsのみ使う
 python3 -m pip install --upgrade pip setuptools wheel
 python3 -m pip install -r requirements_jetson_nano_yolo.txt
@@ -163,10 +161,10 @@ YOLOノード起動は以下のラッパーを使うと安全です。
 ./run_yolo_jetson.sh
 ```
 
-launchファイルを直接使う場合も、必ず `.venv` を有効化してから実行してください。
+launchファイルを直接使う場合も、`export_python_path.sh`をsourceして
+`.venv`の有効化、Python pathの設定、ユーザーsite-packagesの除外を行ってください。
 
 ```shell
-source .venv/bin/activate
 source ./export_python_path.sh
 ros2 launch yolo yolo.launch.py
 ```
