@@ -32,7 +32,13 @@ def launch_setup(context, *args, **kwargs):
                     plugin=plugin,
                     name="zed2i",
                     namespace=LaunchConfiguration("namespace"),
-                    parameters=[LaunchConfiguration("params_file")],
+                    parameters=[
+                        LaunchConfiguration("params_file"),
+                        {
+                            "enable_gpu_perception": LaunchConfiguration("enable_gpu_perception"),
+                            "engine_path": LaunchConfiguration("engine_path"),
+                        },
+                    ],
                     extra_arguments=[{"use_intra_process_comms": True}],
                 )
             ],
@@ -49,6 +55,8 @@ def generate_launch_description():
             DeclareLaunchArgument("mode", default_value="sdk"),
             DeclareLaunchArgument("namespace", default_value="/zed2i"),
             DeclareLaunchArgument("params_file", default_value=default_params_file),
+            DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
+            DeclareLaunchArgument("engine_path", default_value=""),
             OpaqueFunction(function=launch_setup),
         ]
     )

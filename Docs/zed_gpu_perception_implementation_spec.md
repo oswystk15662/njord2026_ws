@@ -930,6 +930,18 @@ FP16差でthreshold近辺だけ不一致になる場合は、該当sample、scor
 
 ## 20. Jetson実機受入試験
 
+### 実装後の検証状態（2026-07-21）
+
+この変更はx86_64開発端末で、TensorRT/ZED GPU runtimeを有効化しない
+`njord_interfaces` / `zed2i_driver` のbuildと、ROS非依存の知覚ロジックunit testを
+完了している。ZED GPU buffer、TensorRT engine、MID-360S、実際のTFを必要とする検証は
+この端末では実行できないため、**Jetson Orin Nano Super実機で実施予定**とする。
+
+Jetsonでは、JetPackと互換なZED SDK・TensorRTを導入し、Jetson自身で生成したengineを
+`engine_path`へ設定してから、以下の受入試験と性能測定を実行する。結果（環境version、
+engine manifest、実行コマンド、pass/fail、計測値）はこの節またはintegration reportへ
+追記するまで未完了と扱う。
+
 ### 20.1 機能
 
 - Jetson自身で生成したFP16 engineをdeserializeできる。

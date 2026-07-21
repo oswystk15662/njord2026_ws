@@ -11,6 +11,13 @@ public:
   explicit SdkNode(const rclcpp::NodeOptions & options)
   : Node("zed2i_sdk_node", options)
   {
+    const bool enable_gpu_perception = declare_parameter<bool>("enable_gpu_perception", false);
+    if (enable_gpu_perception) {
+      RCLCPP_FATAL(
+        get_logger(),
+        "enable_gpu_perception=true requires a zed2i_driver build with the ZED SDK, CUDA, and "
+        "TensorRT. This build contains only the SDK stub.");
+    }
     timer_ = create_wall_timer(
       std::chrono::milliseconds(100),
       [this]() {

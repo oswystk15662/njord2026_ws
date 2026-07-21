@@ -124,3 +124,481 @@ CPU readback、色変換、DDS転送をまとめて削減できる可能性が�
 - `tegrastats`のCPU、GPU、RAM、EMC使用率
 - component内／外subscriber数と使用している通信経路
 - 10分以上の連続運転でのdrop、segfault、メモリ増加
+
+追記
+
+確認できた範囲では、対象コードは commit `27de65a...` にあります。指定された `test07089` branch は GitHub API上では見つからなかったため、検索で取得できた該当実装を基に判断します。
+
+## 結論
+
+**Fast DDSをZenohへ変えるより先に、ZED→CPU→ROS Image→Python/CvBridge→GPUという往復をなくすべきです。**
+
+現在は概ね次の経路です。
+
+```text
+ZED USB
+  ↓
+ZED SDK / GPUでdepth生成
+  ↓ retrieveImage/retrieveMeasure
+CPUメモリ
+  ↓ clone()
+cv::Mat
+  ↓ memcpy()
+sensor_msgs/Image
+  ↓ DDSシリアライズ・コピー
+Python rclpy
+  ↓ CvBridge
+NumPy / OpenCV CPU画像
+  ↓ H2D転送
+Ultralytics / PyTorch / TensorRT
+GPU推論
+```
+
+この構成で右画像・depth・point cloudを追加すると、推論そのものより**メモリコピーとCPU処理**が先に限界になる可能性が高いです。
+
+---
+
+## 現在の実装で重い箇所
+
+### 1. 現状は実質的にcomposable nodeではありません
+
+`SdkNode` は `rclcpp::Node` を継承していますが、末尾では普通に `main()` から生成してspinしています。`RCLCPP_COMPONENTS_REGISTER_NODE` もなく、component libraryとして登録されていません。つまり「クラスになった」だけで、YOLOと同一プロセスのintra-process通信にはなっていません。
+
+ROS 2のintra-process zero-copyを使うには、基本的には同一process内にcomponentとして載せ、intra-processを有効にし、対応する所有権形式でメッセージを渡す必要があります。単にcomposable形式に書き換えただけではGPUメモリのzero-copyにはなりません。([ROS Docs][1])
+
+### 2. ZED画像をCPUへ取得後、明示的にcloneしています
+
+```cpp
+mat.getPtr(... sl::MEM::CPU)
+return view.clone();
+```
+
+左・右・depthのすべてでフレーム全体をコピーしています。
+
+HD720の場合、1フレーム当たり概算で、
+
+* BGRA左: `1280 × 720 × 4 ≈ 3.7 MB`
+* BGRA右: 約3.7 MB
+* depth float32: 約3.7 MB
+
+合計約11 MBです。15 FPSなら、cloneだけで少なくとも約166 MB/s相当のメモリ書き込みが生じます。
+
+### 3. ROS Image化でもさらにmemcpyしています
+
+`mat_to_image_msg()` 内でメッセージ用vectorをresizeして、その後にフレーム全体を`memcpy()`しています。
+
+したがって現在は少なくとも、
+
+```text
+ZED GPU → CPU
+CPU sl::Mat → cv::Mat clone
+cv::Mat → ROS msg memcpy
+ROS/DDS → subscriber
+ROS msg → CvBridge / NumPy
+NumPy → CUDA
+```
+
+という多段コピーです。
+
+### 4. YOLOノードがPythonです
+
+YOLO側では、受信したROS Imageを`CvBridge`でBGRの`cv::Mat`相当へ変換してから、Ultralyticsの`model.predict()`へ渡しています。
+
+さらに毎フレーム、
+
+* Python callback
+* `CvBridge`
+* BGR変換
+* Ultralytics前処理
+* NumPyからGPUへの転送
+* boxごとの`.cpu().numpy()`
+* デバッグ画像描画
+* デバッグ画像再publish
+
+が走ります。特に各boxの結果をGPUからCPUへ戻す部分と、デバッグ画像publishは、検出数や解像度次第で無視できません。
+
+### 5. PointCloud生成がCPU全画素ループです
+
+depthをpoint cloudへ変換する処理は、現在`stride=1`で全画素をCPU上で二重ループしています。HD720なら約92万画素を毎フレーム走査します。
+
+しかも一度`std::vector<cv::Vec3f>`を作り、その後PointCloud2へ再度要素単位でコピーしています。
+
+これはかなり大きなボトルネック候補です。
+
+---
+
+# 推奨する改善順序
+
+## 優先度1：YOLOには左画像だけを入れ、depthは検出後に参照する
+
+右・depthをYOLOの入力としてそれぞれ推論する必要は通常ありません。
+
+推奨構成は、
+
+```text
+左画像
+  ↓
+YOLO推論
+  ↓
+bbox / mask
+  ↓
+同一timestampのdepth画像から
+bbox中心・中央値・下端付近などのdepthを取得
+  ↓
+3D位置算出
+```
+
+です。
+
+右画像はZED SDKがdepthを計算するために内部利用しています。ユーザー側YOLOへ右画像をもう一度入れても、同じ物体を少し異なる視点から二重検出するだけになりやすいです。
+
+必要なのは「右画像もYOLO」ではなく、
+
+* 左画像の検出結果
+* depth map
+* camera intrinsics
+* 必要なら左右整合性・depth信頼度
+
+の組み合わせです。
+
+ブイ一個の距離推定なら、bbox内のdepthすべてをCPUへ持ってくる必要すらなく、GPU上で有効depthの中央値や下位百分位を計算できます。
+
+---
+
+## 優先度2：まずpoint cloud常時生成を止める
+
+現在のコードでは`publish_pointcloud`のデフォルトが`true`です。
+
+YOLOとブイの距離推定が目的なら、全画面point cloudを毎フレーム作る必要はありません。
+
+まず以下にします。
+
+```yaml
+publish_pointcloud: false
+```
+
+point cloudが必要な場合も、
+
+* 毎フレームではなく2～5 Hz
+* `stride=2`または`4`
+* ROI内だけ生成
+* ZED SDKのGPU point cloudを必要時のみ利用
+
+とするべきです。
+
+`stride=4`なら計算対象画素数は約1/16になります。
+
+---
+
+## 優先度3：デバッグ画像を通常時はpublishしない
+
+現在は毎フレーム必ずbboxを描画して、`yolo/debug_image`へ再publishしています。
+
+パラメータを追加して、
+
+```yaml
+publish_debug_image: false
+```
+
+を通常運用にしてください。
+
+さらに、デバッグ画像が必要な場合も、
+
+* subscriberが存在するときだけ生成
+* 1～5 FPSへ間引く
+* 実験時のみ有効化
+
+がよいです。
+
+C++ならpublisherのsubscription countを見て、購読者がいなければ画像描画自体を省略できます。
+
+---
+
+## 優先度4：YOLOをTensorRT engine化する
+
+現在はUltralyticsのモデルをロードして`model.predict()`しています。モデルが`.pt`なら、Jetson上ではPyTorch経由よりTensorRT engineを直接使う方が適しています。
+
+候補は以下です。
+
+```text
+.pt
+ ↓ export
+FP16 TensorRT engine
+```
+
+さらに精度が許せば、
+
+```text
+INT8 TensorRT engine
+```
+
+です。
+
+設定としては、
+
+* 固定input shape
+* batch size 1
+* FP16
+* TensorRT engineを起動時に一度だけロード
+* CUDA streamを再利用
+* 入出力bufferを事前確保
+* 推論ごとのmalloc/freeを禁止
+* resize、normalize、BGRA→RGBをGPU上で実施
+
+が重要です。
+
+YOLOXへの変更自体より、**どのモデルでもTensorRTへ落とし、GPU上の前処理から推論まで一続きにすること**の方が効きます。YOLOXを採用しても、CPU OpenCV→ROS→Python→GPUの経路を残すと根本解決になりません。
+
+---
+
+# 最終的に目指す構成
+
+## 案A：C++ component + TensorRT + CUDA
+
+最も性能を追求するならこれです。
+
+```text
+ComposableNodeContainer
+├── ZedGpuComponent
+│    ├── camera.grab()
+│    ├── retrieveImage(..., MEM_GPU)
+│    └── retrieveMeasure(..., MEM_GPU)
+│
+└── YoloTensorRtComponent
+     ├── CUDA BGRA→RGB
+     ├── CUDA resize/letterbox/normalize
+     ├── TensorRT inference
+     ├── CUDA NMS
+     └── depth ROI reduction
+```
+
+ZED SDKは画像・depth・point cloudをGPUメモリへ直接取得できます。`retrieveMeasure(..., MEM_GPU)`が公式に提供されています。([StereoLabs Docs][2])
+
+コードイメージは、
+
+```cpp
+sl::Mat left_gpu;
+sl::Mat depth_gpu;
+
+camera_.retrieveImage(left_gpu, sl::VIEW::LEFT, sl::MEM::GPU);
+camera_.retrieveMeasure(depth_gpu, sl::MEASURE::DEPTH, sl::MEM::GPU);
+
+auto* left_ptr = left_gpu.getPtr<sl::uchar1>(sl::MEM::GPU);
+auto* depth_ptr = depth_gpu.getPtr<sl::float1>(sl::MEM::GPU);
+```
+
+です。
+
+そのポインタをそのままCUDA kernelまたはTensorRT前処理へ渡します。
+
+ここまで行けば、メイン推論経路では`cv::Mat`も`sensor_msgs::Image`も不要です。
+
+ROSには軽量な結果だけを出します。
+
+```text
+Detection2DArray
+BuoyRoi
+Pose / PointStamped
+diagnostics
+```
+
+画像はFoxglove表示や録画が必要なときだけ、低FPSで別経路にpublishします。
+
+---
+
+## 案B：Isaac ROS NITROSを使う
+
+自前CUDA/TensorRT componentを全面的に書く負担を減らしたい場合は、Isaac ROSのNITROS系パイプラインも候補です。
+
+NITROSは、対応node間でGPU bufferを受け渡し、通常のCPU中心のROS Image経路におけるコピーを減らすための仕組みです。特にJetson上の画像前処理・DNN推論パイプラインとの相性があります。([StereoLabs Docs][2])
+
+ただし、現在の独自ZED driverとPython Ultralytics nodeをそのままNITROS化できるわけではありません。対応type adapterやGXF/NITROS側の構成が必要なので、実装量との比較になります。
+
+既存ZED ROS wrapper、Isaac ROS DNN image encoder、TensorRT nodeなどを組み合わせられるなら有力です。
+
+---
+
+# 「カーネル操作」で改善できるところ
+
+ここでいうカーネルがLinux kernelなら、優先度は低いです。USB driverやschedulerを調整しても、現在の多段コピー構造は解消しません。
+
+CUDA kernelという意味なら大いに効果があります。
+
+GPU上でまとめるべき処理は、
+
+```text
+BGRA → RGB
+resize / letterbox
+uint8 → FP16
+normalization
+HWC → CHW
+depth ROI filtering
+median / percentile reduction
+NMS
+```
+
+です。
+
+特に、
+
+```text
+ZED GPU buffer
+ → CUDA preprocessing kernel
+ → TensorRT input tensor
+```
+
+を同じCUDA stream上でつなげれば、CPUへの画像転送を避けられます。
+
+さらに高度には、
+
+* CUDA Graphsで毎フレームのlaunch overhead削減
+* TensorRT custom pluginで前処理やNMS統合
+* pinned host memory
+* buffer pool
+* asynchronous execution
+* double/triple buffering
+* CUDA eventsによる同期
+* Jetson VICを使ったresize/color conversion
+
+があります。
+
+ただし、最初からcustom kernel最適化へ行くより、まずCPU往復とPython経路を消す方が大きく効きます。
+
+---
+
+# Composable化についての注意
+
+C++ driverだけcomponent化して、Python YOLO nodeが別processのままでは、そこはDDS通信になります。
+
+また、ROS 2 intra-processによるzero-copyは主にCPUメモリ上のROS message所有権移動です。GPU上の`sl::Mat`やCUDA bufferを自動でzero-copy転送するものではありません。
+
+したがって段階は、
+
+1. `SdkNode`をcomponent libraryとして登録
+2. YOLOもC++ component化
+3. 同一containerへロード
+4. `use_intra_process_comms(true)`を設定
+5. ROS Image経由を暫定的にintra-process化
+6. 最終的にはGPU handle/type adapterまたは内部APIでGPU bufferを渡す
+
+となります。
+
+暫定版でも、現在の`publish()`へ一時オブジェクトを渡すより、loaned messageや`std::unique_ptr<Image>`を検討できます。ただし可変長`std::vector<uint8_t>`を含む`Image`は、DDS shared memoryやloaned messageの制約を受けやすく、「これだけで完全zero-copy」とは考えない方がよいです。
+
+---
+
+# Fast DDSとZenohの比較
+
+## 同一Jetson内のZED→YOLOにはZenohはほぼ効きません
+
+Zenohは特に、
+
+* Jetsonと地上PC間
+* Wi-Fi越し
+* 複数ロボット
+* DDS discovery traffic削減
+* topicごとの帯域制御
+* 遠隔監視
+
+では有効です。
+
+一方、同じJetson内で大容量画像をdriverからYOLOへ渡す処理については、
+
+```text
+GPU bufferをCPUへ落としてROS Image化する
+```
+
+こと自体が問題です。Fast DDSからZenohへ変えても、このGPU→CPUコピーやCvBridge、Python→GPU転送は消えません。
+
+さらに`zenoh-bridge-ros2dds`はDDSとZenohのbridgeであり、ローカルROS 2 node側ではDDSを使用します。公式説明でも、bridgeはローカルDDS entityを発見してZenohへrouteする構成です。([GitHub][3])
+
+したがって用途は分離すべきです。
+
+```text
+Jetson内部の画像処理:
+  composition / GPU zero-copy / NITROS / CUDA
+
+Jetson ↔ 地上PC:
+  Zenoh bridge
+```
+
+地上PCへはrawの左右画像とfloat depthを常時送らず、
+
+* 検出結果
+* diagnostics
+* 必要時のみ圧縮画像
+* depth可視化画像
+* 低密度point cloud
+
+を送る設計がよいです。
+
+---
+
+# すぐ実行できる現実的な第一段階
+
+大規模改修前に、以下だけでも効果を確認できます。
+
+1. `publish_pointcloud:=false`
+2. ZED depth modeを`QUALITY`から`PERFORMANCE`または用途に適した軽量モードへ変更
+3. debug imageを無効化
+4. YOLO入力を640×640またはそれ以下に固定
+5. TensorRT FP16 engineを使用
+6. YOLO推論を毎カメラフレームではなく10 FPS程度に制限
+7. callbackが詰まったら古い画像を捨て、常に最新フレームだけを推論
+8. QoS depthを1、best effortに統一
+9. depthはbbox周辺だけ参照
+10. 右画像topicは必要なsubscriberがいる場合だけretrieve/publish
+
+現在driverは、subscriberがいなくても毎回左・右・depthを取得し、ROS messageを作っています。
+
+ここを、
+
+```cpp
+if (right_image_pub_->get_subscription_count() > 0) {
+  camera_.retrieveImage(...);
+  publish(...);
+}
+```
+
+のようにするだけでも、未使用データのコピーを削れます。
+
+depthもYOLO componentから内部的に使うなら、外部topic用のdepth message作成はsubscriberがいる場合だけで構いません。
+
+---
+
+## 推奨する実装ロードマップ
+
+**まず1日程度の変更範囲**
+
+```text
+pointcloud off
+debug image off
+QoS depth=1
+latest-frame-only
+TensorRT FP16
+不要topicのlazy publish
+```
+
+**次の段階**
+
+```text
+zed2i_driverを真のcomponent化
+YOLOをC++ TensorRT node化
+同一component container化
+```
+
+**最終段階**
+
+```text
+ZED MEM_GPU
+CUDA前処理
+TensorRT
+depth ROI処理
+ROSには検出結果だけpublish
+```
+
+この最終構成なら、左画像推論に加えてdepthを利用しても、現在より軽くできる可能性があります。右画像はZED SDKのdepth生成に任せ、別YOLO推論は原則不要です。Zenoh導入はその後、地上PCとの画像・可視化通信を整理する目的で行うのが適切です。
+
+[1]: https://docs.ros.org/en/jazzy/Tutorials/Demos/Intra-Process-Communication.html?utm_source=chatgpt.com "Setting up efficient intra-process communication — ROS 2 Documentation: Jazzy documentation"
+[2]: https://docs.stereolabs.com/docs/development/zed-sdk/modules/depth-sensing/using-the-api?utm_source=chatgpt.com "Using the Depth Sensing API | StereoLabs"
+[3]: https://github.com/eclipse-zenoh/zenoh-plugin-ros2dds?utm_source=chatgpt.com "GitHub - eclipse-zenoh/zenoh-plugin-ros2dds: A Zenoh plug-in for ROS2 with a DDS RMW. See https://discourse.ros.org/t/ros-2-alternative-middleware-report/ for the advantages of using this plugin over other DDS RMW implementations. · GitHub"
