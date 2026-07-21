@@ -37,7 +37,8 @@ public:
     left_image_pub_ = create_publisher<sensor_msgs::msg::Image>("left/image_rect", image_qos);
     right_image_pub_ = create_publisher<sensor_msgs::msg::Image>("right/image_rect", image_qos);
     left_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("left/camera_info", image_qos);
-    right_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("right/camera_info", image_qos);
+    right_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("right/camera_info",
+        image_qos);
     depth_pub_ = create_publisher<sensor_msgs::msg::Image>("depth/image", image_qos);
     pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", image_qos);
 
@@ -79,50 +80,92 @@ public:
   }
 
 private:
-  static cv::Mat sl_mat_to_cv_bgra(const sl::Mat & mat)
+  template<typename MessageT>
+  static bool has_subscribers(const std::shared_ptr<rclcpp::Publisher<MessageT>> & publisher)
   {
-    const auto width = static_cast<int>(mat.getWidth());
-    const auto height = static_cast<int>(mat.getHeight());
-    cv::Mat view(height, width, CV_8UC4, mat.getPtr<sl::uchar1>(sl::MEM::CPU), mat.getStepBytes(sl::MEM::CPU));
-    return view.clone();
+    return publisher->get_subscription_count() > 0 ||
+           publisher->get_intra_process_subscription_count() > 0;
   }
 
-  static cv::Mat sl_mat_to_cv_depth(const sl::Mat & mat)
+  static cv::Mat sl_mat_to_cv_bgra_view(const sl::Mat & mat)
   {
     const auto width = static_cast<int>(mat.getWidth());
     const auto height = static_cast<int>(mat.getHeight());
-    cv::Mat view(height, width, CV_32FC1, mat.getPtr<sl::float1>(sl::MEM::CPU), mat.getStepBytes(sl::MEM::CPU));
-    return view.clone();
+    return cv::Mat(
+      height, width, CV_8UC4, mat.getPtr<sl::uchar1>(sl::MEM::CPU),
+      mat.getStepBytes(sl::MEM::CPU));
+  }
+
+  static cv::Mat sl_mat_to_cv_depth_view(const sl::Mat & mat)
+  {
+    const auto width = static_cast<int>(mat.getWidth());
+    const auto height = static_cast<int>(mat.getHeight());
+    return cv::Mat(
+      height, width, CV_32FC1, mat.getPtr<sl::float1>(sl::MEM::CPU),
+      mat.getStepBytes(sl::MEM::CPU));
   }
 
   void grab_and_publish()
   {
+    const bool publish_left = has_subscribers(left_image_pub_);
+    const bool publish_right = has_subscribers(right_image_pub_);
+    const bool publish_left_info = has_subscribers(left_info_pub_);
+    const bool publish_right_info = has_subscribers(right_info_pub_);
+    const bool publish_depth = has_subscribers(depth_pub_);
+    const bool publish_points = publish_pointcloud_ && has_subscribers(pointcloud_pub_);
+
+    if (!publish_left && !publish_right && !publish_left_info && !publish_right_info &&
+      !publish_depth && !publish_points)
+    {
+      return;
+    }
+
+    const auto stamp = now();
+    if (publish_left_info) {
+      left_info_pub_->publish(make_camera_info_msg(
+          width_, height_, fx_, fy_, cx_, cy_, 0.0, left_frame_id_, stamp));
+    }
+    if (publish_right_info) {
+      right_info_pub_->publish(make_camera_info_msg(
+          width_, height_, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp));
+    }
+
+    if (!publish_left && !publish_right && !publish_depth && !publish_points) {
+      return;
+    }
+
     sl::RuntimeParameters runtime_params;
     if (camera_.grab(runtime_params) != sl::ERROR_CODE::SUCCESS) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Failed to grab a ZED frame");
       return;
     }
 
-    sl::Mat left;
-    sl::Mat right;
-    sl::Mat depth;
-    camera_.retrieveImage(left, sl::VIEW::LEFT);
-    camera_.retrieveImage(right, sl::VIEW::RIGHT);
-    camera_.retrieveMeasure(depth, sl::MEASURE::DEPTH);
+    if (publish_left) {
+      sl::Mat left;
+      camera_.retrieveImage(left, sl::VIEW::LEFT);
+      const auto left_bgra = sl_mat_to_cv_bgra_view(left);
+      left_image_pub_->publish(mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
+    }
 
-    const auto stamp = now();
-    const auto left_bgra = sl_mat_to_cv_bgra(left);
-    const auto right_bgra = sl_mat_to_cv_bgra(right);
-    const auto depth_m = sl_mat_to_cv_depth(depth);
+    if (publish_right) {
+      sl::Mat right;
+      camera_.retrieveImage(right, sl::VIEW::RIGHT);
+      const auto right_bgra = sl_mat_to_cv_bgra_view(right);
+      right_image_pub_->publish(mat_to_image_msg(right_bgra, "bgra8", right_frame_id_, stamp));
+    }
 
-    left_image_pub_->publish(mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
-    right_image_pub_->publish(mat_to_image_msg(right_bgra, "bgra8", right_frame_id_, stamp));
-    left_info_pub_->publish(make_camera_info_msg(width_, height_, fx_, fy_, cx_, cy_, 0.0, left_frame_id_, stamp));
-    right_info_pub_->publish(
-      make_camera_info_msg(width_, height_, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp));
-    depth_pub_->publish(mat_to_image_msg(depth_m, "32FC1", depth_frame_id_, stamp));
-
-    if (publish_pointcloud_) {
+    if (publish_depth || publish_points) {
+      sl::Mat depth;
+      camera_.retrieveMeasure(depth, sl::MEASURE::DEPTH);
+      // This is a non-owning view. Each requested ROS output copies it directly into its
+      // final message allocation before the SDK buffer expires.
+      const auto depth_m = sl_mat_to_cv_depth_view(depth);
+      if (publish_depth) {
+        depth_pub_->publish(mat_to_image_msg(depth_m, "32FC1", depth_frame_id_, stamp));
+      }
+      if (!publish_points) {
+        return;
+      }
       pointcloud_pub_->publish(
         depth_to_point_cloud_msg(
           depth_m, fx_, fy_, cx_, cy_, 1, depth_min_m_, depth_max_m_, depth_frame_id_, stamp));
@@ -156,10 +199,5 @@ private:
 
 }  // namespace zed2i_driver
 
-int main(int argc, char ** argv)
-{
-  rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<zed2i_driver::SdkNode>(rclcpp::NodeOptions()));
-  rclcpp::shutdown();
-  return 0;
-}
+#include <rclcpp_components/register_node_macro.hpp>
+RCLCPP_COMPONENTS_REGISTER_NODE(zed2i_driver::SdkNode)

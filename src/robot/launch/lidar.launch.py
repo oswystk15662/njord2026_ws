@@ -3,7 +3,8 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
+from launch_ros.actions import ComposableNodeContainer
+from launch_ros.descriptions import ComposableNode
 from launch_ros.substitutions import FindPackageShare
 
 # Livox ROS driver parameters, transcribed from
@@ -26,32 +27,65 @@ LIDAR_MODEL_TO_CONFIG_FILE = {
 def launch_setup(context, *args, **kwargs):
     lidar_model = LaunchConfiguration("lidar_model").perform(context)
     config_file = LIDAR_MODEL_TO_CONFIG_FILE[lidar_model]
+    enable_buoy_detection = (
+        LaunchConfiguration("enable_buoy_detection").perform(context).lower()
+        in ("true", "1", "yes", "on")
+    )
 
     user_config_path = PathJoinSubstitution(
         [FindPackageShare("robot"), "config", "livox", config_file]
     )
 
-    livox_driver = Node(
-        package="livox_ros_driver2",
-        executable="livox_ros_driver2_node",
-        name="livox_lidar_publisher",
+    components = [
+        ComposableNode(
+            package="livox_ros_driver2",
+            plugin="livox_ros::DriverNode",
+            name="livox_lidar_publisher",
+            parameters=[
+                {
+                    "xfer_format": XFER_FORMAT,
+                    "multi_topic": MULTI_TOPIC,
+                    "data_src": DATA_SRC,
+                    "publish_freq": PUBLISH_FREQ,
+                    "output_data_type": OUTPUT_DATA_TYPE,
+                    "frame_id": FRAME_ID,
+                    "lvx_file_path": LVX_FILE_PATH,
+                    "user_config_path": user_config_path,
+                    "cmdline_input_bd_code": CMDLINE_INPUT_BD_CODE,
+                }
+            ],
+            extra_arguments=[{"use_intra_process_comms": True}],
+        )
+    ]
+
+    if enable_buoy_detection:
+        components.append(
+            ComposableNode(
+                package="pcl_det",
+                plugin="pcl_det::PclBuoyDetectionNode",
+                name="pcl_bouy_det_node",
+                parameters=[
+                    {
+                        "input_topic": "/livox/lidar",
+                        "roi_topic": LaunchConfiguration("roi_topic"),
+                        "output_topic": LaunchConfiguration("output_topic"),
+                        "frame_id": LaunchConfiguration("detection_frame_id"),
+                    }
+                ],
+                extra_arguments=[{"use_intra_process_comms": True}],
+            )
+        )
+
+    sensor_container = ComposableNodeContainer(
+        package="rclcpp_components",
+        executable="component_container_mt",
+        name="livox_perception_container",
+        namespace="/",
         output="screen",
-        parameters=[
-            {
-                "xfer_format": XFER_FORMAT,
-                "multi_topic": MULTI_TOPIC,
-                "data_src": DATA_SRC,
-                "publish_freq": PUBLISH_FREQ,
-                "output_data_type": OUTPUT_DATA_TYPE,
-                "frame_id": FRAME_ID,
-                "lvx_file_path": LVX_FILE_PATH,
-                "user_config_path": user_config_path,
-                "cmdline_input_bd_code": CMDLINE_INPUT_BD_CODE,
-            }
-        ],
+        composable_node_descriptions=components,
     )
 
-    return [livox_driver]
+    return [sensor_container]
 
 
 def generate_launch_description():
@@ -62,6 +96,10 @@ def generate_launch_description():
                 default_value="mid360",
                 choices=["mid360", "mid360s"],
             ),
+            DeclareLaunchArgument("enable_buoy_detection", default_value="false"),
+            DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
+            DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),
+            DeclareLaunchArgument("detection_frame_id", default_value="base_link"),
             OpaqueFunction(function=launch_setup),
         ]
     )

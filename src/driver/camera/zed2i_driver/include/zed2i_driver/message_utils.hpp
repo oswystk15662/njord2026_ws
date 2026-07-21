@@ -6,12 +6,13 @@
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
+#include <memory>
 #include <string>
 
 namespace zed2i_driver
 {
 
-sensor_msgs::msg::Image mat_to_image_msg(
+sensor_msgs::msg::Image::UniquePtr mat_to_image_msg(
   const cv::Mat & image,
   const std::string & encoding,
   const std::string & frame_id,
@@ -28,7 +29,7 @@ sensor_msgs::msg::CameraInfo make_camera_info_msg(
   const std::string & frame_id,
   const rclcpp::Time & stamp);
 
-sensor_msgs::msg::PointCloud2 depth_to_point_cloud_msg(
+sensor_msgs::msg::PointCloud2::UniquePtr depth_to_point_cloud_msg(
   const cv::Mat & depth_m,
   double fx,
   double fy,
