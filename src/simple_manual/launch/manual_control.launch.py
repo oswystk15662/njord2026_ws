@@ -27,6 +27,12 @@ def include_launch(package_name, path_parts, condition=None, launch_arguments=No
 
 def generate_launch_description():
     enable_detection = LaunchConfiguration('enable_detection')
+    enable_yolo = LaunchConfiguration('enable_yolo')
+    yolo_device = LaunchConfiguration('yolo_device')
+    enable_ground_video = LaunchConfiguration('enable_ground_video')
+    ground_video_host = LaunchConfiguration('ground_video_host')
+    ground_video_port = LaunchConfiguration('ground_video_port')
+    ground_video_fps = LaunchConfiguration('ground_video_fps')
 
     serial_port = LaunchConfiguration('serial_port')
     baud = LaunchConfiguration('baud')
@@ -37,18 +43,23 @@ def generate_launch_description():
     drogger_rzs_baud = LaunchConfiguration('drogger_rzs_baud')
     drogger_rzs_fix_topic = LaunchConfiguration('drogger_rzs_fix_topic')
 
-    # real_bringup owns the real sensor drivers and localization. Cameras and
-    # WIT IMU are deliberately disabled: the manual vessel configuration is
-    # MID360S + UM982 + Spatial + Drogger. Thrusters are launched below so the
-    # joystick command path has one, unambiguous owner. Navigation stays off.
+    # real_bringup owns the real sensor drivers and localization. ZED2i is
+    # enabled as the input camera for YOLO; WIT IMU remains disabled. Thrusters
+    # are launched below so the joystick command path has one, unambiguous
+    # owner. Navigation stays off.
     sensors_and_localization = include_launch(
         'robot',
         ['launch', 'real_bringup.launch.py'],
         launch_arguments={
             'enable_mid360': 'true',
             'lidar_model': 'mid360s',
-            'enable_zed2i': 'false',
+            'enable_zed2i': 'true',
             'camera_resolution': 'VGA',
+            'camera_framerate': '30',
+            'enable_ground_video': enable_ground_video,
+            'ground_video_host': ground_video_host,
+            'ground_video_port': ground_video_port,
+            'ground_video_fps': ground_video_fps,
             'enable_back_cam': 'false',
             'enable_um982': 'true',
             'enable_drogger_rzs': 'true',
@@ -77,6 +88,19 @@ def generate_launch_description():
         },
     )
 
+    yolo = include_launch(
+        'yolo',
+        ['launch', 'yolo_cuda.launch.py'],
+        condition=IfCondition(enable_yolo),
+        launch_arguments={
+            'model_path': PathJoinSubstitution(
+                [FindPackageShare('robot'), 'config', 'yolo_model', 'best.engine']
+            ),
+            'device': yolo_device,
+            'camera_topic': '/zed2i/left/image_rect',
+        },
+    )
+
     thruster_driver = include_launch(
         'thruster_driver',
         ['launch', 'thruster_driver.launch.py'],
@@ -96,6 +120,12 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument('baud', default_value='115200'),
             DeclareLaunchArgument('enable_detection', default_value='true'),
+            DeclareLaunchArgument('enable_yolo', default_value='true'),
+            DeclareLaunchArgument('yolo_device', default_value='cuda:0'),
+            DeclareLaunchArgument('enable_ground_video', default_value='true'),
+            DeclareLaunchArgument('ground_video_host', default_value='osw-Stealth-14-AI-Studio-A1VGG'),
+            DeclareLaunchArgument('ground_video_port', default_value='5600'),
+            DeclareLaunchArgument('ground_video_fps', default_value='5.0'),
             DeclareLaunchArgument('um982_transport', default_value='uart'),
             DeclareLaunchArgument(
                 'um982_port',
@@ -113,7 +143,8 @@ def generate_launch_description():
             DeclareLaunchArgument('drogger_rzs_baud', default_value='115200'),
             DeclareLaunchArgument('drogger_rzs_fix_topic', default_value='/gnss/fix'),
             sensors_and_localization,
-            detection,
+            # detection,
+            yolo,
             Node(
                 package='simple_manual',
                 executable='joy_converter_node',

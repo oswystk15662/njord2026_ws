@@ -3,6 +3,9 @@
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
 #include "zed2i_driver/tensor_rt_detector.hpp"
 #endif
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+#include "zed2i_driver/ground_video_streamer.hpp"
+#endif
 
 #include <opencv2/core.hpp>
 #include <rclcpp/rclcpp.hpp>
@@ -52,6 +55,16 @@ public:
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
     engine_path_ = declare_parameter<std::string>("engine_path", "");
     const auto camera_resolution = declare_parameter<std::string>("camera_resolution", "HD720");
+    const bool enable_ground_video = declare_parameter<bool>("enable_ground_video", false);
+    const auto ground_video_codec = declare_parameter<std::string>("ground_video_codec", "jpeg");
+    ground_video_config_.width = declare_parameter<int>("ground_video_width", 640);
+    ground_video_config_.height = declare_parameter<int>("ground_video_height", 360);
+    ground_video_config_.fps = declare_parameter<double>("ground_video_fps", 5.0);
+    ground_video_config_.jpeg_quality = declare_parameter<int>("ground_video_jpeg_quality", 70);
+    ground_video_config_.host = declare_parameter<std::string>("ground_video_host", "");
+    ground_video_config_.port = declare_parameter<int>("ground_video_port", 5600);
+    ground_video_config_.max_pending_frames = declare_parameter<int>("ground_video_max_pending_frames", 1);
+    ground_video_config_.mtu = declare_parameter<int>("ground_video_mtu", 1200);
     const bool enable_gpu_perception = declare_parameter<bool>("enable_gpu_perception", false);
     if (enable_gpu_perception) {
 #ifndef ZED2I_DRIVER_HAS_GPU_PERCEPTION
@@ -125,6 +138,38 @@ public:
       depth_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::F32_C1, sl::MEM::GPU);
     }
 #endif
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+    if (enable_ground_video && ground_video_codec == "jpeg") {
+      GroundVideoConfig config;
+      config.source_width = width_;
+      config.source_height = height_;
+      config.width = ground_video_config_.width;
+      config.height = ground_video_config_.height;
+      config.fps = ground_video_config_.fps;
+      config.jpeg_quality = ground_video_config_.jpeg_quality;
+      config.host = ground_video_config_.host;
+      config.port = ground_video_config_.port;
+      config.max_pending_frames = ground_video_config_.max_pending_frames;
+      config.mtu = ground_video_config_.mtu;
+      try {
+        ground_video_streamer_ = std::make_unique<GroundVideoStreamer>(config);
+        if (!left_gpu_.isInit()) {
+          left_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
+        }
+      } catch (const std::exception & error) {
+        RCLCPP_ERROR(get_logger(), "Ground-video streaming disabled: %s", error.what());
+      }
+    }
+    if (enable_ground_video && ground_video_codec != "jpeg") {
+      RCLCPP_ERROR(get_logger(), "Ground-video streaming disabled: only JPEG is supported");
+    }
+#else
+    if (enable_ground_video) {
+      RCLCPP_ERROR(
+        get_logger(),
+        "Ground-video streaming disabled: this build requires ZED, CUDA, nvJPEG, and GStreamer appsrc.");
+    }
+#endif
 
     const auto period_ms = std::max(1, 1000 / std::max(1, framerate_));
     timer_ = create_wall_timer(
@@ -169,6 +214,9 @@ private:
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
     run_gpu = static_cast<bool>(detector_);
 #endif
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+    run_gpu = run_gpu || static_cast<bool>(ground_video_streamer_);
+#endif
     const bool publish_left = has_subscribers(left_image_pub_);
     const bool publish_right = has_subscribers(right_image_pub_);
     const bool publish_left_info = has_subscribers(left_info_pub_);
@@ -197,35 +245,72 @@ private:
           width_, height_, fx_, fy_, cx_, cy_, baseline_m_, right_frame_id_, stamp));
     }
 
-    if (publish_left) {
+    bool left_published = false;
+#if defined(ZED2I_DRIVER_HAS_GPU_PERCEPTION) || defined(ZED2I_DRIVER_HAS_GROUND_VIDEO)
+    if (run_gpu) {
+      const auto image_error = camera_.retrieveImage(left_gpu_, sl::VIEW::LEFT, sl::MEM::GPU);
+      if (image_error != sl::ERROR_CODE::SUCCESS) {
+        RCLCPP_WARN_THROTTLE(
+          get_logger(), *get_clock(), 2000, "Failed to retrieve the left ZED image on GPU: %s",
+          sl::toString(image_error).c_str());
+      } else {
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+        // Select the ground frame before any GPU-to-CPU download or DDS publish.
+        // submit() only enqueues a latest-wins D2D copy; encoding and networking
+        // continue on the streamer's worker thread.
+        if (ground_video_streamer_) {
+          ground_video_streamer_->submit(
+            left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU), left_gpu_.getStepBytes(sl::MEM::GPU),
+            width_, height_);
+        }
+#endif
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+        if (detector_) {
+          camera_.retrieveMeasure(depth_gpu_, sl::MEASURE::DEPTH, sl::MEM::GPU);
+          const auto * pointer = left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU);
+          try {
+            const auto detections = detector_->infer(
+              pointer, left_gpu_.getStepBytes(sl::MEM::GPU), width_, height_, nullptr);
+            std_msgs::msg::Header header;
+            header.stamp = stamp;
+            header.frame_id = output_frame_;
+            std::vector<PositionedDetection> positioned;
+            positioned.reserve(detections.size());
+            for (const auto & detection : detections) {
+              positioned.push_back({detection, nan_position(), PositionSource::kNone});
+            }
+            detection_pub_->publish(to_detection_array(positioned, header));
+          } catch (const std::exception & error) {
+            RCLCPP_ERROR_THROTTLE(
+              get_logger(), *get_clock(), 2000, "GPU perception stopped: %s", error.what());
+            detector_.reset();
+          }
+        }
+#endif
+        if (publish_left) {
+          const auto download_error = left_gpu_.updateCPUfromGPU();
+          if (download_error == sl::ERROR_CODE::SUCCESS) {
+            const auto left_bgra = sl_mat_to_cv_bgra_view(left_gpu_);
+            left_image_pub_->publish(
+              mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
+            left_published = true;
+          } else {
+            RCLCPP_WARN_THROTTLE(
+              get_logger(), *get_clock(), 2000,
+              "Failed to download the left ZED image after ground-video submission: %s",
+              sl::toString(download_error).c_str());
+          }
+        }
+      }
+    }
+#endif
+
+    if (publish_left && !left_published) {
       sl::Mat left;
       camera_.retrieveImage(left, sl::VIEW::LEFT);
       const auto left_bgra = sl_mat_to_cv_bgra_view(left);
       left_image_pub_->publish(mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
     }
-#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
-    if (run_gpu) {
-      camera_.retrieveImage(left_gpu_, sl::VIEW::LEFT, sl::MEM::GPU);
-      camera_.retrieveMeasure(depth_gpu_, sl::MEASURE::DEPTH, sl::MEM::GPU);
-      const auto * pointer = left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU);
-      try {
-        const auto detections = detector_->infer(
-          pointer, left_gpu_.getStepBytes(sl::MEM::GPU), width_, height_, nullptr);
-        std_msgs::msg::Header header;
-        header.stamp = stamp;
-        header.frame_id = output_frame_;
-        std::vector<PositionedDetection> positioned;
-        positioned.reserve(detections.size());
-        for (const auto & detection : detections) {
-          positioned.push_back({detection, nan_position(), PositionSource::kNone});
-        }
-        detection_pub_->publish(to_detection_array(positioned, header));
-      } catch (const std::exception & error) {
-        RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "GPU perception stopped: %s", error.what());
-        detector_.reset();
-      }
-    }
-#endif
 
     if (publish_right) {
       sl::Mat right;
@@ -268,15 +353,33 @@ private:
   double cy_;
   double baseline_m_;
   std::string engine_path_;
+  struct GroundVideoParameterStorage
+  {
+    int source_width{};
+    int source_height{};
+    int width{640};
+    int height{360};
+    double fps{5.0};
+    int jpeg_quality{70};
+    std::string host;
+    int port{5600};
+    int max_pending_frames{1};
+    int mtu{1200};
+  } ground_video_config_;
+#if defined(ZED2I_DRIVER_HAS_GPU_PERCEPTION) || defined(ZED2I_DRIVER_HAS_GROUND_VIDEO)
+  sl::Mat left_gpu_;
+#endif
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
   std::unique_ptr<TensorRtDetector> detector_;
-  sl::Mat left_gpu_;
   sl::Mat depth_gpu_;
   std::string detection_topic_;
   std::string output_frame_;
   double confidence_threshold_{};
   int max_detections_{};
   rclcpp::Publisher<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr detection_pub_;
+#endif
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+  std::unique_ptr<GroundVideoStreamer> ground_video_streamer_;
 #endif
 
   rclcpp::TimerBase::SharedPtr timer_;

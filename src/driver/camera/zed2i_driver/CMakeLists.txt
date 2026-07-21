@@ -22,6 +22,7 @@ find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common kdtree segmentation)
 find_package(OpenCV REQUIRED)
 find_package(CUDAToolkit QUIET)
+find_package(PkgConfig QUIET)
 include(CheckLanguage)
 
 option(ZED2I_DRIVER_BUILD_GPU_PERCEPTION
@@ -117,15 +118,19 @@ if(ZED2I_DRIVER_BUILD_SDK_NODE)
   endif()
 endif()
 
-set(ZED2I_DRIVER_HAS_GPU_PERCEPTION OFF)
-if(ZED2I_DRIVER_BUILD_GPU_PERCEPTION AND ZED2I_DRIVER_USE_ZED_SDK AND
-   CUDAToolkit_FOUND AND ZED2I_DRIVER_NVINFER_INCLUDE_DIR AND
-   ZED2I_DRIVER_NVINFER_LIBRARY)
+set(ZED2I_DRIVER_HAS_CUDA OFF)
+if(ZED2I_DRIVER_USE_ZED_SDK AND CUDAToolkit_FOUND)
   check_language(CUDA)
   if(CMAKE_CUDA_COMPILER)
     enable_language(CUDA)
-    set(ZED2I_DRIVER_HAS_GPU_PERCEPTION ON)
+    set(ZED2I_DRIVER_HAS_CUDA ON)
   endif()
+endif()
+
+set(ZED2I_DRIVER_HAS_GPU_PERCEPTION OFF)
+if(ZED2I_DRIVER_BUILD_GPU_PERCEPTION AND ZED2I_DRIVER_HAS_CUDA AND
+   ZED2I_DRIVER_NVINFER_INCLUDE_DIR AND ZED2I_DRIVER_NVINFER_LIBRARY)
+  set(ZED2I_DRIVER_HAS_GPU_PERCEPTION ON)
 endif()
 if(ZED2I_DRIVER_HAS_GPU_PERCEPTION)
   message(STATUS "${PROJECT_NAME}: GPU perception enabled (ZED + CUDA compiler/toolkit + TensorRT)")
@@ -158,6 +163,21 @@ if(ZED2I_DRIVER_USE_ZED_SDK)
     ${OpenCV_LIBRARIES}
     ${ZED_LIBRARIES}
   )
+  set(ZED2I_DRIVER_HAS_GROUND_VIDEO OFF)
+  if(ZED2I_DRIVER_HAS_CUDA AND PkgConfig_FOUND)
+    pkg_check_modules(GSTREAMER QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
+    if(GSTREAMER_FOUND AND TARGET CUDA::nvjpeg)
+      set(ZED2I_DRIVER_HAS_GROUND_VIDEO ON)
+      target_sources(zed2i_sdk_component PRIVATE src/ground_video_streamer.cu)
+      target_compile_definitions(zed2i_sdk_component PRIVATE ZED2I_DRIVER_HAS_GROUND_VIDEO=1)
+      target_link_libraries(zed2i_sdk_component CUDA::cudart CUDA::nvjpeg PkgConfig::GSTREAMER)
+    endif()
+  endif()
+  if(ZED2I_DRIVER_HAS_GROUND_VIDEO)
+    message(STATUS "${PROJECT_NAME}: GPU JPEG ground-video streaming enabled")
+  else()
+    message(STATUS "${PROJECT_NAME}: ground-video streaming unavailable; requires ZED, CUDA, nvJPEG, and GStreamer appsrc")
+  endif()
   if(ZED2I_DRIVER_HAS_GPU_PERCEPTION)
     target_sources(zed2i_sdk_component PRIVATE
       src/tensor_rt_detector.cpp

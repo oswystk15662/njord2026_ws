@@ -3,6 +3,7 @@
 #include "zed2i_driver/perception_logic.hpp"
 
 #include <NvInfer.h>
+#include <NvInferVersion.h>
 #include <cuda_runtime_api.h>
 
 #include <fstream>
@@ -28,7 +29,19 @@ Logger logger;
 class TrtDeleter
 {
 public:
-  template<typename T> void operator()(T * pointer) const { if (pointer) pointer->destroy(); }
+  template<typename T> void operator()(T * pointer) const
+  {
+    if (!pointer) {
+      return;
+    }
+#if NV_TENSORRT_MAJOR >= 10
+    // TensorRT 10 removed the legacy destroy() methods and exposes virtual
+    // destructors for these runtime-owned objects.
+    delete pointer;
+#else
+    pointer->destroy();
+#endif
+  }
 };
 }  // namespace
 

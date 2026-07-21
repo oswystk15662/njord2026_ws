@@ -29,8 +29,13 @@ def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
     enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     lidar_model = LaunchConfiguration("lidar_model")
-    camera_resolution = LaunchConfiguration("camera_resolution")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
+    enable_ground_video = LaunchConfiguration("enable_ground_video")
+    ground_video_host = LaunchConfiguration("ground_video_host")
+    ground_video_port = LaunchConfiguration("ground_video_port")
+    ground_video_fps = LaunchConfiguration("ground_video_fps")
+    camera_resolution = LaunchConfiguration("camera_resolution")
+    camera_framerate = LaunchConfiguration("camera_framerate")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_um982 = LaunchConfiguration("enable_um982")
     enable_drogger_rzs = LaunchConfiguration("enable_drogger_rzs")
@@ -67,7 +72,15 @@ def generate_launch_description():
         "zed2i_driver",
         ["launch", "zed2i.launch.py"],
         IfCondition(enable_zed2i),
-        {"mode": "sdk", "camera_resolution": camera_resolution},
+        {
+            "mode": "sdk",
+            "camera_resolution": camera_resolution,
+            "framerate": camera_framerate,
+            "enable_ground_video": enable_ground_video,
+            "ground_video_host": ground_video_host,
+            "ground_video_port": ground_video_port,
+            "ground_video_fps": ground_video_fps,
+        },
     )
 
     back_cam_launch = include_launch(
@@ -170,11 +183,16 @@ def generate_launch_description():
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
+            DeclareLaunchArgument("enable_ground_video", default_value="false"),
+            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument("ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("ground_video_fps", default_value="5.0"),
             DeclareLaunchArgument(
                 "camera_resolution",
                 default_value="HD720",
                 description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
             ),
+            DeclareLaunchArgument("camera_framerate", default_value="15"),
             DeclareLaunchArgument("enable_back_cam", default_value="true"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
             DeclareLaunchArgument("enable_drogger_rzs", default_value="true"),

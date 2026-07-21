@@ -97,11 +97,24 @@ class YoloDetectorNode(Node):
         self.roi_theta_min_deg = self.get_parameter('roi_theta_min_deg').get_parameter_value().double_value
 
         self.get_logger().info(f'Loading YOLO model from: {model_path}')
+        self._is_tensorrt_engine = model_path.lower().endswith('.engine')
+        self._predict_kwargs = {'verbose': False}
 
         # YOLOモデルのロード
         try:
-            self.model = YOLO(model_path)
-            self.model.to(device)
+            self.model = YOLO(
+                model_path,
+                task='detect' if self._is_tensorrt_engine else None,
+            )
+            if self._is_tensorrt_engine:
+                # TensorRT engines are already bound to the GPU used at build time;
+                # Ultralytics' Model.to() only applies to PyTorch models.
+                self._predict_kwargs.update(device=0, half=True)
+                self.get_logger().info(
+                    'Using TensorRT engine backend on GPU 0 with FP16 inference.'
+                )
+            else:
+                self.model.to(device)
         except Exception as e:
             self.get_logger().error(f'Failed to load model from {model_path}: {e}')
             # フォールバック (必要なら)
@@ -204,7 +217,7 @@ class YoloDetectorNode(Node):
             return
 
         # --- YOLO推論 ---
-        results = self.model.predict(cv_image, verbose=False)
+        results = self.model.predict(cv_image, **self._predict_kwargs)
         result = results[0]
         
         virtual_obstacles = [] # 生成する点のリスト [[x, y, z], ...]

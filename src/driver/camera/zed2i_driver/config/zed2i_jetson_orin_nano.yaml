@@ -20,6 +20,18 @@ zed2i:
     # matching local TensorRT engine has been generated.
     enable_gpu_perception: false
     engine_path: ""
+    # Ground-video transport is opt-in: an empty host and false enable prevent
+    # accidental UDP transmission during normal development.
+    enable_ground_video: false
+    ground_video_codec: jpeg
+    ground_video_width: 640
+    ground_video_height: 360
+    ground_video_fps: 5.0
+    ground_video_jpeg_quality: 70
+    ground_video_host: ""
+    ground_video_port: 5600
+    ground_video_max_pending_frames: 1
+    ground_video_mtu: 1200
     detection_topic: /buoy_detections_3d
     output_frame: base_link
     confidence_threshold: 0.25

@@ -118,6 +118,9 @@ def generate_launch_description():
         executable="navsat_transform_node",
         name="navsat_transform_node",
         output="screen",
+        # Keep the noisy datum/initialization messages local to this node.
+        # Other nodes keep the launch-wide default log level.
+        arguments=["--ros-args", "--log-level", "ERROR"],
         parameters=[
             {
                 "frequency": 10.0,

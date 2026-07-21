@@ -24,6 +24,12 @@ def generate_launch_description():
         description='Computation device (default: cuda:0)'
     )
 
+    camera_topic_arg = DeclareLaunchArgument(
+        'camera_topic',
+        default_value='/camera/image_raw',
+        description='Image topic consumed by the YOLO detector',
+    )
+
     yolo_node = Node(
         package=pkg_name,
         executable='yolo_cuda_node',
@@ -32,12 +38,13 @@ def generate_launch_description():
         parameters=[{
             'model_path': LaunchConfiguration('model_path'),
             'device': LaunchConfiguration('device'),
-            'camera_topic': '/camera/image_raw'
+            'camera_topic': LaunchConfiguration('camera_topic')
         }]
     )
 
     return LaunchDescription([
         model_path_arg,
         device_arg,
+        camera_topic_arg,
         yolo_node,
     ])
