@@ -15,3 +15,6 @@ rosbag2*
 
 # Claude agent worktrees (local only)
 .claude/worktrees/
+
+# Local YOLO model artifact
+src/detection/yolo/config/best.pt
