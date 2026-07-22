@@ -231,11 +231,11 @@ void ThrusterDriverNode::loadThrusterConfigs()
   const std::vector<bool> reverse =
     getBoolVector("thrusters.reverse", std::vector<bool>(ids.size(), false));
   const std::vector<double> forward_gain =
-    getDoubleVector("static_map.wheels.forward_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.forward_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> reverse_gain =
-    getDoubleVector("static_map.wheels.reverse_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.reverse_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> offset =
-    getDoubleVector("static_map.wheels.offset", std::vector<double>(ids.size(), 0.0));
+    getDoubleVector("static_map.thrusters.offset", std::vector<double>(ids.size(), 0.0));
 
   const std::size_t n = ids.size();
   if (
