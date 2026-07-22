@@ -13,13 +13,13 @@ ekf_filter_node_local:
     print_diagnostics: true
 
     # GLIM LiDAR odometry
-    odom0: /odom
-    odom0_config: [true,  true,  true,
-                   true,  true,  true,
-                   false, false, false,
-                   false, false, false,
-                   false, false, false]
-    odom0_differential: false
+    # odom0: /odom
+    # odom0_config: [true,  true,  true,
+    #                true,  true,  true,
+    #                false, false, false,
+    #                false, false, false,
+    #                false, false, false]
+    # odom0_differential: false
 
     imu0: /lidar/imu
     imu0_config: [false, false, false,
