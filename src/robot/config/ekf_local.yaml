@@ -20,3 +20,17 @@ ekf_filter_node_local:
                    false, false, false,
                    false, false, false]
     odom0_differential: false
+
+    imu0: /lidar/imu
+    imu0_config: [false, false, false,
+                  false, false, false,
+                  true,  true,  true,
+                  false, false, false,
+                  true,  true,  true]
+    
+    # imu1: /imu/data
+    # imu1_config: [false, false, false,
+    #               false, false, false,
+    #               true,  true,  true,
+    #               false, false, false,
+    #               true,  true,  true]

@@ -37,6 +37,13 @@ def generate_launch_description():
         parameters=[{"robot_description": robot_description}],
     )
 
+    wit_imu_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join('witmotion_imu_driver', "launch", "witmotion_std_serial_imu.launch.py")
+        ),
+        launch_arguments={"enable_diagnostics": LaunchConfiguration("enable_diagnostics")}.items(),
+    )
+
     spatial_driver = Node(
         package="adnav_driver",
         executable="adnav_driver",
@@ -48,6 +55,31 @@ def generate_launch_description():
         ],
     )
 
+    spatial_navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="spatial_navsat_transform_node",
+        output="screen",
+        parameters=[
+            {
+                "frequency": 10.0,
+                "magnetic_declination_radians": 0.0,
+                "yaw_offset": 0.0,
+                "zero_altitude": True,
+                "broadcast_utm_transform": False,
+                "publish_filtered_gps": False,
+                "use_odometry_yaw": False,
+                "wait_for_datum": False,
+            }
+        ],
+        remappings=[
+            ("imu", "/adnav_driver/imu"),
+            ("gps/fix", "/adnav_driver/nav_sat_fix"),
+            ("odometry/filtered", "odometry/filtered/local"),
+            ("odometry/gps", "/odometry/gps/spatial"),
+        ],
+    )
+
     # The UM982 driver is launched separately because its transport settings
     # are deployment-specific.
     um982_static_tf = Node(
@@ -56,22 +88,9 @@ def generate_launch_description():
         name="um982_static_tf_pub",
         output="screen",
         arguments=[
-            "--x",
-            "0.0",
-            "--y",
-            "0.0",
-            "--z",
-            "0.0",
-            "--roll",
-            "0.0",
-            "--pitch",
-            "0.0",
-            "--yaw",
-            "0.0",
-            "--frame-id",
-            "base_link",
-            "--child-frame-id",
-            "um982_link",
+            "--x", "0.0", "--y", "0.0", "--z", "0.0",
+            "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "um982_link",
         ],
     )
 
@@ -139,31 +158,6 @@ def generate_launch_description():
         ],
     )
 
-    spatial_navsat_transform_node = Node(
-        package="robot_localization",
-        executable="navsat_transform_node",
-        name="spatial_navsat_transform_node",
-        output="screen",
-        parameters=[
-            {
-                "frequency": 10.0,
-                "magnetic_declination_radians": 0.0,
-                "yaw_offset": 0.0,
-                "zero_altitude": True,
-                "broadcast_utm_transform": False,
-                "publish_filtered_gps": False,
-                "use_odometry_yaw": False,
-                "wait_for_datum": False,
-            }
-        ],
-        remappings=[
-            ("imu", "/adnav_driver/imu"),
-            ("gps/fix", "/adnav_driver/nav_sat_fix"),
-            ("odometry/filtered", "odometry/filtered/local"),
-            ("odometry/gps", "/odometry/gps/spatial"),
-        ],
-    )
-
     diagnostics_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
@@ -176,13 +170,14 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
-            spatial_driver,
+            # wit_imu_launch,
+            # spatial_driver,
+            # spatial_navsat_transform_node,
             um982_static_tf,
             glim_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,
-            spatial_navsat_transform_node,
             diagnostics_launch,
         ]
     )
