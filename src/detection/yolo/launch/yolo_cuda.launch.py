@@ -30,15 +30,43 @@ def generate_launch_description():
         description='Image topic consumed by the YOLO detector',
     )
 
+    node_name_arg = DeclareLaunchArgument(
+        'node_name',
+        default_value='yolo_detector_cuda',
+        description='Name assigned to the YOLO detector node',
+    )
+
+    namespace_arg = DeclareLaunchArgument(
+        'namespace',
+        default_value='',
+        description='Namespace for YOLO outputs such as yolo/debug_image',
+    )
+    enable_roi_arg = DeclareLaunchArgument(
+        'enable_roi', default_value='true',
+        description='Publish buoy ROI messages from detections',
+    )
+    enable_virtual_wall_arg = DeclareLaunchArgument(
+        'enable_virtual_wall', default_value='false',
+        description='Publish virtual obstacles from detections',
+    )
+    enable_debug_image_arg = DeclareLaunchArgument(
+        'enable_debug_image', default_value='true',
+        description='Publish annotated debug images when subscribed',
+    )
+
     yolo_node = Node(
         package=pkg_name,
         executable='yolo_cuda_node',
-        name='yolo_detector_cuda',
+        name=LaunchConfiguration('node_name'),
+        namespace=LaunchConfiguration('namespace'),
         output='screen',
         parameters=[{
             'model_path': LaunchConfiguration('model_path'),
             'device': LaunchConfiguration('device'),
-            'camera_topic': LaunchConfiguration('camera_topic')
+            'camera_topic': LaunchConfiguration('camera_topic'),
+            'enable_roi': LaunchConfiguration('enable_roi'),
+            'enable_virtual_wall': LaunchConfiguration('enable_virtual_wall'),
+            'enable_debug_image': LaunchConfiguration('enable_debug_image'),
         }]
     )
 
@@ -46,5 +74,10 @@ def generate_launch_description():
         model_path_arg,
         device_arg,
         camera_topic_arg,
+        node_name_arg,
+        namespace_arg,
+        enable_roi_arg,
+        enable_virtual_wall_arg,
+        enable_debug_image_arg,
         yolo_node,
     ])

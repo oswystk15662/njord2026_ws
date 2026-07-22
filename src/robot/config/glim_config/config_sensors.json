@@ -60,7 +60,9 @@
       1.0
     ],
     "intensity_field": "intensity",
-    "ring_field": "",
+    // MID-360SのPointCloud2（xfer_format=0）は"line"を出力する。GLIMはこれを
+    // 読み取れるが、現行preprocessにはline別ダウンサンプリングは実装されていない。
+    "ring_field": "line",
     // LiDAR per-point time settings
     "autoconf_perpoint_times": true,
     "autoconf_prefer_frame_time": false,

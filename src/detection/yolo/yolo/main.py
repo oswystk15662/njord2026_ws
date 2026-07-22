@@ -74,6 +74,7 @@ class YoloDetectorNode(Node):
         self.declare_parameter('model_path', default_model_path)
         self.declare_parameter('device', device_default)
         self.declare_parameter('camera_topic', '/camera/image_raw')
+        self.declare_parameter('enable_debug_image', True)
         self.declare_parameter('enable_virtual_wall', False)
         self.declare_parameter('enable_roi', True)
         self.declare_parameter('roi_topic', '/buoy_roi')
@@ -87,6 +88,8 @@ class YoloDetectorNode(Node):
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
         device = self.get_parameter('device').get_parameter_value().string_value
         cam_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
+        self.enable_debug_image = self.get_parameter(
+            'enable_debug_image').get_parameter_value().bool_value
         self.enable_virtual_wall = self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value
         self.enable_roi = self.get_parameter('enable_roi').get_parameter_value().bool_value
         self.roi_topic = self.get_parameter('roi_topic').get_parameter_value().string_value
@@ -193,7 +196,9 @@ class YoloDetectorNode(Node):
         return 'yolov8n.pt'
 
     def image_callback(self, msg):
-        if not self.enable_virtual_wall and not self.enable_roi:
+        # A rear-facing camera may be used only for an annotated ground-video
+        # stream, without contributing navigation ROI or virtual obstacles.
+        if not (self.enable_virtual_wall or self.enable_roi or self.enable_debug_image):
             return
 
         # Replace an unprocessed frame instead of queueing stale camera data.
@@ -225,7 +230,9 @@ class YoloDetectorNode(Node):
         best_conf = 0.0
         fov_rad = math.radians(self.camera_fov_deg)
         min_theta_rad = math.radians(self.roi_theta_min_deg)
-        publish_debug = self.pub_debug_img.get_subscription_count() > 0
+        publish_debug = (
+            self.enable_debug_image and self.pub_debug_img.get_subscription_count() > 0
+        )
 
         # 検出結果のループ
         for box in result.boxes:

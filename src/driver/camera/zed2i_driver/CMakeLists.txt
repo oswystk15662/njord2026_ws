@@ -21,6 +21,7 @@ find_package(pcl_conversions REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common kdtree segmentation)
 find_package(OpenCV REQUIRED)
+find_package(cv_bridge REQUIRED)
 find_package(CUDAToolkit QUIET)
 find_package(PkgConfig QUIET)
 include(CheckLanguage)
@@ -201,6 +202,19 @@ else()
   ament_target_dependencies(zed2i_sdk_component ${DEPENDENCIES} rclcpp_components)
 endif()
 
+# This CPU JPEG/RTP sender is used for USB cameras.  It is intentionally
+# independent of the ZED SDK/CUDA-only ground-video sender above.
+if(PkgConfig_FOUND)
+  pkg_check_modules(GSTREAMER_APP QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
+endif()
+if(GSTREAMER_APP_FOUND)
+  add_executable(back_cam_ground_video_streamer src/back_cam_ground_video_streamer.cpp)
+  ament_target_dependencies(back_cam_ground_video_streamer rclcpp sensor_msgs cv_bridge)
+  target_link_libraries(back_cam_ground_video_streamer ${OpenCV_LIBRARIES} PkgConfig::GSTREAMER_APP)
+else()
+  message(STATUS "${PROJECT_NAME}: back-camera ground-video sender unavailable; requires GStreamer appsrc")
+endif()
+
 rclcpp_components_register_node(zed2i_sdk_component
   PLUGIN "zed2i_driver::SdkNode"
   EXECUTABLE zed2i_sdk_node
@@ -214,6 +228,12 @@ install(TARGETS
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
+
+if(TARGET back_cam_ground_video_streamer)
+  install(TARGETS back_cam_ground_video_streamer
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
 
 install(DIRECTORY
   include/

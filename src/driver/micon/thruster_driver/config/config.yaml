@@ -64,7 +64,7 @@ thruster_driver_node:
       angle_rad: [0.785398, -0.785398, 2.356194, -2.356194]
       reverse: [false, true, false, true]
       # BlueRobotics T200 @16V max thrust ~40N
-      force_per_duty: [40.0, 40.0, 40.0, 40.0]
+      max_thrust: [40.0, 40.0, 40.0, 40.0]
 
     topics:
       cmd_vel: "cmd_vel"

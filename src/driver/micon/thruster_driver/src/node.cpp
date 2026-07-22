@@ -226,8 +226,8 @@ void ThrusterDriverNode::loadThrusterConfigs()
   const std::vector<double> angle_rad = getDoubleVector(
     "thrusters.angle_rad",
     {0.785398, -0.785398, 2.356194, -2.356194});
-  const std::vector<double> force_per_duty =
-    getDoubleVector("thrusters.force_per_duty", std::vector<double>(ids.size(), 1.0));
+  const std::vector<double> max_thrust =
+    getDoubleVector("thrusters.max_thrust", std::vector<double>(ids.size(), 40.0));
   const std::vector<bool> reverse =
     getBoolVector("thrusters.reverse", std::vector<bool>(ids.size(), false));
   const std::vector<double> forward_gain =
@@ -239,7 +239,7 @@ void ThrusterDriverNode::loadThrusterConfigs()
 
   const std::size_t n = ids.size();
   if (
-    links.size() != n || angle_rad.size() != n || force_per_duty.size() != n ||
+    links.size() != n || angle_rad.size() != n || max_thrust.size() != n ||
     reverse.size() != n || forward_gain.size() != n || reverse_gain.size() != n ||
     offset.size() != n)
   {
@@ -253,7 +253,7 @@ void ThrusterDriverNode::loadThrusterConfigs()
     config.id = ids[i];
     config.link = links[i];
     config.angle_rad = angle_rad[i];
-    config.force_per_duty = force_per_duty[i];
+    config.max_thrust = max_thrust[i];
     config.reverse = reverse[i];
     config.forward_gain = forward_gain[i];
     config.reverse_gain = reverse_gain[i];
@@ -374,7 +374,7 @@ std::vector<double> ThrusterDriverNode::allocateWrench(const std::vector<double>
   for (const auto & thruster : thrusters_) {
     geometry.push_back(
         {
-          thruster.x, thruster.y, thruster.angle_rad, thruster.force_per_duty, thruster.reverse});
+          thruster.x, thruster.y, thruster.angle_rad, thruster.max_thrust, thruster.reverse});
   }
   return njord::thruster_driver::allocateWrench(geometry, wrench, allocation_regularization_);
 }
@@ -408,7 +408,7 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
     std_msgs::msg::Float32MultiArray msg;
     msg.data.reserve(commands.size());
     for (std::size_t i = 0; i < commands.size(); ++i) {
-      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].force_per_duty;
+      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].max_thrust;
       msg.data.push_back(static_cast<float>(newtons));
     }
     pub_thruster_command_->publish(msg);

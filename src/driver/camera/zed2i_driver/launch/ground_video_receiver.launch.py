@@ -1,4 +1,4 @@
-"""Receive the ZED2i RTP/JPEG ground-video stream with low latency."""
+"""Receive a ZED2i or back-camera RTP/JPEG stream with low latency."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, ExecuteProcess

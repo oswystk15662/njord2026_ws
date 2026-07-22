@@ -47,7 +47,7 @@ def generate_launch_description():
     serial_port = LaunchConfiguration("serial_port")
     baud = LaunchConfiguration("baud")
     device = LaunchConfiguration("device")
-    um982_transport = LaunchConfiguration("um982_transport")
+    um982_protocol = LaunchConfiguration("um982_protocol")
     um982_port = LaunchConfiguration("um982_port")
     enable_um982_rtk = LaunchConfiguration("enable_um982_rtk")
     drogger_rzs_port = LaunchConfiguration("drogger_rzs_port")
@@ -95,7 +95,7 @@ def generate_launch_description():
         ["launch", "um982.launch.py"],
         IfCondition(enable_um982),
         {
-            "uart_or_tcp": um982_transport,
+            "uart_or_tcp": um982_protocol,
             "gnss_port": um982_port,
             "rtk_enable": enable_um982_rtk,
         },
@@ -205,7 +205,7 @@ def generate_launch_description():
                 default_value="/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_c82421728a9aef118808b29061ce3355-if00-port0",
             ),
             DeclareLaunchArgument("baud", default_value="115200"),
-            DeclareLaunchArgument("um982_transport", default_value="uart"),
+            DeclareLaunchArgument("um982_protocol", default_value="uart"),
             DeclareLaunchArgument("um982_port", default_value="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"),
             DeclareLaunchArgument("enable_um982_rtk", default_value="false"),
             DeclareLaunchArgument(
