@@ -8,6 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -34,24 +35,13 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
-        parameters=[{"robot_description": robot_description}],
-    )
-
-    wit_imu_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join('witmotion_imu_driver', "launch", "witmotion_std_serial_imu.launch.py")
-        ),
-        launch_arguments={"enable_diagnostics": LaunchConfiguration("enable_diagnostics")}.items(),
-    )
-
-    spatial_driver = Node(
-        package="adnav_driver",
-        executable="adnav_driver",
-        name="adnav_driver",
-        output="screen",
-        emulate_tty=True,
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "adnav_spatial.yaml"])
+            {
+                "robot_description": ParameterValue(
+                    robot_description,
+                    value_type=str,
+                )
+            }
         ],
     )
 
@@ -154,8 +144,6 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
-            # wit_imu_launch,
-            # spatial_driver,
             # spatial_navsat_transform_node,
             um982_static_tf,
             local_ekf_node,

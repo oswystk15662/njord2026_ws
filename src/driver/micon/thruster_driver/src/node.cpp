@@ -53,6 +53,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
   max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
+  use_velocity_feedback_ =
+    this->declare_parameter<bool>("control.use_velocity_feedback", true);
   feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
   stop_on_feedback_timeout_ =
     this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
@@ -123,10 +125,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
       cmd_vel_topic,
       10,
       std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
-    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      odom_topic,
-      10,
-      std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    if (use_velocity_feedback_) {
+      sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        odom_topic,
+        10,
+        std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    }
     const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
     control_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -144,10 +148,11 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. mode=%s output=%s thrusters=%zu dob=%s",
+    "thruster_driver started. mode=%s output=%s thrusters=%zu velocity_feedback=%s dob=%s",
     input_mode_.c_str(),
     sim_command_topic.c_str(),
     thrusters_.size(),
+    use_velocity_feedback_ ? "on" : "off",
     dob_enable_ ? "on" : "off");
 }
 
@@ -195,8 +200,8 @@ void ThrusterDriverNode::controlTimerCallback()
   last_control_time_ = now;
 
   const bool cmd_timeout = (now - last_cmd_time_).seconds() > watchdog_timeout_sec_;
-  const bool feedback_timeout =
-    !have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_;
+  const bool feedback_timeout = use_velocity_feedback_ &&
+    (!have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_);
 
   if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
     publishCommands(std::vector<double>(thrusters_.size(), 0.0));

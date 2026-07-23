@@ -11,6 +11,7 @@ thruster_driver_node:
 
     control:
       rate_hz: 50.0
+      use_velocity_feedback: true
       feedback_timeout_sec: 0.5
       stop_on_feedback_timeout: true
       p:

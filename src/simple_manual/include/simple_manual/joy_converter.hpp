@@ -31,7 +31,7 @@ struct JoyConfig
 struct JoyOutput
 {
   geometry_msgs::msg::Twist cmd_vel;
-  bool emergency{true};
+  bool emergency{false};
   bool green{false};
   bool yellow{false};
   bool red{false};

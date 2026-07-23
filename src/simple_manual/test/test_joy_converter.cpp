@@ -19,7 +19,7 @@ TEST(JoyConversion, UsesDefaultMapping)
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.x, -0.15);
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.y, 0.1);
   EXPECT_DOUBLE_EQ(output.cmd_vel.angular.z, 0.2);
-  EXPECT_FALSE(output.emergency);
+  EXPECT_TRUE(output.emergency);
   EXPECT_FALSE(output.green);
   EXPECT_TRUE(output.yellow);
   EXPECT_FALSE(output.red);
@@ -44,7 +44,7 @@ TEST(JoyConversion, UsesConfiguredMappingAndSafeMissingInputs)
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.x, -0.1);
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.y, 0.0);
   EXPECT_DOUBLE_EQ(output.cmd_vel.angular.z, 0.5);
-  EXPECT_TRUE(output.emergency);
+  EXPECT_FALSE(output.emergency);
   EXPECT_FALSE(output.green);
   EXPECT_FALSE(output.yellow);
   EXPECT_FALSE(output.red);

@@ -29,7 +29,9 @@ JoyOutput convert_joy(const sensor_msgs::msg::Joy & msg, const JoyConfig & confi
   output.cmd_vel.angular.z = config.angular_z_scale *
     (static_cast<double>(button_value(msg, config.yaw_positive_button)) -
     static_cast<double>(button_value(msg, config.yaw_negative_button)));
-  output.emergency = !button_value(msg, config.emergency_button);
+  // Positive logic: pressing the designated button requests an emergency
+  // stop; its normal released state keeps the communication E-stop clear.
+  output.emergency = button_value(msg, config.emergency_button);
   output.green = button_value(msg, config.green_button);
   output.yellow = button_value(msg, config.yellow_button);
   output.red = button_value(msg, config.red_button);

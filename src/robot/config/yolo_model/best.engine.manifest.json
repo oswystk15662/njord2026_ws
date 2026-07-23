@@ -2,8 +2,8 @@
   "tensorrt_version": "10.16.2.10",
   "cuda_version": "unknown",
   "gpu": "aarch64",
-  "engine_sha256": "182cc7d5444a0d50e31866fe07cac1caa173dc8642edfb5fdd44cd0f26c054e5",
-  "onnx_sha256": "7b4282b764ce5ee735c6ab86b84efa28df95579852815ccdd18c00b4843a837d",
+  "engine_sha256": "b6aae6bf1c56e3db72313bc901ef89cc65f7c53002a84762308d7b62e3e8e9f5",
+  "onnx_sha256": "5ba64cc6a42bb3fe8b8ef0d1716f7e9baf4dbcfdd1898bd853fef4f969ee66b9",
   "tensors": [
     {
       "name": "images",

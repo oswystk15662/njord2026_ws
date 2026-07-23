@@ -31,6 +31,10 @@ def launch_setup(context, *args, **kwargs):
         LaunchConfiguration("enable_buoy_detection").perform(context).lower()
         in ("true", "1", "yes", "on")
     )
+    enable_glim = (
+        LaunchConfiguration("enable_glim").perform(context).lower()
+        in ("true", "1", "yes", "on")
+    )
 
     user_config_path = PathJoinSubstitution(
         [FindPackageShare("robot"), "config", "livox", config_file]
@@ -76,6 +80,30 @@ def launch_setup(context, *args, **kwargs):
             )
         )
 
+    # GLIM is a registered rclcpp component (glim::GlimROS).  Keeping it in
+    # the Livox container lets its PointCloud2 subscription use ROS 2
+    # intra-process transport instead of serializing the cloud through DDS.
+    # It still receives IMU over the normal topic path because that publisher
+    # is not part of this container.
+    if enable_glim:
+        components.append(
+            ComposableNode(
+                package="glim_ros",
+                plugin="glim::GlimROS",
+                name="glim_node",
+                parameters=[
+                    {
+                        "config_path": PathJoinSubstitution(
+                            [FindPackageShare("robot"), "config", "glim_config"]
+                        ),
+                        "use_sim_time": False,
+                    }
+                ],
+                remappings=[("/glim_node/odom", "/odom")],
+                extra_arguments=[{"use_intra_process_comms": True}],
+            )
+        )
+
     sensor_container = ComposableNodeContainer(
         package="rclcpp_components",
         executable="component_container_mt",
@@ -97,6 +125,11 @@ def generate_launch_description():
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_buoy_detection", default_value="false"),
+            DeclareLaunchArgument(
+                "enable_glim",
+                default_value="true",
+                description="Load GLIM into the Livox component container",
+            ),
             DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
             DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),
             DeclareLaunchArgument("detection_frame_id", default_value="base_link"),

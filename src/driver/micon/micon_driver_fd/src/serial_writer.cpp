@@ -1,13 +1,9 @@
 #include "micon_driver_fd/serial_writer.hpp"
 
-#include <algorithm>
-#include <chrono>
 #include <cstring>
-#include <cerrno>
 #include <fcntl.h>
 #include <functional>
 #include <termios.h>
-#include <thread>
 #include <unistd.h>
 
 namespace micon_driver_fd
@@ -24,102 +20,6 @@ Packet encode_packet(const std::array<float, 4> & thrust, const Flags & flags)
   if (flags.yellow) {packet.back() |= (1u << 1);}
   if (flags.red) {packet.back() |= (1u << 0);}
   return packet;
-}
-
-std::uint16_t crc16_rx_frame(const uint8_t * data, size_t size)
-{
-  // RX CRC is CRC-16/Modbus: init 0xFFFF, reflected polynomial 0xA001,
-  // calculated over TYPE, LEN and payload bytes. It is stored little-endian.
-  std::uint16_t crc = 0xFFFFU;
-  for (size_t i = 0; i < size; ++i) {
-    crc ^= data[i];
-    for (int bit = 0; bit < 8; ++bit) {
-      if ((crc & 0x0001U) != 0U) {
-        crc = static_cast<std::uint16_t>((crc >> 1) ^ 0xA001U);
-      } else {
-        crc = static_cast<std::uint16_t>(crc >> 1);
-      }
-    }
-  }
-  return crc;
-}
-
-std::vector<uint8_t> encode_bms_rx_frame(const std::array<std::uint16_t, 4> & cells_mv)
-{
-  std::vector<uint8_t> frame;
-  frame.reserve(1U + 1U + 1U + kRxBmsPayloadLen + 2U);
-  frame.push_back(kRxStart);
-  frame.push_back(kRxTypeBms);
-  frame.push_back(kRxBmsPayloadLen);
-  for (const auto mv : cells_mv) {
-    frame.push_back(static_cast<uint8_t>(mv & 0xFFU));
-    frame.push_back(static_cast<uint8_t>((mv >> 8) & 0xFFU));
-  }
-  const std::uint16_t crc = crc16_rx_frame(frame.data() + 1, frame.size() - 1);
-  frame.push_back(static_cast<uint8_t>(crc & 0xFFU));
-  frame.push_back(static_cast<uint8_t>((crc >> 8) & 0xFFU));
-  return frame;
-}
-
-std::vector<BmsCells> RxParser::push(const std::vector<uint8_t> & data)
-{
-  return push(data.data(), data.size());
-}
-
-std::vector<BmsCells> RxParser::push(const uint8_t * data, size_t size)
-{
-  std::vector<BmsCells> out;
-  buffer_.insert(buffer_.end(), data, data + size);
-
-  constexpr size_t kHeaderSize = 3U;
-  constexpr size_t kCrcSize = 2U;
-  constexpr uint8_t kMaxPayloadLen = 32U;
-
-  while (true) {
-    const auto start_it = std::find(buffer_.begin(), buffer_.end(), kRxStart);
-    if (start_it == buffer_.end()) {
-      buffer_.clear();
-      return out;
-    }
-    buffer_.erase(buffer_.begin(), start_it);
-
-    if (buffer_.size() < kHeaderSize) {
-      return out;
-    }
-
-    const uint8_t type = buffer_[1];
-    const uint8_t len = buffer_[2];
-    if (len > kMaxPayloadLen) {
-      buffer_.erase(buffer_.begin());
-      continue;
-    }
-
-    const size_t frame_size = kHeaderSize + len + kCrcSize;
-    if (buffer_.size() < frame_size) {
-      return out;
-    }
-
-    const std::uint16_t expected_crc = static_cast<std::uint16_t>(buffer_[frame_size - 2]) |
-      (static_cast<std::uint16_t>(buffer_[frame_size - 1]) << 8);
-    const std::uint16_t actual_crc = crc16_rx_frame(buffer_.data() + 1, 2U + len);
-    if (expected_crc != actual_crc) {
-      buffer_.erase(buffer_.begin());
-      continue;
-    }
-
-    if (type == kRxTypeBms && len == kRxBmsPayloadLen) {
-      BmsCells cells;
-      for (size_t i = 0; i < cells.volts.size(); ++i) {
-        const size_t offset = kHeaderSize + i * 2U;
-        const std::uint16_t mv = static_cast<std::uint16_t>(buffer_[offset]) |
-          (static_cast<std::uint16_t>(buffer_[offset + 1]) << 8);
-        cells.volts[i] = static_cast<float>(mv) / 1000.0F;
-      }
-      out.push_back(cells);
-    }
-
-    buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(frame_size));
-  }
 }
 
 SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
@@ -139,11 +39,8 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
     "/yellow", 10, std::bind(&SerialWriter::yellow_cb, this, std::placeholders::_1));
   sub_green_ = create_subscription<std_msgs::msg::Bool>(
     "/green", 10, std::bind(&SerialWriter::green_cb, this, std::placeholders::_1));
-  pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>("micon/bms_cells", 10);
 
   fd_ = open_serial(serial_port_, baud_);
-  running_ = true;
-  rx_thread_ = std::thread(&SerialWriter::rx_loop, this);
   timer_ = create_wall_timer(
     std::chrono::milliseconds(50), std::bind(&SerialWriter::timer_cb, this));
   RCLCPP_INFO(get_logger(), "serial_writer started, port: %s", serial_port_.c_str());
@@ -151,11 +48,7 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 
 SerialWriter::~SerialWriter()
 {
-  running_ = false;
-  if (rx_thread_.joinable()) {
-    rx_thread_.join();
-  }
-  close_serial();
+  if (fd_ >= 0) {close(fd_);}
 }
 
 void SerialWriter::thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
@@ -194,23 +87,15 @@ void SerialWriter::green_cb(const std_msgs::msg::Bool::SharedPtr msg)
 
 void SerialWriter::timer_cb()
 {
-  int fd = -1;
-  {
-    std::lock_guard<std::mutex> fd_lock(fd_mutex_);
-    fd = fd_;
-  }
-  if (fd < 0) {return;}
+  if (fd_ < 0) {return;}
   Packet packet;
   {
     std::lock_guard<std::mutex> lock(mutex_);
     packet = encode_packet(thrust_, flags_);
   }
-  const ssize_t result = write(fd, packet.data(), packet.size());
+  const ssize_t result = write(fd_, packet.data(), packet.size());
   if (result != static_cast<ssize_t>(packet.size())) {
     RCLCPP_WARN(get_logger(), "serial write failed or incomplete");
-    if (result < 0 && errno != EAGAIN && errno != EWOULDBLOCK && errno != EINTR) {
-      close_serial();
-    }
   }
 }
 
@@ -253,74 +138,9 @@ int SerialWriter::open_serial(const std::string & device, int baud)
     RCLCPP_ERROR(get_logger(), "tcsetattr failed");
     return -1;
   }
+  int file_flags = fcntl(fd, F_GETFL, 0);
+  fcntl(fd, F_SETFL, file_flags & ~O_NONBLOCK);
   return fd;
-}
-
-void SerialWriter::rx_loop()
-{
-  std::array<uint8_t, 128> read_buffer{};
-  auto next_reconnect = std::chrono::steady_clock::now();
-
-  while (running_) {
-    int fd = -1;
-    {
-      std::lock_guard<std::mutex> fd_lock(fd_mutex_);
-      fd = fd_;
-    }
-
-    if (fd < 0) {
-      const auto now = std::chrono::steady_clock::now();
-      if (now >= next_reconnect) {
-        const int new_fd = open_serial(serial_port_, baud_);
-        if (new_fd >= 0) {
-          std::lock_guard<std::mutex> fd_lock(fd_mutex_);
-          if (fd_ < 0) {
-            fd_ = new_fd;
-            RCLCPP_INFO(get_logger(), "serial port reconnected: %s", serial_port_.c_str());
-          } else {
-            close(new_fd);
-          }
-        }
-        next_reconnect = now + std::chrono::seconds(1);
-      }
-      std::this_thread::sleep_for(std::chrono::milliseconds(50));
-      continue;
-    }
-
-    const ssize_t n = read(fd, read_buffer.data(), read_buffer.size());
-    if (n > 0) {
-      const auto cells = rx_parser_.push(read_buffer.data(), static_cast<size_t>(n));
-      for (const auto & cell_set : cells) {
-        publish_bms(cell_set);
-      }
-    } else if (n == 0) {
-      RCLCPP_WARN(get_logger(), "serial read failed; closing port");
-      close_serial();
-      next_reconnect = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    } else if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
-      std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    } else {
-      RCLCPP_WARN(get_logger(), "serial read failed; closing port");
-      close_serial();
-      next_reconnect = std::chrono::steady_clock::now() + std::chrono::seconds(1);
-    }
-  }
-}
-
-void SerialWriter::close_serial()
-{
-  std::lock_guard<std::mutex> fd_lock(fd_mutex_);
-  if (fd_ >= 0) {
-    close(fd_);
-    fd_ = -1;
-  }
-}
-
-void SerialWriter::publish_bms(const BmsCells & cells)
-{
-  std_msgs::msg::Float32MultiArray msg;
-  msg.data = {cells.volts[0], cells.volts[1], cells.volts[2], cells.volts[3]};
-  pub_bms_->publish(msg);
 }
 
 }  // namespace micon_driver_fd

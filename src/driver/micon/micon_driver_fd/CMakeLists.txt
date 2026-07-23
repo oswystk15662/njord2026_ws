@@ -8,7 +8,6 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(std_msgs REQUIRED)
-find_package(Threads REQUIRED)
 
 add_library(serial_writer_lib src/serial_writer.cpp)
 target_compile_features(serial_writer_lib PUBLIC cxx_std_17)
@@ -17,7 +16,6 @@ target_include_directories(serial_writer_lib PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 ament_target_dependencies(serial_writer_lib rclcpp std_msgs)
-target_link_libraries(serial_writer_lib Threads::Threads)
 
 add_executable(serial_writer src/main.cpp)
 target_compile_features(serial_writer PUBLIC cxx_std_17)
