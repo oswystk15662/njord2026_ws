@@ -16,6 +16,7 @@ setup(
         ("share/" + package_name + "/config", [
             "config/task1_params.yaml",
             "config/task1_nav2_params.yaml",
+            "config/task1_ekf_local.yaml",
         ]),
     ],
     install_requires=["setuptools"],
