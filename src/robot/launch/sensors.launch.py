@@ -24,6 +24,7 @@ def include_launch(package_name, path_parts, launch_arguments=None):
 
 
 def generate_launch_description():
+    enable_glim = LaunchConfiguration("enable_gpu_perception")
     enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
     engine_path = LaunchConfiguration("engine_path")
 
@@ -66,7 +67,7 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "adnav_spatial.yaml"])
+            PathJoinSubstitution(["robot", "config", "adnav_spatial.yaml"])
         ],
     )
 
@@ -108,8 +109,9 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            DeclareLaunchArgument("enable_glim", default_value="true"),
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
-            DeclareLaunchArgument("engine_path", ""),
+            DeclareLaunchArgument("engine_path", default_value=""),
 
             mid360_launch,
             zed2i_launch,

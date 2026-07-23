@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <fcntl.h>
 #include <pty.h>
 #include <termios.h>
@@ -18,6 +19,98 @@
 
 using namespace std::chrono_literals;
 
+namespace
+{
+
+uint16_t read_uint16_le(const uint8_t * bytes)
+{
+  return static_cast<uint16_t>(bytes[0]) |
+         (static_cast<uint16_t>(bytes[1]) << 8U);
+}
+
+float read_float32_le(const uint8_t * bytes)
+{
+  const uint32_t bits =
+    static_cast<uint32_t>(bytes[0]) |
+    (static_cast<uint32_t>(bytes[1]) << 8U) |
+    (static_cast<uint32_t>(bytes[2]) << 16U) |
+    (static_cast<uint32_t>(bytes[3]) << 24U);
+  float value = 0.0F;
+  std::memcpy(&value, &bits, sizeof(value));
+  return value;
+}
+
+uint16_t crc16_ccitt_false(const uint8_t * data, size_t length)
+{
+  uint16_t crc = 0xFFFFU;
+  for (size_t i = 0; i < length; ++i) {
+    crc ^= static_cast<uint16_t>(data[i]) << 8U;
+    for (uint8_t bit = 0; bit < 8; ++bit) {
+      crc = (crc & 0x8000U) != 0U ?
+        static_cast<uint16_t>((crc << 1U) ^ 0x1021U) :
+        static_cast<uint16_t>(crc << 1U);
+    }
+  }
+  return crc;
+}
+
+std::vector<uint8_t> cobs_decode(const uint8_t * encoded, size_t encoded_length)
+{
+  std::vector<uint8_t> decoded;
+  size_t read_index = 0;
+  while (read_index < encoded_length) {
+    const uint8_t code = encoded[read_index++];
+    if (code == 0) {
+      return {};
+    }
+    const size_t bytes_to_copy = static_cast<size_t>(code) - 1U;
+    if (bytes_to_copy > encoded_length - read_index) {
+      return {};
+    }
+    for (size_t i = 0; i < bytes_to_copy; ++i) {
+      decoded.push_back(encoded[read_index++]);
+    }
+    if (code != 0xFFU && read_index < encoded_length) {
+      decoded.push_back(0);
+    }
+  }
+  return decoded;
+}
+
+void expect_thruster_command_frame(
+  const micon_driver_fd::Packet & packet,
+  const std::array<float, 4> & thrust,
+  uint8_t expected_flags,
+  uint16_t expected_sequence,
+  bool check_sequence = true)
+{
+  ASSERT_FALSE(packet.empty());
+  EXPECT_EQ(packet.back(), 0);
+
+  const std::vector<uint8_t> raw = cobs_decode(packet.data(), packet.size() - 1U);
+  ASSERT_EQ(raw.size(), micon_driver_fd::kRawFrameSize);
+  EXPECT_EQ(raw[0], micon_driver_fd::kProtocolVersion);
+  EXPECT_EQ(raw[1], micon_driver_fd::kThrusterCommandType);
+  if (check_sequence) {
+    EXPECT_EQ(read_uint16_le(raw.data() + 2), expected_sequence);
+  }
+  EXPECT_EQ(raw[4], micon_driver_fd::kPayloadSize);
+
+  for (size_t i = 0; i < thrust.size(); ++i) {
+    EXPECT_FLOAT_EQ(read_float32_le(raw.data() + micon_driver_fd::kHeaderSize + i * sizeof(float)),
+      thrust[i]);
+  }
+  EXPECT_EQ(raw[micon_driver_fd::kHeaderSize + 4U * sizeof(float)], expected_flags);
+
+  const uint16_t received_crc =
+    read_uint16_le(raw.data() + raw.size() - micon_driver_fd::kCrcSize);
+  const uint16_t calculated_crc =
+    crc16_ccitt_false(raw.data(), raw.size() - micon_driver_fd::kCrcSize);
+  EXPECT_EQ(received_crc, calculated_crc);
+}
+
+}  // namespace
+
 TEST(SerialPacket, EncodesFloatsAndFlags)
 {
   const std::array<float, 4> thrust{{1.0F, -0.5F, 0.25F, 0.0F}};
@@ -25,13 +118,8 @@ TEST(SerialPacket, EncodesFloatsAndFlags)
   flags.emergency = true;
   flags.green = true;
   flags.red = true;
-  const auto packet = micon_driver_fd::encode_packet(thrust, flags);
-  for (size_t i = 0; i < thrust.size(); ++i) {
-    float decoded = 0.0F;
-    std::memcpy(&decoded, packet.data() + i * sizeof(float), sizeof(float));
-    EXPECT_FLOAT_EQ(decoded, thrust[i]);
-  }
-  EXPECT_EQ(packet.back(), 0x0D);
+  const auto packet = micon_driver_fd::encode_packet(thrust, flags, 42);
+  expect_thruster_command_frame(packet, thrust, 0x0D, 42);
 }
 
 TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
@@ -59,27 +147,34 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   executor.add_node(publisher_node);
   std_msgs::msg::Float32MultiArray thrust;
   thrust.data = {0.1F, -0.2F, 0.3F, -0.4F};
-  thrust_pub->publish(thrust);
-  emg_pub->publish(std_msgs::msg::Bool().set__data(true));
-  green_pub->publish(std_msgs::msg::Bool().set__data(true));
-  red_pub->publish(std_msgs::msg::Bool().set__data(true));
   const auto receive_deadline = std::chrono::steady_clock::now() + 300ms;
   while (std::chrono::steady_clock::now() < receive_deadline) {
+    thrust_pub->publish(thrust);
+    emg_pub->publish(std_msgs::msg::Bool().set__data(true));
+    green_pub->publish(std_msgs::msg::Bool().set__data(true));
+    red_pub->publish(std_msgs::msg::Bool().set__data(true));
     executor.spin_some();
     std::this_thread::sleep_for(5ms);
   }
 
   std::vector<uint8_t> received(1024);
   const ssize_t count = read(master_fd, received.data(), received.size());
-  ASSERT_GE(count, static_cast<ssize_t>(micon_driver_fd::kPacketSize));
-  const size_t frame_count = static_cast<size_t>(count) / micon_driver_fd::kPacketSize;
-  const uint8_t * packet = received.data() + (frame_count - 1) * micon_driver_fd::kPacketSize;
-  for (size_t i = 0; i < thrust.data.size(); ++i) {
-    float decoded = 0.0F;
-    std::memcpy(&decoded, packet + i * sizeof(float), sizeof(float));
-    EXPECT_FLOAT_EQ(decoded, thrust.data[i]);
-  }
-  EXPECT_EQ(packet[micon_driver_fd::kPacketSize - 1], 0x0D);
+  ASSERT_GT(count, 0);
+  received.resize(static_cast<size_t>(count));
+  const auto last_delimiter = std::find(received.rbegin(), received.rend(), 0);
+  ASSERT_NE(last_delimiter, received.rend());
+  const size_t last_delimiter_index =
+    received.size() - 1U - static_cast<size_t>(last_delimiter - received.rbegin());
+  const auto previous_delimiter = std::find(
+    received.rbegin() + static_cast<std::ptrdiff_t>(received.size() - last_delimiter_index),
+    received.rend(), 0);
+  const size_t frame_begin = previous_delimiter == received.rend() ?
+    0U :
+    received.size() - static_cast<size_t>(previous_delimiter - received.rbegin());
+  const micon_driver_fd::Packet packet(
+    received.begin() + static_cast<std::ptrdiff_t>(frame_begin),
+    received.begin() + static_cast<std::ptrdiff_t>(last_delimiter_index + 1U));
+  expect_thruster_command_frame(packet, {0.1F, -0.2F, 0.3F, -0.4F}, 0x05, 0, false);
 
   close(master_fd);
   executor.remove_node(publisher_node);

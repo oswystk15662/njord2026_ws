@@ -1,131 +1,200 @@
 #include <HardwareSerial.h>
+
+#include <cmath>
+
+#include "serial_protocol.hpp"
 #include "thrust_duty_profile.hpp"
 
-#define TIMER_12_BIT  12
-#define BASE_FREQ     50
-#define SERVO_PIN_1   16
-#define SERVO_PIN_2   4
-#define SERVO_PIN_3   18
-#define SERVO_PIN_4   17
+namespace {
 
-#define FET_SW        14
+constexpr uint8_t kPwmResolutionBits = 12;
+constexpr uint32_t kPwmFrequencyHz = 50;
+constexpr uint32_t kPwmPeriodUs = 20000;
+constexpr uint16_t kEscCenterUs = 1500;
+constexpr uint32_t kCommandTimeoutMs = 1000;
+constexpr unsigned long kSerialBaudRate = 115200;
+constexpr size_t kSerialBytesPerLoop = 128;
 
-#define OLD_ESC_C     1500
-#define OLD_ESC_MIN   1000
-#define OLD_ESC_MAX   2000
+constexpr uint8_t kServoPins[] = {16, 4, 18, 17};
+constexpr uint8_t kFetSwitchPin = 14;
+constexpr uint8_t kGreenLedPin = 25;
+constexpr uint8_t kYellowLedPin = 26;
+constexpr uint8_t kRedLedPin = 27;
 
-#define TIMEOUT       5000
+constexpr size_t kThrusterCount = 4;
+constexpr uint8_t kEmergencyStopMask = 1U << 3;
+constexpr uint8_t kGreenLedMask = 1U << 2;
+constexpr uint8_t kYellowLedMask = 1U << 1;
+constexpr uint8_t kRedLedMask = 1U;
 
-#define LED_G_PIN     25
-#define LED_Y_PIN     26
-#define LED_R_PIN     27
-#define RELAY_PIN     2
+// float32[4] + control_flags
+constexpr size_t kThrusterCommandPayloadSize =
+    kThrusterCount * sizeof(float) + sizeof(uint8_t);
+constexpr size_t kThrusterCommandRawSize =
+    serial_protocol::kHeaderSize + kThrusterCommandPayloadSize +
+    serial_protocol::kCrcSize;
 
-const bool DEBUG = false;
-const int  SERIAL_SPEED = 115200;
+static_assert(sizeof(float) == 4, "Protocol requires 32-bit float");
+static_assert(kThrusterCommandRawSize <= serial_protocol::kMaximumRawFrameSize,
+              "Thruster command exceeds the protocol frame limit");
 
-// パケットサイズ: float×4 + uint8×1 = 17バイト
-#define PACKET_SIZE   17
+// Logical thrusters 1..4 are connected to servo pins 4, 1, 3, 2 respectively.
+constexpr uint8_t kThrusterPins[] = {
+    kServoPins[3], kServoPins[0], kServoPins[2], kServoPins[1]
+};
 
-unsigned long time_data = 0;
-unsigned long now = 0;
+uint8_t encodedFrame[serial_protocol::kMaximumEncodedFrameSize];
+size_t encodedFrameLength = 0;
+bool discardingOversizedFrame = false;
+unsigned long lastValidCommandTimeMs = 0;
+bool hasValidCommand = false;
 
-
-void servoAnalogWrite(uint8_t pin, uint32_t value, uint32_t valueMax = 20000) {
-  uint32_t duty = (uint32_t)((4095 * value) / valueMax);
+void writeServoPulse(uint8_t pin, uint32_t pulseWidthUs) {
+  const uint32_t duty =
+      ((1U << kPwmResolutionBits) - 1U) * pulseWidthUs / kPwmPeriodUs;
   ledcWrite(pin, duty);
 }
 
-void servoCalibration() {
-  servoAnalogWrite(SERVO_PIN_1, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_2, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_3, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_4, OLD_ESC_C);
+void centerAllThrusters() {
+  for (const uint8_t pin : kServoPins) {
+    writeServoPulse(pin, kEscCenterUs);
+  }
+}
+
+void setFetEnabled(bool enabled) {
+  digitalWrite(kFetSwitchPin, enabled ? HIGH : LOW);
+}
+
+void enterSafeState() {
+  centerAllThrusters();
+  setFetEnabled(false);
+}
+
+void configurePins() {
+  for (const uint8_t pin : kServoPins) {
+    ledcAttach(pin, kPwmFrequencyHz, kPwmResolutionBits);
+  }
+
+  pinMode(kFetSwitchPin, OUTPUT);
+  pinMode(kGreenLedPin, OUTPUT);
+  pinMode(kYellowLedPin, OUTPUT);
+  pinMode(kRedLedPin, OUTPUT);
+}
+
+void updateLeds(uint8_t controlFlags) {
+  digitalWrite(kGreenLedPin, (controlFlags & kGreenLedMask) != 0);
+  digitalWrite(kYellowLedPin, (controlFlags & kYellowLedMask) != 0);
+  digitalWrite(kRedLedPin, (controlFlags & kRedLedMask) != 0);
+}
+
+void updateThrusters(const float (&thrusts)[kThrusterCount]) {
+  setFetEnabled(true);
+  for (size_t i = 0; i < kThrusterCount; ++i) {
+    writeServoPulse(
+        kThrusterPins[i],
+        thrust_profile::forceN_to_on_time(static_cast<double>(thrusts[i])));
+  }
+}
+
+bool processThrusterCommand(const uint8_t* raw, size_t rawLength) {
+  if (rawLength != kThrusterCommandRawSize ||
+      raw[0] != serial_protocol::kVersion ||
+      raw[1] != static_cast<uint8_t>(
+                    serial_protocol::MessageType::kThrusterCommand) ||
+      raw[4] != kThrusterCommandPayloadSize) {
+    return false;
+  }
+
+  const uint16_t receivedCrc =
+      serial_protocol::readUint16Le(raw + rawLength - serial_protocol::kCrcSize);
+  const uint16_t calculatedCrc =
+      serial_protocol::crc16CcittFalse(
+          raw, rawLength - serial_protocol::kCrcSize);
+  if (receivedCrc != calculatedCrc) {
+    return false;
+  }
+
+  const uint8_t* payload = raw + serial_protocol::kHeaderSize;
+  float thrusts[kThrusterCount];
+  for (size_t i = 0; i < kThrusterCount; ++i) {
+    thrusts[i] = serial_protocol::readFloat32Le(payload + i * sizeof(float));
+    if (!std::isfinite(thrusts[i])) {
+      return false;
+    }
+  }
+  const uint8_t controlFlags = payload[kThrusterCount * sizeof(float)];
+
+  lastValidCommandTimeMs = millis();
+  hasValidCommand = true;
+  updateLeds(controlFlags);
+
+  if ((controlFlags & kEmergencyStopMask) != 0U) {
+    enterSafeState();
+  } else {
+    updateThrusters(thrusts);
+  }
+  return true;
+}
+
+void processEncodedFrame() {
+  uint8_t raw[serial_protocol::kMaximumRawFrameSize];
+  size_t rawLength = 0;
+  if (serial_protocol::cobsDecode(
+          encodedFrame, encodedFrameLength, raw, sizeof(raw), rawLength)) {
+    processThrusterCommand(raw, rawLength);
+  }
+}
+
+void processSerialInput() {
+  size_t processedBytes = 0;
+  while (Serial.available() > 0 && processedBytes < kSerialBytesPerLoop) {
+    const int received = Serial.read();
+    if (received < 0) {
+      break;
+    }
+    ++processedBytes;
+    const uint8_t byte = static_cast<uint8_t>(received);
+
+    if (byte == 0) {
+      if (discardingOversizedFrame) {
+        discardingOversizedFrame = false;
+      } else if (encodedFrameLength > 0) {
+        processEncodedFrame();
+      }
+      encodedFrameLength = 0;
+      continue;
+    }
+
+    if (discardingOversizedFrame) {
+      continue;
+    }
+    if (encodedFrameLength >= sizeof(encodedFrame)) {
+      encodedFrameLength = 0;
+      discardingOversizedFrame = true;
+      continue;
+    }
+    encodedFrame[encodedFrameLength++] = byte;
+  }
+}
+
+void enforceSafety() {
+  if (hasValidCommand &&
+      millis() - lastValidCommandTimeMs > kCommandTimeoutMs) {
+    enterSafeState();
+  }
+}
+
+}  // namespace
+
+void setup() {
+  configurePins();
+  updateLeds(0);
+  enterSafeState();
+  Serial.begin(kSerialBaudRate);
   delay(3000);
 }
 
-void servoSetCenter() {
-  servoAnalogWrite(SERVO_PIN_1, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_2, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_3, OLD_ESC_C);
-  servoAnalogWrite(SERVO_PIN_4, OLD_ESC_C);
-}
-
-void isTimeOut() {
-  now = millis();
-  if (now - time_data > TIMEOUT) {
-    servoSetCenter();
-  }
-}
-
-void setup() {
-  ledcAttach(SERVO_PIN_1, BASE_FREQ, TIMER_12_BIT);
-  ledcAttach(SERVO_PIN_2, BASE_FREQ, TIMER_12_BIT);
-  ledcAttach(SERVO_PIN_3, BASE_FREQ, TIMER_12_BIT);
-  ledcAttach(SERVO_PIN_4, BASE_FREQ, TIMER_12_BIT);
-
-  pinMode(FET_SW,    OUTPUT);
-  pinMode(LED_G_PIN, OUTPUT);
-  pinMode(LED_Y_PIN, OUTPUT);
-  pinMode(LED_R_PIN, OUTPUT);
-  pinMode(RELAY_PIN, INPUT_PULLUP);
-
-  digitalWrite(FET_SW, HIGH);
-
-  Serial.begin(SERIAL_SPEED);
-
-  servoCalibration();
-}
-
 void loop() {
-  if (Serial.available() >= PACKET_SIZE) {
-    uint8_t buf[PACKET_SIZE];
-    Serial.readBytes(buf, PACKET_SIZE);
-    time_data = millis();
-
-    // th1〜th4: 推力（N）をfloatとしてパース
-    float th1, th2, th3, th4;
-    memcpy(&th1, buf +  0, 4);
-    memcpy(&th2, buf +  4, 4);
-    memcpy(&th3, buf +  8, 4);
-    memcpy(&th4, buf + 12, 4);
-
-    // settingバイトのビット展開
-    // bit3: 緊急停止, bit2: LED緑, bit1: LED黄, bit0: LED赤
-    uint8_t setting = buf[16];
-    bool em_stop = (setting >> 3) & 0x01;
-    int  led_g   = (setting >> 2) & 0x01;
-    int  led_y   = (setting >> 1) & 0x01;
-    int  led_r   = (setting >> 0) & 0x01;
-
-    if (em_stop) {
-      servoSetCenter();
-      digitalWrite(FET_SW, LOW);
-    } else {
-      digitalWrite(FET_SW, HIGH);
-
-      // 推力（N）→PWMパルス幅（µs）変換
-      uint16_t pwm1 = thrust_profile::forceN_to_on_time(th1);
-      uint16_t pwm2 = thrust_profile::forceN_to_on_time(th2);
-      uint16_t pwm3 = thrust_profile::forceN_to_on_time(th3);
-      uint16_t pwm4 = thrust_profile::forceN_to_on_time(th4);
-
-      // ピンマッピングは元コードと同じ
-      servoAnalogWrite(SERVO_PIN_4, pwm1);
-      servoAnalogWrite(SERVO_PIN_1, pwm2);
-      servoAnalogWrite(SERVO_PIN_3, pwm3);
-      servoAnalogWrite(SERVO_PIN_2, pwm4);
-    }
-
-    digitalWrite(LED_G_PIN, led_g);
-    digitalWrite(LED_Y_PIN, led_y);
-    digitalWrite(LED_R_PIN, led_r);
-
-    // ESP→PC: 1バイト, bit0 = 緊急停止リレーの動作状態
-    // INPUT_PULLUPのためLOW=リレー動作中
-    uint8_t relay_state = (digitalRead(RELAY_PIN) == LOW) ? 0x01 : 0x00;
-    Serial.write(relay_state);
-  }
-
-  isTimeOut();
+  enforceSafety();
+  processSerialInput();
 }

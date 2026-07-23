@@ -7,7 +7,6 @@ ESP32で4基のスラスター、非常停止用FET、状態表示LEDを制御�
 - 4基のスラスターを50 Hz・12 bit PWMで制御
 - `float32`の推力値（N）を測定データからPWMパルス幅へ線形補間
 - COBSフレーミングとCRC-16による通信エラー検出
-- 物理非常停止リレーの優先処理
 - software emergency stopによる停止
 - 有効な制御コマンドが1000 ms途絶した場合のフェイルセーフ停止
 
@@ -32,7 +31,6 @@ ESP32で4基のスラスター、非常停止用FET、状態表示LEDを制御�
 | Green LED | 25 |
 | Yellow LED | 26 |
 | Red LED | 27 |
-| Emergency-stop relay input | 2 |
 
 論理スラスター番号とServo出力の対応は次のとおりです。
 
@@ -60,7 +58,7 @@ COBS(Version | Type | Sequence | PayloadLength | Payload | CRC-16) | 0x00
 
 - 起動時は全スラスターを中立（1500 us）にし、FETをLOWにします。
 - ARM/DISARM状態はなく、有効な通常指令を受信するとFETをHIGHにします。
-- 物理非常停止または通信非常停止時は、全スラスターを中立にしてFETをLOWにします。
+- software emergency stopまたは通信非常停止時は、全スラスターを中立にしてFETをLOWにします。
 - 非常停止はラッチせず、解除後の次の有効な指令から出力を再開します。
 - 有効な推力コマンドが1000 ms途絶すると、全スラスターを中立にしてFETをLOWにします。
 - CRC、長さ、Version、TypeまたはPayload検査に失敗したデータは出力へ反映せず、通信ウォッチドッグも更新しません。

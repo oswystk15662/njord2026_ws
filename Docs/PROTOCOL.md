@@ -52,9 +52,9 @@ raw frameは常に24 byteです。
 | 3 | `0x08` | Software emergency stop |
 | 4..7 | `0xF0` | Reserved |
 
-software emergency stopが1、または物理E-stop入力がLOWの場合、ESP32は
-全スラスターを中立にしてFETをLOWにします。それ以外の有効な指令では
-FETをHIGHにして4スラスターの指令を反映します。非常停止状態はラッチせず、
+software emergency stopが1の場合、ESP32は全スラスターを中立にしてFETをLOWに
+します。それ以外の有効な指令ではFETをHIGHにして4スラスターの指令を反映します。
+GPIO2の物理E-stop入力はfirmwareでは使用しません。非常停止状態はラッチせず、
 解除後の次の有効な指令から出力を再開します。
 
 有効な指令を1000 ms受信しなかった場合も、ESP32は全スラスターを中立にして

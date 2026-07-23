@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
@@ -21,10 +22,20 @@ struct Flags
   bool green{false};
 };
 
-constexpr size_t kPacketSize = 4 * sizeof(float) + 1;
-using Packet = std::array<uint8_t, kPacketSize>;
+constexpr uint8_t kProtocolVersion = 0x01;
+constexpr uint8_t kThrusterCommandType = 0x01;
+constexpr size_t kHeaderSize = 5;
+constexpr size_t kCrcSize = 2;
+constexpr size_t kPayloadSize = 4 * sizeof(float) + 1;
+constexpr size_t kRawFrameSize = kHeaderSize + kPayloadSize + kCrcSize;
+constexpr size_t kMaxEncodedFrameSize = kRawFrameSize + 1;
+constexpr size_t kPacketSize = kMaxEncodedFrameSize + 1;
+using Packet = std::vector<uint8_t>;
 
-Packet encode_packet(const std::array<float, 4> & thrust, const Flags & flags);
+Packet encode_packet(
+  const std::array<float, 4> & thrust,
+  const Flags & flags,
+  uint16_t sequence = 0);
 
 class SerialWriter : public rclcpp::Node
 {
@@ -44,6 +55,7 @@ private:
   Flags flags_;
   std::array<float, 4> thrust_{{0.0f, 0.0f, 0.0f, 0.0f}};
   std::mutex mutex_;
+  uint16_t sequence_{0};
   int fd_{-1};
   std::string serial_port_;
   int baud_{115200};

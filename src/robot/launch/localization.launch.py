@@ -19,7 +19,7 @@ def generate_launch_description():
     enable_diagnostics_arg = DeclareLaunchArgument(
         "enable_diagnostics",
         default_value="true",
-        description="Launch generic topic heartbeat diagnostics for localization topics",
+        # description="Launch generic topic heartbeat diagnostics for localization topics",
     )
 
     robot_description = Command(
@@ -43,6 +43,24 @@ def generate_launch_description():
                 )
             }
         ],
+    )
+
+    # CPUリソースが枯渇していた場合、pointcloud2に変換するのがボトルネックになるので、
+    # 取れた点群を直に転送できるように、LiDAR Driver側でComposableNode起動？してください
+    glim_node = Node(
+        package="glim_ros",
+        executable="glim_ros_node",
+        name="glim_ros_node",
+        output="screen",
+        parameters=[
+            {
+                "config_path": PathJoinSubstitution(
+                    [FindPackageShare("robot"), "config", "glim_config"]
+                ),
+                "use_sim_time": False,
+            }
+        ],
+        remappings=[("/glim_ros_node/odom", "/odom")],
     )
 
     spatial_navsat_transform_node = Node(
@@ -144,6 +162,7 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
+            # glim_node,
             # spatial_navsat_transform_node,
             um982_static_tf,
             local_ekf_node,

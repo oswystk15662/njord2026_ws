@@ -1,6 +1,28 @@
 # シリアル通信仕様
 
-## PC → ESP（17 バイト）
+## PC → ESP
+
+UART は 115200 bps, 8N1 です。PC から ESP32 へ送るデータは
+`Docs/PROTOCOL.md` と同じ形式です。
+
+```text
+COBS(raw_frame) || 0x00
+```
+
+`raw_frame` は 24 byte 固定です。
+
+| Offset | Size | Field | Value |
+|---:|---:|---|---|
+| 0 | 1 B | version | `0x01` |
+| 1 | 1 B | type | `0x01` (`THRUSTER_COMMAND`) |
+| 2 | 2 B | sequence | little-endian, 送信ごとに増加 |
+| 4 | 1 B | payload_length | `17` |
+| 5 | 17 B | payload | 下記 |
+| 22 | 2 B | crc | CRC-16/CCITT-FALSE, little-endian |
+
+CRC は version から payload 末尾までの 22 byte を対象にする。
+
+## Payload（17 バイト）
 
 | フィールド | 型 | サイズ | 説明 |
 |---|---|---|---|
@@ -28,7 +50,19 @@
 
 ---
 
-## ESP → PC（1 バイト）
+## 安全動作
+
+不正 frame、CRC 不一致、非有限 float は出力へ反映しない。
+
+software emergency stop が 1、または有効な指令が 1000 ms 途絶した場合、
+全スラスターを中立にして FET を LOW にする。GPIO2 の物理 E-stop 入力は
+firmware では使用しない。
+
+## ESP → PC
+
+現 firmware は protocol frame の応答を返さない。
+
+旧 firmware は 1 byte のリレー状態を返していた。
 
 ```
   bit7  bit6  bit5  bit4  bit3  bit2  bit1      bit0
