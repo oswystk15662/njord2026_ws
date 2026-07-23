@@ -94,22 +94,6 @@ def generate_launch_description():
         ],
     )
 
-    glim_node = Node(
-        package="glim_ros",
-        executable="glim_rosnode",
-        name="glim_node",
-        output="screen",
-        parameters=[
-            {
-                "config_path": PathJoinSubstitution(
-                    [robot_share, "config", "glim_config"]
-                ),
-                "use_sim_time": False,
-            }
-        ],
-        remappings=[("/glim_node/odom", "/odom")],
-    )
-
     local_ekf_node = Node(
         package="robot_localization",
         executable="ekf_node",
@@ -174,7 +158,6 @@ def generate_launch_description():
             # spatial_driver,
             # spatial_navsat_transform_node,
             um982_static_tf,
-            glim_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,

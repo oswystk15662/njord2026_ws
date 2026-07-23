@@ -1,27 +1,22 @@
 ### Local EKF (odom -> base_link estimate) ###
-# GLIM odometry alone is fused into a filtered odometry topic. GLIM remains
-# the TF authority on the real robot.
+# The local EKF is the sole odom -> base_link TF authority while GLIM is
+# disabled. Its LiDAR IMU keeps attitude and angular-rate estimates alive;
+# translational odometry requires an additional local measurement source.
 ekf_filter_node_local:
   ros__parameters:
     frequency: 30.0
     two_d_mode: true
-    publish_tf: false
+    publish_tf: true
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
     world_frame: odom
     print_diagnostics: true
 
-    # GLIM LiDAR odometry
-    # odom0: /odom
-    # odom0_config: [true,  true,  true,
-    #                true,  true,  true,
-    #                false, false, false,
-    #                false, false, false,
-    #                false, false, false]
-    # odom0_differential: false
+    # GLIM is disabled for this EKF-only fallback. Do not subscribe to /odom:
+    # an absent or stale GLIM source must not become a delayed measurement.
 
-    imu0: /lidar/imu
+    imu0: /livox/imu
     imu0_config: [false, false, false,
                   false, false, false,
                   true,  true,  true,
