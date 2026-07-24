@@ -1,33 +1,59 @@
 # simple_manual
 
-Manual velocity-command input for the maintained X4 thruster control pipeline.
+Real-vessel manual bringup and velocity-command input for the maintained X4
+thruster control pipeline. Navigation is not started.
+
+The launch starts:
+
+- MID360S, UM982, Advanced Navigation Spatial, and wired Drogger drivers
+- the complete localization launch
+- the LiDAR preprocessing, segmentation/clustering, and tracking pipeline
+- `/joy` from the shore PC -> `joy_converter` -> `thruster_driver` ->
+  `micon_driver_fd`
+
+Camera/YOLO detection is not started because it is not part of this sensor
+configuration. The LiDAR detection pipeline can be disabled for troubleshooting
+with `enable_detection:=false`.
 
 ## Interfaces
 
 - `joy` (`sensor_msgs/msg/Joy`) is read by both manual nodes.
 - `joy_converter_node` publishes `cmd_vel`, `/emg`, `/red`, `/yellow`, and `/green`.
-- `/emg` uses an active-low joystick contract: it is `false` only while button 0 is held.
-- `thruster_driver` performs velocity feedback control and X4 allocation.
-- `micon_driver_fd/serial_writer` packs the four normalized thruster commands and one flag byte.
+- `/emg` uses positive logic: button 0 sends `true` (emergency stop), while its
+  normal released state sends `false` (emergency stop released).
+- `manual_control.launch.py` starts `thruster_driver` in open-loop mode: it does
+  not subscribe to velocity feedback, and performs X4 allocation from `cmd_vel`.
+- `micon_driver_fd/serial_writer` automatically requests ARM. Joystick input cannot
+  request DISARM; after an emergency stop is released or the ESP32 resets, the
+  driver re-requests ARM once the required zero-thrust command is acknowledged.
+  The ESP32's physical and communication emergency-stop interlocks remain active.
 
-The flag byte is `bit3=emg`, `bit2=green`, `bit1=yellow`, `bit0=red`. The serial
-writer transports the emergency flag but does not suppress commands locally; the
-ESP32 firmware must enforce the stop. Validate that behavior on restrained
-hardware before operation.
+The command flags are `bit3=emg`, `bit2=green`, `bit1=yellow`, and `bit0=red`.
+The ESP32 enforces the emergency stop and other safety interlocks. Validate that
+behavior on restrained hardware before operation.
 
 ```bash
 ros2 launch simple_manual manual_control.launch.py serial_port:=/dev/ttyUSB0
 ```
 
-The launch file opens `rqt_reconfigure` by default. Select `/joy_converter` to
-change the `axis.*`, `button.*`, and `scale.*` parameters while the node is
-running. The save and load buttons store and restore a YAML profile. Disable
-the GUI on headless systems with `launch_gui:=false`.
+`simple_manual.launch.py` is also provided as a compatibility alias:
+
+```bash
+ros2 launch simple_manual simple_manual.launch.py serial_port:=/dev/ttyUSB0
+```
+
+The `axis.*`, `button.*`, and `scale.*` parameters belong to the
+`/joy_converter` node and can be changed with ROS 2 parameter commands.
+
+## Running the joystick on the shore PC
+
+`manual_control.launch.py` does not start `joy_node`. Start it on the shore PC
+in the same ROS domain so its `/joy` topic reaches the vessel PC.
 
 ## Pairing a DualShock4 controller over Bluetooth
 
-The `joy` node reads from `/dev/input/js0`, which requires the DualShock4 to
-be paired and connected over Bluetooth first.
+The shore PC's `joy` node reads from `/dev/input/js0`, which requires the
+DualShock4 to be paired and connected over Bluetooth first.
 
 MAC address on record: `28:C1:3C:3F:D4:80`
 
@@ -56,9 +82,9 @@ MAC address on record: `28:C1:3C:3F:D4:80`
    ```bash
    ls /dev/input/js0
    ```
-5. Launch as usual:
+5. Start `joy_node` on the shore PC:
    ```bash
-   ros2 launch simple_manual manual_control.launch.py serial_port:=/dev/ttyUSB0
+   ros2 run joy joy_node
    ```
 
 To disconnect: `bluetoothctl disconnect 28:C1:3C:3F:D4:80`. The pairing

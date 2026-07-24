@@ -1,11 +1,12 @@
 ### Global EKF (map -> odom) ###
 # The local EKF estimate and GPS odometry are fused into a globally corrected
-# odometry topic. GLIM remains the TF authority on the real robot.
+# odometry topic. The global EKF is the sole map -> odom TF authority while
+# GLIM is disabled.
 ekf_filter_node_global:
   ros__parameters:
     frequency: 30.0
     two_d_mode: true
-    publish_tf: false
+    publish_tf: true
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
@@ -36,22 +37,22 @@ ekf_filter_node_global:
     # Advanced Navigation Spatial: fuse only its absolute yaw initially.
     # Angular velocity and acceleration remain disabled until the body/ROS
     # axis convention has been validated on the installed unit.
-    imu1: /adnav_driver/imu
-    imu1_config: [false, false, false,
-                  false, false, true,
-                  false, false, false,
-                  false, false, false,
-                  false, false, false]
-    imu1_differential: false
-    imu1_relative: false
-    imu1_remove_gravitational_acceleration: true
+    # imu1: /adnav_driver/imu
+    # imu1_config: [false, false, false,
+    #               false, false, true,
+    #               false, false, false,
+    #               false, false, false,
+    #               false, false, false]
+    # imu1_differential: false
+    # imu1_relative: false
+    # imu1_remove_gravitational_acceleration: true
 
     # Spatial GNSS odometry from its dedicated navsat_transform_node
-    odom2: /odometry/gps/spatial
-    odom2_config: [true,  true,  false,
-                   false, false, false,
-                   false, false, false,
-                   false, false, false,
-                   false, false, false]
-    odom2_differential: false
-    odom2_relative: false
+    # odom2: /odometry/gps/spatial
+    # odom2_config: [true,  true,  false,
+    #                false, false, false,
+    #                false, false, false,
+    #                false, false, false,
+    #                false, false, false]
+    # odom2_differential: false
+    # odom2_relative: false

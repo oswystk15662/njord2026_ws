@@ -8,6 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -18,7 +19,7 @@ def generate_launch_description():
     enable_diagnostics_arg = DeclareLaunchArgument(
         "enable_diagnostics",
         default_value="true",
-        description="Launch generic topic heartbeat diagnostics for localization topics",
+        # description="Launch generic topic heartbeat diagnostics for localization topics",
     )
 
     robot_description = Command(
@@ -34,17 +35,56 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
-        parameters=[{"robot_description": robot_description}],
+        parameters=[
+            {
+                "robot_description": ParameterValue(
+                    robot_description,
+                    value_type=str,
+                )
+            }
+        ],
     )
 
-    spatial_driver = Node(
-        package="adnav_driver",
-        executable="adnav_driver",
-        name="adnav_driver",
+    # CPUリソースが枯渇していた場合、pointcloud2に変換するのがボトルネックになるので、
+    # 取れた点群を直に転送できるように、LiDAR Driver側でComposableNode起動？してください
+    glim_node = Node(
+        package="glim_ros",
+        executable="glim_ros_node",
+        name="glim_ros_node",
         output="screen",
-        emulate_tty=True,
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "adnav_spatial.yaml"])
+            {
+                "config_path": PathJoinSubstitution(
+                    [FindPackageShare("robot"), "config", "glim_config"]
+                ),
+                "use_sim_time": False,
+            }
+        ],
+        remappings=[("/glim_ros_node/odom", "/odom")],
+    )
+
+    spatial_navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="spatial_navsat_transform_node",
+        output="screen",
+        parameters=[
+            {
+                "frequency": 10.0,
+                "magnetic_declination_radians": 0.0,
+                "yaw_offset": 0.0,
+                "zero_altitude": True,
+                "broadcast_utm_transform": False,
+                "publish_filtered_gps": False,
+                "use_odometry_yaw": False,
+                "wait_for_datum": False,
+            }
+        ],
+        remappings=[
+            ("imu", "/adnav_driver/imu"),
+            ("gps/fix", "/adnav_driver/nav_sat_fix"),
+            ("odometry/filtered", "odometry/filtered/local"),
+            ("odometry/gps", "/odometry/gps/spatial"),
         ],
     )
 
@@ -56,39 +96,10 @@ def generate_launch_description():
         name="um982_static_tf_pub",
         output="screen",
         arguments=[
-            "--x",
-            "0.0",
-            "--y",
-            "0.0",
-            "--z",
-            "0.0",
-            "--roll",
-            "0.0",
-            "--pitch",
-            "0.0",
-            "--yaw",
-            "0.0",
-            "--frame-id",
-            "base_link",
-            "--child-frame-id",
-            "um982_link",
+            "--x", "0.0", "--y", "0.0", "--z", "0.0",
+            "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "um982_link",
         ],
-    )
-
-    glim_node = Node(
-        package="glim_ros",
-        executable="glim_rosnode",
-        name="glim_node",
-        output="screen",
-        parameters=[
-            {
-                "config_path": PathJoinSubstitution(
-                    [robot_share, "config", "glim_config"]
-                ),
-                "use_sim_time": False,
-            }
-        ],
-        remappings=[("/glim_node/odom", "/odom")],
     )
 
     local_ekf_node = Node(
@@ -118,6 +129,9 @@ def generate_launch_description():
         executable="navsat_transform_node",
         name="navsat_transform_node",
         output="screen",
+        # Keep the noisy datum/initialization messages local to this node.
+        # Other nodes keep the launch-wide default log level.
+        arguments=["--ros-args", "--log-level", "ERROR"],
         parameters=[
             {
                 "frequency": 10.0,
@@ -136,31 +150,6 @@ def generate_launch_description():
         ],
     )
 
-    spatial_navsat_transform_node = Node(
-        package="robot_localization",
-        executable="navsat_transform_node",
-        name="spatial_navsat_transform_node",
-        output="screen",
-        parameters=[
-            {
-                "frequency": 10.0,
-                "magnetic_declination_radians": 0.0,
-                "yaw_offset": 0.0,
-                "zero_altitude": True,
-                "broadcast_utm_transform": False,
-                "publish_filtered_gps": False,
-                "use_odometry_yaw": False,
-                "wait_for_datum": False,
-            }
-        ],
-        remappings=[
-            ("imu", "/adnav_driver/imu"),
-            ("gps/fix", "/adnav_driver/nav_sat_fix"),
-            ("odometry/filtered", "odometry/filtered/local"),
-            ("odometry/gps", "/odometry/gps/spatial"),
-        ],
-    )
-
     diagnostics_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
@@ -173,13 +162,12 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
-            spatial_driver,
+            # glim_node,
+            # spatial_navsat_transform_node,
             um982_static_tf,
-            glim_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,
-            spatial_navsat_transform_node,
             diagnostics_launch,
         ]
     )

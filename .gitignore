@@ -8,6 +8,7 @@ venv/
 __pycache__/
 *.pyc
 
+
 rosbag2*
 
 # temporary backups
@@ -15,3 +16,12 @@ rosbag2*
 
 # Claude agent worktrees (local only)
 .claude/worktrees/
+
+# Local/generated visualization and TensorRT build artifacts.
+frames_*.gv
+frames_*.pdf
+imgui.ini
+*.engine.build.log
+
+rosbag2*
+

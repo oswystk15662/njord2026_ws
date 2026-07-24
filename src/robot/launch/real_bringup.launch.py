@@ -27,8 +27,17 @@ def include_launch(package_name, path_parts, condition, launch_arguments=None):
 
 def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
+    enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     lidar_model = LaunchConfiguration("lidar_model")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
+    enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
+    gpu_perception_engine_path = LaunchConfiguration("gpu_perception_engine_path")
+    enable_ground_video = LaunchConfiguration("enable_ground_video")
+    ground_video_host = LaunchConfiguration("ground_video_host")
+    ground_video_port = LaunchConfiguration("ground_video_port")
+    ground_video_fps = LaunchConfiguration("ground_video_fps")
+    camera_resolution = LaunchConfiguration("camera_resolution")
+    camera_framerate = LaunchConfiguration("camera_framerate")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_um982 = LaunchConfiguration("enable_um982")
     enable_drogger_rzs = LaunchConfiguration("enable_drogger_rzs")
@@ -40,7 +49,7 @@ def generate_launch_description():
     serial_port = LaunchConfiguration("serial_port")
     baud = LaunchConfiguration("baud")
     device = LaunchConfiguration("device")
-    um982_transport = LaunchConfiguration("um982_transport")
+    um982_protocol = LaunchConfiguration("um982_protocol")
     um982_port = LaunchConfiguration("um982_port")
     enable_um982_rtk = LaunchConfiguration("enable_um982_rtk")
     drogger_rzs_port = LaunchConfiguration("drogger_rzs_port")
@@ -55,14 +64,27 @@ def generate_launch_description():
         "robot",
         ["launch", "lidar.launch.py"],
         IfCondition(enable_mid360),
-        {"lidar_model": lidar_model},
+        {
+            "lidar_model": lidar_model,
+            "enable_buoy_detection": enable_pcl_buoy_detection,
+        },
     )
 
     zed2i_launch = include_launch(
         "zed2i_driver",
         ["launch", "zed2i.launch.py"],
         IfCondition(enable_zed2i),
-        {"mode": "sdk"},
+        {
+            "mode": "sdk",
+            "camera_resolution": camera_resolution,
+            "framerate": camera_framerate,
+            "enable_gpu_perception": enable_gpu_perception,
+            "engine_path": gpu_perception_engine_path,
+            "enable_ground_video": enable_ground_video,
+            "ground_video_host": ground_video_host,
+            "ground_video_port": ground_video_port,
+            "ground_video_fps": ground_video_fps,
+        },
     )
 
     back_cam_launch = include_launch(
@@ -77,7 +99,7 @@ def generate_launch_description():
         ["launch", "um982.launch.py"],
         IfCondition(enable_um982),
         {
-            "uart_or_tcp": um982_transport,
+            "uart_or_tcp": um982_protocol,
             "gnss_port": um982_port,
             "rtk_enable": enable_um982_rtk,
         },
@@ -158,12 +180,25 @@ def generate_launch_description():
         [
             # Livox LiDAR(mid360/mid360s)を起動するか
             DeclareLaunchArgument("enable_mid360", default_value="true"),
+            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="false"),
             DeclareLaunchArgument(
                 "lidar_model",
                 default_value="mid360s",
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
+            DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
+            DeclareLaunchArgument("gpu_perception_engine_path", default_value=""),
+            DeclareLaunchArgument("enable_ground_video", default_value="false"),
+            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument("ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("ground_video_fps", default_value="5.0"),
+            DeclareLaunchArgument(
+                "camera_resolution",
+                default_value="HD720",
+                description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
+            ),
+            DeclareLaunchArgument("camera_framerate", default_value="15"),
             DeclareLaunchArgument("enable_back_cam", default_value="true"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
             DeclareLaunchArgument("enable_drogger_rzs", default_value="true"),
@@ -176,7 +211,7 @@ def generate_launch_description():
                 default_value="/dev/serial/by-id/usb-Silicon_Labs_CP2102N_USB_to_UART_Bridge_Controller_c82421728a9aef118808b29061ce3355-if00-port0",
             ),
             DeclareLaunchArgument("baud", default_value="115200"),
-            DeclareLaunchArgument("um982_transport", default_value="uart"),
+            DeclareLaunchArgument("um982_protocol", default_value="uart"),
             DeclareLaunchArgument("um982_port", default_value="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0"),
             DeclareLaunchArgument("enable_um982_rtk", default_value="false"),
             DeclareLaunchArgument(
@@ -195,14 +230,14 @@ def generate_launch_description():
             ),
             mid360_launch,
             zed2i_launch,
-            back_cam_launch,
+            # back_cam_launch,
             um982_launch,
             drogger_rzs_launch,
-            imu_node,
+            # imu_node,
             localization_launch,
             thruster_launch,
             serial_writer,
             bms_launch,
-            nav2_launch,
+            # nav2_launch,
         ]
     )

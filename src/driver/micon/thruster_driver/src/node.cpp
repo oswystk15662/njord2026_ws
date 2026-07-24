@@ -53,6 +53,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
   max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
+  use_velocity_feedback_ =
+    this->declare_parameter<bool>("control.use_velocity_feedback", true);
   feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
   stop_on_feedback_timeout_ =
     this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
@@ -123,10 +125,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
       cmd_vel_topic,
       10,
       std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
-    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      odom_topic,
-      10,
-      std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    if (use_velocity_feedback_) {
+      sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        odom_topic,
+        10,
+        std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    }
     const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
     control_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -144,10 +148,11 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. mode=%s output=%s thrusters=%zu dob=%s",
+    "thruster_driver started. mode=%s output=%s thrusters=%zu velocity_feedback=%s dob=%s",
     input_mode_.c_str(),
     sim_command_topic.c_str(),
     thrusters_.size(),
+    use_velocity_feedback_ ? "on" : "off",
     dob_enable_ ? "on" : "off");
 }
 
@@ -195,8 +200,8 @@ void ThrusterDriverNode::controlTimerCallback()
   last_control_time_ = now;
 
   const bool cmd_timeout = (now - last_cmd_time_).seconds() > watchdog_timeout_sec_;
-  const bool feedback_timeout =
-    !have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_;
+  const bool feedback_timeout = use_velocity_feedback_ &&
+    (!have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_);
 
   if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
     publishCommands(std::vector<double>(thrusters_.size(), 0.0));
@@ -226,20 +231,20 @@ void ThrusterDriverNode::loadThrusterConfigs()
   const std::vector<double> angle_rad = getDoubleVector(
     "thrusters.angle_rad",
     {0.785398, -0.785398, 2.356194, -2.356194});
-  const std::vector<double> force_per_duty =
-    getDoubleVector("thrusters.force_per_duty", std::vector<double>(ids.size(), 1.0));
+  const std::vector<double> max_thrust =
+    getDoubleVector("thrusters.max_thrust", std::vector<double>(ids.size(), 40.0));
   const std::vector<bool> reverse =
     getBoolVector("thrusters.reverse", std::vector<bool>(ids.size(), false));
   const std::vector<double> forward_gain =
-    getDoubleVector("static_map.wheels.forward_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.forward_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> reverse_gain =
-    getDoubleVector("static_map.wheels.reverse_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.reverse_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> offset =
-    getDoubleVector("static_map.wheels.offset", std::vector<double>(ids.size(), 0.0));
+    getDoubleVector("static_map.thrusters.offset", std::vector<double>(ids.size(), 0.0));
 
   const std::size_t n = ids.size();
   if (
-    links.size() != n || angle_rad.size() != n || force_per_duty.size() != n ||
+    links.size() != n || angle_rad.size() != n || max_thrust.size() != n ||
     reverse.size() != n || forward_gain.size() != n || reverse_gain.size() != n ||
     offset.size() != n)
   {
@@ -253,7 +258,7 @@ void ThrusterDriverNode::loadThrusterConfigs()
     config.id = ids[i];
     config.link = links[i];
     config.angle_rad = angle_rad[i];
-    config.force_per_duty = force_per_duty[i];
+    config.max_thrust = max_thrust[i];
     config.reverse = reverse[i];
     config.forward_gain = forward_gain[i];
     config.reverse_gain = reverse_gain[i];
@@ -374,7 +379,7 @@ std::vector<double> ThrusterDriverNode::allocateWrench(const std::vector<double>
   for (const auto & thruster : thrusters_) {
     geometry.push_back(
         {
-          thruster.x, thruster.y, thruster.angle_rad, thruster.force_per_duty, thruster.reverse});
+          thruster.x, thruster.y, thruster.angle_rad, thruster.max_thrust, thruster.reverse});
   }
   return njord::thruster_driver::allocateWrench(geometry, wrench, allocation_regularization_);
 }
@@ -408,7 +413,7 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
     std_msgs::msg::Float32MultiArray msg;
     msg.data.reserve(commands.size());
     for (std::size_t i = 0; i < commands.size(); ++i) {
-      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].force_per_duty;
+      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].max_thrust;
       msg.data.push_back(static_cast<float>(newtons));
     }
     pub_thruster_command_->publish(msg);

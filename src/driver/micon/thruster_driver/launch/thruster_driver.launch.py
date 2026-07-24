@@ -22,6 +22,7 @@ def generate_launch_description():
 
     config_file = LaunchConfiguration("config_file")
     robot_description_file = LaunchConfiguration("robot_description_file")
+    use_velocity_feedback = LaunchConfiguration("use_velocity_feedback")
     stop_on_feedback_timeout = LaunchConfiguration("stop_on_feedback_timeout")
 
     return LaunchDescription(
@@ -35,6 +36,11 @@ def generate_launch_description():
                 "robot_description_file",
                 default_value=default_robot_description,
                 description="Path to robot URDF containing fixed thruster poses",
+            ),
+            DeclareLaunchArgument(
+                "use_velocity_feedback",
+                default_value="true",
+                description="Subscribe to feedback odometry and use measured velocity in control.",
             ),
             DeclareLaunchArgument(
                 "stop_on_feedback_timeout",
@@ -57,6 +63,10 @@ def generate_launch_description():
                         ),
                         "control.stop_on_feedback_timeout": ParameterValue(
                             stop_on_feedback_timeout,
+                            value_type=bool,
+                        ),
+                        "control.use_velocity_feedback": ParameterValue(
+                            use_velocity_feedback,
                             value_type=bool,
                         ),
                     },

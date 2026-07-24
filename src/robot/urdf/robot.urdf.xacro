@@ -92,6 +92,9 @@
     <parent link="base_link"/>
     <child link="livox_frame"/>
     <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="${lidar_roll} ${lidar_pitch} ${lidar_yaw}"/>
+    <!-- The MID-360 is mounted upside down: preserve its origin while
+         rotating its frame 180 degrees around the vehicle X axis. -->
+    <origin xyz="${lidar_x} ${lidar_y} ${lidar_z}" rpy="3.141592653589793 0 0"/>
   </joint>
 
   <link name="imu_link">

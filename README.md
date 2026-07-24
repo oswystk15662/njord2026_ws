@@ -141,10 +141,8 @@ sudo apt update
 sudo apt install -y python3-venv
 
 # YOLO専用venv
-python3 -m venv --prompt njord2026_ws .venv
-source .venv/bin/activate
+# .venvがなければuv venv（uv未導入時はpython3 -m venv）で自動作成される
 source ./export_python_path.sh
-
 # Jetson専用requirementsのみ使う
 python3 -m pip install --upgrade pip setuptools wheel
 python3 -m pip install -r requirements_jetson_nano_yolo.txt
@@ -163,10 +161,10 @@ YOLOノード起動は以下のラッパーを使うと安全です。
 ./run_yolo_jetson.sh
 ```
 
-launchファイルを直接使う場合も、必ず `.venv` を有効化してから実行してください。
+launchファイルを直接使う場合も、`export_python_path.sh`をsourceして
+`.venv`の有効化、Python pathの設定、ユーザーsite-packagesの除外を行ってください。
 
 ```shell
-source .venv/bin/activate
 source ./export_python_path.sh
 ros2 launch yolo yolo.launch.py
 ```
@@ -478,7 +476,8 @@ cd /home/ibo_asv/njord2026_ws
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 
-ros2 launch robot lidar.launch.py lidar_model:=mid360s
+ros2 launch robot lidar.launch.py \
+  lidar_model:=mid360s enable_buoy_detection:=true
 ros2 launch zed2i_driver zed2i.launch.py mode:=sdk
 ros2 launch robot back_cam.launch.py
 ros2 launch um982_driver um982.launch.py \
@@ -486,11 +485,11 @@ ros2 launch um982_driver um982.launch.py \
 ros2 run micon_driver_fd serial_writer --ros-args \
   -p serial_port:=/dev/ttyUSB1 -p baud:=115200
 ros2 launch robot localization.launch.py
-ros2 launch pcl_det pcl_bouy_det.launch.py \
-  input_pointcloud_topic:=/livox/lidar \
-  roi_topic:=/buoy_roi \
-  output_topic:=/buoy_detections
 ```
+
+`enable_buoy_detection:=true`ではLivox driverと点群ブイ検出を同じ
+`component_container_mt`へロードし、`/livox/lidar`区間でintra-process通信を使う。
+個別起動が必要な場合は従来どおり`pcl_bouy_det.launch.py`も使用できる。
 
 `localization.launch.py`は`glim_ros`がインストールされていないためlaunch全体を完遂
 できなかった。残りのlocal/global EKFとNavSat Transformは、同launchファイルと同じ
@@ -720,6 +719,10 @@ event-driven topicである。試験時は画角内に認識対象のブイが�
 フル負荷時のJetsonはGPU使用率最大99%、RAM約5.9 / 7.3 GiBだった。ZED2iの
 深度・点群とCUDA YOLO 2本の同時実行で計算資源が飽和しており、ZED2iとback_camが
 設定周波数を満たさない主因と考えられる。
+
+今後の軽量化項目と実装状況は
+[`Docs/sensor_pipeline_performance_roadmap.md`](Docs/sensor_pipeline_performance_roadmap.md)
+を参照する。
 
 UM982は`/dev/ttyUSB2`を開いて連続受信できているため、USBハブ帯域が直接の原因とは
 考えにくい。driverはGPGGA/UNIHEADINGを0.05秒周期に設定したと記録しているが、実出力は
