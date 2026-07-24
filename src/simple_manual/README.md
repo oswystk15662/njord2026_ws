@@ -21,8 +21,16 @@ with `enable_detection:=false`.
 - `joy_converter_node` publishes `cmd_vel`, `/emg`, `/red`, `/yellow`, and `/green`.
 - `/emg` uses positive logic: button 0 sends `true` (emergency stop), while its
   normal released state sends `false` (emergency stop released).
-- `manual_control.launch.py` starts `thruster_driver` in open-loop mode: it does
-  not subscribe to velocity feedback, and performs X4 allocation from `cmd_vel`.
+- `manual_control.launch.py` uses UM982-only feedback by default, without the
+  EKF.  The UM982 driver natively publishes `odometry/feedback`
+  (`nav_msgs/msg/Odometry`), and this launch remaps it to the existing
+  `/odometry/filtered/local` interface.  Its surge/sway velocity is a filtered
+  GNSS position difference rotated into the boat frame by the dual-antenna
+  heading, and its yaw rate is the heading difference.  This requires a stable
+  outdoor GNSS fix.  Pass
+  `enable_um982_velocity_feedback:=false` to restore the prior EKF path.
+  The default `um982_feedback_mode:=ekf` uses the dedicated UM982-only EKF;
+  `um982_feedback_mode:=window` selects the time-window regression alternative.
 - `micon_driver_fd/serial_writer` automatically requests ARM. Joystick input cannot
   request DISARM; after an emergency stop is released or the ESP32 resets, the
   driver re-requests ARM once the required zero-thrust command is acknowledged.

@@ -4,8 +4,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, OpaqueFunction, TimerAction
-from launch.conditions import IfCondition
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, OpaqueFunction, TimerAction
+from launch.conditions import IfCondition, UnlessCondition
 from launch.substitutions import (
     Command,
     FindExecutable,
@@ -16,6 +16,7 @@ from launch_ros.actions import ComposableNodeContainer, LoadComposableNodes, Nod
 from launch_ros.descriptions import ComposableNode
 from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
+from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 
 LIDAR_CONFIGS = {
@@ -211,6 +212,7 @@ def generate_launch_description():
             'NTRIP_Password': '',
             'Heading_FrameID': 'odom',
             'log_file_name': '',
+            'publish_feedback_odometry': LaunchConfiguration('enable_um982_velocity_feedback'),
         }],
     )
     drogger_rzs = Node(
@@ -241,8 +243,6 @@ def generate_launch_description():
                     Command(['cat ', LaunchConfiguration('thruster_robot_description_file')]),
                     value_type=str,
                 ),
-                'control.stop_on_feedback_timeout': False,
-                'control.use_velocity_feedback': False,
             },
         ],
     )
@@ -296,6 +296,19 @@ def generate_launch_description():
             ('gps/fix', '/sensor/vehicle_gnss/fix/raw'),
             ('odometry/filtered', 'odometry/filtered/local'),
         ],
+    )
+    um982_feedback = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution([
+                FindPackageShare('um982_feedback_filter'), 'launch', 'um982_feedback.launch.py'
+            ])
+        ),
+        launch_arguments={
+            'feedback_mode': LaunchConfiguration('um982_feedback_mode'),
+            'raw_topic': '/odometry/feedback',
+            'output_topic': '/odometry/filtered/local',
+        }.items(),
+        condition=IfCondition(LaunchConfiguration('enable_um982_velocity_feedback')),
     )
 
     diagnostics = ComposableNodeContainer(
@@ -358,6 +371,17 @@ def generate_launch_description():
             default_value='/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0',
         ),
         DeclareLaunchArgument(
+        DeclareLaunchArgument(
+            'enable_um982_velocity_feedback', default_value='true',
+            description=(
+                'Use UM982 dual-antenna heading and GNSS position differences as '
+                'thruster velocity feedback. Requires an outdoor GNSS fix.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'um982_feedback_mode', default_value='ekf', choices=['window', 'ekf'],
+            description='UM982-only feedback filter: time-window regression or independent EKF.',
+        ),
             'drogger_rzs_port',
             default_value=(
                 '/dev/serial/by-id/'
