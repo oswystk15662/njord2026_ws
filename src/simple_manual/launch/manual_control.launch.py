@@ -57,7 +57,7 @@ def _sensor_container(context, *_args, **_kwargs):
                     'cmdline_input_bd_code': 'livox0000000001',
                 }
             ],
-            extra_arguments=[{'use_intra_process_comms': True}],
+            extra_arguments=[{'use_intra_process_comms': False}],
         ),
         ComposableNode(
             package='zed2i_driver',
@@ -81,7 +81,7 @@ def _sensor_container(context, *_args, **_kwargs):
                     'ground_video_fps': 5.0,
                 },
             ],
-            extra_arguments=[{'use_intra_process_comms': True}],
+            extra_arguments=[{'use_intra_process_comms': False}],
         ),
     ]
 
@@ -115,7 +115,7 @@ def _load_perception_components(context, *_args, **_kwargs):
                         'frame_id': 'base_link',
                     }
                 ],
-                extra_arguments=[{'use_intra_process_comms': True}],
+                extra_arguments=[{'use_intra_process_comms': False}],
             )
         )
 
@@ -235,6 +235,10 @@ def generate_launch_description():
                     Command(['cat ', LaunchConfiguration('thruster_robot_description_file')]),
                     value_type=str,
                 ),
+            },
+            {
+                # Manual control is open-loop: do not require odometry feedback.
+                'control.use_velocity_feedback': False,
             },
         ],
     )
@@ -408,17 +412,17 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('enable_diagnostics', default_value='true'),
 
-        diagnostics,
+        # diagnostics,
 
         joy_converter,
         twist_mux,
         micon_driver,
-        um982_driver,
-        um982_feedback,
+        # um982_driver,
+        # um982_feedback,
         # drogger_rzs,
         thruster_driver,
-        robot_state_publisher,
-        um982_static_tf,
+        # robot_state_publisher,
+        # um982_static_tf,
         TimerAction(
             period=LaunchConfiguration('lidar_start_delay'),
             actions=[OpaqueFunction(function=_sensor_container)],
@@ -427,16 +431,16 @@ def generate_launch_description():
             period=LaunchConfiguration('perception_start_delay'),
             actions=[OpaqueFunction(function=_load_perception_components)],
         ),
-        TimerAction(
-            period=LaunchConfiguration('localization_start_delay'),
-            actions=[global_ekf, navsat_transform],
-        ),
-        TimerAction(
-            period=LaunchConfiguration('localization_start_delay'),
-            actions=[local_ekf],
-            # Both UM982 feedback and the local EKF publish
-            # /odometry/filtered/local.  Do not run the EKF path while this
-            # direct feedback path owns that topic.
-            condition=UnlessCondition(LaunchConfiguration('enable_um982_velocity_feedback')),
-        ),
+        # TimerAction(
+        #     period=LaunchConfiguration('localization_start_delay'),
+        #     actions=[global_ekf, navsat_transform],
+        # ),
+        # TimerAction(
+        #     period=LaunchConfiguration('localization_start_delay'),
+        #     actions=[local_ekf],
+        #     # Both UM982 feedback and the local EKF publish
+        #     # /odometry/filtered/local. Do not run the EKF path while this
+        #     # direct feedback path owns that topic.
+        #     condition=UnlessCondition(LaunchConfiguration('enable_um982_velocity_feedback')),
+        # ),
     ])

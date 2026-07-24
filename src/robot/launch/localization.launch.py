@@ -165,8 +165,8 @@ def generate_launch_description():
             # glim_node,
             # spatial_navsat_transform_node,
             um982_static_tf,
-            local_ekf_node,
-            global_ekf_node,
+            # local_ekf_node,
+            # global_ekf_node,
             navsat_transform_node,
             diagnostics_launch,
         ]

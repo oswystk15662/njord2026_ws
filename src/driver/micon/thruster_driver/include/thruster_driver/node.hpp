@@ -104,6 +104,7 @@ private:
   double damping_quadratic_yaw_{0.0};
 
   double allocation_regularization_{1e-4};
+  std::vector<double> allocation_wrench_sign_{1.0, 1.0, 1.0};
   double deadzone_pos_{0.0};
   double deadzone_neg_{0.0};
 

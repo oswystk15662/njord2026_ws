@@ -12,6 +12,6 @@ joy_converter:
       red: 3
       manual_enable: 12
     scale:
-      linear_x: 1.0
-      linear_y: 1.0
-      angular_z: 1.0
+      linear_x: 0.1
+      linear_y: 0.1
+      angular_z: 0.1
