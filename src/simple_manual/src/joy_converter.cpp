@@ -35,6 +35,7 @@ JoyOutput convert_joy(const sensor_msgs::msg::Joy & msg, const JoyConfig & confi
   output.green = button_value(msg, config.green_button);
   output.yellow = button_value(msg, config.yellow_button);
   output.red = button_value(msg, config.red_button);
+  output.manual_enabled = button_value(msg, config.manual_enable_button);
   return output;
 }
 
@@ -49,6 +50,7 @@ JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
   config_.green_button = declare_parameter<int64_t>("button.green", 1);
   config_.yellow_button = declare_parameter<int64_t>("button.yellow", 2);
   config_.red_button = declare_parameter<int64_t>("button.red", 3);
+  config_.manual_enable_button = declare_parameter<int64_t>("button.manual_enable", 12);
   config_.linear_x_scale = declare_parameter<double>("scale.linear_x", 0.2);
   config_.linear_y_scale = declare_parameter<double>("scale.linear_y", 0.2);
   config_.angular_z_scale = declare_parameter<double>("scale.angular_z", 0.2);
@@ -57,7 +59,7 @@ JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
     std::bind(&JoyConverter::on_parameters, this, std::placeholders::_1));
   sub_ = create_subscription<sensor_msgs::msg::Joy>(
     "joy", 10, std::bind(&JoyConverter::joy_cb, this, std::placeholders::_1));
-  pub_cmd_vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 10);
+  pub_cmd_vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_manual", 10);
   pub_emg_ = create_publisher<std_msgs::msg::Bool>("/emg", 10);
   pub_green_ = create_publisher<std_msgs::msg::Bool>("/green", 10);
   pub_yellow_ = create_publisher<std_msgs::msg::Bool>("/yellow", 10);
@@ -73,7 +75,14 @@ void JoyConverter::joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
     config = config_;
   }
   const auto output = convert_joy(*msg, config);
-  pub_cmd_vel_->publish(output.cmd_vel);
+  // Do not keep a zero-valued manual command active in twist_mux after the
+  // enable button is released. One zero command stops manual motion first.
+  if (output.manual_enabled) {
+    pub_cmd_vel_->publish(output.cmd_vel);
+  } else if (manual_was_enabled_) {
+    pub_cmd_vel_->publish(geometry_msgs::msg::Twist{});
+  }
+  manual_was_enabled_ = output.manual_enabled;
   pub_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
   pub_green_->publish(std_msgs::msg::Bool().set__data(output.green));
   pub_yellow_->publish(std_msgs::msg::Bool().set__data(output.yellow));
@@ -103,6 +112,8 @@ rcl_interfaces::msg::SetParametersResult JoyConverter::on_parameters(
       candidate.yellow_button = parameter.as_int();
     } else if (name == "button.red") {
       candidate.red_button = parameter.as_int();
+    } else if (name == "button.manual_enable") {
+      candidate.manual_enable_button = parameter.as_int();
     } else if (name == "scale.linear_x") {
       candidate.linear_x_scale = parameter.as_double();
     } else if (name == "scale.linear_y") {
@@ -113,7 +124,8 @@ rcl_interfaces::msg::SetParametersResult JoyConverter::on_parameters(
   const bool valid_indices = candidate.linear_x_axis >= 0 && candidate.linear_y_axis >= 0 &&
     candidate.yaw_positive_button >= 0 && candidate.yaw_negative_button >= 0 &&
     candidate.emergency_button >= 0 && candidate.green_button >= 0 &&
-    candidate.yellow_button >= 0 && candidate.red_button >= 0;
+    candidate.yellow_button >= 0 && candidate.red_button >= 0 &&
+    candidate.manual_enable_button >= 0;
   const bool valid_scales = std::isfinite(candidate.linear_x_scale) &&
     std::isfinite(candidate.linear_y_scale) && std::isfinite(candidate.angular_z_scale);
 

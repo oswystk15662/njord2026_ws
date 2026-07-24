@@ -1,7 +1,7 @@
 ### Local EKF (odom -> base_link estimate) ###
 # The local EKF is the sole odom -> base_link TF authority while GLIM is
-# disabled. Its LiDAR IMU keeps attitude and angular-rate estimates alive;
-# translational odometry requires an additional local measurement source.
+# disabled. Its LiDAR IMU supplies only its reported yaw; translational odometry
+# requires an additional local measurement source.
 ekf_filter_node_local:
   ros__parameters:
     frequency: 30.0
@@ -17,11 +17,20 @@ ekf_filter_node_local:
     # an absent or stale GLIM source must not become a delayed measurement.
 
     imu0: /livox/imu
+    # The MID-360 IMU has no attitude estimate. Its acceleration is reported
+    # in g (approximately -1.0 on Z while stationary), whereas
+    # robot_localization expects m/s^2. Do not integrate it as acceleration:
+    # doing so creates a fictitious local position/velocity that destabilizes
+    # the global EKF through odom0_differential. The raw gyro also has a
+    # substantial stationary bias, so do not integrate its yaw rate. Retain
+    # only the driver's identity yaw, which keeps navsat_transform's
+    # use_odometry_yaw reference stable until a calibrated heading source is
+    # enabled.
     imu0_config: [false, false, false,
+                  false, false, true,
                   false, false, false,
-                  true,  true,  true,
                   false, false, false,
-                  true,  true,  true]
+                  false, false, false]
     
     # imu1: /imu/data
     # imu1_config: [false, false, false,

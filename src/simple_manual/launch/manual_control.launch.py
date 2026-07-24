@@ -98,27 +98,8 @@ def _sensor_container(context, *_args, **_kwargs):
 
 
 def _load_perception_components(context, *_args, **_kwargs):
-    """Load detection/localization components into the running sensor container."""
+    """Load optional perception components into the running sensor container."""
     components = []
-
-    if _as_bool(context, 'enable_glim'):
-        components.append(
-            ComposableNode(
-                package='glim_ros',
-                plugin='glim::GlimROS',
-                name='glim_node',
-                parameters=[
-                    {
-                        'config_path': PathJoinSubstitution(
-                            [FindPackageShare('robot'), 'config', 'glim_config']
-                        ),
-                        'use_sim_time': False,
-                    }
-                ],
-                remappings=[('/glim_node/odom', '/odom')],
-                extra_arguments=[{'use_intra_process_comms': True}],
-            )
-        )
 
     if _as_bool(context, 'enable_pcl_buoy_detection'):
         components.append(
@@ -178,6 +159,16 @@ def generate_launch_description():
             )
         ],
     )
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='twist_mux',
+        output='screen',
+        parameters=[
+            PathJoinSubstitution([FindPackageShare('robot'), 'config', 'twist_mux.yaml'])
+        ],
+        remappings=[('cmd_vel_out', '/cmd_vel')],
+    )
     micon_driver = Node(
         package='micon_driver_fd',
         executable='serial_writer',
@@ -215,22 +206,23 @@ def generate_launch_description():
             'publish_feedback_odometry': LaunchConfiguration('enable_um982_velocity_feedback'),
         }],
     )
-    drogger_rzs = Node(
-        package='drogger_wired_flex',
-        executable='drogger_wired_flex_node',
-        name='drogger_wired_flex',
-        output='screen',
-        parameters=[
-            PathJoinSubstitution(
-                [FindPackageShare('drogger_wired_flex'), 'config', 'params_rzs_d01_usb.yaml']
-            ),
-            {
-                'serial_port': LaunchConfiguration('drogger_rzs_port'),
-                'serial_baudrate': ParameterValue(115200, value_type=int),
-                'fix_topic': '/gnss/fix',
-            },
-        ],
-    )
+    # Drogger is intentionally disabled. Global localization uses UM982 only.
+    # drogger_rzs = Node(
+    #     package='drogger_wired_flex',
+    #     executable='drogger_wired_flex_node',
+    #     name='drogger_wired_flex',
+    #     output='screen',
+    #     parameters=[
+    #         PathJoinSubstitution(
+    #             [FindPackageShare('drogger_wired_flex'), 'config', 'params_rzs_d01_usb.yaml']
+    #         ),
+    #         {
+    #             'serial_port': LaunchConfiguration('drogger_rzs_port'),
+    #             'serial_baudrate': ParameterValue(115200, value_type=int),
+    #             'fix_topic': '/gnss/fix',
+    #         },
+    #     ],
+    # )
     thruster_driver = Node(
         package='thruster_driver',
         executable='thruster_driver_node',
@@ -295,6 +287,7 @@ def generate_launch_description():
         remappings=[
             ('gps/fix', '/sensor/vehicle_gnss/fix/raw'),
             ('odometry/filtered', 'odometry/filtered/local'),
+            ('odometry/gps', '/odometry/gps/um982'),
         ],
     )
     um982_feedback = IncludeLaunchDescription(
@@ -338,8 +331,7 @@ def generate_launch_description():
                 }],
             )
             for name, topic, topic_type, expected, minimum, timeout, stale in [
-                ('glim_odom', '/odom', 'nav_msgs/msg/Odometry', 10.0, 2.0, 1.0, 5.0),
-                ('imu', '/adnav_driver/imu', 'sensor_msgs/msg/Imu', 20.0, 10.0, 0.5, 2.0),
+                ('livox_imu', '/livox/imu', 'sensor_msgs/msg/Imu', 200.0, 50.0, 0.5, 2.0),
                 (
                     'gps_fix', '/sensor/vehicle_gnss/fix/raw',
                     'sensor_msgs/msg/NavSatFix', 20.0, 10.0, 1.0, 3.0,
@@ -371,7 +363,6 @@ def generate_launch_description():
             default_value='/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0',
         ),
         DeclareLaunchArgument(
-        DeclareLaunchArgument(
             'enable_um982_velocity_feedback', default_value='true',
             description=(
                 'Use UM982 dual-antenna heading and GNSS position differences as '
@@ -382,30 +373,33 @@ def generate_launch_description():
             'um982_feedback_mode', default_value='ekf', choices=['window', 'ekf'],
             description='UM982-only feedback filter: time-window regression or independent EKF.',
         ),
-            'drogger_rzs_port',
-            default_value=(
-                '/dev/serial/by-id/'
-                'usb-Prolific_Technology_Inc._USB-Serial_Controller_'
-                'ACCQg146B12-if00-port0'
-            ),
-        ),
+        # Drogger is intentionally disabled. Keep this argument commented out
+        # until the driver is restored.
+        # DeclareLaunchArgument(
+        #     'drogger_rzs_port',
+        #     default_value=(
+        #         '/dev/serial/by-id/'
+        #         'usb-Prolific_Technology_Inc._USB-Serial_Controller_'
+        #         'ACCQg146B12-if00-port0'
+        #     ),
+        # ),
         DeclareLaunchArgument(
             'lidar_model', default_value='mid360s', choices=['mid360', 'mid360s']
         ),
-        DeclareLaunchArgument('enable_glim', default_value='true'),
         DeclareLaunchArgument('enable_pcl_buoy_detection', default_value='true'),
         DeclareLaunchArgument('enable_gpu_perception', default_value='true'),
         DeclareLaunchArgument('engine_path', default_value=default_engine),
         DeclareLaunchArgument('camera_resolution', default_value='HD720'),
         DeclareLaunchArgument('camera_framerate', default_value='15'),
+        DeclareLaunchArgument('lidar_start_delay', default_value='18.0'),
         DeclareLaunchArgument(
             'perception_start_delay',
-            default_value='10.0',
-            description='Seconds to wait before loading GLIM and buoy detection components.',
+            default_value='20.0',
+            description='Seconds to wait before loading buoy detection components.',
         ),
         DeclareLaunchArgument(
             'localization_start_delay',
-            default_value='20.0',
+            default_value='30.0',
             description='Seconds to wait before starting localization and its diagnostics.',
         ),
         DeclareLaunchArgument('thruster_config_file', default_value=default_thruster_config),
@@ -413,20 +407,36 @@ def generate_launch_description():
             'thruster_robot_description_file', default_value=default_thruster_urdf
         ),
         DeclareLaunchArgument('enable_diagnostics', default_value='true'),
+
+        diagnostics,
+
         joy_converter,
+        twist_mux,
         micon_driver,
         um982_driver,
-        drogger_rzs,
+        um982_feedback,
+        # drogger_rzs,
         thruster_driver,
-        OpaqueFunction(function=_sensor_container),
         robot_state_publisher,
         um982_static_tf,
+        TimerAction(
+            period=LaunchConfiguration('lidar_start_delay'),
+            actions=[OpaqueFunction(function=_sensor_container)],
+        ),
         TimerAction(
             period=LaunchConfiguration('perception_start_delay'),
             actions=[OpaqueFunction(function=_load_perception_components)],
         ),
         TimerAction(
             period=LaunchConfiguration('localization_start_delay'),
-            actions=[local_ekf, global_ekf, navsat_transform, diagnostics],
+            actions=[global_ekf, navsat_transform],
+        ),
+        TimerAction(
+            period=LaunchConfiguration('localization_start_delay'),
+            actions=[local_ekf],
+            # Both UM982 feedback and the local EKF publish
+            # /odometry/filtered/local.  Do not run the EKF path while this
+            # direct feedback path owns that topic.
+            condition=UnlessCondition(LaunchConfiguration('enable_um982_velocity_feedback')),
         ),
     ])

@@ -1,38 +1,37 @@
 # Task 2: Collision Avoidance
-# test07089 pool experiment (issue #47): straight run along the pool diagonal
-# C -> A, shared diagonal with Task 1.2 (GPS3/GPS4 in task1_waypoints.yaml).
-# Course length ~46.16 m, heading -0.2027 rad (constant along the diagonal).
+# Today's experiment: straight run from GPS 5 (= Task 1 GPS 1) to GPS 6
+# (= Task 1 GPS 2). Course length ~45.23 m, heading 0.6627 rad.
 
 task2_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   origin:
-    latitude: 35.6675575459
-    longitude: 139.7933614800
-    name: "GPS 5 - Start (pool corner C)"
+    latitude: 34.5456666667
+    longitude: 135.5070555556
+    name: "GPS 5 - Start (same as GPS 1)"
   gps_points:
     - id: 5
-      latitude: 35.6675575459
-      longitude: 139.7933614800
-      name: "GPS 5 - Start (corner C)"
+      latitude: 34.5456666667
+      longitude: 135.5070555556
+      name: "GPS 5 - Start (same as GPS 1)"
     - id: 6
-      latitude: 35.6674742121
-      longitude: 139.7938614790
-      name: "GPS 6 - Goal (corner A)"
+      latitude: 34.5459166667
+      longitude: 135.5074444444
+      name: "GPS 6 - Goal (same as GPS 2)"
 
   waypoints:
     - id: 5
       x: 0.0
       y: 0.0
-      yaw: -0.2027
+      yaw: 0.6627
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
 
     - id: "gate_1"
-      x: 15.0730
-      y: -3.0923
-      yaw: -0.2027
+      x: 11.8859
+      y: 9.2766
+      yaw: 0.6627
       type: "gate"
       name: "Entry Gate"
       gate_pair: ["red", "green"]
@@ -40,9 +39,9 @@ task2_config:
       tolerance_m: 2.0
 
     - id: "gate_2"
-      x: 30.1460
-      y: -6.1847
-      yaw: -0.2027
+      x: 23.7717
+      y: 18.5532
+      yaw: 0.6627
       type: "gate"
       name: "Exit Gate"
       gate_pair: ["red", "green"]
@@ -50,9 +49,9 @@ task2_config:
       tolerance_m: 2.0
 
     - id: 6
-      x: 45.2190
-      y: -9.2770
-      yaw: -0.2027
+      x: 35.6576
+      y: 27.8299
+      yaw: 0.6627
       type: "goal"
       name: "GPS 6 - Goal"
       tolerance_m: 2.0

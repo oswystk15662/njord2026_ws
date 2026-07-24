@@ -10,6 +10,7 @@ joy_converter:
       green: 1
       yellow: 2
       red: 3
+      manual_enable: 12
     scale:
       linear_x: 1.0
       linear_y: 1.0

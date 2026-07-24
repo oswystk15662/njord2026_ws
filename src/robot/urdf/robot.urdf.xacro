@@ -17,7 +17,7 @@
   <xacro:property name="gnss1_y" value="0.4" />
   <xacro:property name="gnss1_z" value="1.0" />
 
-  <xacro:property name="gnss2_x" value="-0.5" />
+  <xacro:property name="gnss2_x" value="0.5" />
   <xacro:property name="gnss2_y" value="-0.4" />
   <xacro:property name="gnss2_z" value="1.0" />
 
@@ -67,6 +67,15 @@
       </geometry>
     </collision>
   </link>
+
+  <!-- ZED2i left camera optical-origin frame, rigidly mounted at the bow. -->
+  <link name="zed2i_left_camera_frame"/>
+
+  <joint name="zed2i_left_camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="zed2i_left_camera_frame"/>
+    <origin xyz="0.48 0 0.47" rpy="0 0 0"/>
+  </joint>
 
   <link name="livox_frame">
     <visual>
