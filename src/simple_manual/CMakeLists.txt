@@ -24,6 +24,10 @@ target_compile_features(joy_converter_node PUBLIC cxx_std_17)
 target_link_libraries(joy_converter_node joy_converter_lib)
 ament_target_dependencies(joy_converter_node rclcpp)
 
+add_executable(command_arbiter_node src/command_arbiter.cpp)
+target_compile_features(command_arbiter_node PUBLIC cxx_std_17)
+ament_target_dependencies(command_arbiter_node rclcpp geometry_msgs std_msgs)
+
 add_executable(thruster_id_test src/thruster_id_test.cpp)
 target_compile_features(thruster_id_test PUBLIC cxx_std_17)
 ament_target_dependencies(thruster_id_test rclcpp std_msgs)
@@ -48,6 +52,7 @@ endif()
 install(TARGETS
   joy_converter_lib
   joy_converter_node
+  command_arbiter_node
   thruster_id_test
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

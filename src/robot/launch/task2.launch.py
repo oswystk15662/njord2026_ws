@@ -7,6 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -34,6 +35,7 @@ def generate_launch_description():
             'serial_port': LaunchConfiguration('serial_port'),
             'baud': LaunchConfiguration('baud'),
             'um982_port': LaunchConfiguration('um982_port'),
+            'auto_topic': '/cmd_vel_smoothed',
         },
     )
     nav2 = _include(
@@ -48,6 +50,12 @@ def generate_launch_description():
         'waypoint_publisher',
         'waypoint_publisher.launch.py',
         {'task_type': 'task2', 'frame_id': 'map', 'publish_rate_hz': '2.0'},
+    )
+    autonomy_supervisor = Node(
+        package='diagnostic_monitors',
+        executable='autonomy_supervisor_node',
+        name='autonomy_supervisor',
+        output='screen',
     )
 
     return LaunchDescription([
@@ -68,6 +76,7 @@ def generate_launch_description():
         DeclareLaunchArgument('nav2_start_delay', default_value='35.0'),
         DeclareLaunchArgument('waypoint_start_delay', default_value='45.0'),
         manual,
+        autonomy_supervisor,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

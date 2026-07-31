@@ -159,15 +159,12 @@ def generate_launch_description():
             )
         ],
     )
-    twist_mux = Node(
-        package='twist_mux',
-        executable='twist_mux',
-        name='twist_mux',
+    command_arbiter = Node(
+        package='simple_manual',
+        executable='command_arbiter_node',
+        name='command_arbiter',
         output='screen',
-        parameters=[
-            PathJoinSubstitution([FindPackageShare('robot'), 'config', 'twist_mux.yaml'])
-        ],
-        remappings=[('cmd_vel_out', '/cmd_vel')],
+        parameters=[{'auto_topic': LaunchConfiguration('auto_topic')}],
     )
     micon_driver = Node(
         package='micon_driver_fd',
@@ -362,6 +359,7 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument('baud', default_value='115200'),
+        DeclareLaunchArgument('auto_topic', default_value='/cmd_vel_nav'),
         DeclareLaunchArgument(
             'um982_port',
             default_value='/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0',
@@ -418,7 +416,7 @@ def generate_launch_description():
         # diagnostics,
 
         joy_converter,
-        twist_mux,
+        command_arbiter,
         micon_driver,
         # um982_driver,
         # um982_feedback,

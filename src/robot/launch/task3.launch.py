@@ -40,6 +40,7 @@ def generate_launch_description():
             'serial_port': LaunchConfiguration('serial_port'),
             'baud': LaunchConfiguration('baud'),
             'um982_port': LaunchConfiguration('um982_port'),
+            'auto_topic': '/cmd_vel_smoothed',
         },
     )
     nav2 = _include(
@@ -70,6 +71,12 @@ def generate_launch_description():
             'output_topic': '/virtual_obstacles',
             'map_frame': 'odom',
         }],
+    )
+    autonomy_supervisor = Node(
+        package='diagnostic_monitors',
+        executable='autonomy_supervisor_node',
+        name='autonomy_supervisor',
+        output='screen',
     )
     um982_driver = Node(
         package='um982_driver',
@@ -141,6 +148,7 @@ def generate_launch_description():
         robot_state_publisher,
         um982_static_tf,
         cardinal_walls,
+        autonomy_supervisor,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

@@ -111,6 +111,12 @@ def generate_launch_description():
             'map_frame': 'map',
         }],
     )
+    autonomy_supervisor = Node(
+        package='diagnostic_monitors',
+        executable='autonomy_supervisor_node',
+        name='autonomy_supervisor',
+        output='screen',
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -142,6 +148,7 @@ def generate_launch_description():
         robot_state_publisher,
         um982_static_tf,
         cardinal_walls,
+        autonomy_supervisor,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

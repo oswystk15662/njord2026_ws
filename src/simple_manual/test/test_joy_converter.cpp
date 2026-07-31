@@ -50,18 +50,26 @@ TEST(JoyConversion, UsesConfiguredMappingAndSafeMissingInputs)
   EXPECT_FALSE(output.red);
 }
 
-TEST(JoyConversion, RequiresManualEnableButton)
+TEST(JoyConversion, DetectsManualAndAutoModeButtons)
 {
   sensor_msgs::msg::Joy joy;
   joy.axes = {0.5F, 0.5F};
   joy.buttons.resize(13, 0);
 
   auto output = simple_manual::convert_joy(joy, simple_manual::JoyConfig{});
-  EXPECT_FALSE(output.manual_enabled);
+  EXPECT_FALSE(output.manual_mode);
+  EXPECT_FALSE(output.auto_mode);
 
-  joy.buttons[12] = 1;
+  joy.buttons[3] = 1;
   output = simple_manual::convert_joy(joy, simple_manual::JoyConfig{});
-  EXPECT_TRUE(output.manual_enabled);
+  EXPECT_TRUE(output.manual_mode);
+  EXPECT_FALSE(output.auto_mode);
+
+  joy.buttons[3] = 0;
+  joy.buttons[2] = 1;
+  output = simple_manual::convert_joy(joy, simple_manual::JoyConfig{});
+  EXPECT_FALSE(output.manual_mode);
+  EXPECT_TRUE(output.auto_mode);
 }
 
 TEST(JoyConverterParameters, AcceptsValidAndRejectsInvalidValues)
@@ -82,9 +90,9 @@ TEST(JoyConverterParameters, AcceptsValidAndRejectsInvalidValues)
   ASSERT_EQ(results.size(), 1U);
   EXPECT_FALSE(results[0].successful);
   EXPECT_EQ(node->get_parameter("button.red").as_int(), 3);
-  results = node->set_parameters({rclcpp::Parameter("button.manual_enable", -1)});
+  results = node->set_parameters({rclcpp::Parameter("button.manual_mode", -1)});
   ASSERT_EQ(results.size(), 1U);
   EXPECT_FALSE(results[0].successful);
-  EXPECT_EQ(node->get_parameter("button.manual_enable").as_int(), 12);
+  EXPECT_EQ(node->get_parameter("button.manual_mode").as_int(), 3);
   rclcpp::shutdown();
 }
