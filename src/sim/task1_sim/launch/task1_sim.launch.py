@@ -22,27 +22,38 @@ def include_launch(package_name, relative_path, condition, launch_arguments=None
 def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
     pkg_robot = get_package_share_directory("robot")
+    pkg_dutyed = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     pkg_thruster = get_package_share_directory("thruster_driver")
+
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
     nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
-    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
-    robot_description = open(robot_description_file, "r").read()
     nav_through_poses_bt_xml = os.path.join(
         pkg_share,
         "behavior_trees",
         "navigate_through_poses_w_replanning_and_recovery.xml",
     )
+    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
+    robot_description = open(robot_description_file, "r").read()
 
+    # Startup timing (mirrors task2/task3):
+    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, thruster_driver, orchestrator, EKF, navsat
+    #   t=5.0  NAV2 layer:   Nav2 bringup (needs SimNode TF + filtered odometry)
+    #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
     use_dynamics_arg = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="true")
     use_thruster_driver_arg = DeclareLaunchArgument("use_thruster_driver", default_value="true")
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
+    task_type_arg = DeclareLaunchArgument(
+        "task_type",
+        default_value="task1",
+        description="Waypoint set: 'task1' (competition scenario) or 'task1_follow' (lawnmower survey)",
+    )
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
         default_value="0.0",
-        description="Delay before launching Task1 dynamics/orchestrator/validator layer",
+        description="Delay before launching Task1 sensor/dynamics/EKF layer",
     )
     nav2_delay_arg = DeclareLaunchArgument(
         "nav2_delay",
@@ -57,19 +68,30 @@ def generate_launch_description():
     params_arg = DeclareLaunchArgument("params", default_value=config)
     nav2_params_arg = DeclareLaunchArgument("nav2_params", default_value=nav2_params)
 
-    dynamics = include_launch(
-        "dutyed_tf_pub_with_disturbance",
-        ["launch", "sim_dynamics.launch.py"],
-        IfCondition(LaunchConfiguration("use_dynamics")),
+    # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
+    # SimNode is the sole simulation TF authority (publish_tf=True). EKF/navsat
+    # run with publish_tf=False so they only produce filtered odometry topics.
+    dynamics = Node(
+        package="dutyed_tf_pub_with_disturbance",
+        executable="dutyed_tf_pub_with_disturbance_node",
+        name="dutyed_tf_pub_with_disturbance_node",
+        parameters=[
+            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
+            {"publish_tf": True},
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_dynamics")),
     )
 
-    sensor_noise = IncludeLaunchDescription(
+    sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")
         )
     )
 
-    thruster_driver = Node(
+    # Thruster driver: cmd_vel -> /thruster_command with P + DOB velocity control.
+    # Replaces the deprecated open-loop `kinematics` node.
+    thruster_driver_node = Node(
         package="thruster_driver",
         executable="thruster_driver_node",
         name="thruster_driver_node",
@@ -78,40 +100,99 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
-                "topics.cmd_vel": "/cmd_vel_auto",
-                # The shared driver config contains real-vessel propeller
-                # reversal [false, true, false, true].  Simulation receives
-                # physical forces directly, so use non-reversed sim outputs.
-                "thrusters.reverse": [False, False, False, False],
             },
         ],
-        condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
         output="screen",
+        condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
     )
 
-    robot_state_publisher = Node(
+    robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
         name="robot_state_publisher",
+        output="screen",
         parameters=[{
             "robot_description": robot_description,
             "use_sim_time": False,
         }],
-        output="screen",
     )
 
-    local_ekf = Node(
+    local_ekf_node = Node(
         package="robot_localization",
         executable="ekf_node",
         name="ekf_filter_node_local",
+        output="screen",
         parameters=[
-            os.path.join(pkg_share, "config", "task1_ekf_local.yaml"),
+            os.path.join(pkg_robot, "config", "ekf_local.yaml"),
             {"publish_tf": False},
         ],
-        remappings=[("odometry/filtered", "/odometry/filtered/local")],
+        remappings=[("odometry/filtered", "odometry/filtered/local")],
+    )
+
+    global_ekf_node = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node_global",
+        output="screen",
+        parameters=[
+            os.path.join(pkg_robot, "config", "ekf_global.yaml"),
+            {"publish_tf": False},
+        ],
+        remappings=[("odometry/filtered", "odometry/filtered/global")],
+    )
+
+    navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="navsat_transform_node",
+        output="screen",
+        parameters=[{
+            "frequency": 10.0,
+            "magnetic_declination_radians": 0.0,
+            "yaw_offset": 0.0,
+            "zero_altitude": True,
+            "broadcast_utm_transform": False,
+            "publish_filtered_gps": True,
+            "use_odometry_yaw": False,
+            "wait_for_datum": False,
+        }],
+        remappings=[
+            ("imu", "/wit/imu"),
+            ("gps/fix", "/gps/fix"),
+            ("odometry/filtered", "odometry/filtered/local"),
+        ],
+    )
+
+    orchestrator = Node(
+        package="task1_sim",
+        executable="task1_orchestrator",
+        name="task1_orchestrator",
+        parameters=[LaunchConfiguration("params")],
         output="screen",
     )
 
+    validator = include_launch(
+        "operation_validator",
+        ["launch", "operation_validator.launch.py"],
+        IfCondition(LaunchConfiguration("use_validator")),
+    )
+
+    sensor_layer_timer = TimerAction(
+        period=LaunchConfiguration("driver_delay"),
+        actions=[
+            dynamics,
+            sensor_noise_launch,
+            thruster_driver_node,
+            robot_state_pub_node,
+            local_ekf_node,
+            global_ekf_node,
+            navsat_transform_node,
+            validator,
+            orchestrator,
+        ],
+    )
+
+    # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
     configured_nav2_params = RewrittenYaml(
         source_file=LaunchConfiguration("nav2_params"),
         root_key=None,
@@ -132,47 +213,21 @@ def generate_launch_description():
         },
     )
 
+    nav2_layer_timer = TimerAction(
+        period=LaunchConfiguration("nav2_delay"),
+        actions=[nav2],
+    )
+
+    # ── GOAL LAYER (t=8s) ────────────────────────────────────────────────────
     waypoints = include_launch(
         "waypoint_publisher",
         ["launch", "waypoint_publisher.launch.py"],
         IfCondition(LaunchConfiguration("use_waypoints")),
         {
-            "task_type": "task1",
+            "task_type": LaunchConfiguration("task_type"),
             "frame_id": "map",
             "publish_rate_hz": "2.0",
         },
-    )
-
-    validator = include_launch(
-        "operation_validator",
-        ["launch", "operation_validator.launch.py"],
-        IfCondition(LaunchConfiguration("use_validator")),
-    )
-
-    orchestrator = Node(
-        package="task1_sim",
-        executable="task1_orchestrator",
-        name="task1_orchestrator",
-        parameters=[LaunchConfiguration("params")],
-        output="screen",
-    )
-
-    sensor_layer_timer = TimerAction(
-        period=LaunchConfiguration("driver_delay"),
-        actions=[
-            dynamics,
-            sensor_noise,
-            thruster_driver,
-            robot_state_publisher,
-            local_ekf,
-            validator,
-            orchestrator,
-        ],
-    )
-
-    nav2_layer_timer = TimerAction(
-        period=LaunchConfiguration("nav2_delay"),
-        actions=[nav2],
     )
 
     goal_layer_timer = TimerAction(
@@ -189,6 +244,7 @@ def generate_launch_description():
         use_thruster_driver_arg,
         use_waypoints_arg,
         use_validator_arg,
+        task_type_arg,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,
