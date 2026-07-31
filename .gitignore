@@ -14,3 +14,6 @@ imgui.ini
 *.engine.build.log
 
 rosbag2*
+
+# Local git worktrees used by Codex and other agents.
+_worktrees/
