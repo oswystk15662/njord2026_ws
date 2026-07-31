@@ -22,6 +22,7 @@ def include_launch(package_name, relative_path, condition, launch_arguments=None
 def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
     pkg_robot = get_package_share_directory("robot")
+    pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     pkg_thruster = get_package_share_directory("thruster_driver")
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
     nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
@@ -62,6 +63,12 @@ def generate_launch_description():
         IfCondition(LaunchConfiguration("use_dynamics")),
     )
 
+    sensor_noise = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")
+        )
+    )
+
     thruster_driver = Node(
         package="thruster_driver",
         executable="thruster_driver_node",
@@ -71,9 +78,37 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
+                "topics.cmd_vel": "/cmd_vel_auto",
+                # The shared driver config contains real-vessel propeller
+                # reversal [false, true, false, true].  Simulation receives
+                # physical forces directly, so use non-reversed sim outputs.
+                "thrusters.reverse": [False, False, False, False],
             },
         ],
         condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
+        output="screen",
+    )
+
+    robot_state_publisher = Node(
+        package="robot_state_publisher",
+        executable="robot_state_publisher",
+        name="robot_state_publisher",
+        parameters=[{
+            "robot_description": robot_description,
+            "use_sim_time": False,
+        }],
+        output="screen",
+    )
+
+    local_ekf = Node(
+        package="robot_localization",
+        executable="ekf_node",
+        name="ekf_filter_node_local",
+        parameters=[
+            os.path.join(pkg_share, "config", "task1_ekf_local.yaml"),
+            {"publish_tf": False},
+        ],
+        remappings=[("odometry/filtered", "/odometry/filtered/local")],
         output="screen",
     )
 
@@ -126,7 +161,10 @@ def generate_launch_description():
         period=LaunchConfiguration("driver_delay"),
         actions=[
             dynamics,
+            sensor_noise,
             thruster_driver,
+            robot_state_publisher,
+            local_ekf,
             validator,
             orchestrator,
         ],
