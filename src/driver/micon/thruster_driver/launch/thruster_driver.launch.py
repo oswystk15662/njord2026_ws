@@ -17,7 +17,7 @@ def generate_launch_description():
     default_robot_description = os.path.join(
         get_package_share_directory("robot"),
         "urdf",
-        "robot.urdf_modified.urdf",
+        "robot.urdf.xacro",
     )
 
     config_file = LaunchConfiguration("config_file")
@@ -35,7 +35,7 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "robot_description_file",
                 default_value=default_robot_description,
-                description="Path to robot URDF containing fixed thruster poses",
+                description="Path to robot xacro/URDF containing fixed thruster poses",
             ),
             DeclareLaunchArgument(
                 "use_velocity_feedback",
@@ -58,7 +58,7 @@ def generate_launch_description():
                     config_file,
                     {
                         "robot_description": ParameterValue(
-                            Command(["cat ", robot_description_file]),
+                            Command(["xacro ", robot_description_file]),
                             value_type=str,
                         ),
                         "control.stop_on_feedback_timeout": ParameterValue(

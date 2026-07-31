@@ -9,6 +9,7 @@ from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 
 
 class Task3Orchestrator(Node):
@@ -18,30 +19,42 @@ class Task3Orchestrator(Node):
         # Declare parameters
         self.declare_parameter("frame_id", "map")
         self.declare_parameter("task_type", "task3_1")
+        self.declare_parameter("run_full_sequence", False)
         self.declare_parameter("motion_amp", 0.3)
         self.declare_parameter("motion_freq_hz", 0.1)
-        self.declare_parameter("dock_pose", [15.0, 0.0, 0.0])
+        self.declare_parameter("dock_pose", [20.0, 0.0, 0.0])
         self.declare_parameter("dock_size_xy", [2.0, 4.13])
-        self.declare_parameter("goal_xy", [13.0, 11.0])
+        self.declare_parameter("goal_xy", [18.0, 10.0])
         self.declare_parameter("goal_radius", 1.5)
+        self.declare_parameter("dock_visit_radius", 1.5)
         self.declare_parameter("publish_rate_hz", 10.0)
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         self.task_type = self.get_parameter("task_type").get_parameter_value().string_value
+        self.run_full_sequence = self.get_parameter("run_full_sequence").get_parameter_value().bool_value
         self.motion_amp = self.get_parameter("motion_amp").get_parameter_value().double_value
         self.motion_freq_hz = self.get_parameter("motion_freq_hz").get_parameter_value().double_value
         self.goal_radius = self.get_parameter("goal_radius").get_parameter_value().double_value
+        self.dock_visit_radius = self.get_parameter("dock_visit_radius").get_parameter_value().double_value
         self.publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
 
         # Dynamically override parameters based on task type to form a point-symmetric virtual field
         if self.task_type == "task3_2":
-            self.dock_pose = [-15.0, 0.0, 3.14159]
+            self.dock_pose = [-20.0, 0.0, 3.14159]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [-13.0, -11.0]
+            self.goal_xy = [-18.0, -11.0]
+            self.dock_visit_xy = [-20.0, 0.0]
         else:  # task3_1 default
-            self.dock_pose = [15.0, 0.0, 0.0]
+            self.dock_pose = [20.0, 0.0, 0.0]
             self.dock_size_xy = [2.0, 4.13]
-            self.goal_xy = [13.0, 11.0]
+            if self.run_full_sequence:
+                self.goal_xy = [-18.0, -11.0]
+                self.dock_visit_xy = [-20.0, 0.0]
+            else:
+                self.goal_xy = [18.0, 10.0]
+                self.dock_visit_xy = [20.0, 1.065]
+
+        self.completion_requires_dock_visit = True
 
         # Always import BOTH buoy sets — full field is always visible
         from .buoy_config import BUOY_DEFINITIONS_3_1, BUOY_DEFINITIONS_3_2
@@ -50,7 +63,9 @@ class Task3Orchestrator(Node):
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
+        self.pub_gps8_reached = self.create_publisher(Bool, "/sim/task3/gps8_reached", transient_qos)
         self.pub_dock_projection = self.create_publisher(PolygonStamped, "/sim/dock_projection", 10)
+        self.pub_buoy_markers = self.create_publisher(MarkerArray, "/sim/buoy_markers", 10)
 
         # Pointcloud publisher and TF listener
         self.pub_pointcloud = self.create_publisher(PointCloud2, "/pointcloud", 10)
@@ -61,6 +76,9 @@ class Task3Orchestrator(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.goal_announced = False
+        self.dock_visited = False
+        self.gps8_visited = False
+        self.gate_midpoints = {}
         self.publish_start_and_goal()
 
         # Pre-generate static dock points in the global map frame
@@ -109,36 +127,88 @@ class Task3Orchestrator(Node):
             poly.polygon.points.append(p)
         self.pub_dock_projection.publish(poly)
 
+    def publish_buoy_markers(self, buoy_positions):
+        markers = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+
+        for marker_id, buoy in enumerate(buoy_positions):
+            marker = Marker()
+            marker.header.stamp = stamp
+            marker.header.frame_id = self.frame_id
+            marker.ns = "task3_buoys"
+            marker.id = marker_id
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = buoy["x"]
+            marker.pose.position.y = buoy["y"]
+            marker.pose.position.z = 0.45
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.9
+            marker.scale.y = 0.9
+            marker.scale.z = 0.9
+            marker.color.a = 0.9
+            if "red" in buoy["name"]:
+                marker.color.r = 1.0
+                marker.color.g = 0.0
+                marker.color.b = 0.0
+            elif "green" in buoy["name"]:
+                marker.color.r = 0.0
+                marker.color.g = 1.0
+                marker.color.b = 0.0
+            else:
+                marker.color.r = 1.0
+                marker.color.g = 1.0
+                marker.color.b = 1.0
+            markers.markers.append(marker)
+
+        self.pub_buoy_markers.publish(markers)
+
+    def update_gate_midpoints(self, buoy_positions):
+        by_name = {buoy["name"]: buoy for buoy in buoy_positions}
+        gate_pairs = {
+            "gps8": ("b31_red_gate", "b31_green_gate"),
+            "gps9": ("b32_red_gate", "b32_green_gate"),
+        }
+        for gate_name, (red_name, green_name) in gate_pairs.items():
+            red = by_name.get(red_name)
+            green = by_name.get(green_name)
+            if red is None or green is None:
+                continue
+            self.gate_midpoints[gate_name] = (
+                0.5 * (red["x"] + green["x"]),
+                0.5 * (red["y"] + green["y"]),
+            )
+
     def generate_field_points(self):
         pts = []
-        # 1. Task 3.1 Dock (Normal Dock) - shifted 2m deeper (x: 14.0 to 16.0)
+        # 1. Task 3.1 Dock (Normal Dock) - shifted deeper (x: 19.0 to 21.0)
         # Left prong
-        pts.extend(self.line_points(14.0, 2.195, 16.0, 2.195, 0.05))
-        pts.extend(self.line_points(14.0, 2.065, 16.0, 2.065, 0.05))
-        pts.extend(self.line_points(14.0, 2.065, 14.0, 2.195, 0.05))
+        pts.extend(self.line_points(19.0, 2.195, 21.0, 2.195, 0.05))
+        pts.extend(self.line_points(19.0, 2.065, 21.0, 2.065, 0.05))
+        pts.extend(self.line_points(19.0, 2.065, 19.0, 2.195, 0.05))
         # Right prong
-        pts.extend(self.line_points(14.0, -2.195, 16.0, -2.195, 0.05))
-        pts.extend(self.line_points(14.0, -2.065, 16.0, -2.065, 0.05))
-        pts.extend(self.line_points(14.0, -2.065, 14.0, -2.195, 0.05))
+        pts.extend(self.line_points(19.0, -2.195, 21.0, -2.195, 0.05))
+        pts.extend(self.line_points(19.0, -2.065, 21.0, -2.065, 0.05))
+        pts.extend(self.line_points(19.0, -2.065, 19.0, -2.195, 0.05))
         # Center prong
-        pts.extend(self.line_points(14.0, 0.065, 16.0, 0.065, 0.05))
-        pts.extend(self.line_points(14.0, -0.065, 16.0, -0.065, 0.05))
-        pts.extend(self.line_points(14.0, -0.065, 14.0, 0.065, 0.05))
+        pts.extend(self.line_points(19.0, 0.065, 21.0, 0.065, 0.05))
+        pts.extend(self.line_points(19.0, -0.065, 21.0, -0.065, 0.05))
+        pts.extend(self.line_points(19.0, -0.065, 19.0, 0.065, 0.05))
         # Back walls
-        pts.extend(self.line_points(16.0, 0.065, 16.0, 2.065, 0.05))
-        pts.extend(self.line_points(16.0, -2.065, 16.0, -0.065, 0.05))
+        pts.extend(self.line_points(21.0, 0.065, 21.0, 2.065, 0.05))
+        pts.extend(self.line_points(21.0, -2.065, 21.0, -0.065, 0.05))
 
-        # 2. Task 3.2 Dock (Parallel Dock) - shifted 2m deeper (x: -14.0 to -16.0)
+        # 2. Task 3.2 Dock (Parallel Dock) - shifted deeper (x: -19.0 to -21.0)
         # Left prong
-        pts.extend(self.line_points(-14.0, 2.195, -16.0, 2.195, 0.05))
-        pts.extend(self.line_points(-14.0, 2.065, -16.0, 2.065, 0.05))
-        pts.extend(self.line_points(-14.0, 2.065, -14.0, 2.195, 0.05))
+        pts.extend(self.line_points(-19.0, 2.195, -21.0, 2.195, 0.05))
+        pts.extend(self.line_points(-19.0, 2.065, -21.0, 2.065, 0.05))
+        pts.extend(self.line_points(-19.0, 2.065, -19.0, 2.195, 0.05))
         # Right prong
-        pts.extend(self.line_points(-14.0, -2.195, -16.0, -2.195, 0.05))
-        pts.extend(self.line_points(-14.0, -2.065, -16.0, -2.065, 0.05))
-        pts.extend(self.line_points(-14.0, -2.065, -14.0, -2.195, 0.05))
+        pts.extend(self.line_points(-19.0, -2.195, -21.0, -2.195, 0.05))
+        pts.extend(self.line_points(-19.0, -2.065, -21.0, -2.065, 0.05))
+        pts.extend(self.line_points(-19.0, -2.065, -19.0, -2.195, 0.05))
         # Back wall (no center prong)
-        pts.extend(self.line_points(-16.0, -2.065, -16.0, 2.065, 0.05))
+        pts.extend(self.line_points(-21.0, -2.065, -21.0, 2.065, 0.05))
 
         # Unique points (deduplicate within 1mm)
         unique_pts = []
@@ -212,6 +282,7 @@ class Task3Orchestrator(Node):
 
         # Generate dynamic buoy positions and broadcast TFs
         buoy_pts = []
+        buoy_positions = []
         s = 0.05  # 5cm square
         for buoy in self.buoy_definitions:
             phase = 2.0 * math.pi * self.motion_freq_hz * t + buoy['phase_offset']
@@ -220,6 +291,7 @@ class Task3Orchestrator(Node):
 
             # Broadcast buoy TF
             self.publish_tf(buoy['name'], x_dyn, y_dyn)
+            buoy_positions.append({"name": buoy["name"], "x": x_dyn, "y": y_dyn})
 
             # Generate 5cm-squared points around the dynamic center
             buoy_pts.extend(self.line_points(x_dyn - s/2, y_dyn + s/2, x_dyn + s/2, y_dyn + s/2, 0.01))
@@ -229,7 +301,9 @@ class Task3Orchestrator(Node):
 
         # Broadcast dock TF and projection
         self.publish_tf("dock", self.dock_pose[0], self.dock_pose[1], self.dock_pose[2])
+        self.update_gate_midpoints(buoy_positions)
         self.publish_dock_projection()
+        self.publish_buoy_markers(buoy_positions)
 
         # Combine static dock and dynamic buoy points
         all_map_pts = self.static_map_points + buoy_pts
@@ -258,9 +332,44 @@ class Task3Orchestrator(Node):
     def on_odom(self, msg: Odometry):
         if self.goal_announced:
             return
-        dx = msg.pose.pose.position.x - self.goal_xy[0]
-        dy = msg.pose.pose.position.y - self.goal_xy[1]
-        if math.hypot(dx, dy) <= self.goal_radius:
+
+        gps8_xy = self.gate_midpoints.get("gps8", (18.0, 10.0))
+        gps8_dx = msg.pose.pose.position.x - gps8_xy[0]
+        gps8_dy = msg.pose.pose.position.y - gps8_xy[1]
+        if (
+            self.task_type == "task3_1" and
+            not self.gps8_visited and
+            math.hypot(gps8_dx, gps8_dy) <= self.goal_radius
+        ):
+            self.gps8_visited = True
+            reached = Bool()
+            reached.data = True
+            self.pub_gps8_reached.publish(reached)
+            self.get_logger().info(
+                f"Task3.1 first GPS8 gate reached at dynamic midpoint "
+                f"({gps8_xy[0]:.2f}, {gps8_xy[1]:.2f})"
+            )
+
+        if self.completion_requires_dock_visit and not self.dock_visited:
+            dock_dx = msg.pose.pose.position.x - self.dock_visit_xy[0]
+            dock_dy = msg.pose.pose.position.y - self.dock_visit_xy[1]
+            if math.hypot(dock_dx, dock_dy) <= self.dock_visit_radius:
+                self.dock_visited = True
+                self.get_logger().info(
+                    f"{self.task_type} dock visit observed; final goal check armed"
+                )
+
+        goal_xy = gps8_xy if (
+            self.task_type == "task3_1" and
+            not self.run_full_sequence
+        ) else self.goal_xy
+
+        dx = msg.pose.pose.position.x - goal_xy[0]
+        dy = msg.pose.pose.position.y - goal_xy[1]
+        if (
+            math.hypot(dx, dy) <= self.goal_radius and
+            (not self.completion_requires_dock_visit or self.dock_visited)
+        ):
             done = Bool()
             done.data = True
             self.pub_goal.publish(done)

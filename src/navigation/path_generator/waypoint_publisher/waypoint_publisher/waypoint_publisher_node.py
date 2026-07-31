@@ -14,35 +14,32 @@ Supports:
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
-from rclpy.qos import DurabilityPolicy, QoSProfile
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import Point, PoseStamped
+from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
-from nav_msgs.msg import Path as PathMsg
-from std_msgs.msg import ColorRGBA, Header
-from visualization_msgs.msg import Marker, MarkerArray
+from tf2_ros import Buffer, TransformListener
 import yaml
 from pathlib import Path
 from enum import Enum
-from ament_index_python.packages import get_package_share_directory
 
 class TaskType(Enum):
     """Enumeration for supported task types"""
     TASK1 = "task1"
-    TASK1_FOLLOW = "task1_follow"
     TASK2 = "task2"
     TASK3_1 = "task3_1"
     TASK3_2 = "task3_2"
 
 class DockingState(Enum):
-    """State machine for task3 multi-stage docking (two berths)"""
+    """State machine for task3 multi-stage docking."""
     IDLE = 0
-    STAGE1_APPROACH = 1   # 7 -> 8 -> berth1
-    STAGE1_WAIT = 2       # stationary at berth1
-    STAGE2_APPROACH = 3   # 8_exit -> 9 -> berth2
-    STAGE2_WAIT = 4       # stationary at berth2
-    STAGE3_EXIT = 5       # 10
-    COMPLETE = 6
+    STAGE1_GATE = 1
+    STAGE1_APPROACH = 2
+    STAGE1_WAIT = 3
+    STAGE2_APPROACH = 4
+    STAGE2_WAIT = 5
+    FINAL_EXIT = 6
+    COMPLETE = 7
+    FAILED = 8
 
 class WaypointPublisher(Node):
     """
@@ -52,16 +49,22 @@ class WaypointPublisher(Node):
     
     def __init__(self):
         super().__init__('waypoint_publisher')
-        
+
         # Declare parameters
         self.declare_parameter('task_type', 'task1')
         self.declare_parameter('frame_id', 'map')
         self.declare_parameter('publish_rate_hz', 2.0)
-        
+        self.declare_parameter('use_dynamic_gate_midpoints', True)
+        self.declare_parameter('run_full_sequence', False)
+        self.declare_parameter('max_goal_retries', 1)
+
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
         self.frame_id = self.get_parameter('frame_id').value
         self.publish_rate_hz = self.get_parameter('publish_rate_hz').value
+        self.use_dynamic_gate_midpoints = self.get_parameter('use_dynamic_gate_midpoints').value
+        self.run_full_sequence = self.get_parameter('run_full_sequence').value
+        self.max_goal_retries = int(self.get_parameter('max_goal_retries').value)
         
         # Validate task type
         try:
@@ -72,23 +75,23 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
-        self.frame_id = self.frame_id or self.config.get('frame_id', 'map')
-        
-        transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.waypoints_pub = self.create_publisher(PathMsg, '/task_waypoints', transient_qos)
-        self.path_pub = self.create_publisher(PathMsg, '/task_waypoint_path', transient_qos)
-        self.marker_pub = self.create_publisher(MarkerArray, '/task_waypoint_markers', transient_qos)
 
+        # TF lookup is used to replace Task3 gate waypoints with the live midpoint
+        # between the corresponding red and green buoys when those frames exist.
+        self.tf_buffer = Buffer()
+        self.tf_listener = TransformListener(self.tf_buffer, self)
+        
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
-        path_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.path_publisher = self.create_publisher(PathMsg, '/plan', path_qos)
-        self.marker_publisher = self.create_publisher(MarkerArray, '/waypoint_markers', path_qos)
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
         self.dock_wait_timer = None
         self.goal_handle = None
+        self.current_task3_stage_name = None
+        self.current_task3_poses = []
+        self.task3_goal_retry_count = 0
+        self.warned_gate_fallback_ids = set()
         
         # Subscription to navigation feedback
         self.goal_reached_subscription = None
@@ -96,22 +99,22 @@ class WaypointPublisher(Node):
         # Create timer for periodic publishing
         self.timer = self.create_timer(1.0 / self.publish_rate_hz, self._timer_callback)
         self.first_publish = True
-        self.plan_published = False
         
-        self._publish_visualization()
-
-        self.get_logger().info(f"WaypointPublisher initialized for task: {self.task_type.value}")
+        self.get_logger().info(
+            f"WaypointPublisher initialized for task: {self.task_type.value}, "
+            f"run_full_sequence={self.run_full_sequence}"
+        )
         
     def _load_config(self) -> dict:
         """
         Load waypoint configuration from YAML file
         Returns: dict with task configuration
         """
-        package_share_dir = Path(get_package_share_directory('waypoint_publisher')) / 'config'
+        # Construct config file path
+        package_share_dir = Path(__file__).parent.parent / 'config'
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
-            TaskType.TASK1_FOLLOW: 'task1_follow_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
             TaskType.TASK3_2: 'task3_waypoints.yaml',
@@ -129,8 +132,6 @@ class WaypointPublisher(Node):
         # Extract relevant config based on task type
         if self.task_type == TaskType.TASK1:
             return full_config['task1_config']
-        elif self.task_type == TaskType.TASK1_FOLLOW:
-            return full_config['task1_follow_config']
         elif self.task_type == TaskType.TASK2:
             return full_config['task2_config']
         elif self.task_type == TaskType.TASK3_1:
@@ -140,12 +141,6 @@ class WaypointPublisher(Node):
     
     def _timer_callback(self):
         """Timer callback to publish waypoints"""
-        self._publish_visualization()
-
-        if not self.plan_published:
-            self._publish_plan(self._build_poses_from_config())
-            self.plan_published = True
-
         if not self.first_publish:
             return
         
@@ -155,7 +150,7 @@ class WaypointPublisher(Node):
         
         self.first_publish = False
         
-        if self.task_type in [TaskType.TASK1, TaskType.TASK1_FOLLOW, TaskType.TASK2]:
+        if self.task_type in [TaskType.TASK1, TaskType.TASK2]:
             self._publish_waypoints_single_stage()
         elif self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self._publish_task3_first_stage()
@@ -163,24 +158,47 @@ class WaypointPublisher(Node):
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
         waypoints = self._build_poses_from_config()
-        self._publish_plan(waypoints)
         self._send_navigate_through_poses_goal(waypoints)
         
         task_name = self.task_type.value
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
     
     def _publish_task3_first_stage(self):
-        """Publish the docking approach stage for the selected Task3 mode."""
-        waypoints = self._build_poses_from_config()
-        if len(waypoints) >= 3:
-            stage1 = waypoints[:3]
-            self._publish_plan(stage1)
-            self._send_navigate_through_poses_goal(stage1)
-            self.docking_state = DockingState.STAGE1_APPROACH
+        """Publish the gate approach stage for the selected Task3 mode."""
+        gate_stage_ids = self._task3_stage_ids('stage_1_gate')
+        if not gate_stage_ids:
+            self._publish_task3_dock_stage()
+            return
+
+        stage1 = self._build_poses_for_ids(gate_stage_ids)
+        if stage1:
+            self.docking_state = DockingState.STAGE1_GATE
+            self._send_navigate_through_poses_goal(stage1, stage_name='stage_1_gate')
             if self.task_type == TaskType.TASK3_2:
-                self.get_logger().info("Task3.2: approach sent [gps9 -> gate -> berth2]")
+                self.get_logger().info(
+                    "Task3.2: gate stage sent [gps9 -> corridor_gate -> gps9_gate]"
+                )
             else:
-                self.get_logger().info("Task3.1: Stage 1 sent [gps7 -> gps8 -> berth1]")
+                self.get_logger().info(
+                    "Task3.1: gate stage sent [gps7 -> corridor_gate -> gps8]"
+                )
+        else:
+            self.get_logger().warn("Task3: Insufficient waypoints for stage_1_gate")
+
+    def _publish_task3_dock_stage(self):
+        """Publish the dock approach stage after the mandatory gate goal."""
+        stage1 = self._build_poses_for_ids(self._task3_stage_ids('stage_1'))
+        if stage1:
+            self.docking_state = DockingState.STAGE1_APPROACH
+            self._send_navigate_through_poses_goal(stage1, stage_name='stage_1')
+            if self.task_type == TaskType.TASK3_2:
+                self.get_logger().info(
+                    "Task3.2: dock stage sent [berth2_approach -> berth2]"
+                )
+            else:
+                self.get_logger().info(
+                    "Task3.1: dock stage sent [berth1_approach -> berth1]"
+                )
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 1")
     
@@ -193,113 +211,82 @@ class WaypointPublisher(Node):
         waypoints = self.config.get('waypoints', [])
         
         for wp in waypoints:
-            pose = PoseStamped()
-            pose.header.frame_id = self.frame_id
-            pose.header.stamp = self.get_clock().now().to_msg()
-            
-            # Position
-            pose.pose.position.x = float(wp.get('x', 0.0))
-            pose.pose.position.y = float(wp.get('y', 0.0))
-            pose.pose.position.z = 0.0
-            
-            # Orientation (yaw to quaternion)
-            yaw = float(wp.get('yaw', 0.0))
-            pose.pose.orientation = self._yaw_to_quaternion(yaw)
-            
-            poses.append(pose)
+            poses.append(self._pose_from_waypoint(wp))
         
         return poses
+
+    def _build_poses_for_ids(self, waypoint_ids: list) -> list:
+        """Build poses for the requested waypoint ids, preserving the id order."""
+        by_id = {str(wp.get('id')): wp for wp in self.config.get('waypoints', [])}
+        poses = []
+        missing = []
+        for waypoint_id in waypoint_ids:
+            wp = by_id.get(str(waypoint_id))
+            if wp is None:
+                missing.append(str(waypoint_id))
+                continue
+            poses.append(self._pose_from_waypoint(wp))
+        if missing:
+            self.get_logger().warn(f"Task3: missing waypoint ids: {', '.join(missing)}")
+            return []
+        return poses
+
+    def _task3_stage_ids(self, stage_name: str) -> list:
+        stages = self.config.get('stages', {})
+        if self.run_full_sequence:
+            stages = self.config.get('full_sequence_stages', stages)
+        return stages.get(stage_name, [])
+
+    def _pose_from_waypoint(self, wp: dict) -> PoseStamped:
+        pose = PoseStamped()
+        pose.header.frame_id = self.frame_id
+        pose.header.stamp = self.get_clock().now().to_msg()
+
+        x = float(wp.get('x', 0.0))
+        y = float(wp.get('y', 0.0))
+        midpoint = self._gate_midpoint_from_tf(wp)
+        if midpoint is not None:
+            x, y = midpoint
+
+        pose.pose.position.x = x
+        pose.pose.position.y = y
+        pose.pose.position.z = 0.0
+
+        yaw = float(wp.get('yaw', 0.0))
+        pose.pose.orientation = self._yaw_to_quaternion(yaw)
+        return pose
+
+    def _gate_midpoint_from_tf(self, wp: dict):
+        if not self.use_dynamic_gate_midpoints or wp.get('type') != 'gate':
+            return None
+        gate_pair = wp.get('gate_pair')
+        if not gate_pair:
+            return None
+        try:
+            red_tf = self.tf_buffer.lookup_transform(
+                self.frame_id, gate_pair['red_frame'], rclpy.time.Time())
+            green_tf = self.tf_buffer.lookup_transform(
+                self.frame_id, gate_pair['green_frame'], rclpy.time.Time())
+        except Exception as exc:
+            waypoint_id = str(wp.get('id'))
+            if waypoint_id not in self.warned_gate_fallback_ids:
+                self.warned_gate_fallback_ids.add(waypoint_id)
+                self.get_logger().warn(
+                    f"Task3: using configured gate waypoint for {waypoint_id}; "
+                    f"gate TF unavailable: {exc}"
+                )
+            return None
+
+        rx = red_tf.transform.translation.x
+        ry = red_tf.transform.translation.y
+        gx = green_tf.transform.translation.x
+        gy = green_tf.transform.translation.y
+        self.get_logger().debug(
+            f"Task3: using live gate midpoint for {wp.get('id')} from "
+            f"{gate_pair['red_frame']} and {gate_pair['green_frame']}"
+        )
+        return (0.5 * (rx + gx), 0.5 * (ry + gy))
     
-
-    def _publish_visualization(self):
-        """Publish Foxglove/RViz-friendly waypoint path and markers."""
-        poses = self._build_poses_from_config()
-        stamp = self.get_clock().now().to_msg()
-        header = Header()
-        header.frame_id = self.frame_id
-        header.stamp = stamp
-
-        waypoints_msg = PathMsg()
-        waypoints_msg.header = header
-        path_msg = PathMsg()
-        path_msg.header = header
-
-        marker_array = MarkerArray()
-        line_marker = Marker()
-        line_marker.header = header
-        line_marker.ns = "task_waypoint_path"
-        line_marker.id = 0
-        line_marker.type = Marker.LINE_STRIP
-        line_marker.action = Marker.ADD
-        line_marker.pose.orientation.w = 1.0
-        line_marker.scale.x = 0.25
-        line_marker.color.r = 0.0
-        line_marker.color.g = 0.65
-        line_marker.color.b = 1.0
-        line_marker.color.a = 1.0
-
-        delete_text = Marker()
-        delete_text.header = header
-        delete_text.ns = "task_waypoint_labels"
-        delete_text.action = Marker.DELETEALL
-        marker_array.markers.append(delete_text)
-
-        for idx, pose in enumerate(poses, start=1):
-            pose.header = header
-            waypoints_msg.poses.append(pose)
-            path_msg.poses.append(pose)
-
-            point = Point()
-            point.x = pose.pose.position.x
-            point.y = pose.pose.position.y
-            point.z = pose.pose.position.z
-            line_marker.points.append(point)
-
-            sphere = Marker()
-            sphere.header = header
-            sphere.ns = "task_waypoints"
-            sphere.id = idx
-            sphere.type = Marker.SPHERE
-            sphere.action = Marker.ADD
-            sphere.pose = pose.pose
-            sphere.pose.position.z = 0.2
-            sphere.scale.x = 0.8
-            sphere.scale.y = 0.8
-            sphere.scale.z = 0.4
-            if idx == 1:
-                sphere.color.g = 1.0
-            elif idx == len(poses):
-                sphere.color.r = 1.0
-                sphere.color.g = 0.2
-            else:
-                sphere.color.r = 1.0
-                sphere.color.g = 0.85
-            sphere.color.a = 1.0
-            marker_array.markers.append(sphere)
-
-            label = Marker()
-            label.header = header
-            label.ns = "task_waypoint_labels"
-            label.id = idx
-            label.type = Marker.TEXT_VIEW_FACING
-            label.action = Marker.ADD
-            label.pose.position.x = pose.pose.position.x
-            label.pose.position.y = pose.pose.position.y
-            label.pose.position.z = 1.2
-            label.pose.orientation.w = 1.0
-            label.scale.z = 1.0
-            label.color.r = 1.0
-            label.color.g = 1.0
-            label.color.b = 1.0
-            label.color.a = 1.0
-            label.text = str(idx)
-            marker_array.markers.append(label)
-
-        marker_array.markers.append(line_marker)
-        self.waypoints_pub.publish(waypoints_msg)
-        self.path_pub.publish(path_msg)
-        self.marker_pub.publish(marker_array)
-
     def _yaw_to_quaternion(self, yaw: float):
         """Convert yaw angle to quaternion"""
         from geometry_msgs.msg import Quaternion
@@ -314,7 +301,7 @@ class WaypointPublisher(Node):
         
         return quat
     
-    def _send_navigate_through_poses_goal(self, poses: list):
+    def _send_navigate_through_poses_goal(self, poses: list, stage_name: str = None):
         """
         Send NavigateThroughPoses action goal
         
@@ -324,6 +311,12 @@ class WaypointPublisher(Node):
         if not self.nav_client.server_is_ready():
             self.get_logger().warn("NavigateThroughPoses action server not ready, retrying...")
             return
+
+        if self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2] and stage_name:
+            if stage_name != self.current_task3_stage_name:
+                self.task3_goal_retry_count = 0
+            self.current_task3_stage_name = stage_name
+            self.current_task3_poses = poses
         
         goal_msg = NavigateThroughPoses.Goal()
         goal_msg.poses = poses
@@ -338,11 +331,14 @@ class WaypointPublisher(Node):
         
         if not self.goal_handle.accepted:
             self.get_logger().warn("Goal rejected by NavigateThroughPoses action server")
-            self.first_publish = True
+            if self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
+                self._retry_or_fail_current_task3_stage("goal rejected")
+            else:
+                self.first_publish = True
             return
         
         self.get_logger().info("Goal accepted by NavigateThroughPoses action server")
-        
+
         # For task3, wait for goal completion and then trigger stage 2
         if self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self.goal_handle.get_result_async().add_done_callback(self._task3_goal_result_callback)
@@ -352,12 +348,14 @@ class WaypointPublisher(Node):
         wrapped_result = future.result()
         if wrapped_result is None or wrapped_result.status != GoalStatus.STATUS_SUCCEEDED:
             status = None if wrapped_result is None else wrapped_result.status
-            self.get_logger().error(
-                f"Task3: Goal failed at state {self.docking_state}, status={status}"
-            )
+            self._retry_or_fail_current_task3_stage(f"goal status={status}")
             return
 
-        if self.docking_state == DockingState.STAGE1_APPROACH:
+        if self.docking_state == DockingState.STAGE1_GATE:
+            self.get_logger().info("Task3: mandatory gate reached; continuing to dock stage")
+            self._publish_task3_dock_stage()
+
+        elif self.docking_state == DockingState.STAGE1_APPROACH:
             self.docking_state = DockingState.STAGE1_WAIT
             wait_time = float(self.config.get('constraints', {}).get('wait_time_s', 10))
             berth_name = "Berth 2" if self.task_type == TaskType.TASK3_2 else "Berth 1"
@@ -367,35 +365,74 @@ class WaypointPublisher(Node):
         elif self.docking_state == DockingState.STAGE2_APPROACH:
             # Arrived at berth2 -> start wait
             self.docking_state = DockingState.STAGE2_WAIT
-            wait_time = float(self.config.get('constraints', {}).get('wait_time_s', 10))
+            constraints = self.config.get('constraints', {})
+            wait_time = float(
+                constraints.get('second_wait_time_s', constraints.get('wait_time_s', 5))
+            )
             self.get_logger().info(f"Task3: Berth 2 reached, waiting {wait_time:.0f}s...")
             self.dock_wait_timer = self.create_timer(wait_time, self._stage2_wait_complete)
 
-        elif self.docking_state == DockingState.STAGE3_EXIT:
+        elif self.docking_state == DockingState.FINAL_EXIT:
             self.docking_state = DockingState.COMPLETE
-            self.get_logger().info("Task3: Complete! Reached gps10.")
+            finish_name = "gps10" if self._task3_stage_ids('stage_3') else "gps8"
+            self.get_logger().info(f"Task3: Complete! Reached {finish_name}.")
+
+    def _retry_or_fail_current_task3_stage(self, reason: str):
+        """Retry the active Task3 stage without falling back to stage 1."""
+        if (
+            not self.current_task3_stage_name or
+            not self.current_task3_poses or
+            self.docking_state in [DockingState.COMPLETE, DockingState.FAILED]
+        ):
+            self.docking_state = DockingState.FAILED
+            self.get_logger().error(f"Task3: failed with no retryable current stage: {reason}")
+            return
+
+        if self.task3_goal_retry_count >= self.max_goal_retries:
+            self.docking_state = DockingState.FAILED
+            self.get_logger().error(
+                f"Task3: {self.current_task3_stage_name} failed after "
+                f"{self.task3_goal_retry_count} retries: {reason}"
+            )
+            return
+
+        self.task3_goal_retry_count += 1
+        self.get_logger().warn(
+            f"Task3: retrying {self.current_task3_stage_name} "
+            f"({self.task3_goal_retry_count}/{self.max_goal_retries}) after {reason}"
+        )
+        self._send_navigate_through_poses_goal(
+            self.current_task3_poses,
+            stage_name=self.current_task3_stage_name,
+        )
 
     def _stage1_wait_complete(self):
-        """Continue to the second berth for Task3.1, or exit for Task3.2."""
+        """Continue according to the selected Task3 flow."""
         if self.dock_wait_timer:
             self.destroy_timer(self.dock_wait_timer)
             self.dock_wait_timer = None
         if self.task_type == TaskType.TASK3_2:
-            self.docking_state = DockingState.STAGE3_EXIT
+            self.docking_state = DockingState.FINAL_EXIT
             self._publish_task3_third_stage()
-        else:
+        elif self.run_full_sequence:
             self.docking_state = DockingState.STAGE2_APPROACH
+            self._publish_task3_second_stage()
+        else:
+            self.docking_state = DockingState.FINAL_EXIT
             self._publish_task3_second_stage()
 
     def _publish_task3_second_stage(self):
-        """Stage 2: gps8_exit -> gps9 -> berth2"""
-        waypoints = self._build_poses_from_config()
-        # indices 3=8_exit, 4=gps9, 5=berth2
-        if len(waypoints) >= 6:
-            stage2 = waypoints[3:6]  # 8_exit, gps9, berth2
-            self._publish_plan(stage2)
-            self._send_navigate_through_poses_goal(stage2)
-            self.get_logger().info("Task3: Stage 2 sent [gps8_exit -> gps9 -> berth2]")
+        """Stage 2: either return to GPS8 or continue to berth2."""
+        stage2 = self._build_poses_for_ids(self._task3_stage_ids('stage_2'))
+        if stage2:
+            self._send_navigate_through_poses_goal(stage2, stage_name='stage_2')
+            if self.run_full_sequence:
+                self.get_logger().info(
+                    "Task3: Stage 2 sent [berth1_exit -> corridor_gate -> "
+                    "gps9 -> berth2_approach -> berth2]"
+                )
+            else:
+                self.get_logger().info("Task3.1: Stage 2 sent [berth1_exit -> gps8 - finish]")
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 2")
 
@@ -404,101 +441,17 @@ class WaypointPublisher(Node):
         if self.dock_wait_timer:
             self.destroy_timer(self.dock_wait_timer)
             self.dock_wait_timer = None
-        self.docking_state = DockingState.STAGE3_EXIT
+        self.docking_state = DockingState.FINAL_EXIT
         self._publish_task3_third_stage()
 
     def _publish_task3_third_stage(self):
         """Stage 3: gps10 (finish)"""
-        waypoints = self._build_poses_from_config()
-        finish_index = 3 if self.task_type == TaskType.TASK3_2 else 6
-        if len(waypoints) > finish_index:
-            stage3 = [waypoints[finish_index]]
-            self._publish_plan(stage3)
-            self._send_navigate_through_poses_goal(stage3)
+        stage3 = self._build_poses_for_ids(self._task3_stage_ids('stage_3'))
+        if stage3:
+            self._send_navigate_through_poses_goal(stage3, stage_name='stage_3')
             self.get_logger().info("Task3: Stage 3 sent [gps10 - finish]")
         else:
             self.get_logger().warn("Task3: Insufficient waypoints for stage 3")
-
-    def _publish_plan(self, poses: list):
-        """Publish the intended route for validators and GUI overlays."""
-        if not poses:
-            return
-
-        stamp = self.get_clock().now().to_msg()
-        path = PathMsg()
-        path.header.frame_id = self.frame_id
-        path.header.stamp = stamp
-
-        for pose in poses:
-            pose.header.stamp = stamp
-            path.poses.append(pose)
-
-        self.path_publisher.publish(path)
-        self._publish_waypoint_markers(poses, stamp)
-        self.get_logger().info(f"Published /plan with {len(path.poses)} poses")
-
-    def _publish_waypoint_markers(self, poses: list, stamp):
-        """Publish RViz markers that match the currently published path."""
-        marker_array = MarkerArray()
-        clear_marker = Marker()
-        clear_marker.action = Marker.DELETEALL
-        marker_array.markers.append(clear_marker)
-
-        waypoint_defs = self.config.get('waypoints', [])
-        for idx, pose in enumerate(poses):
-            wp = waypoint_defs[idx] if idx < len(waypoint_defs) else {}
-            marker_array.markers.append(self._make_waypoint_marker(idx, pose, wp, stamp))
-            marker_array.markers.append(self._make_waypoint_label_marker(idx, pose, wp, stamp))
-
-        self.marker_publisher.publish(marker_array)
-
-    def _waypoint_color(self, wp_type: str) -> ColorRGBA:
-        color = ColorRGBA()
-        color.a = 0.95
-        if wp_type == 'start':
-            color.r, color.g, color.b = 0.1, 0.9, 0.2
-        elif wp_type == 'goal':
-            color.r, color.g, color.b = 1.0, 0.1, 0.1
-        elif wp_type == 'gps':
-            color.r, color.g, color.b = 0.1, 0.35, 1.0
-        else:
-            color.r, color.g, color.b = 1.0, 0.85, 0.05
-        return color
-
-    def _make_waypoint_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
-        marker = Marker()
-        marker.header.frame_id = self.frame_id
-        marker.header.stamp = stamp
-        marker.ns = 'waypoints'
-        marker.id = idx
-        marker.type = Marker.SPHERE
-        marker.action = Marker.ADD
-        marker.pose.position.x = pose.pose.position.x
-        marker.pose.position.y = pose.pose.position.y
-        marker.pose.position.z = 0.3
-        marker.pose.orientation.w = 1.0
-        marker.scale.x = 0.8
-        marker.scale.y = 0.8
-        marker.scale.z = 0.8
-        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
-        return marker
-
-    def _make_waypoint_label_marker(self, idx: int, pose: PoseStamped, wp: dict, stamp) -> Marker:
-        marker = Marker()
-        marker.header.frame_id = self.frame_id
-        marker.header.stamp = stamp
-        marker.ns = 'waypoint_labels'
-        marker.id = idx
-        marker.type = Marker.TEXT_VIEW_FACING
-        marker.action = Marker.ADD
-        marker.pose.position.x = pose.pose.position.x
-        marker.pose.position.y = pose.pose.position.y
-        marker.pose.position.z = 1.1
-        marker.pose.orientation.w = 1.0
-        marker.scale.z = 0.8
-        marker.color = self._waypoint_color(str(wp.get('type', 'intermediate')))
-        marker.text = str(wp.get('name', f'WP {idx + 1}'))
-        return marker
 
 def main(args=None):
     rclpy.init(args=args)

@@ -5,8 +5,9 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, TimerAction, LogInfo
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import Command, LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_task3_sim  = get_package_share_directory("task3_sim")
@@ -14,9 +15,8 @@ def generate_launch_description():
     pkg_dutyed     = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_waypoint   = get_package_share_directory("waypoint_publisher")
     pkg_thruster   = get_package_share_directory("thruster_driver")
-    pkg_buoy_pub   = get_package_share_directory("buoy_obstacle_publisher")
-    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf_modified.urdf')
-    robot_description = open(robot_description_file, 'r').read()
+    robot_description_file = os.path.join(pkg_robot, 'urdf', 'robot.urdf.xacro')
+    robot_description = Command(['xacro ', robot_description_file])
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
@@ -41,11 +41,14 @@ def generate_launch_description():
         'nav2_delay', default_value='5.0',
         description='Delay before launching Nav2 (needs SimNode TF and filtered odometry)')
     goal_delay_arg = DeclareLaunchArgument(
-        'goal_delay', default_value='8.0',
+        'goal_delay', default_value='12.0',
         description='Delay before launching waypoint_publisher (needs Nav2 action servers up)')
     task_type_arg = DeclareLaunchArgument(
-        'task_type', default_value='task3_1',
+        'task_type', default_value='task3_2',
         description='Task type: task3_1 or task3_2')
+    full_sequence_arg = DeclareLaunchArgument(
+        'run_full_sequence', default_value='false',
+        description='For task3_1, continue through task3_2 and finish at GPS10')
     enable_diagnostics_arg = DeclareLaunchArgument(
         'enable_diagnostics', default_value='true',
         description='Launch generic topic heartbeat diagnostics for Task3 simulation')
@@ -54,6 +57,7 @@ def generate_launch_description():
     nav2_delay   = LaunchConfiguration('nav2_delay')
     goal_delay   = LaunchConfiguration('goal_delay')
     task_type    = LaunchConfiguration('task_type')
+    run_full_sequence = LaunchConfiguration('run_full_sequence')
     enable_diagnostics = LaunchConfiguration('enable_diagnostics')
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
@@ -81,11 +85,17 @@ def generate_launch_description():
         package="task3_sim",
         executable="task3_orchestrator",
         name="task3_orchestrator",
-        parameters=[config, {"task_type": task_type}],
+        parameters=[
+            config,
+            {
+                "task_type": task_type,
+                "run_full_sequence": ParameterValue(run_full_sequence, value_type=bool),
+            },
+        ],
         output="screen",
     )
 
-    # Thruster driver: cmd_vel -> /thruster_command (Float32MultiArray, Newton)
+    # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
     thruster_driver_node = Node(
         package="thruster_driver",
         executable="thruster_driver_node",
@@ -93,7 +103,8 @@ def generate_launch_description():
         parameters=[
             os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                "robot_description": robot_description,
+                "robot_description": ParameterValue(robot_description, value_type=str),
+                "transport_mode": "sim",
                 "control.dob.enable": False,
             },
         ],
@@ -107,7 +118,7 @@ def generate_launch_description():
         name='robot_state_publisher',
         output='screen',
         parameters=[{
-            'robot_description': robot_description,
+            'robot_description': ParameterValue(robot_description, value_type=str),
             'use_sim_time': False
         }]
     )
@@ -120,15 +131,9 @@ def generate_launch_description():
         output='screen',
         parameters=[
             os.path.join(pkg_robot, 'config', 'ekf_local.yaml'),
-            {
-                'publish_tf': False,
-                'print_diagnostics': False,
-            },
+            {'publish_tf': False},
         ],
-        remappings=[
-            ('odometry/filtered', 'odometry/filtered/local'),
-            ('/diagnostics', '/diagnostics/ekf'),
-        ]
+        remappings=[('odometry/filtered', 'odometry/filtered/local')]
     )
 
     # EKF global: local filtered odom + GPS -> odometry/filtered/global topic only
@@ -139,15 +144,9 @@ def generate_launch_description():
         output='screen',
         parameters=[
             os.path.join(pkg_robot, 'config', 'ekf_global.yaml'),
-            {
-                'publish_tf': False,
-                'print_diagnostics': False,
-            },
+            {'publish_tf': False},
         ],
-        remappings=[
-            ('odometry/filtered', 'odometry/filtered/global'),
-            ('/diagnostics', '/diagnostics/ekf'),
-        ]
+        remappings=[('odometry/filtered', 'odometry/filtered/global')]
     )
 
     # NavSat transform: /gps/fix + /wit/imu → /odometry/gps
@@ -182,20 +181,16 @@ def generate_launch_description():
             'map_frame': 'map',
             'resolution': 0.2,
             'map_size_m': 80.0,
-            'field_size_m': 40.0,
+            # GPS points fit in x=[-18, 18], y=[-11, 10]. The x margin also
+            # encloses the fixed docks, whose rear walls reach x=+/-21 m.
+            'field_size_x_m': 48.0,
+            'field_size_y_m': 28.0,
             'field_center_x': 0.0,
             'field_center_y': 0.0,
             'boundary_cost': 100,
+            'include_task3_docks': True,
+            'dock_wall_thickness_m': 0.3,
         }],
-        output='screen',
-    )
-
-    # Buoy obstacle publisher: buoy TFs → /buoy_costmap (OccupancyGrid, 5 Hz)
-    buoy_obstacle_node = Node(
-        package='buoy_obstacle_publisher',
-        executable='buoy_obstacle_publisher',
-        name='buoy_obstacle_publisher',
-        parameters=[os.path.join(pkg_buoy_pub, 'config', 'buoy_obstacle_publisher.yaml')],
         output='screen',
     )
 
@@ -211,7 +206,6 @@ def generate_launch_description():
             global_ekf_node,
             navsat_transform_node,
             field_boundary_node,
-            buoy_obstacle_node,
         ]
     )
 
@@ -244,6 +238,8 @@ def generate_launch_description():
             'task_type': task_type,
             'frame_id': 'map',
             'publish_rate_hz': '2.0',
+            'use_dynamic_gate_midpoints': 'true',
+            'run_full_sequence': run_full_sequence,
         }.items()
     )
 
@@ -267,6 +263,7 @@ def generate_launch_description():
         nav2_delay_arg,
         goal_delay_arg,
         task_type_arg,
+        full_sequence_arg,
         enable_diagnostics_arg,
         sensor_layer_timer,
         nav2_layer_timer,

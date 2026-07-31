@@ -14,6 +14,9 @@
   <exec_depend>adnav_driver</exec_depend>
   <exec_depend>diagnostic_monitors</exec_depend>
   <exec_depend>drogger_wired_flex</exec_depend>
+  <exec_depend>dwb_core</exec_depend>
+  <exec_depend>dwb_critics</exec_depend>
+  <exec_depend>dwb_plugins</exec_depend>
   <exec_depend>glim_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
@@ -28,6 +31,7 @@
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>waypoint_publisher</exec_depend>
   <exec_depend>witmotion_imu_driver</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
   <exec_depend>xacro</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
