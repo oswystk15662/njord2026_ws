@@ -79,6 +79,10 @@ def generate_launch_description():
                 "robot_description": robot_description,
                 "control.dob.enable": False,
                 "topics.cmd_vel": "/cmd_vel_auto",
+                # The shared driver config contains real-vessel propeller
+                # reversal [false, true, false, true].  Simulation receives
+                # physical forces directly, so use non-reversed sim outputs.
+                "thrusters.reverse": [False, False, False, False],
             },
         ],
         condition=IfCondition(LaunchConfiguration("use_thruster_driver")),

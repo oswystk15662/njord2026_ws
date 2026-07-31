@@ -15,19 +15,19 @@ constexpr double kPi = 3.14159265358979323846;
 std::vector<njord::thruster_driver::ThrusterGeometry> driverGeometry()
 {
   return {
-    {0.353553, -0.353553, kPi / 4.0, 1.0, false},
-    {0.353553, 0.353553, -kPi / 4.0, 1.0, false},
-    {-0.353553, -0.353553, 3.0 * kPi / 4.0, 1.0, false},
-    {-0.353553, 0.353553, -3.0 * kPi / 4.0, 1.0, false}};
+    {0.1803, -0.2500, kPi / 4.0, 51.5, false},
+    {0.1803, 0.2500, -kPi / 4.0, 51.5, false},
+    {-0.1803, -0.2500, 3.0 * kPi / 4.0, 51.5, false},
+    {-0.1803, 0.2500, -3.0 * kPi / 4.0, 51.5, false}};
 }
 
 std::vector<njord::sim::SimThrusterGeometry> simulatorGeometry()
 {
   return {
-    {0.353553, -0.353553, kPi / 4.0},
-    {0.353553, 0.353553, -kPi / 4.0},
-    {-0.353553, -0.353553, 3.0 * kPi / 4.0},
-    {-0.353553, 0.353553, -3.0 * kPi / 4.0}};
+    {0.1803, -0.2500, kPi / 4.0},
+    {0.1803, 0.2500, -kPi / 4.0},
+    {-0.1803, -0.2500, 3.0 * kPi / 4.0},
+    {-0.1803, 0.2500, -3.0 * kPi / 4.0}};
 }
 
 void expectMmgAxisMatchesAllocation(const std::array<double, 3> & requested)
@@ -67,4 +67,28 @@ TEST(ThrusterMmgConsistency, PreservesSurgeSwayAndYawAxes)
   expectMmgAxisMatchesAllocation({0.5, 0.0, 0.0});
   expectMmgAxisMatchesAllocation({0.0, 0.5, 0.0});
   expectMmgAxisMatchesAllocation({0.0, 0.0, 0.25});
+}
+
+TEST(ThrusterMmgConsistency, ForceTopicMatchesDriverAllocation)
+{
+  const auto geometry = driverGeometry();
+  const auto sim_geometry = simulatorGeometry();
+  for (const std::array<double, 3> requested : {
+    std::array<double, 3>{0.5, 0.0, 0.0},
+    std::array<double, 3>{0.0, 0.5, 0.0},
+    std::array<double, 3>{0.0, 0.0, 0.25}}) {
+    const auto commands = njord::thruster_driver::allocateWrench(
+      geometry, {requested[0], requested[1], requested[2]}, 1e-9);
+    std::vector<double> forces;
+    forces.reserve(commands.size());
+    for (std::size_t i = 0; i < commands.size(); ++i) {
+      forces.push_back(commands[i] * geometry[i].force_per_duty);
+    }
+
+    const auto driver_wrench = njord::thruster_driver::commandToWrench(geometry, commands);
+    const auto sim_wrench = njord::sim::forcesToPlanarInput(forces, sim_geometry);
+    for (std::size_t axis = 0; axis < driver_wrench.size(); ++axis) {
+      EXPECT_NEAR(sim_wrench[axis], driver_wrench[axis], 1e-9);
+    }
+  }
 }

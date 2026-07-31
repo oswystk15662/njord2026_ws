@@ -178,10 +178,11 @@ void SimNode::onTimer()
   PlanarInput input;
   if (latest_forces_.size() == 4U) {
     const std::vector<SimThrusterGeometry> geometry = {
-      {0.353553, -0.353553, 0.785398},
-      {0.353553, 0.353553, -0.785398},
-      {-0.353553, -0.353553, 2.35619},
-      {-0.353553, 0.353553, -2.35619}};
+      // Match robot.urdf.xacro / robot.urdf_modified.urdf.
+      {0.1803, -0.2500, 0.785398},
+      {0.1803, 0.2500, -0.785398},
+      {-0.1803, -0.2500, 2.35619},
+      {-0.1803, 0.2500, -2.35619}};
     input = forcesToPlanarInput(latest_forces_, geometry);
   }
 
