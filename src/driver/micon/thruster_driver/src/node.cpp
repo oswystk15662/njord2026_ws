@@ -52,7 +52,15 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   max_linear_x_ = this->declare_parameter<double>("input_scaling.max_linear_x", 1.0);
   max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
   max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
+  if (!std::isfinite(max_linear_x_) || max_linear_x_ <= 0.0 ||
+    !std::isfinite(max_linear_y_) || max_linear_y_ <= 0.0 ||
+    !std::isfinite(max_angular_z_) || max_angular_z_ <= 0.0)
+  {
+    throw std::runtime_error("input_scaling limits must be finite and greater than zero");
+  }
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
+  use_velocity_feedback_ =
+    this->declare_parameter<bool>("control.use_velocity_feedback", true);
   feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
   stop_on_feedback_timeout_ =
     this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
@@ -90,6 +98,15 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   allocation_regularization_ = std::max(
     1e-9,
     this->declare_parameter<double>("allocation.regularization_lambda", 1e-4));
+  allocation_wrench_sign_ = getDoubleVector(
+    "allocation.wrench_sign", {1.0, 1.0, 1.0});
+  if (allocation_wrench_sign_.size() != 3U ||
+    !std::all_of(
+      allocation_wrench_sign_.begin(), allocation_wrench_sign_.end(),
+      [](double sign) {return sign == -1.0 || sign == 1.0;}))
+  {
+    throw std::runtime_error("allocation.wrench_sign must contain three values, each -1 or 1");
+  }
   deadzone_pos_ = this->declare_parameter<double>("static_map.deadzone_pos", 0.0);
   deadzone_neg_ = this->declare_parameter<double>("static_map.deadzone_neg", 0.0);
 
@@ -123,10 +140,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
       cmd_vel_topic,
       10,
       std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
-    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      odom_topic,
-      10,
-      std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    if (use_velocity_feedback_) {
+      sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        odom_topic,
+        10,
+        std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    }
     const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
     control_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -144,10 +163,11 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. mode=%s output=%s thrusters=%zu dob=%s",
+    "thruster_driver started. mode=%s output=%s thrusters=%zu velocity_feedback=%s dob=%s",
     input_mode_.c_str(),
     sim_command_topic.c_str(),
     thrusters_.size(),
+    use_velocity_feedback_ ? "on" : "off",
     dob_enable_ ? "on" : "off");
 }
 
@@ -195,8 +215,8 @@ void ThrusterDriverNode::controlTimerCallback()
   last_control_time_ = now;
 
   const bool cmd_timeout = (now - last_cmd_time_).seconds() > watchdog_timeout_sec_;
-  const bool feedback_timeout =
-    !have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_;
+  const bool feedback_timeout = use_velocity_feedback_ &&
+    (!have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_);
 
   if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
     publishCommands(std::vector<double>(thrusters_.size(), 0.0));
@@ -206,7 +226,11 @@ void ThrusterDriverNode::controlTimerCallback()
   }
 
   const std::vector<double> wrench = computeWrench(dt);
-  std::vector<double> commands = allocateWrench(wrench);
+  std::vector<double> allocation_wrench = wrench;
+  for (std::size_t i = 0; i < allocation_wrench.size(); ++i) {
+    allocation_wrench[i] *= allocation_wrench_sign_[i];
+  }
+  std::vector<double> commands = allocateWrench(allocation_wrench);
 
   for (std::size_t i = 0; i < commands.size(); ++i) {
     commands[i] = applyStaticMap(commands[i], thrusters_[i]);

@@ -18,18 +18,38 @@ with `enable_detection:=false`.
 ## Interfaces
 
 - `joy` (`sensor_msgs/msg/Joy`) is read by both manual nodes.
-- `joy_converter_node` publishes `cmd_vel`, `/emg`, `/red`, `/yellow`, and `/green`.
-- `/emg` uses an active-low joystick contract: it is `false` only while button 0 is held.
-- `thruster_driver` performs velocity feedback control and X4 allocation.
-- `micon_driver_fd/serial_writer` packs the four normalized thruster commands and one flag byte.
+- `joy_converter_node` publishes `/cmd_vel_manual`, `/emg`, `/red`, `/yellow`, and `/green`.
+  Hold controller button 12 to publish manual velocity; releasing it sends one zero command and
+  returns control to Nav2 through `twist_mux` after its 0.5 s timeout.
+- `/emg` uses positive logic: button 0 sends `true` (emergency stop), while its
+  normal released state sends `false` (emergency stop released).
+- `manual_control.launch.py` uses UM982-only feedback by default, without the
+  EKF.  The UM982 driver natively publishes `odometry/feedback`
+  (`nav_msgs/msg/Odometry`), and this launch remaps it to the existing
+  `/odometry/filtered/local` interface.  Its surge/sway velocity is a filtered
+  GNSS position difference rotated into the boat frame by the dual-antenna
+  heading, and its yaw rate is the heading difference.  This requires a stable
+  outdoor GNSS fix.  Pass
+  `enable_um982_velocity_feedback:=false` to restore the prior EKF path.
+  The default `um982_feedback_mode:=ekf` uses the dedicated UM982-only EKF;
+  `um982_feedback_mode:=window` selects the time-window regression alternative.
+- `micon_driver_fd/serial_writer` automatically requests ARM. Joystick input cannot
+  request DISARM; after an emergency stop is released or the ESP32 resets, the
+  driver re-requests ARM once the required zero-thrust command is acknowledged.
+  The ESP32's physical and communication emergency-stop interlocks remain active.
 
-The flag byte is `bit3=emg`, `bit2=green`, `bit1=yellow`, `bit0=red`. The serial
-writer transports the emergency flag but does not suppress commands locally; the
-ESP32 firmware must enforce the stop. Validate that behavior on restrained
-hardware before operation.
+The command flags are `bit3=emg`, `bit2=green`, `bit1=yellow`, and `bit0=red`.
+The ESP32 enforces the emergency stop and other safety interlocks. Validate that
+behavior on restrained hardware before operation.
 
 ```bash
 ros2 launch simple_manual manual_control.launch.py serial_port:=/dev/ttyUSB0
+```
+
+`simple_manual.launch.py` is also provided as a compatibility alias:
+
+```bash
+ros2 launch simple_manual simple_manual.launch.py serial_port:=/dev/ttyUSB0
 ```
 
 The `axis.*`, `button.*`, and `scale.*` parameters belong to the

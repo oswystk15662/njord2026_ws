@@ -1,6 +1,8 @@
 #include "zed2i_driver/message_utils.hpp"
 #include "zed2i_driver/detection_message_utils.hpp"
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+#include "zed2i_driver/gpu_depth_median.hpp"
+#include "zed2i_driver/perception_logic.hpp"
 #include "zed2i_driver/tensor_rt_detector.hpp"
 #endif
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
@@ -12,7 +14,12 @@
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
+#include <sensor_msgs/point_cloud2_iterator.hpp>
+#include <geometry_msgs/msg/point_stamped.hpp>
 #include <sl/Camera.hpp>
+#include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
+#include <tf2_ros/buffer.h>
+#include <tf2_ros/transform_listener.h>
 
 #include <algorithm>
 #include <chrono>
@@ -22,6 +29,14 @@
 #include <string>
 #include <stdexcept>
 #include <vector>
+#include <mutex>
+#include <optional>
+
+#include <pcl/common/centroid.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+#include <pcl/search/kdtree.h>
+#include <pcl/segmentation/extract_clusters.h>
 
 namespace zed2i_driver
 {
@@ -44,7 +59,9 @@ class SdkNode : public rclcpp::Node
 {
 public:
   explicit SdkNode(const rclcpp::NodeOptions & options)
-  : Node("zed2i_sdk_node", options)
+  : Node("zed2i_sdk_node", options),
+    tf_buffer_(this->get_clock()),
+    tf_listener_(tf_buffer_)
   {
     left_frame_id_ = declare_parameter<std::string>("left_frame_id", "zed2i_left_camera_frame");
     right_frame_id_ = declare_parameter<std::string>("right_frame_id", "zed2i_right_camera_frame");
@@ -83,9 +100,37 @@ public:
       max_detections_ = declare_parameter<int>("max_detections", 32);
       detection_topic_ = declare_parameter<std::string>("detection_topic", "/buoy_detections_3d");
       output_frame_ = declare_parameter<std::string>("output_frame", "base_link");
+      publish_debug_detections_ = declare_parameter<bool>("publish_debug_detections", false);
+      depth_center_ratio_ = declare_parameter<double>("depth_center_ratio", 0.5);
+      depth_sample_stride_ = declare_parameter<int>("depth_sample_stride", 2);
+      min_valid_depth_samples_ = declare_parameter<int>("min_valid_depth_samples", 16);
+      enable_virtual_wall_ = declare_parameter<bool>("enable_virtual_wall", true);
+      virtual_wall_topic_ = declare_parameter<std::string>(
+        "virtual_wall_topic", "/virtual_obstacles");
+      wall_frame_ = declare_parameter<std::string>("wall_frame", "map");
+      channel_heading_rad_ = declare_parameter<double>("channel_heading_rad", NAN);
+      wall_radius_m_ = declare_parameter<double>("wall_radius_m", 2.0);
+      wall_points_per_full_circle_ = declare_parameter<int>("wall_points_per_full_circle", 40);
+      lidar_topic_ = declare_parameter<std::string>("lidar_topic", "/livox/lidar");
+      lidar_max_age_sec_ = declare_parameter<double>("lidar_max_age_sec", 0.15);
+      lidar_cluster_tolerance_m_ = declare_parameter<double>("lidar_cluster_tolerance_m", 0.15);
+      lidar_min_cluster_points_ = declare_parameter<int>("lidar_min_cluster_points", 5);
+      lidar_max_cluster_points_ = declare_parameter<int>("lidar_max_cluster_points", 5000);
       detector_ = std::make_unique<TensorRtDetector>(engine_path_, confidence_threshold_, max_detections_);
-      detection_pub_ = create_publisher<njord_interfaces::msg::BuoyDetectionArray>(
-        detection_topic_, rclcpp::QoS(10));
+      if (publish_debug_detections_) {
+        detection_pub_ = create_publisher<njord_interfaces::msg::BuoyDetectionArray>(
+          detection_topic_, rclcpp::QoS(10));
+      }
+      if (enable_virtual_wall_) {
+        virtual_wall_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+          virtual_wall_topic_, rclcpp::QoS(10));
+      }
+      lidar_sub_ = create_subscription<sensor_msgs::msg::PointCloud2>(
+        lidar_topic_, rclcpp::SensorDataQoS(),
+        [this](sensor_msgs::msg::PointCloud2::ConstSharedPtr message) {
+          std::lock_guard<std::mutex> lock(lidar_mutex_);
+          latest_lidar_ = std::move(message);
+        });
 #endif
     }
 
@@ -183,6 +228,126 @@ public:
   }
 
 private:
+  std::optional<geometry_msgs::msg::PointStamped> lidar_fallback_position(
+    const Detection2D & detection, const rclcpp::Time & stamp)
+  {
+    sensor_msgs::msg::PointCloud2::ConstSharedPtr cloud;
+    {
+      std::lock_guard<std::mutex> lock(lidar_mutex_);
+      cloud = latest_lidar_;
+    }
+    if (!cloud || cloud->header.frame_id.empty()) {
+      return std::nullopt;
+    }
+    const auto age = std::abs((stamp - rclcpp::Time(cloud->header.stamp)).seconds());
+    if (age > lidar_max_age_sec_) {
+      return std::nullopt;
+    }
+
+    geometry_msgs::msg::TransformStamped cloud_to_camera;
+    try {
+      cloud_to_camera = tf_buffer_.lookupTransform(
+        left_frame_id_, cloud->header.frame_id, cloud->header.stamp,
+        rclcpp::Duration::from_seconds(0.05));
+    } catch (const tf2::TransformException & error) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "Skipping LiDAR fallback: %s -> %s TF unavailable: %s",
+        cloud->header.frame_id.c_str(), left_frame_id_.c_str(), error.what());
+      return std::nullopt;
+    }
+
+    pcl::PointCloud<pcl::PointXYZ>::Ptr candidates(new pcl::PointCloud<pcl::PointXYZ>());
+    try {
+      sensor_msgs::PointCloud2ConstIterator<float> x(*cloud, "x");
+      sensor_msgs::PointCloud2ConstIterator<float> y(*cloud, "y");
+      sensor_msgs::PointCloud2ConstIterator<float> z(*cloud, "z");
+      for (; x != x.end(); ++x, ++y, ++z) {
+        if (!std::isfinite(*x) || !std::isfinite(*y) || !std::isfinite(*z)) {
+          continue;
+        }
+        geometry_msgs::msg::PointStamped point_in;
+        point_in.header = cloud->header;
+        point_in.point.x = *x;
+        point_in.point.y = *y;
+        point_in.point.z = *z;
+        geometry_msgs::msg::PointStamped point_camera;
+        tf2::doTransform(point_in, point_camera, cloud_to_camera);
+        if (point_camera.point.z <= 0.0) {
+          continue;
+        }
+        const auto u = fx_ * point_camera.point.x / point_camera.point.z + cx_;
+        const auto v = fy_ * point_camera.point.y / point_camera.point.z + cy_;
+        if (point_in_central_bbox_roi(
+            static_cast<float>(u), static_cast<float>(v), detection,
+            static_cast<float>(depth_center_ratio_))) {
+          candidates->push_back({
+            static_cast<float>(point_camera.point.x),
+            static_cast<float>(point_camera.point.y),
+            static_cast<float>(point_camera.point.z)});
+        }
+      }
+    } catch (const std::runtime_error & error) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "Skipping LiDAR fallback: PointCloud2 lacks xyz fields: %s", error.what());
+      return std::nullopt;
+    }
+    if (candidates->size() < static_cast<size_t>(lidar_min_cluster_points_)) {
+      return std::nullopt;
+    }
+
+    pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+    tree->setInputCloud(candidates);
+    pcl::EuclideanClusterExtraction<pcl::PointXYZ> extraction;
+    extraction.setClusterTolerance(lidar_cluster_tolerance_m_);
+    extraction.setMinClusterSize(lidar_min_cluster_points_);
+    extraction.setMaxClusterSize(lidar_max_cluster_points_);
+    extraction.setSearchMethod(tree);
+    extraction.setInputCloud(candidates);
+    std::vector<pcl::PointIndices> clusters;
+    extraction.extract(clusters);
+    if (clusters.empty()) {
+      return std::nullopt;
+    }
+    const auto center_u = (detection.x1 + detection.x2) * 0.5F;
+    const auto center_v = (detection.y1 + detection.y2) * 0.5F;
+    float best_distance = std::numeric_limits<float>::infinity();
+    Eigen::Vector4f selected;
+    bool found = false;
+    for (const auto & cluster : clusters) {
+      Eigen::Vector4f centroid;
+      pcl::compute3DCentroid(*candidates, cluster.indices, centroid);
+      const auto u = static_cast<float>(fx_) * centroid.x() / centroid.z() + static_cast<float>(cx_);
+      const auto v = static_cast<float>(fy_) * centroid.y() / centroid.z() + static_cast<float>(cy_);
+      const auto distance = (u - center_u) * (u - center_u) + (v - center_v) * (v - center_v);
+      if (distance < best_distance) {
+        best_distance = distance;
+        selected = centroid;
+        found = true;
+      }
+    }
+    if (!found) {
+      return std::nullopt;
+    }
+    geometry_msgs::msg::PointStamped camera_point;
+    camera_point.header.stamp = stamp;
+    camera_point.header.frame_id = left_frame_id_;
+    camera_point.point.x = selected.x();
+    camera_point.point.y = selected.y();
+    camera_point.point.z = selected.z();
+    try {
+      const auto camera_to_output = tf_buffer_.lookupTransform(
+        output_frame_, left_frame_id_, stamp, rclcpp::Duration::from_seconds(0.05));
+      geometry_msgs::msg::PointStamped output_point;
+      tf2::doTransform(camera_point, output_point, camera_to_output);
+      return output_point;
+    } catch (const tf2::TransformException & error) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+        "Skipping LiDAR fallback: %s -> %s TF unavailable: %s",
+        left_frame_id_.c_str(), output_frame_.c_str(), error.what());
+      return std::nullopt;
+    }
+  }
+
   template<typename MessageT>
   static bool has_subscribers(const std::shared_ptr<rclcpp::Publisher<MessageT>> & publisher)
   {
@@ -271,15 +436,98 @@ private:
           try {
             const auto detections = detector_->infer(
               pointer, left_gpu_.getStepBytes(sl::MEM::GPU), width_, height_, nullptr);
-            std_msgs::msg::Header header;
-            header.stamp = stamp;
-            header.frame_id = output_frame_;
+            const auto depth_pointer = depth_gpu_.getPtr<sl::float1>(sl::MEM::GPU);
             std::vector<PositionedDetection> positioned;
             positioned.reserve(detections.size());
             for (const auto & detection : detections) {
-              positioned.push_back({detection, nan_position(), PositionSource::kNone});
+              PositionedDetection item{detection, nan_position(), PositionSource::kNone};
+              const auto roi = central_depth_roi(
+                detection, static_cast<float>(depth_center_ratio_), width_, height_);
+              const auto depth = depth_median_gpu(
+                depth_pointer, depth_gpu_.getStepBytes(sl::MEM::GPU), width_, height_,
+                roi.x0, roi.y0, roi.x1, roi.y1, depth_sample_stride_,
+                static_cast<float>(depth_min_m_), static_cast<float>(depth_max_m_),
+                min_valid_depth_samples_, nullptr);
+              if (std::isfinite(depth)) {
+                geometry_msgs::msg::PointStamped camera_point;
+                camera_point.header.stamp = stamp;
+                camera_point.header.frame_id = left_frame_id_;
+                const auto u = (detection.x1 + detection.x2) * 0.5F;
+                const auto v = (detection.y1 + detection.y2) * 0.5F;
+                camera_point.point.x = (u - cx_) * depth / fx_;
+                camera_point.point.y = (v - cy_) * depth / fy_;
+                camera_point.point.z = depth;
+                try {
+                  const auto transform = tf_buffer_.lookupTransform(
+                    output_frame_, left_frame_id_, stamp, rclcpp::Duration::from_seconds(0.05));
+                  geometry_msgs::msg::PointStamped output_point;
+                  tf2::doTransform(camera_point, output_point, transform);
+                  item.position_base = {
+                    static_cast<float>(output_point.point.x),
+                    static_cast<float>(output_point.point.y),
+                    static_cast<float>(output_point.point.z)};
+                  item.source = PositionSource::kZedDepth;
+                } catch (const tf2::TransformException & error) {
+                  RCLCPP_WARN_THROTTLE(
+                    get_logger(), *get_clock(), 2000,
+                    "Skipping buoy position: %s -> %s TF unavailable: %s",
+                    left_frame_id_.c_str(), output_frame_.c_str(), error.what());
+                }
+              }
+              if (item.source == PositionSource::kNone) {
+                if (const auto fallback = lidar_fallback_position(detection, stamp)) {
+                  item.position_base = {
+                    static_cast<float>(fallback->point.x),
+                    static_cast<float>(fallback->point.y),
+                    static_cast<float>(fallback->point.z)};
+                  item.source = PositionSource::kLidarFused;
+                }
+              }
+              positioned.push_back(item);
             }
-            detection_pub_->publish(to_detection_array(positioned, header));
+            std_msgs::msg::Header header;
+            header.stamp = stamp;
+            header.frame_id = output_frame_;
+            if (detection_pub_) {
+              detection_pub_->publish(to_detection_array(positioned, header));
+            }
+            if (virtual_wall_pub_) {
+              std::vector<PositionedDetection> wall_detections;
+              wall_detections.reserve(positioned.size());
+              for (const auto & item : positioned) {
+                if (item.source == PositionSource::kNone) {
+                  continue;
+                }
+                try {
+                  geometry_msgs::msg::PointStamped output_point;
+                  output_point.header = header;
+                  output_point.point.x = item.position_base[0];
+                  output_point.point.y = item.position_base[1];
+                  output_point.point.z = item.position_base[2];
+                  const auto transform = tf_buffer_.lookupTransform(
+                    wall_frame_, output_frame_, stamp, rclcpp::Duration::from_seconds(0.05));
+                  geometry_msgs::msg::PointStamped wall_point;
+                  tf2::doTransform(output_point, wall_point, transform);
+                  auto wall_item = item;
+                  wall_item.position_base = {
+                    static_cast<float>(wall_point.point.x),
+                    static_cast<float>(wall_point.point.y),
+                    static_cast<float>(wall_point.point.z)};
+                  wall_detections.push_back(wall_item);
+                } catch (const tf2::TransformException & error) {
+                  RCLCPP_WARN_THROTTLE(
+                    get_logger(), *get_clock(), 2000,
+                    "Skipping virtual wall: %s -> %s TF unavailable: %s",
+                    output_frame_.c_str(), wall_frame_.c_str(), error.what());
+                }
+              }
+              auto wall_header = header;
+              wall_header.frame_id = wall_frame_;
+              virtual_wall_pub_->publish(to_virtual_wall_cloud(
+                wall_detections, wall_header, wall_frame_,
+                static_cast<float>(channel_heading_rad_), static_cast<float>(wall_radius_m_),
+                wall_points_per_full_circle_));
+            }
           } catch (const std::exception & error) {
             RCLCPP_ERROR_THROTTLE(
               get_logger(), *get_clock(), 2000, "GPU perception stopped: %s", error.what());
@@ -376,7 +624,26 @@ private:
   std::string output_frame_;
   double confidence_threshold_{};
   int max_detections_{};
+  bool publish_debug_detections_{};
+  double depth_center_ratio_{};
+  int depth_sample_stride_{};
+  int min_valid_depth_samples_{};
+  bool enable_virtual_wall_{};
+  std::string virtual_wall_topic_;
+  std::string wall_frame_;
+  double channel_heading_rad_{};
+  double wall_radius_m_{};
+  int wall_points_per_full_circle_{};
   rclcpp::Publisher<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr detection_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr virtual_wall_pub_;
+  std::string lidar_topic_;
+  double lidar_max_age_sec_{};
+  double lidar_cluster_tolerance_m_{};
+  int lidar_min_cluster_points_{};
+  int lidar_max_cluster_points_{};
+  std::mutex lidar_mutex_;
+  sensor_msgs::msg::PointCloud2::ConstSharedPtr latest_lidar_;
+  rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr lidar_sub_;
 #endif
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
   std::unique_ptr<GroundVideoStreamer> ground_video_streamer_;
@@ -389,6 +656,8 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr right_info_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
+  tf2_ros::Buffer tf_buffer_;
+  tf2_ros::TransformListener tf_listener_;
 };
 
 }  // namespace zed2i_driver

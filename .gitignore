@@ -6,7 +6,11 @@ venv/
 .venv/
 __pycache__/
 *.pyc
-*.engine
-src/detection/yolo/config/*.onnx
+
+# Local/generated visualization and TensorRT build artifacts.
+frames_*.gv
+frames_*.pdf
+imgui.ini
+*.engine.build.log
 
 rosbag2*

@@ -23,6 +23,7 @@ struct JoyConfig
   int64_t green_button{1};
   int64_t yellow_button{2};
   int64_t red_button{3};
+  int64_t manual_enable_button{12};
   double linear_x_scale{0.2};
   double linear_y_scale{0.2};
   double angular_z_scale{0.2};
@@ -31,10 +32,11 @@ struct JoyConfig
 struct JoyOutput
 {
   geometry_msgs::msg::Twist cmd_vel;
-  bool emergency{true};
+  bool emergency{false};
   bool green{false};
   bool yellow{false};
   bool red{false};
+  bool manual_enabled{false};
 };
 
 JoyOutput convert_joy(const sensor_msgs::msg::Joy & msg, const JoyConfig & config);
@@ -58,6 +60,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_green_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_yellow_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_red_;
+  bool manual_was_enabled_{false};
 };
 
 }  // namespace simple_manual

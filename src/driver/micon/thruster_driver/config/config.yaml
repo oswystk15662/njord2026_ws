@@ -5,12 +5,13 @@ thruster_driver_node:
     duty_resolution: 1000
 
     input_scaling:
-      max_linear_x: 1.5
-      max_linear_y: 1.5
-      max_angular_z: 2.0
+      max_linear_x: 1.0
+      max_linear_y: 1.0
+      max_angular_z: 1.0
 
     control:
       rate_hz: 50.0
+      use_velocity_feedback: true
       feedback_timeout_sec: 0.5
       stop_on_feedback_timeout: true
       p:
@@ -43,6 +44,11 @@ thruster_driver_node:
 
     allocation:
       regularization_lambda: 1.0e-4
+      # Measured actuator/body convention: positive allocated surge moves the
+      # vessel toward base_link -x. Correct that mapping after the ROS-frame
+      # velocity error is computed, so feedback remains negative feedback.
+      # Order: [surge, sway, yaw].
+      wrench_sign: [-1.0, 1.0, 1.0]
 
     safety:
       watchdog_timeout_sec: 0.5

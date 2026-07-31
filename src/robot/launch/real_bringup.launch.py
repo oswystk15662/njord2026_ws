@@ -30,6 +30,8 @@ def generate_launch_description():
     enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     lidar_model = LaunchConfiguration("lidar_model")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
+    enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
+    gpu_perception_engine_path = LaunchConfiguration("gpu_perception_engine_path")
     enable_ground_video = LaunchConfiguration("enable_ground_video")
     ground_video_host = LaunchConfiguration("ground_video_host")
     ground_video_port = LaunchConfiguration("ground_video_port")
@@ -76,6 +78,8 @@ def generate_launch_description():
             "mode": "sdk",
             "camera_resolution": camera_resolution,
             "framerate": camera_framerate,
+            "enable_gpu_perception": enable_gpu_perception,
+            "engine_path": gpu_perception_engine_path,
             "enable_ground_video": enable_ground_video,
             "ground_video_host": ground_video_host,
             "ground_video_port": ground_video_port,
@@ -183,6 +187,8 @@ def generate_launch_description():
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
+            DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
+            DeclareLaunchArgument("gpu_perception_engine_path", default_value=""),
             DeclareLaunchArgument("enable_ground_video", default_value="false"),
             DeclareLaunchArgument("ground_video_host", default_value=""),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
@@ -224,14 +230,14 @@ def generate_launch_description():
             ),
             mid360_launch,
             zed2i_launch,
-            back_cam_launch,
+            # back_cam_launch,
             um982_launch,
             drogger_rzs_launch,
-            imu_node,
+            # imu_node,
             localization_launch,
             thruster_launch,
             serial_writer,
             bms_launch,
-            nav2_launch,
+            # nav2_launch,
         ]
     )

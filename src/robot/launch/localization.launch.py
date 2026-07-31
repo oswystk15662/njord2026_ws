@@ -8,6 +8,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 
 
@@ -18,7 +19,7 @@ def generate_launch_description():
     enable_diagnostics_arg = DeclareLaunchArgument(
         "enable_diagnostics",
         default_value="true",
-        description="Launch generic topic heartbeat diagnostics for localization topics",
+        # description="Launch generic topic heartbeat diagnostics for localization topics",
     )
 
     robot_description = Command(
@@ -34,25 +35,32 @@ def generate_launch_description():
         executable="robot_state_publisher",
         name="robot_state_publisher",
         output="screen",
-        parameters=[{"robot_description": robot_description}],
-    )
-
-    wit_imu_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join('witmotion_imu_driver', "launch", "witmotion_std_serial_imu.launch.py")
-        ),
-        launch_arguments={"enable_diagnostics": LaunchConfiguration("enable_diagnostics")}.items(),
-    )
-
-    spatial_driver = Node(
-        package="adnav_driver",
-        executable="adnav_driver",
-        name="adnav_driver",
-        output="screen",
-        emulate_tty=True,
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "adnav_spatial.yaml"])
+            {
+                "robot_description": ParameterValue(
+                    robot_description,
+                    value_type=str,
+                )
+            }
         ],
+    )
+
+    # CPUリソースが枯渇していた場合、pointcloud2に変換するのがボトルネックになるので、
+    # 取れた点群を直に転送できるように、LiDAR Driver側でComposableNode起動？してください
+    glim_node = Node(
+        package="glim_ros",
+        executable="glim_ros_node",
+        name="glim_ros_node",
+        output="screen",
+        parameters=[
+            {
+                "config_path": PathJoinSubstitution(
+                    [FindPackageShare("robot"), "config", "glim_config"]
+                ),
+                "use_sim_time": False,
+            }
+        ],
+        remappings=[("/glim_ros_node/odom", "/odom")],
     )
 
     spatial_navsat_transform_node = Node(
@@ -92,22 +100,6 @@ def generate_launch_description():
             "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
             "--frame-id", "base_link", "--child-frame-id", "um982_link",
         ],
-    )
-
-    glim_node = Node(
-        package="glim_ros",
-        executable="glim_rosnode",
-        name="glim_node",
-        output="screen",
-        parameters=[
-            {
-                "config_path": PathJoinSubstitution(
-                    [robot_share, "config", "glim_config"]
-                ),
-                "use_sim_time": False,
-            }
-        ],
-        remappings=[("/glim_node/odom", "/odom")],
     )
 
     local_ekf_node = Node(
@@ -170,13 +162,11 @@ def generate_launch_description():
         [
             enable_diagnostics_arg,
             robot_state_publisher,
-            # wit_imu_launch,
-            # spatial_driver,
+            # glim_node,
             # spatial_navsat_transform_node,
             um982_static_tf,
-            glim_node,
-            local_ekf_node,
-            global_ekf_node,
+            # local_ekf_node,
+            # global_ekf_node,
             navsat_transform_node,
             diagnostics_launch,
         ]

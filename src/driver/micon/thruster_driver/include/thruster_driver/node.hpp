@@ -34,6 +34,7 @@ private:
     double forward_gain{1.0};
     double reverse_gain{1.0};
     double offset{0.0};
+    double max_thrust;
     bool reverse{false};
   };
 
@@ -80,6 +81,7 @@ private:
   double max_angular_z_{1.0};
   double control_rate_hz_{50.0};
   double watchdog_timeout_sec_{0.5};
+  bool use_velocity_feedback_{true};
   double feedback_timeout_sec_{0.5};
   bool stop_on_feedback_timeout_{true};
 
@@ -103,6 +105,7 @@ private:
   double damping_quadratic_yaw_{0.0};
 
   double allocation_regularization_{1e-4};
+  std::vector<double> allocation_wrench_sign_{1.0, 1.0, 1.0};
   double deadzone_pos_{0.0};
   double deadzone_neg_{0.0};
 
