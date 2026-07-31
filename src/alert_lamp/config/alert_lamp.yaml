@@ -1,0 +1,51 @@
+alert_lamp_manager_node:
+  ros__parameters:
+    evaluation_rate_hz: 10.0
+    heartbeat:
+      driver_timeout_sec: 1.0
+      high_level_timeout_sec: 1.0
+      autonomy_timeout_sec: 1.0
+      localization_timeout_sec: 1.0
+      manual_control_timeout_sec: 1.0
+      ground_station_timeout_sec: 2.0
+      driver_heartbeat_type: std_msgs/msg/Empty
+      high_level_heartbeat_type: std_msgs/msg/Empty
+      autonomy_heartbeat_type: std_msgs/msg/Empty
+      localization_heartbeat_type: std_msgs/msg/Empty
+      manual_control_heartbeat_type: std_msgs/msg/Empty
+      ground_station_heartbeat_type: std_msgs/msg/Empty
+    localization:
+      message_timeout_sec: 0.5
+      position_covariance_threshold: 1.0
+      rtk_covariance_threshold: 0.01
+      rtk_grace_period_sec: 10.0
+    lamp:
+      green_blink_period_sec: 1.0
+      yellow_blink_period_sec: 1.0
+      red_blink_period_sec: 0.5
+      duty_ratio: 0.5
+    topics:
+      operating_mode: /system/operating_mode
+      emergency_stop: /safety/emergency_stop
+      autonomy_ready: /autonomy/ready
+      rtk_status: /sensor/vehicle_gnss/fix/raw
+      localization: /odometry/filtered/global
+      diagnostics: /diagnostics
+      driver_heartbeat: /heartbeat/driver
+      high_level_heartbeat: /heartbeat/high_level
+      autonomy_heartbeat: /heartbeat/autonomy
+      localization_heartbeat: /heartbeat/localization
+      manual_control_heartbeat: /heartbeat/manual_control
+      ground_station_heartbeat: /heartbeat/ground_station
+      alert_command: /alert_lamp/command
+
+alert_lamp_driver_node:
+  ros__parameters:
+    command_timeout_sec: 1.0
+    # Existing micon_driver_fd/serial_writer owns USB serial and consumes these Bool topics.
+    output_type: topic
+    topics:
+      alert_command: /alert_lamp/command
+      green: /green
+      yellow: /yellow
+      red: /red

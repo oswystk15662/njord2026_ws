@@ -47,13 +47,20 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   last_control_time_(this->now())
 {
   input_mode_ = toLower(this->declare_parameter<std::string>("input_mode", "cmd_vel"));
-  transport_mode_ = toLower(this->declare_parameter<std::string>("transport_mode", "sim"));
 
   control_rate_hz_ = this->declare_parameter<double>("control.rate_hz", 50.0);
   max_linear_x_ = this->declare_parameter<double>("input_scaling.max_linear_x", 1.0);
   max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
   max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
+  if (!std::isfinite(max_linear_x_) || max_linear_x_ <= 0.0 ||
+    !std::isfinite(max_linear_y_) || max_linear_y_ <= 0.0 ||
+    !std::isfinite(max_angular_z_) || max_angular_z_ <= 0.0)
+  {
+    throw std::runtime_error("input_scaling limits must be finite and greater than zero");
+  }
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
+  use_velocity_feedback_ =
+    this->declare_parameter<bool>("control.use_velocity_feedback", true);
   feedback_timeout_sec_ = this->declare_parameter<double>("control.feedback_timeout_sec", 0.5);
   stop_on_feedback_timeout_ =
     this->declare_parameter<bool>("control.stop_on_feedback_timeout", true);
@@ -61,6 +68,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   kp_surge_ = this->declare_parameter<double>("control.p.surge", 1.0);
   kp_sway_ = this->declare_parameter<double>("control.p.sway", 1.0);
   kp_yaw_ = this->declare_parameter<double>("control.p.yaw", 1.0);
+  max_surge_wrench_ = std::max(
+    1.0, this->declare_parameter<double>("control.max_surge_wrench", 1.0));
+  max_sway_wrench_ = std::max(
+    1.0, this->declare_parameter<double>("control.max_sway_wrench", 1.0));
+  max_yaw_wrench_ = std::max(
+    1.0, this->declare_parameter<double>("control.max_yaw_wrench", 1.0));
 
   dob_enable_ = this->declare_parameter<bool>("control.dob.enable", false);
   dob_observer_gain_ = this->declare_parameter<double>("control.dob.observer_gain", 1.0);
@@ -85,37 +98,19 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   allocation_regularization_ = std::max(
     1e-9,
     this->declare_parameter<double>("allocation.regularization_lambda", 1e-4));
+  allocation_wrench_sign_ = getDoubleVector(
+    "allocation.wrench_sign", {1.0, 1.0, 1.0});
+  if (allocation_wrench_sign_.size() != 3U ||
+    !std::all_of(
+      allocation_wrench_sign_.begin(), allocation_wrench_sign_.end(),
+      [](double sign) {return sign == -1.0 || sign == 1.0;}))
+  {
+    throw std::runtime_error("allocation.wrench_sign must contain three values, each -1 or 1");
+  }
   deadzone_pos_ = this->declare_parameter<double>("static_map.deadzone_pos", 0.0);
   deadzone_neg_ = this->declare_parameter<double>("static_map.deadzone_neg", 0.0);
 
   duty_resolution_ = this->declare_parameter<int>("duty_resolution", 1000);
-  u16_neutral_ = this->declare_parameter<int>("u16_neutral", 1000);
-  u16_span_ = this->declare_parameter<int>("u16_span", 1000);
-
-  sim_output_enabled_ = (
-    transport_mode_ == "sim" ||
-    transport_mode_ == "sim_and_mros_usb" ||
-    transport_mode_ == "sim_and_can" ||
-    transport_mode_ == "sim_and_both");
-  mros_enabled_ = (
-    transport_mode_ == "mros_usb" ||
-    transport_mode_ == "both" ||
-    transport_mode_ == "sim_and_mros_usb" ||
-    transport_mode_ == "sim_and_both");
-  can_enabled_ = (
-    transport_mode_ == "can" ||
-    transport_mode_ == "both" ||
-    transport_mode_ == "sim_and_can" ||
-    transport_mode_ == "sim_and_both");
-
-  if (!sim_output_enabled_ && !mros_enabled_ && !can_enabled_) {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid transport_mode='%s'. Falling back to sim.",
-      transport_mode_.c_str());
-    transport_mode_ = "sim";
-    sim_output_enabled_ = true;
-  }
 
   loadThrusterConfigs();
   const std::string robot_description =
@@ -132,24 +127,8 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   const std::string sim_command_topic =
     this->declare_parameter<std::string>("topics.sim_thruster_command", "/thruster_command");
 
-  if (sim_output_enabled_) {
-    pub_thruster_command_ =
-      this->create_publisher<std_msgs::msg::Int16MultiArray>(sim_command_topic, 10);
-  }
-
-  if (mros_enabled_) {
-    pub_mros_.reserve(thrusters_.size());
-    for (const auto & thruster : thrusters_) {
-      pub_mros_.push_back(this->create_publisher<std_msgs::msg::UInt16>(thruster.mros_topic, 10));
-    }
-  }
-
-  if (can_enabled_) {
-    pub_can_.reserve(thrusters_.size());
-    for (const auto & thruster : thrusters_) {
-      pub_can_.push_back(this->create_publisher<can_msgs::msg::Frame>(thruster.can_topic, 10));
-    }
-  }
+  pub_thruster_command_ =
+    this->create_publisher<std_msgs::msg::Float32MultiArray>(sim_command_topic, 10);
 
   pub_current_force_ =
     this->create_publisher<std_msgs::msg::Float32MultiArray>("/debug/current_force", 10);
@@ -161,10 +140,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
       cmd_vel_topic,
       10,
       std::bind(&ThrusterDriverNode::cmdVelCallback, this, std::placeholders::_1));
-    sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
-      odom_topic,
-      10,
-      std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    if (use_velocity_feedback_) {
+      sub_odom_ = this->create_subscription<nav_msgs::msg::Odometry>(
+        odom_topic,
+        10,
+        std::bind(&ThrusterDriverNode::odomCallback, this, std::placeholders::_1));
+    }
     const double period_sec = 1.0 / std::max(1.0, control_rate_hz_);
     control_timer_ = this->create_wall_timer(
       std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -182,10 +163,11 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
 
   RCLCPP_INFO(
     this->get_logger(),
-    "thruster_driver started. mode=%s transport=%s thrusters=%zu dob=%s",
+    "thruster_driver started. mode=%s output=%s thrusters=%zu velocity_feedback=%s dob=%s",
     input_mode_.c_str(),
-    transport_mode_.c_str(),
+    sim_command_topic.c_str(),
     thrusters_.size(),
+    use_velocity_feedback_ ? "on" : "off",
     dob_enable_ ? "on" : "off");
 }
 
@@ -233,8 +215,8 @@ void ThrusterDriverNode::controlTimerCallback()
   last_control_time_ = now;
 
   const bool cmd_timeout = (now - last_cmd_time_).seconds() > watchdog_timeout_sec_;
-  const bool feedback_timeout =
-    !have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_;
+  const bool feedback_timeout = use_velocity_feedback_ &&
+    (!have_feedback_ || (now - last_feedback_time_).seconds() > feedback_timeout_sec_);
 
   if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
     publishCommands(std::vector<double>(thrusters_.size(), 0.0));
@@ -244,7 +226,11 @@ void ThrusterDriverNode::controlTimerCallback()
   }
 
   const std::vector<double> wrench = computeWrench(dt);
-  std::vector<double> commands = allocateWrench(wrench);
+  std::vector<double> allocation_wrench = wrench;
+  for (std::size_t i = 0; i < allocation_wrench.size(); ++i) {
+    allocation_wrench[i] *= allocation_wrench_sign_[i];
+  }
+  std::vector<double> commands = allocateWrench(allocation_wrench);
 
   for (std::size_t i = 0; i < commands.size(); ++i) {
     commands[i] = applyStaticMap(commands[i], thrusters_[i]);
@@ -264,32 +250,22 @@ void ThrusterDriverNode::loadThrusterConfigs()
   const std::vector<double> angle_rad = getDoubleVector(
     "thrusters.angle_rad",
     {0.785398, -0.785398, 2.356194, -2.356194});
-  const std::vector<double> force_per_duty =
-    getDoubleVector("thrusters.force_per_duty", std::vector<double>(ids.size(), 1.0));
+  const std::vector<double> max_thrust =
+    getDoubleVector("thrusters.max_thrust", std::vector<double>(ids.size(), 40.0));
   const std::vector<bool> reverse =
     getBoolVector("thrusters.reverse", std::vector<bool>(ids.size(), false));
   const std::vector<double> forward_gain =
-    getDoubleVector("static_map.wheels.forward_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.forward_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> reverse_gain =
-    getDoubleVector("static_map.wheels.reverse_gain", std::vector<double>(ids.size(), 1.0));
+    getDoubleVector("static_map.thrusters.reverse_gain", std::vector<double>(ids.size(), 1.0));
   const std::vector<double> offset =
-    getDoubleVector("static_map.wheels.offset", std::vector<double>(ids.size(), 0.0));
-  const std::vector<std::string> mros_topics = getStringVector(
-    "topics.mros_cmd",
-    {"FR_esp32/cmd_duty_u16", "FL_esp32/cmd_duty_u16", "RR_esp32/cmd_duty_u16",
-      "RL_esp32/cmd_duty_u16"});
-  const std::vector<std::string> can_topics = getStringVector(
-    "topics.can_tx",
-    {"FR_esp32/can_tx", "FL_esp32/can_tx", "RR_esp32/can_tx", "RL_esp32/can_tx"});
-  const std::vector<int64_t> can_ids =
-    getIntVector("thrusters.can_ids", {0x301, 0x302, 0x303, 0x304});
+    getDoubleVector("static_map.thrusters.offset", std::vector<double>(ids.size(), 0.0));
 
   const std::size_t n = ids.size();
   if (
-    links.size() != n || angle_rad.size() != n || force_per_duty.size() != n ||
+    links.size() != n || angle_rad.size() != n || max_thrust.size() != n ||
     reverse.size() != n || forward_gain.size() != n || reverse_gain.size() != n ||
-    offset.size() != n || mros_topics.size() != n || can_topics.size() != n ||
-    can_ids.size() != n)
+    offset.size() != n)
   {
     throw std::runtime_error("All thruster config arrays must match thrusters.ids size");
   }
@@ -301,14 +277,11 @@ void ThrusterDriverNode::loadThrusterConfigs()
     config.id = ids[i];
     config.link = links[i];
     config.angle_rad = angle_rad[i];
-    config.force_per_duty = force_per_duty[i];
+    config.max_thrust = max_thrust[i];
     config.reverse = reverse[i];
     config.forward_gain = forward_gain[i];
     config.reverse_gain = reverse_gain[i];
     config.offset = offset[i];
-    config.mros_topic = mros_topics[i];
-    config.can_topic = can_topics[i];
-    config.can_id = static_cast<int>(can_ids[i]);
     thrusters_.push_back(config);
   }
 }
@@ -405,9 +378,9 @@ std::vector<double> ThrusterDriverNode::computeWrench(double dt)
       wrench[i] = clamp(wrench[i] + dob_observer_gain_ * dob_lpf_[i], -1.0, 1.0);
     }
   } else {
-    for (double & value : wrench) {
-      value = clamp(value, -1.0, 1.0);
-    }
+    wrench[0] = clamp(wrench[0], -max_surge_wrench_, max_surge_wrench_);
+    wrench[1] = clamp(wrench[1], -max_sway_wrench_, max_sway_wrench_);
+    wrench[2] = clamp(wrench[2], -max_yaw_wrench_, max_yaw_wrench_);
   }
 
   prev_meas_surge_ = meas_surge_;
@@ -425,7 +398,7 @@ std::vector<double> ThrusterDriverNode::allocateWrench(const std::vector<double>
   for (const auto & thruster : thrusters_) {
     geometry.push_back(
         {
-          thruster.x, thruster.y, thruster.angle_rad, thruster.force_per_duty, thruster.reverse});
+          thruster.x, thruster.y, thruster.angle_rad, thruster.max_thrust, thruster.reverse});
   }
   return njord::thruster_driver::allocateWrench(geometry, wrench, allocation_regularization_);
 }
@@ -455,37 +428,14 @@ double ThrusterDriverNode::applyDeadzone(double value, double deadzone) const
 
 void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
 {
-  if (sim_output_enabled_ && pub_thruster_command_) {
-    std_msgs::msg::Int16MultiArray msg;
+  if (pub_thruster_command_) {
+    std_msgs::msg::Float32MultiArray msg;
     msg.data.reserve(commands.size());
-    for (double command : commands) {
-      const int value = static_cast<int>(std::lround(clamp(command, -1.0, 1.0) * duty_resolution_));
-      msg.data.push_back(static_cast<int16_t>(std::clamp(value, -32768, 32767)));
+    for (std::size_t i = 0; i < commands.size(); ++i) {
+      const double newtons = clamp(commands[i], -1.0, 1.0) * thrusters_[i].max_thrust;
+      msg.data.push_back(static_cast<float>(newtons));
     }
     pub_thruster_command_->publish(msg);
-  }
-
-  if (mros_enabled_) {
-    for (std::size_t i = 0; i < commands.size() && i < pub_mros_.size(); ++i) {
-      std_msgs::msg::UInt16 msg;
-      msg.data = toUint16Command(commands[i]);
-      pub_mros_[i]->publish(msg);
-    }
-  }
-
-  if (can_enabled_) {
-    for (std::size_t i = 0; i < commands.size() && i < pub_can_.size(); ++i) {
-      const std::uint16_t value = toUint16Command(commands[i]);
-      can_msgs::msg::Frame frame;
-      frame.id = static_cast<std::uint32_t>(thrusters_[i].can_id);
-      frame.is_rtr = false;
-      frame.is_extended = false;
-      frame.is_error = false;
-      frame.dlc = 2;
-      frame.data[0] = static_cast<std::uint8_t>(value & 0xFFU);
-      frame.data[1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-      pub_can_[i]->publish(frame);
-    }
   }
 
   std_msgs::msg::Float32MultiArray force_msg;
@@ -501,15 +451,6 @@ void ThrusterDriverNode::publishCommands(const std::vector<double> & commands)
     static_cast<float>(dob_lpf_[1]),
     static_cast<float>(dob_lpf_[2])};
   pub_dob_estimate_->publish(dob_msg);
-}
-
-std::uint16_t ThrusterDriverNode::toUint16Command(double normalized) const
-{
-  const double cmd =
-    static_cast<double>(u16_neutral_) +
-    clamp(normalized, -1.0, 1.0) * static_cast<double>(u16_span_);
-  const int cmd_i = static_cast<int>(std::lround(cmd));
-  return static_cast<std::uint16_t>(std::clamp(cmd_i, 0, 65535));
 }
 
 double ThrusterDriverNode::clamp(double value, double min_value, double max_value) const
@@ -536,13 +477,6 @@ std::vector<bool> ThrusterDriverNode::getBoolVector(
   const std::vector<bool> & defaults)
 {
   return this->declare_parameter<std::vector<bool>>(name, defaults);
-}
-
-std::vector<int64_t> ThrusterDriverNode::getIntVector(
-  const std::string & name,
-  const std::vector<int64_t> & defaults)
-{
-  return this->declare_parameter<std::vector<int64_t>>(name, defaults);
 }
 
 std::string ThrusterDriverNode::toLower(std::string value)

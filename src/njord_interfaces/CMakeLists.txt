@@ -26,6 +26,8 @@ set(action_files
 
 set(msg_files
   "msg/BuoyRoi.msg"
+  "msg/BuoyDetection.msg"
+  "msg/BuoyDetectionArray.msg"
   "msg/Thruster.msg"
   "msg/Bms.msg"
 )

@@ -46,7 +46,8 @@
 	<joint name="lidar_joint" type="fixed">
 		<parent link="base_link"/>
 		<child link="livox_frame"/>
-		<origin rpy="0 0 0" xyz="0.5 0.0 0.8"/>
+		<!-- The MID-360 is mounted upside down: 180 degrees about X. -->
+		<origin rpy="3.141592653589793 0 0" xyz="0.5 0.0 0.8"/>
 	</joint>
 	<link name="imu_link">
 		<visual>

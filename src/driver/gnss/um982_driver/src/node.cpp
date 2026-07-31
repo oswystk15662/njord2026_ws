@@ -3,6 +3,7 @@
 #include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 #include <algorithm>
+#include <termios.h>
 
 using namespace std::chrono_literals;
 
@@ -50,6 +51,10 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
     fix_debug_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss_debug/fix/raw", 10);
     heading_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss/compass/raw", 10);
     heading_debug_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss_debug/compass/raw", 10);
+    if (params_.publish_feedback_odometry) {
+        feedback_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
+            params_.feedback_odometry_topic, 10);
+    }
 
     // Subscriber
     ctrl_sub_ = this->create_subscription<std_msgs::msg::String>(
@@ -123,6 +128,12 @@ void UM982Driver::init_parameters()
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
+    this->declare_parameter("publish_feedback_odometry", false);
+    // A relative name keeps the published Odometry independent from the
+    // consumer.  Bringup launch files remap it to the required feedback topic.
+    this->declare_parameter("feedback_odometry_topic", "odometry/feedback");
+    this->declare_parameter("feedback_velocity_filter_alpha", 0.35);
+    this->declare_parameter("feedback_max_speed_mps", 4.0);
     this->declare_parameter("NTRIP_Server", params_.ntrip_server);
     this->declare_parameter("NTRIP_Port", params_.ntrip_port);
     this->declare_parameter("NTRIP_Mountpoint", params_.mountpoint);
@@ -140,6 +151,14 @@ void UM982Driver::init_parameters()
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
+    params_.publish_feedback_odometry =
+        this->get_parameter("publish_feedback_odometry").as_bool();
+    params_.feedback_odometry_topic =
+        this->get_parameter("feedback_odometry_topic").as_string();
+    params_.feedback_velocity_filter_alpha = std::clamp(
+        this->get_parameter("feedback_velocity_filter_alpha").as_double(), 0.0, 1.0);
+    params_.feedback_max_speed_mps = std::max(
+        0.1, this->get_parameter("feedback_max_speed_mps").as_double());
     params_.ntrip_server = this->get_parameter("NTRIP_Server").as_string();
     params_.ntrip_port = this->get_parameter("NTRIP_Port").as_int();
     params_.mountpoint = this->get_parameter("NTRIP_Mountpoint").as_string();
@@ -187,6 +206,20 @@ void UM982Driver::configure_gnss_output()
     // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
     // fallback heading sentence.
     write_to_gnss("UNLOG\r\n");
+
+    // UNLOG can stop a binary message halfway through transmission.  If that
+    // fragment remains in the UART receive queue, appending the command reply
+    // and the first newly configured message produces one apparent CRC error
+    // at every startup.  No asynchronous read is active yet, so wait for the
+    // receiver to process UNLOG and discard only this stale startup input.
+    if (serial_port_ && serial_port_->is_open()) {
+        std::this_thread::sleep_for(100ms);
+        if (::tcflush(serial_port_->native_handle(), TCIFLUSH) != 0) {
+            RCLCPP_WARN(this->get_logger(), "Failed to flush stale UM982 UART input");
+        }
+        gnss_parse_buf_.clear();
+    }
+
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
     write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
@@ -273,10 +306,17 @@ void UM982Driver::process_gnss_buffer()
             bool crc_ok = utils::calculate_unicore_crc32(gnss_parse_buf_.data(), total_len - 4) ==
                 utils::read_u32_le(&gnss_parse_buf_[total_len - 4]);
 
-            if (crc_ok && msg_id == kUniheadingMessageId) {
+            if (!crc_ok) {
+                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
+                // The declared length may span bytes belonging to a following
+                // valid frame.  Drop only the first sync byte and let the
+                // normal scanner find the next complete 0xAA 0x44 0xB5.
+                gnss_parse_buf_.erase(gnss_parse_buf_.begin());
+                continue;
+            }
+
+            if (msg_id == kUniheadingMessageId) {
                 parse_uniheadingb(gnss_parse_buf_.data() + kBinaryHeaderLen, msg_len);
-            } else if (!crc_ok) {
-                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u)", msg_id);
             }
 
             gnss_parse_buf_.erase(gnss_parse_buf_.begin(), gnss_parse_buf_.begin() + total_len);
@@ -369,6 +409,87 @@ void UM982Driver::parse_gga(const std::string& line)
         fix_pub_->publish(msg);
     }
     fix_debug_pub_->publish(msg);
+    if (quality >= 1) {
+        publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
+    }
+}
+
+void UM982Driver::publish_feedback_odometry(
+    double latitude_deg, double longitude_deg, const rclcpp::Time& stamp)
+{
+    if (!params_.publish_feedback_odometry || !feedback_odom_pub_ || !have_heading_) {
+        return;
+    }
+
+    constexpr double kEarthRadiusM = 6378137.0;
+    constexpr double kPi = 3.14159265358979323846;
+    const double latitude_rad = latitude_deg * kPi / 180.0;
+    const double longitude_rad = longitude_deg * kPi / 180.0;
+
+    if (!have_previous_fix_) {
+        reference_latitude_rad_ = latitude_rad;
+        reference_longitude_rad_ = longitude_rad;
+        previous_east_m_ = 0.0;
+        previous_north_m_ = 0.0;
+        previous_fix_stamp_ = stamp;
+        previous_yaw_rad_ = latest_yaw_rad_;
+        have_previous_fix_ = true;
+        have_previous_yaw_ = true;
+    } else {
+        const double east_m = kEarthRadiusM * std::cos(reference_latitude_rad_) *
+            (longitude_rad - reference_longitude_rad_);
+        const double north_m = kEarthRadiusM * (latitude_rad - reference_latitude_rad_);
+        const double dt = (stamp - previous_fix_stamp_).seconds();
+        if (dt > 1e-3 && dt <= 1.0) {
+            const double east_velocity = (east_m - previous_east_m_) / dt;
+            const double north_velocity = (north_m - previous_north_m_) / dt;
+            const double raw_surge = std::cos(latest_yaw_rad_) * east_velocity +
+                std::sin(latest_yaw_rad_) * north_velocity;
+            const double raw_sway = -std::sin(latest_yaw_rad_) * east_velocity +
+                std::cos(latest_yaw_rad_) * north_velocity;
+            double yaw_delta = latest_yaw_rad_ - previous_yaw_rad_;
+            yaw_delta = std::atan2(std::sin(yaw_delta), std::cos(yaw_delta));
+            const double raw_yaw_rate = yaw_delta / dt;
+            const double speed = std::hypot(raw_surge, raw_sway);
+            if (speed <= params_.feedback_max_speed_mps) {
+                const double alpha = params_.feedback_velocity_filter_alpha;
+                filtered_surge_mps_ += alpha * (raw_surge - filtered_surge_mps_);
+                filtered_sway_mps_ += alpha * (raw_sway - filtered_sway_mps_);
+                filtered_yaw_rate_rps_ += alpha * (raw_yaw_rate - filtered_yaw_rate_rps_);
+            }
+        }
+        previous_east_m_ = east_m;
+        previous_north_m_ = north_m;
+        previous_fix_stamp_ = stamp;
+        previous_yaw_rad_ = latest_yaw_rad_;
+    }
+
+    const double east_m = kEarthRadiusM * std::cos(reference_latitude_rad_) *
+        (longitude_rad - reference_longitude_rad_);
+    const double north_m = kEarthRadiusM * (latitude_rad - reference_latitude_rad_);
+
+    nav_msgs::msg::Odometry odom;
+    odom.header.stamp = stamp;
+    odom.header.frame_id = "odom";
+    odom.child_frame_id = "base_link";
+    // Relative ENU position with the first valid fix as the origin.  This is
+    // deliberately not a global map pose; it is the measurement consumed by
+    // the dedicated UM982 feedback filters.
+    odom.pose.pose.position.x = east_m;
+    odom.pose.pose.position.y = north_m;
+    tf2::Quaternion orientation;
+    orientation.setRPY(0.0, 0.0, latest_yaw_rad_);
+    odom.pose.pose.orientation = tf2::toMsg(orientation);
+    odom.twist.twist.linear.x = filtered_surge_mps_;
+    odom.twist.twist.linear.y = filtered_sway_mps_;
+    odom.twist.twist.angular.z = filtered_yaw_rate_rps_;
+    odom.twist.covariance[0] = 0.25;
+    odom.twist.covariance[7] = 0.25;
+    odom.twist.covariance[35] = 0.05;
+    odom.pose.covariance[0] = 0.25;
+    odom.pose.covariance[7] = 0.25;
+    odom.pose.covariance[35] = 0.02;
+    feedback_odom_pub_->publish(odom);
 }
 
 void UM982Driver::parse_ths(const std::string& line)
@@ -382,6 +503,10 @@ void UM982Driver::parse_ths(const std::string& line)
     try {
         double heading_deg = std::stod(parts[1]);
         double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+
+        latest_yaw_rad_ = yaw_rad;
+        latest_heading_stamp_ = this->now();
+        have_heading_ = true;
 
         tf2::Quaternion q;
         q.setRPY(0, 0, yaw_rad);
@@ -447,6 +572,11 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
 
     if (!stop_publish_ && is_valid) {
         heading_pub_->publish(msg);
+    }
+    if (is_valid) {
+        latest_yaw_rad_ = yaw_rad;
+        latest_heading_stamp_ = msg.header.stamp;
+        have_heading_ = true;
     }
     heading_debug_pub_->publish(msg);
 }

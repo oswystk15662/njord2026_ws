@@ -2,8 +2,9 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
-#include <cstdint>
+#include <functional>
+#include <sstream>
+#include <string>
 
 namespace njord
 {
@@ -13,86 +14,43 @@ namespace bms
 BmsNode::BmsNode(const rclcpp::NodeOptions & options)
 : Node("bms_node", options)
 {
-  transport_mode_ = toLower(this->declare_parameter<std::string>("transport_mode", "mros_usb"));
-  can_rx_id_ = static_cast<std::uint32_t>(this->declare_parameter<int>("can_rx_id", 0x401));
-
-  const std::string mros_rx_topic = this->declare_parameter<std::string>("topics.mros_rx", "bms/raw_cells");
-  const std::string can_rx_topic = this->declare_parameter<std::string>("topics.can_rx", "bms/can_rx");
-  const std::string output_topic = this->declare_parameter<std::string>("topics.output", "bms/cell_voltages");
-
-  can_enabled_ = (transport_mode_ == "can" || transport_mode_ == "both");
-  mros_enabled_ = (transport_mode_ == "mros_usb" || transport_mode_ == "both");
-
-  if (!can_enabled_ && !mros_enabled_) {
-    RCLCPP_WARN(
-      this->get_logger(),
-      "Invalid transport_mode='%s'. Falling back to mros_usb.",
-      transport_mode_.c_str());
-    transport_mode_ = "mros_usb";
-    mros_enabled_ = true;
-  }
+  const std::string input_topic =
+    this->declare_parameter<std::string>("topics.input", "micon/bms_cells");
+  const std::string output_topic =
+    this->declare_parameter<std::string>("topics.output", "bms/cell_voltages");
+  const std::string diagnostics_topic =
+    this->declare_parameter<std::string>("topics.diagnostics", "/diagnostics");
+  warning_voltage_ = this->declare_parameter<double>("low_voltage.warning", 3.5);
+  error_voltage_ = this->declare_parameter<double>("low_voltage.error", 3.3);
 
   pub_cells_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(output_topic, 10);
-
-  if (mros_enabled_) {
-    sub_mros_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
-      mros_rx_topic,
-      10,
-      std::bind(&BmsNode::mrosCallback, this, std::placeholders::_1));
-  }
-
-  if (can_enabled_) {
-    sub_can_ = this->create_subscription<can_msgs::msg::Frame>(
-      can_rx_topic,
-      50,
-      std::bind(&BmsNode::canCallback, this, std::placeholders::_1));
-  }
+  pub_diagnostics_ =
+    this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 10);
+  sub_cells_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
+    input_topic, 10, std::bind(&BmsNode::cellsCallback, this, std::placeholders::_1));
 
   RCLCPP_INFO(
-    this->get_logger(),
-    "bms node started. transport_mode=%s",
-    transport_mode_.c_str());
+    this->get_logger(), "bms node started. input=%s output=%s",
+    input_topic.c_str(), output_topic.c_str());
 }
 
-void BmsNode::mrosCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
+void BmsNode::cellsCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
 {
   if (msg->data.size() != 4U) {
     RCLCPP_WARN_THROTTLE(
       this->get_logger(), *this->get_clock(), 2000,
-      "mros bms message size=%zu. Expected 4.",
+      "BMS cell message size=%zu. Expected 4.",
       msg->data.size());
     return;
   }
 
-  std::array<float, 4> cells{
+  const std::array<float, 4> cells{
     msg->data[0],
     msg->data[1],
     msg->data[2],
     msg->data[3]};
   publishCells(cells);
-}
-
-void BmsNode::canCallback(const can_msgs::msg::Frame::SharedPtr msg)
-{
-  if (msg->id != can_rx_id_) {
-    return;
-  }
-
-  if (msg->dlc < 8U) {
-    RCLCPP_WARN_THROTTLE(
-      this->get_logger(), *this->get_clock(), 2000,
-      "CAN bms frame dlc=%u. Expected >= 8.", msg->dlc);
-    return;
-  }
-
-  std::array<float, 4> cells{};
-  for (std::size_t i = 0; i < 4; ++i) {
-    const std::uint16_t mv = static_cast<std::uint16_t>(msg->data[i * 2]) |
-      (static_cast<std::uint16_t>(msg->data[i * 2 + 1]) << 8);
-    cells[i] = static_cast<float>(mv) / 1000.0F;
-  }
-
-  publishCells(cells);
+  publishDiagnostics(cells);
 }
 
 void BmsNode::publishCells(const std::array<float, 4> & cells)
@@ -102,12 +60,43 @@ void BmsNode::publishCells(const std::array<float, 4> & cells)
   pub_cells_->publish(out);
 }
 
-std::string BmsNode::toLower(std::string value)
+void BmsNode::publishDiagnostics(const std::array<float, 4> & cells)
 {
-  std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
-    return static_cast<char>(std::tolower(c));
-  });
-  return value;
+  const auto min_it = std::min_element(cells.begin(), cells.end());
+  diagnostic_msgs::msg::DiagnosticStatus status;
+  status.name = "bms/cell_voltage";
+  status.hardware_id = "micon";
+  status.level = diagnostic_msgs::msg::DiagnosticStatus::OK;
+  status.message = "OK";
+
+  if (*min_it < error_voltage_) {
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::ERROR;
+    status.message = "cell voltage below error threshold";
+  } else if (*min_it < warning_voltage_) {
+    status.level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
+    status.message = "cell voltage below warning threshold";
+  }
+
+  for (size_t i = 0; i < cells.size(); ++i) {
+    diagnostic_msgs::msg::KeyValue kv;
+    kv.key = "cell" + std::to_string(i + 1) + "_voltage";
+    std::ostringstream ss;
+    ss << cells[i];
+    kv.value = ss.str();
+    status.values.push_back(kv);
+  }
+
+  diagnostic_msgs::msg::KeyValue min_kv;
+  min_kv.key = "min_cell_voltage";
+  std::ostringstream min_ss;
+  min_ss << *min_it;
+  min_kv.value = min_ss.str();
+  status.values.push_back(min_kv);
+
+  diagnostic_msgs::msg::DiagnosticArray array;
+  array.header.stamp = this->now();
+  array.status.push_back(status);
+  pub_diagnostics_->publish(array);
 }
 
 }  // namespace bms

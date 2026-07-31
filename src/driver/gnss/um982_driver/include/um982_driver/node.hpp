@@ -4,6 +4,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
+#include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/string.hpp>
 
 #include <boost/asio.hpp>
@@ -52,6 +53,8 @@ private:
     void parse_gga(const std::string& line);
     void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
+    void publish_feedback_odometry(
+        double latitude_deg, double longitude_deg, const rclcpp::Time& stamp);
 
     // --- ROS Callbacks/Timers ---
     void ctrl_callback(const std_msgs::msg::String::SharedPtr msg);
@@ -82,6 +85,7 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_debug_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_debug_pub_;
+    rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr feedback_odom_pub_;
 
     // ROS Subscribers & Timers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr ctrl_sub_;
@@ -91,6 +95,23 @@ private:
     std::string last_gpgga_;
     std::ofstream log_file_;
     bool stop_publish_;
+
+    // State for UM982-only velocity feedback.  Position changes are converted
+    // from local ENU to body-frame surge/sway using the dual-antenna heading.
+    bool have_heading_{false};
+    double latest_yaw_rad_{0.0};
+    rclcpp::Time latest_heading_stamp_{0, 0, RCL_ROS_TIME};
+    bool have_previous_fix_{false};
+    double reference_latitude_rad_{0.0};
+    double reference_longitude_rad_{0.0};
+    double previous_east_m_{0.0};
+    double previous_north_m_{0.0};
+    rclcpp::Time previous_fix_stamp_{0, 0, RCL_ROS_TIME};
+    double filtered_surge_mps_{0.0};
+    double filtered_sway_mps_{0.0};
+    double filtered_yaw_rate_rps_{0.0};
+    double previous_yaw_rad_{0.0};
+    bool have_previous_yaw_{false};
     
     // Parameters
     struct {
@@ -105,6 +126,10 @@ private:
         bool rtk_enable;
         std::string heading_frame_id;
         std::string log_file_name;
+        bool publish_feedback_odometry;
+        std::string feedback_odometry_topic;
+        double feedback_velocity_filter_alpha;
+        double feedback_max_speed_mps;
 
         // RTK/NTRIP Settings
         std::string ntrip_server = "ntrip.ales-corp.co.jp";

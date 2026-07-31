@@ -1,38 +1,37 @@
 # Task 1: Maneuvering and Path Finding
-# Bathymetry-style follow-test waypoint configuration for the test07089 pool.
+# Two-period sine-wave follow-test waypoint configuration.
 #
-# Pool rectangle reference points:
+# Legacy pool rectangle reference points for Task 1.2:
 #   A: 35°40'03.0"N 139°47'37.9"E
 #   B: 35°40'03.9"N 139°47'36.8"E
 #   C: 35°40'03.3"N 139°47'36.1"E
 #
-# B is the right-angle corner within measurement accuracy. GPS points 1 and 2
-# are placed near opposite corners of the usable survey area. The route is a
-# lawnmower pattern: each long leg is about 25 m, then the ASV shifts sideways
-# about 3.59 m before running the next leg in the opposite direction.
+# GPS points 1 and 2 define the start and finish of today's course.  The route
+# advances from GPS 1 to GPS 2 while tracing two complete sine-wave periods
+# with a 3 m lateral amplitude.  Each period is sampled at eight segments.
 
 task1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   origin:
-    latitude: 35.6677242112
-    longitude: 139.7935559245
+    latitude: 34.5456666667
+    longitude: 135.5070555556
     name: "GPS 1 - Survey Start"
   gps_points:
     - id: 1
-      latitude: 35.6677242112
-      longitude: 139.7935559245
-      dms: '35°40''03.807"N 139°47''36.801"E'
+      latitude: 34.5456666667
+      longitude: 135.5070555556
+      dms: '34°32''44.4"N 135°30''25.4"E'
       name: "GPS 1 - Survey Start"
     - id: 2
-      latitude: 35.6674242620
-      longitude: 139.7935866822
-      dms: '35°40''02.727"N 139°47''36.912"E'
+      latitude: 34.5459166667
+      longitude: 135.5074444444
+      dms: '34°32''45.3"N 135°30''26.8"E'
       name: "GPS 2 - Survey Finish"
 
     # --- Task 1.2 (cardinal marker recognition, issue #46) ---
     # Reference points only; no TaskType/route exists yet for task1-2.
-    # Diagonal A<->C of the same pool rectangle, shared with task2-1 (GPS5/GPS6).
+    # Diagonal A<->C of the legacy pool rectangle; not used by this Task 1 route.
     - id: 3
       latitude: 35.6675575459
       longitude: 139.7933614800
@@ -46,123 +45,144 @@ task1_config:
     - id: 1
       x: 0.0000
       y: 0.0000
-      yaw: -0.7889
+      yaw: 1.3575
       type: "start"
       name: "GPS 1 - Survey Start"
       tolerance_m: 2.0
 
     - id: 2
-      x: 17.6150
-      y: -17.7401
-      yaw: -2.3294
+      x: 0.9234
+      y: 3.4116
+      yaw: 1.1953
       type: "turn"
-      name: "Waypoint 1 - Lane 1 End"
+      name: "Sine 1 - 1/16"
       tolerance_m: 2.0
 
     - id: 3
-      x: 15.1427
-      y: -20.3485
-      yaw: 2.3527
+      x: 2.6114
+      y: 5.8437
+      yaw: 0.6627
       type: "turn"
-      name: "Waypoint 2 - Lane 2 Start"
+      name: "Sine 1 - 2/16"
       tolerance_m: 2.0
 
     - id: 4
-      x: -2.4723
-      y: -2.6083
-      yaw: -2.3294
+      x: 5.3806
+      y: 6.8904
+      yaw: 0.1302
       type: "turn"
-      name: "Waypoint 3 - Lane 2 End"
+      name: "Sine 1 - 3/16"
       tolerance_m: 2.0
 
     - id: 5
-      x: -4.9445
-      y: -5.2167
-      yaw: -0.7889
+      x: 8.9144
+      y: 6.9575
+      yaw: -0.0321
       type: "turn"
-      name: "Waypoint 4 - Lane 3 Start"
+      name: "Sine 1 - 4/16"
       tolerance_m: 2.0
 
     - id: 6
-      x: 12.6705
-      y: -22.9568
-      yaw: -2.3294
+      x: 12.4482
+      y: 7.0246
+      yaw: 0.1302
       type: "turn"
-      name: "Waypoint 5 - Lane 3 End"
+      name: "Sine 1 - 5/16"
       tolerance_m: 2.0
 
     - id: 7
-      x: 10.1983
-      y: -25.5651
-      yaw: 2.3527
+      x: 15.2174
+      y: 8.0712
+      yaw: 0.6627
       type: "turn"
-      name: "Waypoint 6 - Lane 4 Start"
+      name: "Sine 1 - 6/16"
       tolerance_m: 2.0
 
     - id: 8
-      x: -7.4167
-      y: -7.8250
-      yaw: -2.3294
+      x: 16.9054
+      y: 10.5033
+      yaw: 1.1953
       type: "turn"
-      name: "Waypoint 7 - Lane 4 End"
+      name: "Sine 1 - 7/16"
       tolerance_m: 2.0
 
     - id: 9
-      x: -9.8889
-      y: -10.4334
-      yaw: -0.7889
+      x: 17.8288
+      y: 13.9149
+      yaw: 1.3575
       type: "turn"
-      name: "Waypoint 8 - Lane 5 Start"
+      name: "Sine 1 - 8/16 (period 1 complete)"
       tolerance_m: 2.0
 
     - id: 10
-      x: 7.7261
-      y: -28.1735
-      yaw: -2.3294
+      x: 18.7522
+      y: 17.3266
+      yaw: 1.1953
       type: "turn"
-      name: "Waypoint 9 - Lane 5 End"
+      name: "Sine 1 - 9/16"
       tolerance_m: 2.0
 
     - id: 11
-      x: 5.2538
-      y: -30.7818
-      yaw: 2.3527
+      x: 20.4402
+      y: 19.7586
+      yaw: 0.6627
       type: "turn"
-      name: "Waypoint 10 - Lane 6 Start"
+      name: "Sine 1 - 10/16"
       tolerance_m: 2.0
 
     - id: 12
-      x: -12.3612
-      y: -13.0417
-      yaw: -2.3294
+      x: 23.2094
+      y: 20.8053
+      yaw: 0.1302
       type: "turn"
-      name: "Waypoint 11 - Lane 6 End"
+      name: "Sine 1 - 11/16"
       tolerance_m: 2.0
 
     - id: 13
-      x: -14.8334
-      y: -15.6501
-      yaw: -0.7889
+      x: 26.7432
+      y: 20.8724
+      yaw: -0.0321
       type: "turn"
-      name: "Waypoint 12 - Lane 7 Start"
+      name: "Sine 1 - 12/16"
       tolerance_m: 2.0
 
     - id: 14
-      x: 2.7816
-      y: -33.3902
-      yaw: -0.7889
+      x: 30.2769
+      y: 20.9395
+      yaw: 0.1302
+      type: "turn"
+      name: "Sine 1 - 13/16"
+      tolerance_m: 2.0
+
+    - id: 15
+      x: 33.0462
+      y: 21.9862
+      yaw: 0.6627
+      type: "turn"
+      name: "Sine 1 - 14/16"
+      tolerance_m: 2.0
+
+    - id: 16
+      x: 34.7341
+      y: 24.4182
+      yaw: 1.1953
+      type: "turn"
+      name: "Sine 1 - 15/16"
+      tolerance_m: 2.0
+
+    - id: 17
+      x: 35.6576
+      y: 27.8299
+      yaw: 1.3575
       type: "goal"
       name: "GPS 2 - Survey Finish"
       tolerance_m: 2.0
 
   constraints:
     follow_test: true
-    route_pattern: "bathymetry_lawnmower"
-    long_leg_length_m: 25.0
-    lane_spacing_m: 3.5938
-    lane_count: 7
-    pool_long_edge_m: 39.2189
-    pool_short_edge_m: 25.5628
-    edge_inset_m: 2.0
+    route_pattern: "sine_wave"
+    sine_period_count: 2
+    sine_amplitude_m: 3.0
+    sine_segments_per_period: 8
     cardinal_marker_detection: false
     vision_halfway: false

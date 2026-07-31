@@ -11,6 +11,7 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -18,20 +19,11 @@ find_package(tf2_geometry_msgs REQUIRED)
 # Boost (Asioなどのため)
 find_package(Boost REQUIRED COMPONENTS system)
 
-if(NOT DEFINED ENV{ROS_DISTRO})
-  message(FATAL_ERROR "ROS_DISTRO is not set. Please build inside a ROS 2 environment.")
-endif()
+find_package(njord_platform REQUIRED)
+njord_detect_platform()
+njord_distro_header(UM982_TF2_GEOMETRY_MSGS_HEADER tf2_geometry_msgs/tf2_geometry_msgs)
 
-string(TOLOWER "$ENV{ROS_DISTRO}" UM982_ROS_DISTRO)
-if(UM982_ROS_DISTRO STREQUAL "foxy")
-  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs.h")
-elseif(UM982_ROS_DISTRO STREQUAL "humble" OR UM982_ROS_DISTRO STREQUAL "jazzy")
-  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs.hpp")
-else()
-  message(FATAL_ERROR "Unsupported ROS_DISTRO: $ENV{ROS_DISTRO}. Expected one of: foxy, humble, jazzy.")
-endif()
-
-message(STATUS "um982_driver: ROS_DISTRO=${UM982_ROS_DISTRO}, tf2_geometry_msgs header=${UM982_TF2_GEOMETRY_MSGS_HEADER}")
+message(STATUS "um982_driver: ROS_DISTRO=${NJORD_ROS_DISTRO}, tf2_geometry_msgs header=${UM982_TF2_GEOMETRY_MSGS_HEADER}")
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tf2_geometry_msgs_include.hpp.in
@@ -60,6 +52,7 @@ ament_target_dependencies(um982_driver_component
   rclcpp_components
   sensor_msgs
   geometry_msgs
+  nav_msgs
   std_msgs
   tf2
   tf2_geometry_msgs
@@ -97,5 +90,12 @@ install(DIRECTORY include/
 install(DIRECTORY launch
   DESTINATION share/${PROJECT_NAME}
 )
+
+if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
+  ament_add_gtest(test_um982_utils test/test_utils.cpp)
+  target_include_directories(test_um982_utils PRIVATE include)
+  target_link_libraries(test_um982_utils um982_driver_component)
+endif()
 
 ament_package()

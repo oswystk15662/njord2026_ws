@@ -1,7 +1,7 @@
 zed2i:
   ros__parameters:
-    left_device: /dev/video0
-    right_device: /dev/video1
+    left_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0
+    right_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index1
     left_frame_id: zed2i_left_camera_frame
     right_frame_id: zed2i_right_camera_frame
     depth_frame_id: zed2i_left_camera_frame

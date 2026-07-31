@@ -21,9 +21,12 @@ def include_launch(package_name, relative_path, condition, launch_arguments=None
 
 def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
-    pkg_kinematics = get_package_share_directory("kinematics")
+    pkg_robot = get_package_share_directory("robot")
+    pkg_thruster = get_package_share_directory("thruster_driver")
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
     nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
+    robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
+    robot_description = open(robot_description_file, "r").read()
     nav_through_poses_bt_xml = os.path.join(
         pkg_share,
         "behavior_trees",
@@ -32,7 +35,7 @@ def generate_launch_description():
 
     use_dynamics_arg = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2_arg = DeclareLaunchArgument("use_nav2", default_value="true")
-    use_kinematics_arg = DeclareLaunchArgument("use_kinematics", default_value="true")
+    use_thruster_driver_arg = DeclareLaunchArgument("use_thruster_driver", default_value="true")
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
     driver_delay_arg = DeclareLaunchArgument(
@@ -59,19 +62,18 @@ def generate_launch_description():
         IfCondition(LaunchConfiguration("use_dynamics")),
     )
 
-    kinematics = Node(
-        package="kinematics",
-        executable="kinematics_node",
-        name="kinematics_node",
+    thruster_driver = Node(
+        package="thruster_driver",
+        executable="thruster_driver_node",
+        name="thruster_driver_node",
         parameters=[
-            os.path.join(pkg_kinematics, "config", "config.yaml"),
+            os.path.join(pkg_thruster, "config", "config.yaml"),
             {
-                # Hardware wiring reversals are not present in the physics simulator.
-                "thrusters.FL.reverse": False,
-                "thrusters.RL.reverse": False,
+                "robot_description": robot_description,
+                "control.dob.enable": False,
             },
         ],
-        condition=IfCondition(LaunchConfiguration("use_kinematics")),
+        condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
         output="screen",
     )
 
@@ -124,7 +126,7 @@ def generate_launch_description():
         period=LaunchConfiguration("driver_delay"),
         actions=[
             dynamics,
-            kinematics,
+            thruster_driver,
             validator,
             orchestrator,
         ],
@@ -146,7 +148,7 @@ def generate_launch_description():
         startup_message,
         use_dynamics_arg,
         use_nav2_arg,
-        use_kinematics_arg,
+        use_thruster_driver_arg,
         use_waypoints_arg,
         use_validator_arg,
         driver_delay_arg,
