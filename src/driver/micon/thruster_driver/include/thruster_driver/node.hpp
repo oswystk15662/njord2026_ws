@@ -29,6 +29,7 @@ private:
     double x{0.0};
     double y{0.0};
     double angle_rad{0.0};
+    double max_thrust{40.0};
     double force_per_duty{1.0};
     double forward_gain{1.0};
     double reverse_gain{1.0};
