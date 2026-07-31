@@ -40,8 +40,8 @@ setup(
     entry_points={
         'console_scripts': [
             'yolo_node = yolo.main:main',
-            # Compatibility entry point for the legacy yolo_cuda.launch.py.
             'yolo_cuda_node = yolo.main:cuda_main',
+            'yolo_fusion_node = yolo.fusion_main:main',
         ],
     },
 )

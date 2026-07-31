@@ -1,17 +1,31 @@
 import os
-import threading
+import sys
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import HistoryPolicy, QoSProfile, ReliabilityPolicy
 from sensor_msgs.msg import Image, PointCloud2, PointField
-from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 from njord_interfaces.msg import BuoyRoi
+from vision_msgs.msg import Detection2DArray, Detection2D, ObjectHypothesisWithPose
 import cv2
 import numpy as np
 import struct
 import math
+import time
 from ament_index_python.packages import get_package_share_directory # パス解決用
-from yolo.perception_utils import LatestFrameBuffer, crop_image_roi, shift_and_clip_bbox
+
+ROOT = os.path.dirname(os.path.abspath(__file__))
+os.environ.setdefault("MPLCONFIGDIR", os.path.join("/tmp", "njord_yolo_matplotlib"))
+os.environ.setdefault("YOLO_CONFIG_DIR", os.path.join("/tmp", "njord_yolo_ultralytics"))
+
+# このパッケージに同梱した YOLOv10 実装を優先して読み込む。
+# 外部 workspace に依存しないように、yolo/yolov10-main を repo 内へ配置している。
+YOLOV10_CANDIDATES = [
+    os.path.join(ROOT, "yolov10-main"),
+]
+
+for yolo_path in YOLOV10_CANDIDATES:
+    if os.path.exists(yolo_path):
+        sys.path.insert(0, yolo_path)
+        break
 
 try:
     from cv_bridge import CvBridge
@@ -21,12 +35,14 @@ except Exception as exc:
     _cv_bridge_import_error = exc
 
 try:
-    from ultralytics import YOLO
+    try:
+        from ultralytics import YOLOv10 as YOLO
+    except Exception:
+        from ultralytics import YOLO
     _ultralytics_import_error = None
 except Exception as exc:
     YOLO = None
     _ultralytics_import_error = exc
-
 
 class YoloDetectorNode(Node):
     def __init__(self, node_name='yolo_detector', device_default='cpu'):
@@ -42,87 +58,75 @@ class YoloDetectorNode(Node):
         self.declare_parameter('model_path', default_model_path)
         self.declare_parameter('device', device_default)
         self.declare_parameter('camera_topic', '/camera/image_raw')
-        self.declare_parameter('enable_debug_image', True)
-        self.declare_parameter('publish_debug_image', True)
         self.declare_parameter('enable_virtual_wall', False)
         self.declare_parameter('enable_roi', True)
         self.declare_parameter('roi_topic', '/buoy_roi')
         self.declare_parameter('roi_frame_id', 'base_link')
-        self.declare_parameter('roi_range_predict', 5.0)
-        self.declare_parameter('roi_range_half', 2.0)
-        self.declare_parameter('camera_fov_deg', 90.0)
-        self.declare_parameter('roi_theta_min_deg', 2.0)
-        self.declare_parameter('publish_detections', False)
+        self.declare_parameter('publish_detections', True)
         self.declare_parameter('detections_topic', '/yolo/detections')
+        self.declare_parameter('enable_color_estimation', True)
         self.declare_parameter('use_image_roi', False)
         self.declare_parameter('roi_x_min_ratio', 0.0)
         self.declare_parameter('roi_x_max_ratio', 1.0)
         self.declare_parameter('roi_y_min_ratio', 0.0)
         self.declare_parameter('roi_y_max_ratio', 1.0)
         self.declare_parameter('draw_image_roi', True)
-        self.declare_parameter('enable_color_estimation', False)
+        self.declare_parameter('inference_hz', 5.0)
+        self.declare_parameter('debug_image_hz', 5.0)
+        self.declare_parameter('publish_debug_image', True)
+        self.declare_parameter('subscription_queue_size', 1)
+        self.declare_parameter('roi_range_predict', 5.0)
+        self.declare_parameter('roi_range_half', 2.0)
+        self.declare_parameter('camera_fov_deg', 90.0)
+        self.declare_parameter('roi_theta_min_deg', 2.0)
         
         # 4. パラメータ取得
         model_path = self.get_parameter('model_path').get_parameter_value().string_value
+        if not model_path:
+            model_path = default_model_path
         device = self.get_parameter('device').get_parameter_value().string_value
         cam_topic = self.get_parameter('camera_topic').get_parameter_value().string_value
-        self.enable_debug_image = self.get_parameter(
-            'enable_debug_image').get_parameter_value().bool_value
-        self.publish_debug_image = self.get_parameter(
-            'publish_debug_image').get_parameter_value().bool_value
         self.enable_virtual_wall = self.get_parameter('enable_virtual_wall').get_parameter_value().bool_value
         self.enable_roi = self.get_parameter('enable_roi').get_parameter_value().bool_value
         self.roi_topic = self.get_parameter('roi_topic').get_parameter_value().string_value
         self.roi_frame_id = self.get_parameter('roi_frame_id').get_parameter_value().string_value
-        self.roi_range_predict = self.get_parameter('roi_range_predict').get_parameter_value().double_value
-        self.roi_range_half = self.get_parameter('roi_range_half').get_parameter_value().double_value
-        self.camera_fov_deg = self.get_parameter('camera_fov_deg').get_parameter_value().double_value
-        self.roi_theta_min_deg = self.get_parameter('roi_theta_min_deg').get_parameter_value().double_value
         self.publish_detections = self.get_parameter('publish_detections').get_parameter_value().bool_value
         self.detections_topic = self.get_parameter('detections_topic').get_parameter_value().string_value
+        self.enable_color_estimation = self.get_parameter('enable_color_estimation').get_parameter_value().bool_value
         self.use_image_roi = self.get_parameter('use_image_roi').get_parameter_value().bool_value
         self.roi_x_min_ratio = self.get_parameter('roi_x_min_ratio').get_parameter_value().double_value
         self.roi_x_max_ratio = self.get_parameter('roi_x_max_ratio').get_parameter_value().double_value
         self.roi_y_min_ratio = self.get_parameter('roi_y_min_ratio').get_parameter_value().double_value
         self.roi_y_max_ratio = self.get_parameter('roi_y_max_ratio').get_parameter_value().double_value
         self.draw_image_roi = self.get_parameter('draw_image_roi').get_parameter_value().bool_value
-        self.enable_color_estimation = self.get_parameter('enable_color_estimation').get_parameter_value().bool_value
+        self.inference_hz = self.get_parameter('inference_hz').get_parameter_value().double_value
+        self.debug_image_hz = self.get_parameter('debug_image_hz').get_parameter_value().double_value
+        self.publish_debug_image = self.get_parameter('publish_debug_image').get_parameter_value().bool_value
+        self.subscription_queue_size = self.get_parameter('subscription_queue_size').get_parameter_value().integer_value
+        self.roi_range_predict = self.get_parameter('roi_range_predict').get_parameter_value().double_value
+        self.roi_range_half = self.get_parameter('roi_range_half').get_parameter_value().double_value
+        self.camera_fov_deg = self.get_parameter('camera_fov_deg').get_parameter_value().double_value
+        self.roi_theta_min_deg = self.get_parameter('roi_theta_min_deg').get_parameter_value().double_value
 
         self.get_logger().info(f'Loading YOLO model from: {model_path}')
-        self._is_tensorrt_engine = model_path.lower().endswith('.engine')
-        self._predict_kwargs = {'verbose': False}
+        self.min_inference_interval = 1.0 / self.inference_hz if self.inference_hz > 0.0 else 0.0
+        self.min_debug_image_interval = 1.0 / self.debug_image_hz if self.debug_image_hz > 0.0 else 0.0
+        self.last_inference_time = 0.0
+        self.last_debug_image_time = 0.0
 
         # YOLOモデルのロード
         try:
-            self.model = YOLO(
-                model_path,
-                task='detect' if self._is_tensorrt_engine else None,
-            )
-            if self._is_tensorrt_engine:
-                # TensorRT engines are already bound to the GPU used at build time;
-                # Ultralytics' Model.to() only applies to PyTorch models.
-                self._predict_kwargs.update(device=0, half=True)
-                self.get_logger().info(
-                    'Using TensorRT engine backend on GPU 0 with FP16 inference.'
-                )
-            else:
-                self.model.to(device)
+            self.model = YOLO(model_path)
+            self.model.to(device)
         except Exception as e:
             self.get_logger().error(f'Failed to load model from {model_path}: {e}')
             # フォールバック (必要なら)
             # self.model = YOLO("yolov8n.pt") 
             raise e # 起動失敗させる
 
-        self._frames = LatestFrameBuffer()
-
         # ROS通信設定
-        image_qos = QoSProfile(
-            history=HistoryPolicy.KEEP_LAST,
-            depth=1,
-            reliability=ReliabilityPolicy.BEST_EFFORT,
-        )
         self.sub_img = self.create_subscription(
-            Image, cam_topic, self.image_callback, image_qos)
+            Image, cam_topic, self.image_callback, self.subscription_queue_size)
         
         # デバッグ用画像出力
         self.pub_debug_img = self.create_publisher(Image, 'yolo/debug_image', 10)
@@ -135,16 +139,12 @@ class YoloDetectorNode(Node):
             Detection2DArray, self.detections_topic, 10)
 
         self.bridge = CvBridge()
-        self._inference_thread = threading.Thread(
-            target=self._inference_loop,
-            name=f'{node_name}_inference',
-            daemon=True,
-        )
-        self._inference_thread.start()
         self.get_logger().info(
-            'YoloDetectorNode Initialized. '
-            f'detections={"on" if self.publish_detections else "off"}, '
-            f'image_roi={"on" if self.use_image_roi else "off"}.')
+            f'YoloDetectorNode Initialized. image_roi={"on" if self.use_image_roi else "off"} '
+            f'x[{self.roi_x_min_ratio:.2f}, {self.roi_x_max_ratio:.2f}] '
+            f'y[{self.roi_y_min_ratio:.2f}, {self.roi_y_max_ratio:.2f}], '
+            f'inference_hz={self.inference_hz}, debug_image_hz={self.debug_image_hz}'
+        )
 
     def _validate_runtime_dependencies(self):
         if _cv_bridge_import_error is not None:
@@ -190,49 +190,26 @@ class YoloDetectorNode(Node):
         return 'yolov8n.pt'
 
     def image_callback(self, msg):
-        # A rear-facing camera may be used only for an annotated ground-video
-        # stream, without contributing navigation ROI or virtual obstacles.
-        if not (
-            self.enable_virtual_wall or self.enable_roi or self.enable_debug_image
-            or self.publish_detections
-        ):
+        if not self.enable_virtual_wall and not self.enable_roi and not self.publish_detections:
             return
 
-        # Replace an unprocessed frame instead of queueing stale camera data.
-        self._frames.put(msg)
+        now = time.monotonic()
+        if self.min_inference_interval > 0.0 and now - self.last_inference_time < self.min_inference_interval:
+            return
+        self.last_inference_time = now
 
-    def _inference_loop(self):
-        while True:
-            msg = self._frames.take()
-            if msg is None:
-                return
-            try:
-                self._process_image(msg)
-            except Exception as exc:
-                self.get_logger().error(f'YOLO inference failed: {exc}')
-
-    def _process_image(self, msg):
         try:
             cv_image = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
         except Exception as e:
             self.get_logger().error(f'CvBridge Error: {e}')
             return
 
-        if self.use_image_roi:
-            inference_image, roi_offset_x, roi_offset_y, roi_rect = crop_image_roi(
-                cv_image,
-                self.roi_x_min_ratio,
-                self.roi_x_max_ratio,
-                self.roi_y_min_ratio,
-                self.roi_y_max_ratio,
-            )
-        else:
-            inference_image = cv_image
-            roi_offset_x = roi_offset_y = 0
-            roi_rect = (0, 0, msg.width - 1, msg.height - 1)
+        roi_image, roi_offset_x, roi_offset_y, roi_rect = self.crop_image_roi(cv_image)
 
-        # Keep TensorRT's task/device/FP16 kwargs unchanged.
-        results = self.model.predict(inference_image, **self._predict_kwargs)
+        # --- YOLO推論 ---
+        # use_image_roi=true の場合は、画像全体ではなく監視領域だけを YOLO に渡す。
+        # 検出 bbox は後で元画像座標へ戻して /yolo/detections に publish する。
+        results = self.model.predict(roi_image, verbose=False)
         result = results[0]
         
         virtual_obstacles = [] # 生成する点のリスト [[x, y, z], ...]
@@ -240,10 +217,6 @@ class YoloDetectorNode(Node):
         best_conf = 0.0
         fov_rad = math.radians(self.camera_fov_deg)
         min_theta_rad = math.radians(self.roi_theta_min_deg)
-        publish_debug = (
-            self.enable_debug_image and self.publish_debug_image
-            and self.pub_debug_img.get_subscription_count() > 0
-        )
         detection_array = Detection2DArray()
         detection_array.header = msg.header
 
@@ -252,14 +225,10 @@ class YoloDetectorNode(Node):
             class_id = int(box.cls[0])
             label = result.names[class_id]
             conf = float(box.conf[0])
-            xyxy = shift_and_clip_bbox(
-                box.xyxy[0].cpu().numpy(),
-                roi_offset_x,
-                roi_offset_y,
-                msg.width,
-                msg.height,
-            )
+            xyxy = box.xyxy[0].cpu().numpy() # [x1, y1, x2, y2]
+            xyxy = self.shift_bbox_to_full_image(xyxy, roi_offset_x, roi_offset_y)
             color_name = self.estimate_detection_color(cv_image, xyxy, label)
+
             if self.publish_detections:
                 detection_array.detections.append(
                     self.create_detection_msg(msg.header, xyxy, label, conf, color_name))
@@ -289,8 +258,7 @@ class YoloDetectorNode(Node):
                     virtual_obstacles.extend(wall_points)
 
                     # デバッグ描画: 壁の方向へ線を引く
-                    if publish_debug:
-                        cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
+                    cv2.line(cv_image, (cx, cy), (cx, cy+50), (0, 0, 255), 3)
 
             if self.enable_roi and conf > best_conf:
                 bbox_width = max(1.0, float(xyxy[2] - xyxy[0]))
@@ -308,31 +276,13 @@ class YoloDetectorNode(Node):
                 best_conf = conf
 
             # デバッグ描画: BBox
-            if publish_debug:
-                cv2.rectangle(
-                    cv_image,
-                    (int(xyxy[0]), int(xyxy[1])),
-                    (int(xyxy[2]), int(xyxy[3])),
-                    (0, 255, 0),
-                    2,
-                )
-                cv2.putText(
-                    cv_image,
-                    f'{label} {color_name} {conf:.2f}',
-                    (int(xyxy[0]), int(xyxy[1])-10),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.5,
-                    (0, 255, 0),
-                    2,
-                )
+            cv2.rectangle(cv_image, (int(xyxy[0]), int(xyxy[1])), (int(xyxy[2]), int(xyxy[3])), (0, 255, 0), 2)
+            cv2.putText(cv_image, f'{label} {color_name} {conf:.2f}', (int(xyxy[0]), int(xyxy[1])-10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
-        if self.use_image_roi and self.draw_image_roi and publish_debug:
+        if self.use_image_roi and self.draw_image_roi:
             x1, y1, x2, y2 = roi_rect
             cv2.rectangle(cv_image, (x1, y1), (x2, y2), (255, 180, 0), 2)
-
-        # Publish even an empty array so fusion consumers can clear stale detections.
-        if self.publish_detections:
-            self.pub_detections.publish(detection_array)
 
         # 仮想壁（点群）のPublish
         if self.enable_virtual_wall:
@@ -347,20 +297,80 @@ class YoloDetectorNode(Node):
         if self.enable_roi and best_roi is not None:
             self.pub_roi.publish(best_roi)
 
-        # デバッグ画像のPublish
-        if publish_debug:
+        if self.publish_detections:
+            self.pub_detections.publish(detection_array)
+
+        # デバッグ画像のPublish。
+        # Foxglove の画像表示が重い場合があるので、debug_image_hz で publish 周期を落とす。
+        if self.should_publish_debug_image(now):
+            self.last_debug_image_time = now
             self.pub_debug_img.publish(self.bridge.cv2_to_imgmsg(cv_image, encoding='bgr8'))
 
+    def should_publish_debug_image(self, now):
+        if not self.publish_debug_image:
+            return False
+        if self.min_debug_image_interval <= 0.0:
+            return True
+        return now - self.last_debug_image_time >= self.min_debug_image_interval
+
+    def crop_image_roi(self, image):
+        """
+        画像内の監視領域 ROI を切り出す。
+        ROI は比率指定なので、カメラ解像度が変わっても同じ設定を使いやすい。
+        戻り値:
+          roi_image: YOLO に渡す画像
+          offset_x/y: ROI 左上の元画像座標
+          roi_rect: debug_image に描くための (x1, y1, x2, y2)
+        """
+        h, w = image.shape[:2]
+        if not self.use_image_roi:
+            return image, 0, 0, (0, 0, w - 1, h - 1)
+
+        x_min_ratio = self.clamp(self.roi_x_min_ratio, 0.0, 1.0)
+        x_max_ratio = self.clamp(self.roi_x_max_ratio, 0.0, 1.0)
+        y_min_ratio = self.clamp(self.roi_y_min_ratio, 0.0, 1.0)
+        y_max_ratio = self.clamp(self.roi_y_max_ratio, 0.0, 1.0)
+
+        x1 = int(round(w * min(x_min_ratio, x_max_ratio)))
+        x2 = int(round(w * max(x_min_ratio, x_max_ratio)))
+        y1 = int(round(h * min(y_min_ratio, y_max_ratio)))
+        y2 = int(round(h * max(y_min_ratio, y_max_ratio)))
+
+        x1 = max(0, min(w - 1, x1))
+        x2 = max(x1 + 1, min(w, x2))
+        y1 = max(0, min(h - 1, y1))
+        y2 = max(y1 + 1, min(h, y2))
+
+        return image[y1:y2, x1:x2], x1, y1, (x1, y1, x2 - 1, y2 - 1)
+
+    def shift_bbox_to_full_image(self, xyxy, offset_x, offset_y):
+        """
+        ROI crop 内の bbox 座標を、元画像全体の座標へ戻す。
+        Fusion では元画像座標の bbox と LiDAR 投影点を比較するため、この変換が必要。
+        """
+        shifted = np.array(xyxy, dtype=float)
+        shifted[0] += offset_x
+        shifted[2] += offset_x
+        shifted[1] += offset_y
+        shifted[3] += offset_y
+        return shifted
+
     @staticmethod
-    def create_detection_msg(header, xyxy, label, confidence, color_name):
-        """Serialize full-image pixel coordinates for the fusion contract."""
-        x1, y1, x2, y2 = [float(value) for value in xyxy]
+    def clamp(value, min_value, max_value):
+        return max(min_value, min(max_value, float(value)))
+
+    def create_detection_msg(self, header, xyxy, label, confidence, color_name):
+        """
+        YOLO の bbox/class/confidence/color を vision_msgs/Detection2D に詰める。
+        color は標準 msg に専用 field がないため、暫定的に id に入れる。
+        Fusion 側では detection.results[0].hypothesis.class_id と detection.id を読む。
+        """
+        x1, y1, x2, y2 = [float(v) for v in xyxy]
         width = max(1.0, x2 - x1)
         height = max(1.0, y2 - y1)
+
         detection = Detection2D()
         detection.header = header
-        # Fusion currently consumes the estimated buoy colour from this field.
-        # This is a project-local convention, not a tracking identifier.
         detection.id = color_name
         detection.bbox.center.position.x = x1 + width * 0.5
         detection.bbox.center.position.y = y1 + height * 0.5
@@ -375,43 +385,55 @@ class YoloDetectorNode(Node):
         return detection
 
     def estimate_detection_color(self, image_bgr, xyxy, label):
-        """Return a conservative colour hint; class labels take precedence."""
+        """
+        bbox 内の HSV をざっくり見て、ブイの見た目色を推定する。
+        YOLO class 名に red/green/yellow などが含まれる場合は class 名を優先する。
+        """
         label_lower = str(label).lower()
-        for name in ('red', 'green', 'yellow', 'black', 'white', 'blue', 'orange'):
+        for name in ['red', 'green', 'yellow', 'black', 'white', 'blue', 'orange']:
             if name in label_lower:
                 return name
+
         if not self.enable_color_estimation:
             return 'unknown'
 
-        height, width = image_bgr.shape[:2]
-        x1, y1, x2, y2 = [int(round(value)) for value in xyxy]
-        x1, x2 = max(0, min(width - 1, x1)), max(0, min(width, x2))
-        y1, y2 = max(0, min(height - 1, y1)), max(0, min(height, y2))
+        h, w = image_bgr.shape[:2]
+        x1, y1, x2, y2 = [int(round(v)) for v in xyxy]
+        x1 = max(0, min(w - 1, x1))
+        x2 = max(0, min(w, x2))
+        y1 = max(0, min(h - 1, y1))
+        y2 = max(0, min(h, y2))
+
         if x2 <= x1 or y2 <= y1:
             return 'unknown'
 
-        hsv = cv2.cvtColor(image_bgr[y1:y2, x1:x2], cv2.COLOR_BGR2HSV)
-        saturation, value = hsv[:, :, 1], hsv[:, :, 2]
+        crop = image_bgr[y1:y2, x1:x2]
+        if crop.size == 0:
+            return 'unknown'
+
+        hsv = cv2.cvtColor(crop, cv2.COLOR_BGR2HSV)
+        saturation = hsv[:, :, 1]
+        value = hsv[:, :, 2]
+
         valid = (saturation > 50) & (value > 50)
         if np.count_nonzero(valid) < 10:
-            return 'white' if float(np.mean(value)) > 160 else 'black'
-        hue = float(np.median(hsv[:, :, 0][valid]))
-        if hue < 10 or hue > 170:
+            mean_v = float(np.mean(value))
+            return 'white' if mean_v > 160 else 'black'
+
+        hue = hsv[:, :, 0][valid]
+        mean_hue = float(np.median(hue))
+
+        if mean_hue < 10 or mean_hue > 170:
             return 'red'
-        if hue < 25:
+        if 10 <= mean_hue < 25:
             return 'orange'
-        if hue < 40:
+        if 25 <= mean_hue < 40:
             return 'yellow'
-        if hue < 90:
+        if 40 <= mean_hue < 90:
             return 'green'
-        if hue < 135:
+        if 90 <= mean_hue < 135:
             return 'blue'
         return 'unknown'
-
-    def destroy_node(self):
-        self._frames.stop()
-        self._inference_thread.join()
-        return super().destroy_node()
 
     def generate_virtual_wall(self, label, bx, by):
         """
@@ -489,7 +511,9 @@ def main(args=None):
 
 
 def cuda_main(args=None):
+    """Compatibility entry point for the legacy CUDA launch file."""
     run_node(args=args, node_name='yolo_detector_cuda', device_default='cuda:0')
+
 
 if __name__ == '__main__':
     main()
