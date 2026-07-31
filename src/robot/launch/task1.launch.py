@@ -100,6 +100,17 @@ def generate_launch_description():
             '--frame-id', 'base_link', '--child-frame-id', 'um982_link',
         ],
     )
+    cardinal_walls = Node(
+        package='buoy_obstacle_publisher',
+        executable='cardinal_wall_publisher',
+        name='cardinal_wall_publisher',
+        output='screen',
+        parameters=[{
+            'detection_topic': '/buoy_detections_3d',
+            'output_topic': '/virtual_obstacles',
+            'map_frame': 'map',
+        }],
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -130,6 +141,7 @@ def generate_launch_description():
         um982_feedback,
         robot_state_publisher,
         um982_static_tf,
+        cardinal_walls,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

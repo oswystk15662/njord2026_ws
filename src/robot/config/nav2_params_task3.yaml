@@ -20,9 +20,11 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
-    global_frame: map
+    # Default real-vessel profile: UM982 feedback only.  A future multi-sensor
+    # profile may restore map/global-EKF localisation.
+    global_frame: odom
     robot_base_frame: base_link
-    odom_topic: /odometry/filtered/global
+    odom_topic: /odometry/filtered/local
     bt_loop_duration: 10
     default_server_timeout: 20
     # Rewritten by robot/launch/nav2.launch.py using the installed package share path.
@@ -146,7 +148,7 @@ global_costmap:
     ros__parameters:
       update_frequency: 5.0
       publish_frequency: 5.0
-      global_frame: map
+      global_frame: odom
       robot_base_frame: base_link
       use_sim_time: false
       robot_radius: 0.35

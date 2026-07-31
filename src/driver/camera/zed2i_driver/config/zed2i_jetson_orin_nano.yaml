@@ -46,7 +46,8 @@ zed2i:
     lidar_min_cluster_points: 5
     lidar_max_cluster_points: 5000
     fusion_max_range_delta_m: 2.0
-    enable_virtual_wall: true
+    # Nav2 obstacles are generated downstream from /buoy_detections_3d.
+    enable_virtual_wall: false
     virtual_wall_topic: /virtual_obstacles
     wall_frame: map
     channel_heading_rad: .nan

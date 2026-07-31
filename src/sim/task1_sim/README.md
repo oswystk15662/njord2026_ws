@@ -10,8 +10,9 @@ This package models that flow in a simulation-local `map` frame.
 ## Responsibilities
 
 - launch the Task1 sim stack: dynamics, Nav2, waypoint publisher, validator, and orchestrator
-- provide a YOLO/cardinal-marker stub through `/yolo/start_inference`
-- publish dynamic virtual obstacles on `/virtual_obstacles`
+- retain a cardinal-marker stub through `/yolo/start_inference` for task validation
+- publish fixed simulation geometry on `/sim_obstacles`; fused cardinal detections
+  produce `/virtual_obstacles` through `cardinal_wall_publisher`
 - publish route and buoy status on `/sim/task1_status`
 - publish boundary/buoy RViz markers on `/sim/boundary_markers`
 - publish cardinal-direction RViz arrows on `/sim/cardinal_mark_markers`
@@ -25,6 +26,12 @@ Waypoint goals are sent by `waypoint_publisher` through Nav2's
 
 ```bash
 ros2 launch task1_sim task1_sim.launch.py
+
+# Fast control/Nav2 loop using SimNode truth odometry only
+ros2 launch task1_sim task1_sim_truth.launch.py
+
+# Simulated IMU/GNSS plus local/global EKF and navsat processing
+ros2 launch task1_sim task1_sim_sensor_parity.launch.py
 ```
 
 Useful launch switches:

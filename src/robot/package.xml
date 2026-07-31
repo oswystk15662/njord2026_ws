@@ -10,6 +10,7 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <exec_depend>ament_index_python</exec_depend>
+  <exec_depend>buoy_obstacle_publisher</exec_depend>
   <exec_depend>adnav_driver</exec_depend>
   <exec_depend>diagnostic_monitors</exec_depend>
   <exec_depend>drogger_wired_flex</exec_depend>

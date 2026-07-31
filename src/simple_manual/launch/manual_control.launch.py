@@ -57,7 +57,7 @@ def _sensor_container(context, *_args, **_kwargs):
                     'cmdline_input_bd_code': 'livox0000000001',
                 }
             ],
-            extra_arguments=[{'use_intra_process_comms': False}],
+            extra_arguments=[{'use_intra_process_comms': True}],
         ),
         ComposableNode(
             package='zed2i_driver',
@@ -81,7 +81,7 @@ def _sensor_container(context, *_args, **_kwargs):
                     'ground_video_fps': 5.0,
                 },
             ],
-            extra_arguments=[{'use_intra_process_comms': False}],
+            extra_arguments=[{'use_intra_process_comms': True}],
         ),
     ]
 
@@ -115,7 +115,7 @@ def _load_perception_components(context, *_args, **_kwargs):
                         'frame_id': 'base_link',
                     }
                 ],
-                extra_arguments=[{'use_intra_process_comms': False}],
+                extra_arguments=[{'use_intra_process_comms': True}],
             )
         )
 
@@ -390,7 +390,10 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'lidar_model', default_value='mid360s', choices=['mid360', 'mid360s']
         ),
-        DeclareLaunchArgument('enable_pcl_buoy_detection', default_value='true'),
+        DeclareLaunchArgument(
+            'enable_pcl_buoy_detection', default_value='false',
+            description='Deprecated point-cloud-only detector; GPU camera/LiDAR fusion is preferred.',
+        ),
         DeclareLaunchArgument('enable_gpu_perception', default_value='true'),
         DeclareLaunchArgument('engine_path', default_value=default_engine),
         DeclareLaunchArgument('camera_resolution', default_value='HD720'),

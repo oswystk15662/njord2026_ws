@@ -117,10 +117,10 @@ public:
       lidar_min_cluster_points_ = declare_parameter<int>("lidar_min_cluster_points", 5);
       lidar_max_cluster_points_ = declare_parameter<int>("lidar_max_cluster_points", 5000);
       detector_ = std::make_unique<TensorRtDetector>(engine_path_, confidence_threshold_, max_detections_);
-      if (publish_debug_detections_) {
-        detection_pub_ = create_publisher<njord_interfaces::msg::BuoyDetectionArray>(
-          detection_topic_, rclcpp::QoS(10));
-      }
+      // Canonical output for Nav2-side perception consumers.  This must not
+      // depend on the optional debug-detection setting.
+      detection_pub_ = create_publisher<njord_interfaces::msg::BuoyDetectionArray>(
+        detection_topic_, rclcpp::QoS(10));
       if (enable_virtual_wall_) {
         virtual_wall_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
           virtual_wall_topic_, rclcpp::QoS(10));

@@ -33,6 +33,11 @@ def generate_launch_description():
         "behavior_trees",
         "navigate_through_poses_w_replanning_and_recovery.xml",
     )
+    nav_to_pose_bt_xml = os.path.join(
+        get_package_share_directory("nav2_bt_navigator"),
+        "behavior_trees",
+        "navigate_to_pose_w_replanning_and_recovery.xml",
+    )
     robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
     robot_description = open(robot_description_file, "r").read()
 
@@ -45,6 +50,10 @@ def generate_launch_description():
     use_thruster_driver_arg = DeclareLaunchArgument("use_thruster_driver", default_value="true")
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
+    use_sensor_noise_arg = DeclareLaunchArgument("use_sensor_noise", default_value="true")
+    use_local_ekf_arg = DeclareLaunchArgument("use_local_ekf", default_value="true")
+    use_global_ekf_arg = DeclareLaunchArgument("use_global_ekf", default_value="true")
+    use_navsat_arg = DeclareLaunchArgument("use_navsat", default_value="true")
     task_type_arg = DeclareLaunchArgument(
         "task_type",
         default_value="task1",
@@ -86,7 +95,8 @@ def generate_launch_description():
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")
-        )
+        ),
+        condition=IfCondition(LaunchConfiguration("use_sensor_noise")),
     )
 
     # Thruster driver: cmd_vel -> /thruster_command with P + DOB velocity control.
@@ -106,6 +116,20 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
     )
 
+    # Keep the simulation on the vessel command path.  Nav2's collision
+    # monitor publishes /cmd_vel_auto; twist_mux is the sole owner of /cmd_vel.
+    twist_mux = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        name="twist_mux",
+        parameters=[
+            os.path.join(pkg_robot, "config", "twist_mux.yaml"),
+            {"topics.navigation.topic": "/cmd_vel_auto"},
+        ],
+        remappings=[("cmd_vel_out", "/cmd_vel")],
+        output="screen",
+    )
+
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -123,10 +147,11 @@ def generate_launch_description():
         name="ekf_filter_node_local",
         output="screen",
         parameters=[
-            os.path.join(pkg_robot, "config", "ekf_local.yaml"),
+            os.path.join(pkg_share, "config", "task1_ekf_local.yaml"),
             {"publish_tf": False},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/local")],
+        condition=IfCondition(LaunchConfiguration("use_local_ekf")),
     )
 
     global_ekf_node = Node(
@@ -139,6 +164,7 @@ def generate_launch_description():
             {"publish_tf": False},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/global")],
+        condition=IfCondition(LaunchConfiguration("use_global_ekf")),
     )
 
     navsat_transform_node = Node(
@@ -161,6 +187,7 @@ def generate_launch_description():
             ("gps/fix", "/gps/fix"),
             ("odometry/filtered", "odometry/filtered/local"),
         ],
+        condition=IfCondition(LaunchConfiguration("use_navsat")),
     )
 
     orchestrator = Node(
@@ -177,18 +204,36 @@ def generate_launch_description():
         IfCondition(LaunchConfiguration("use_validator")),
     )
 
+    cardinal_walls = Node(
+        package="buoy_obstacle_publisher",
+        executable="cardinal_wall_publisher",
+        name="cardinal_wall_publisher",
+        parameters=[{
+            "detection_topic": "/buoy_detections_3d",
+            "output_topic": "/virtual_obstacles",
+            "map_frame": "map",
+            "course_bounds": [-5.0, 55.0, -40.0, 15.0],
+            "wall_width_m": 0.2,
+            "point_spacing_m": 0.05,
+            "confirmations_required": 2,
+        }],
+        output="screen",
+    )
+
     sensor_layer_timer = TimerAction(
         period=LaunchConfiguration("driver_delay"),
         actions=[
             dynamics,
             sensor_noise_launch,
             thruster_driver_node,
+            twist_mux,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
             navsat_transform_node,
             validator,
             orchestrator,
+            cardinal_walls,
         ],
     )
 
@@ -198,6 +243,7 @@ def generate_launch_description():
         root_key=None,
         param_rewrites={
             "bt_navigator.ros__parameters.default_nav_through_poses_bt_xml": nav_through_poses_bt_xml,
+            "bt_navigator.ros__parameters.default_nav_to_pose_bt_xml": nav_to_pose_bt_xml,
         },
         convert_types=True,
     )
@@ -244,6 +290,10 @@ def generate_launch_description():
         use_thruster_driver_arg,
         use_waypoints_arg,
         use_validator_arg,
+        use_sensor_noise_arg,
+        use_local_ekf_arg,
+        use_global_ekf_arg,
+        use_navsat_arg,
         task_type_arg,
         driver_delay_arg,
         nav2_delay_arg,
