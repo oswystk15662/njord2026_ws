@@ -16,8 +16,17 @@ def _monitor(
     stale_timeout,
     qos_reliability="best_effort",
 ):
+    diagnostic_name = monitor_name
+    if monitor_name == "local_filtered_odom":
+        diagnostic_name = "odom_local"
+    elif monitor_name == "global_filtered_odom":
+        diagnostic_name = "odom_global"
+    elif monitor_name == "thruster_command":
+        diagnostic_name = "thruster"
+
     return {
         "monitor_name": monitor_name,
+        "diagnostic_name": diagnostic_name,
         "topic": topic,
         "topic_type": topic_type,
         "mode": mode,
@@ -123,8 +132,8 @@ PROFILES = {
             "/wit/imu",
             "sensor_msgs/msg/Imu",
             "required_frequency",
-            50.0,
             20.0,
+            10.0,
             0.5,
             2.0,
         ),
@@ -205,19 +214,18 @@ def _launch_setup(context, *args, **kwargs):
 
     components = []
     for monitor in monitors:
-        name = f"{monitor['monitor_name']}_heartbeat"
         components.append(
             ComposableNode(
                 package="diagnostic_monitors",
                 plugin="njord::diagnostic_monitors::TopicHeartbeatMonitor",
-                name=name,
+                name=monitor["diagnostic_name"],
                 parameters=[monitor],
             )
         )
 
     return [
         ComposableNodeContainer(
-            name=f"{profile}_diagnostic_monitor_container",
+            name=f"{profile}_diag",
             namespace="",
             package="rclcpp_components",
             executable="component_container_mt",

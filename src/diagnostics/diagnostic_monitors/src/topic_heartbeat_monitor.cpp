@@ -49,8 +49,7 @@ TopicHeartbeatMonitor::TopicHeartbeatMonitor(const rclcpp::NodeOptions & options
   window_size_ = declare_parameter<int>("window_size", 50);
   qos_depth_ = declare_parameter<int>("qos_depth", 10);
   qos_reliability_ = declare_parameter<std::string>("qos_reliability", "best_effort");
-  diagnostic_name_ = declare_parameter<std::string>(
-    "diagnostic_name", "topic_heartbeat: " + monitor_name_);
+  diagnostic_name_ = declare_parameter<std::string>("diagnostic_name", monitor_name_);
   hardware_id_ = declare_parameter<std::string>("hardware_id", "topic_heartbeat_monitor");
 
   mode_ = parseMode(mode_text_);
@@ -170,7 +169,7 @@ void TopicHeartbeatMonitor::updateDiagnostic(diagnostic_updater::DiagnosticStatu
     message = "topic or topic_type is not configured";
   } else if (mode_ == Mode::Optional && publishers == 0U && !has_message_) {
     level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-    message = "optional topic has no publisher";
+    message = "OK optional, no publisher";
   } else if (publishers == 0U) {
     level = mode_ == Mode::RequiredFrequency ?
       diagnostic_msgs::msg::DiagnosticStatus::ERROR :
@@ -181,21 +180,23 @@ void TopicHeartbeatMonitor::updateDiagnostic(diagnostic_updater::DiagnosticStatu
       diagnostic_msgs::msg::DiagnosticStatus::ERROR :
       diagnostic_msgs::msg::DiagnosticStatus::WARN;
     message = "publisher exists but no message received";
-  } else if (age > stale_timeout_sec_) {
+  } else if (mode_ != Mode::HeartbeatOnly && age > stale_timeout_sec_) {
     level = mode_ == Mode::Optional ?
       diagnostic_msgs::msg::DiagnosticStatus::WARN :
       diagnostic_msgs::msg::DiagnosticStatus::ERROR;
     message = "last message is stale";
-  } else if (age > timeout_sec_) {
+  } else if (mode_ != Mode::HeartbeatOnly && age > timeout_sec_) {
     level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
     message = "last message timeout exceeded";
   } else if (mode_ == Mode::RequiredFrequency && frequency < minimum_frequency_hz_) {
     level = diagnostic_msgs::msg::DiagnosticStatus::WARN;
     message = "frequency below minimum";
+  } else if (mode_ == Mode::HeartbeatOnly) {
+    message = "OK heartbeat";
   } else {
     std::ostringstream oss;
     oss.precision(3);
-    oss << frequency << " Hz, last message age " << age << " sec";
+    oss << "OK " << frequency << " Hz";
     message = oss.str();
   }
 
