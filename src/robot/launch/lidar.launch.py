@@ -35,6 +35,8 @@ def launch_setup(context, *args, **kwargs):
         LaunchConfiguration("enable_glim").perform(context).lower()
         in ("true", "1", "yes", "on")
     )
+    glim_backend = LaunchConfiguration("glim_backend").perform(context)
+    glim_config_dir_name = "glim_config" if glim_backend == "gpu" else "glim_config_cpu"
 
     user_config_path = PathJoinSubstitution(
         [FindPackageShare("robot"), "config", "livox", config_file]
@@ -94,7 +96,7 @@ def launch_setup(context, *args, **kwargs):
                 parameters=[
                     {
                         "config_path": PathJoinSubstitution(
-                            [FindPackageShare("robot"), "config", "glim_config"]
+                            [FindPackageShare("robot"), "config", glim_config_dir_name]
                         ),
                         "use_sim_time": False,
                     }
@@ -121,7 +123,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "lidar_model",
-                default_value="mid360",
+                default_value="mid360s",
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument("enable_buoy_detection", default_value="false"),
@@ -129,6 +131,12 @@ def generate_launch_description():
                 "enable_glim",
                 default_value="true",
                 description="Load GLIM into the Livox component container",
+            ),
+            DeclareLaunchArgument(
+                "glim_backend",
+                default_value="gpu",
+                choices=["gpu", "cpu"],
+                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
             DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),

@@ -8,15 +8,15 @@
   <license>TODO: License declaration</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
+  <buildtool_depend>njord_platform</buildtool_depend>
 
   <exec_depend>ament_index_python</exec_depend>
-  <exec_depend>adnav_driver</exec_depend>
   <exec_depend>diagnostic_monitors</exec_depend>
   <exec_depend>drogger_wired_flex</exec_depend>
-  <exec_depend>glim_ros</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">glim_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
-  <exec_depend>livox_ros_driver2</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">livox_ros_driver2</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_common</exec_depend>
   <exec_depend>pcl_det</exec_depend>
@@ -32,6 +32,7 @@
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>
+  <test_depend>python3-yaml</test_depend>
 
   <export>
     <build_type>ament_cmake</build_type>

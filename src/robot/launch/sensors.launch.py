@@ -24,7 +24,7 @@ def include_launch(package_name, path_parts, launch_arguments=None):
 
 
 def generate_launch_description():
-    enable_glim = LaunchConfiguration("enable_gpu_perception")
+    enable_glim = LaunchConfiguration("enable_glim")
     enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
     engine_path = LaunchConfiguration("engine_path")
 
@@ -67,7 +67,7 @@ def generate_launch_description():
         output="screen",
         emulate_tty=True,
         parameters=[
-            PathJoinSubstitution(["robot", "config", "adnav_spatial.yaml"])
+            PathJoinSubstitution([FindPackageShare("robot"), "config", "adnav_spatial.yaml"])
         ],
     )
 

@@ -22,6 +22,29 @@ def generate_launch_description():
         # description="Launch generic topic heartbeat diagnostics for localization topics",
     )
 
+    enable_glim_arg = DeclareLaunchArgument(
+        "enable_glim",
+        default_value="false",
+        description="Launch GLIM here (leave false in the 2-machine split; Jetson hosts GLIM)",
+    )
+    enable_local_ekf_arg = DeclareLaunchArgument(
+        "enable_local_ekf",
+        default_value="true",
+    )
+    enable_global_ekf_arg = DeclareLaunchArgument(
+        "enable_global_ekf",
+        default_value="true",
+    )
+    enable_navsat_transform_arg = DeclareLaunchArgument(
+        "enable_navsat_transform",
+        default_value="true",
+    )
+    enable_spatial_navsat_arg = DeclareLaunchArgument(
+        "enable_spatial_navsat",
+        default_value="false",
+        description="Advanced Navigation Spatial navsat transform (adnav_driver submodule is not checked out)",
+    )
+
     robot_description = Command(
         [
             FindExecutable(name="xacro"),
@@ -61,6 +84,7 @@ def generate_launch_description():
             }
         ],
         remappings=[("/glim_ros_node/odom", "/odom")],
+        condition=IfCondition(LaunchConfiguration("enable_glim")),
     )
 
     spatial_navsat_transform_node = Node(
@@ -86,6 +110,7 @@ def generate_launch_description():
             ("odometry/filtered", "odometry/filtered/local"),
             ("odometry/gps", "/odometry/gps/spatial"),
         ],
+        condition=IfCondition(LaunchConfiguration("enable_spatial_navsat")),
     )
 
     # The UM982 driver is launched separately because its transport settings
@@ -111,6 +136,7 @@ def generate_launch_description():
             PathJoinSubstitution([robot_share, "config", "ekf_local.yaml"])
         ],
         remappings=[("odometry/filtered", "odometry/filtered/local")],
+        condition=IfCondition(LaunchConfiguration("enable_local_ekf")),
     )
 
     global_ekf_node = Node(
@@ -122,6 +148,7 @@ def generate_launch_description():
             PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"])
         ],
         remappings=[("odometry/filtered", "odometry/filtered/global")],
+        condition=IfCondition(LaunchConfiguration("enable_global_ekf")),
     )
 
     navsat_transform_node = Node(
@@ -147,7 +174,9 @@ def generate_launch_description():
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
             ("odometry/filtered", "odometry/filtered/local"),
+            ("odometry/gps", "/odometry/gps/um982"),
         ],
+        condition=IfCondition(LaunchConfiguration("enable_navsat_transform")),
     )
 
     diagnostics_launch = IncludeLaunchDescription(
@@ -161,12 +190,17 @@ def generate_launch_description():
     return LaunchDescription(
         [
             enable_diagnostics_arg,
+            enable_glim_arg,
+            enable_local_ekf_arg,
+            enable_global_ekf_arg,
+            enable_navsat_transform_arg,
+            enable_spatial_navsat_arg,
             robot_state_publisher,
-            # glim_node,
-            # spatial_navsat_transform_node,
+            glim_node,
+            spatial_navsat_transform_node,
             um982_static_tf,
-            # local_ekf_node,
-            # global_ekf_node,
+            local_ekf_node,
+            global_ekf_node,
             navsat_transform_node,
             diagnostics_launch,
         ]

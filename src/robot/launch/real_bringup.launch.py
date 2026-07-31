@@ -67,6 +67,8 @@ def generate_launch_description():
         {
             "lidar_model": lidar_model,
             "enable_buoy_detection": enable_pcl_buoy_detection,
+            "enable_glim": LaunchConfiguration("enable_glim"),
+            "glim_backend": LaunchConfiguration("glim_backend"),
         },
     )
 
@@ -185,6 +187,17 @@ def generate_launch_description():
                 "lidar_model",
                 default_value="mid360s",
                 choices=["mid360", "mid360s"],
+            ),
+            DeclareLaunchArgument(
+                "enable_glim",
+                default_value="true",
+                description="Load GLIM into the Livox component container",
+            ),
+            DeclareLaunchArgument(
+                "glim_backend",
+                default_value="gpu",
+                choices=["gpu", "cpu"],
+                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),

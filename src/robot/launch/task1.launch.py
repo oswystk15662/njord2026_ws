@@ -1,18 +1,18 @@
-"""Real-vessel Task 1 bringup: manual hardware, Nav2, and task waypoints."""
+"""Real-vessel Task 1 bringup: role-selected hardware, Nav2, and task waypoints."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, LaunchConfiguration, PathJoinSubstitution
-from launch_ros.actions import Node
-from launch_ros.parameter_descriptions import ParameterValue
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 
 
-def _include(package, launch_file, arguments=None):
+def _include(package, launch_file, arguments=None, condition=None):
     """Include a launch file in its own argument scope."""
     return GroupAction(
         scoped=True,
+        condition=condition,
         actions=[
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
@@ -24,24 +24,31 @@ def _include(package, launch_file, arguments=None):
     )
 
 
-def generate_launch_description():
-    robot_description = Command([
-        FindExecutable(name='xacro'),
-        ' ',
-        PathJoinSubstitution([FindPackageShare('robot'), 'urdf', 'robot.urdf.xacro']),
-    ])
+def _role_is(name):
+    return IfCondition(PythonExpression(["'", LaunchConfiguration('role'), "' == '", name, "'"]))
 
-    manual = _include(
-        'simple_manual',
-        'manual_control.launch.py',
-        {
-            'serial_port': LaunchConfiguration('serial_port'),
-            'baud': LaunchConfiguration('baud'),
-            'um982_port': LaunchConfiguration('um982_port'),
-            'lidar_start_delay': LaunchConfiguration('lidar_start_delay'),
-            'perception_start_delay': LaunchConfiguration('perception_start_delay'),
-            'localization_start_delay': LaunchConfiguration('localization_start_delay'),
-        },
+
+def generate_launch_description():
+    bringup_args = {
+        'serial_port': LaunchConfiguration('serial_port'),
+        'baud': LaunchConfiguration('baud'),
+        'um982_port': LaunchConfiguration('um982_port'),
+    }
+
+    minipc_role = _include(
+        'robot', 'minipc_bringup.launch.py', bringup_args, condition=_role_is('minipc')
+    )
+    standalone_role = _include(
+        'robot',
+        'standalone_bringup.launch.py',
+        # Only the standalone role owns local sensors, so the staged sensor
+        # startup delays are forwarded here and not to minipc_bringup.
+        dict(
+            bringup_args,
+            lidar_start_delay=LaunchConfiguration('lidar_start_delay'),
+            camera_start_delay=LaunchConfiguration('perception_start_delay'),
+        ),
+        condition=_role_is('standalone'),
     )
     nav2 = _include(
         'robot',
@@ -53,55 +60,15 @@ def generate_launch_description():
         'waypoint_publisher.launch.py',
         {'task_type': 'task1', 'frame_id': 'odom', 'publish_rate_hz': '2.0'},
     )
-    um982_driver = Node(
-        package='um982_driver',
-        executable='um982_driver_node',
-        name='um982_driver',
-        output='screen',
-        emulate_tty=True,
-        parameters=[{
-            'uart_or_tcp': 'uart',
-            'GNSS_SerialPort': LaunchConfiguration('um982_port'),
-            'GNSS_Baudrate': 115200,
-            'FIX_FREQ': 20,
-            'HEADING_FREQ': 20,
-            'GNSS_RTK_Enable': False,
-            'Heading_FrameID': 'odom',
-            'log_file_name': '',
-            'publish_feedback_odometry': True,
-        }],
-    )
-    um982_feedback = _include(
-        'um982_feedback_filter',
-        'um982_feedback.launch.py',
-        {
-            'feedback_mode': 'ekf',
-            'raw_topic': '/odometry/feedback',
-            'output_topic': '/odometry/filtered/local',
-        },
-    )
-    robot_state_publisher = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'robot_description': ParameterValue(robot_description, value_type=str),
-        }],
-    )
-    um982_static_tf = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='um982_static_tf_pub',
-        output='screen',
-        arguments=[
-            '--x', '0.0', '--y', '0.0', '--z', '0.0',
-            '--roll', '0.0', '--pitch', '0.0', '--yaw', '0.0',
-            '--frame-id', 'base_link', '--child-frame-id', 'um982_link',
-        ],
-    )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'role',
+            default_value='minipc',
+            choices=['minipc', 'standalone'],
+            description='minipc: 2-machine split (Jetson hosts GLIM/LiDAR/ZED separately). '
+            'standalone: single-Jetson regression bringup.',
+        ),
         DeclareLaunchArgument(
             'serial_port',
             default_value=(
@@ -121,15 +88,16 @@ def generate_launch_description():
             default_value='18.0',
             description='Seconds to wait before starting the Livox LiDAR.',
         ),
-        DeclareLaunchArgument('localization_start_delay', default_value='25.0'),
-        DeclareLaunchArgument('perception_start_delay', default_value='30.0'),
+        DeclareLaunchArgument(
+            'perception_start_delay',
+            default_value='30.0',
+            description='Seconds to wait before starting the ZED 2i / perception '
+                        'components. Only used when role:=standalone.',
+        ),
         DeclareLaunchArgument('nav2_start_delay', default_value='35.0'),
         DeclareLaunchArgument('waypoint_start_delay', default_value='45.0'),
-        manual,
-        um982_driver,
-        um982_feedback,
-        robot_state_publisher,
-        um982_static_tf,
+        minipc_role,
+        standalone_role,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

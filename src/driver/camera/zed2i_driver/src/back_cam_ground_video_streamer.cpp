@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include <cv_bridge/cv_bridge.hpp>
+#include <zed2i_driver/cv_bridge_include.hpp>
 #include <gst/app/gstappsrc.h>
 #include <gst/gst.h>
 #include <opencv2/imgcodecs.hpp>
