@@ -87,8 +87,8 @@ TEST(ThrusterMmgConsistency, ForceTopicMatchesDriverAllocation)
 
     const auto driver_wrench = njord::thruster_driver::commandToWrench(geometry, commands);
     const auto sim_wrench = njord::sim::forcesToPlanarInput(forces, sim_geometry);
-    for (std::size_t axis = 0; axis < driver_wrench.size(); ++axis) {
-      EXPECT_NEAR(sim_wrench[axis], driver_wrench[axis], 1e-9);
-    }
+    EXPECT_NEAR(sim_wrench.surge_force, driver_wrench[0], 1e-9);
+    EXPECT_NEAR(sim_wrench.sway_force, driver_wrench[1], 1e-9);
+    EXPECT_NEAR(sim_wrench.yaw_moment, driver_wrench[2], 1e-9);
   }
 }
