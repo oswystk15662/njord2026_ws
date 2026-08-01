@@ -21,6 +21,15 @@ struct GroundVideoConfig
   int port{5600};
   int max_pending_frames{1};
   int mtu{1200};
+  // Human-FOV-like elliptical region of interest. When enabled, pixels
+  // outside the ellipse (defined as ratios of the *source* frame) are
+  // blacked out on-GPU before JPEG encoding, matching the mask applied to
+  // the other RGB-D outputs.
+  bool fov_ellipse_enable{false};
+  double fov_ellipse_cx_ratio{0.5};
+  double fov_ellipse_cy_ratio{0.5};
+  double fov_ellipse_a_ratio{0.5};
+  double fov_ellipse_b_ratio{0.5};
 };
 
 // Owns the stream-only CUDA buffers, nvJPEG state, and RTP/JPEG sender.  submit()

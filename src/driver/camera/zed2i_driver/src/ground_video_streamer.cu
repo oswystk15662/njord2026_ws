@@ -38,7 +38,8 @@ void check_nvjpeg(nvjpegStatus_t result, const char * operation)
 
 __global__ void resize_bgra_to_bgri(
   const std::uint8_t * source, std::size_t source_pitch, int source_width, int source_height,
-  std::uint8_t * destination, int destination_width, int destination_height)
+  std::uint8_t * destination, int destination_width, int destination_height,
+  bool fov_ellipse_enable, float ellipse_cx, float ellipse_cy, float ellipse_a, float ellipse_b)
 {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -47,8 +48,18 @@ __global__ void resize_bgra_to_bgri(
   }
   const int source_x = x * source_width / destination_width;
   const int source_y = y * source_height / destination_height;
-  const auto * input = source + static_cast<std::size_t>(source_y) * source_pitch + source_x * 4;
   auto * output = destination + (static_cast<std::size_t>(y) * destination_width + x) * 3;
+  if (fov_ellipse_enable) {
+    const float dx = (static_cast<float>(source_x) - ellipse_cx) / ellipse_a;
+    const float dy = (static_cast<float>(source_y) - ellipse_cy) / ellipse_b;
+    if (dx * dx + dy * dy > 1.0F) {
+      output[0] = 0;
+      output[1] = 0;
+      output[2] = 0;
+      return;
+    }
+  }
+  const auto * input = source + static_cast<std::size_t>(source_y) * source_pitch + source_x * 4;
   output[0] = input[0];
   output[1] = input[1];
   output[2] = input[2];
@@ -60,7 +71,11 @@ class GroundVideoStreamer::Impl
 {
 public:
   explicit Impl(const GroundVideoConfig & config)
-  : config_(config), period_(std::chrono::duration<double>(1.0 / config.fps))
+  : config_(config), period_(std::chrono::duration<double>(1.0 / config.fps)),
+    ellipse_cx_(static_cast<float>(config.fov_ellipse_cx_ratio * config.source_width)),
+    ellipse_cy_(static_cast<float>(config.fov_ellipse_cy_ratio * config.source_height)),
+    ellipse_a_(static_cast<float>(std::max(config.fov_ellipse_a_ratio * config.source_width, 1e-6))),
+    ellipse_b_(static_cast<float>(std::max(config.fov_ellipse_b_ratio * config.source_height, 1e-6)))
   {
     validate();
     gst_init(nullptr, nullptr);
@@ -268,7 +283,8 @@ private:
       static_cast<unsigned int>((config_.height + threads.y - 1) / threads.y));
     resize_bgra_to_bgri<<<blocks, threads, 0, stream_>>>(
       slot.bgra, static_cast<std::size_t>(slot.source_width) * 4, slot.source_width, slot.source_height,
-      slot.bgri, config_.width, config_.height);
+      slot.bgri, config_.width, config_.height,
+      config_.fov_ellipse_enable, ellipse_cx_, ellipse_cy_, ellipse_a_, ellipse_b_);
     check_cuda(cudaGetLastError(), "resize_bgra_to_bgri");
     nvjpegImage_t image{};
     image.channel[0] = slot.bgri;
@@ -341,6 +357,10 @@ private:
 
   GroundVideoConfig config_;
   std::chrono::duration<double> period_;
+  float ellipse_cx_{0.0F};
+  float ellipse_cy_{0.0F};
+  float ellipse_a_{0.0F};
+  float ellipse_b_{0.0F};
   const std::chrono::steady_clock::time_point started_{std::chrono::steady_clock::now()};
   std::chrono::steady_clock::time_point last_selected_{};
   std::mutex mutex_;
