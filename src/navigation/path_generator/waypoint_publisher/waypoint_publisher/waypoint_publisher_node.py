@@ -415,6 +415,9 @@ class WaypointPublisher(Node):
             self.docking_state = DockingState.FINAL_EXIT
             self._publish_task3_third_stage()
         elif self.run_full_sequence:
+            self.get_logger().info(
+                "========== Task3-1 complete, transitioning to Task3-2 =========="
+            )
             self.docking_state = DockingState.STAGE2_APPROACH
             self._publish_task3_second_stage()
         else:

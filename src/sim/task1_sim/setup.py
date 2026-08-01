@@ -32,6 +32,7 @@ setup(
     entry_points={
         "console_scripts": [
             "task1_orchestrator = task1_sim.orchestrator:main",
+            "cardinal_perception_sim = task1_sim.cardinal_perception_sim:main",
         ],
     },
 )

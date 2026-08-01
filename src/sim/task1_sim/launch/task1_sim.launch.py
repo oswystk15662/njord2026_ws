@@ -44,6 +44,32 @@ def launch_cardinal_walls(context):
     )]
 
 
+def launch_cardinal_perception_sim(context):
+    """Sim stand-in for the ZED2i+Mid-360 intra-process cardinal-marker
+    pipeline. Reuses buoy_position_xy from the orchestrator config so marker
+    geometry has a single source of truth."""
+    with open(LaunchConfiguration("params").perform(context), "r") as params_file:
+        params = yaml.safe_load(params_file) or {}
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    buoy_position_xy = orchestrator_params.get(
+        "buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
+    )
+    return [Node(
+        package="task1_sim",
+        executable="cardinal_perception_sim",
+        name="cardinal_perception_sim",
+        parameters=[{
+            "odom_topic": "/odom",
+            "cardinal_mark_topic": "/sim/cardinal_mark",
+            "detection_topic": "/buoy_detections_3d",
+            "output_frame": "base_link",
+            "buoy_position_xy": buoy_position_xy,
+        }],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_cardinal_perception_sim")),
+    )]
+
+
 def generate_launch_description():
     pkg_share = get_package_share_directory("task1_sim")
     pkg_robot = get_package_share_directory("robot")
@@ -77,6 +103,12 @@ def generate_launch_description():
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
     use_sensor_noise_arg = DeclareLaunchArgument("use_sensor_noise", default_value="true")
+    use_cardinal_perception_sim_arg = DeclareLaunchArgument(
+        "use_cardinal_perception_sim",
+        default_value="true",
+        description="Emit simulated /buoy_detections_3d once the boat is within ZED2i/Mid-360 "
+                     "range+FOV of a cardinal marker, so cardinal_wall_publisher can build /virtual_obstacles",
+    )
     use_local_ekf_arg = DeclareLaunchArgument("use_local_ekf", default_value="true")
     use_global_ekf_arg = DeclareLaunchArgument("use_global_ekf", default_value="true")
     task_type_arg = DeclareLaunchArgument(
@@ -206,6 +238,7 @@ def generate_launch_description():
     )
 
     cardinal_walls = OpaqueFunction(function=launch_cardinal_walls)
+    cardinal_perception_sim = OpaqueFunction(function=launch_cardinal_perception_sim)
 
     sensor_layer_timer = TimerAction(
         period=LaunchConfiguration("driver_delay"),
@@ -220,6 +253,7 @@ def generate_launch_description():
             validator,
             orchestrator,
             cardinal_walls,
+            cardinal_perception_sim,
         ],
     )
 
@@ -268,6 +302,7 @@ def generate_launch_description():
         use_waypoints_arg,
         use_validator_arg,
         use_sensor_noise_arg,
+        use_cardinal_perception_sim_arg,
         use_local_ekf_arg,
         use_global_ekf_arg,
         task_type_arg,
