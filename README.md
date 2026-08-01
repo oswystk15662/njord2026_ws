@@ -8,6 +8,23 @@
 - clone、fetch、参照などのread-only操作は対象外です。
 
 # 環境について
+
+## 端末構成（Jetson / miniPC 2台）
+
+このワークスペースは **Jetson（ZED 2i + Livox MID360S の処理のみ）** と **miniPC（それ以外すべて）** の 2 台構成を前提にしている。同一ソースツリーが両方でビルドできるよう、CUDA / TensorRT / ZED SDK / ROS distro の有無をビルド時に自動検出して依存とリンク先を切り替える。
+
+ビルド前に必ず以下を source すること:
+
+```shell
+source /opt/ros/$ROS_DISTRO/setup.bash
+source scripts/njord_env.sh      # プロファイル判定と環境変数の export
+colcon build --symlink-install
+```
+
+`scripts/build.sh` は上記をまとめたラッパ。
+
+配線図・ノード配置・帯域の注意・ネットワーク設定（FastRTPS / Zenoh）・時刻同期・検証手順は **`Docs/two_machine_split.md`** にまとめてある。
+
 ## 環境構築
 まずはros2 humbleが入っているubuntu22.04を起動し、以下のコマンドでこのワークスペースをクローンしてください。
 
