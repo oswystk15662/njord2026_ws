@@ -34,7 +34,6 @@ private:
     double forward_gain{1.0};
     double reverse_gain{1.0};
     double offset{0.0};
-    double max_thrust;
     bool reverse{false};
   };
 

@@ -79,7 +79,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("avoidance_eval_radius", 8.0)
         self.declare_parameter("avoidance_margin", 0.5)
         self.declare_parameter("forced_mark", "")
-        self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 15.0])
+        self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 35.0])
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
         self.declare_parameter("pre_inference_block", "[]")
         self.declare_parameter("obstacle_spacing", 0.25)
@@ -259,7 +259,9 @@ class Task1Orchestrator(Node):
 
     def build_sim_obstacle_points(self) -> list[list[float]]:
         points = []
-        self._append_course_boundary(points)
+        # The course boundary is a visual aid, not a physical wall. Including
+        # it in /sim_obstacles split the global costmap at y=15 and made the
+        # shared waypoint route impossible to plan through.
         self._append_center_line(points)
         return points
 

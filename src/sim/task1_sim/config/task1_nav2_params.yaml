@@ -39,7 +39,7 @@ planner_server:
     use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner::ThetaStarPlanner"
+      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
       how_many_corners: 8
       w_euc_cost: 1.0
       w_traversal_cost: 2.0
@@ -95,7 +95,9 @@ global_costmap:
       use_sim_time: false
       rolling_window: false
       width: 60
-      height: 55
+      # Covers both the simulation task points (to y=-35) and the shared
+      # task1 waypoint publisher route (to y=27.83), with a 5 m margin.
+      height: 75
       resolution: 0.1
       origin_x: -5.0
       origin_y: -40.0
@@ -147,14 +149,23 @@ collision_monitor:
     use_sim_time: false
     base_frame_id: "base_link"
     odom_frame_id: "odom"
-    cmd_vel_in_topic: "cmd_vel_smoothed"
-    cmd_vel_out_topic: "cmd_vel_auto"
+    cmd_vel_in_topic: "/cmd_vel_smoothed"
+    cmd_vel_out_topic: "/cmd_vel_nav"
     state_topic: "collision_monitor_state"
     transform_tolerance: 0.2
     source_timeout: 1.0
     base_shift_correction: true
     stop_pub_timeout: 2.0
-    polygons: []
+    polygons: ["FootprintApproach"]
+    FootprintApproach:
+      type: "polygon"
+      action_type: "approach"
+      footprint_topic: "/local_costmap/published_footprint"
+      time_before_collision: 1.2
+      simulation_time_step: 0.1
+      min_points: 6
+      visualize: false
+      enabled: true
     observation_sources: ["sim_obstacles", "virtual_wall"]
     sim_obstacles:
       type: "pointcloud"

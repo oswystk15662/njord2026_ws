@@ -91,3 +91,40 @@ ros2 launch robot real_bringup.launch.py enable_mid360:=false enable_zed2i:=fals
 ```
 
 注意: `zed2i` を含める場合、SDKモードの GPU 前提が満たされている必要がある(詳細は `src/driver/camera/zed2i_driver/README.md` を参照)。
+
+## ZED 2i 陸上映像伝送(ground video)の起動手順
+
+bringup 経由で有効化する場合の手順。**受信側(陸上 PC)を先に起動し、次に Jetson**の順。
+
+```shell
+# 1. 陸上 PC(受信)。ポートごとに 1 プロセスだけ
+ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5600   # ZED 2i left
+ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5601   # back cam
+
+# 2. 受信側の実 IP を確認(ホスト名や localhost は不可)
+ip -4 -o addr show scope global | awk '{print $2, $4}'
+
+# 3. Jetson。ソースを更新したら必ず先に再ビルドする
+colcon build --symlink-install --packages-select zed2i_driver && source install/setup.bash
+ros2 launch robot jetson_bringup.launch.py \
+  enable_ground_video:=true \
+  ground_video_host:=192.168.1.2 \
+  ground_video_port:=5600
+```
+
+`jetson_bringup.launch.py` / `real_bringup.launch.py` が `zed2i_driver` へ転送するのは
+`enable_ground_video` / `ground_video_host` / `ground_video_port` の 3 つだけ。
+fps・解像度・JPEG 品質を変える場合は
+`src/driver/camera/zed2i_driver/config/zed2i_jetson_orin_nano.yaml` を編集する
+(`ground_video_fps` を launch 引数で渡したい場合は `zed2i_driver` の launch を直接使う)。
+
+つまずきやすい点:
+
+- **再ビルド忘れ**で古い `.so` がロードされると
+  `nvjpegCreateSimple failed (nvJPEG status 6)` になり映像が出ない(故障ではない)。
+- **同一ポートの受信を二重起動しない**(`ss -lunp | grep 5600` が 1 行だけか確認)。
+- **ZED はプロセス排他**。二重起動で `CAMERA STREAM FAILED TO START`。
+- 起動成功のサインは送信側ログの `NvMMLiteBlockCreate : Block : BlockType = 1`。
+- `ground_video_fps:=5.0` でも実測は 4.1 fps 程度(仕様どおりの挙動)。
+
+詳細は `src/driver/camera/zed2i_driver/README.md` の同名セクションを参照。

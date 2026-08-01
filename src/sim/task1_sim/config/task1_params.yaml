@@ -22,7 +22,9 @@ task1_orchestrator:
 
     # Matches the default Nav2 costmap window and keeps the spawn at (0, 0)
     # inside the simulated course instead of on the boundary obstacle.
-    course_bounds: [-5.0, 55.0, -40.0, 15.0]
+    # Visual course extent. It encloses the 17-point route (final y=27.83).
+    # The visual border is intentionally not added to Nav2 obstacles.
+    course_bounds: [-5.0, 55.0, -40.0, 35.0]
     center_line: [0.0, 40.0, -10.0, 0.05]
     # Optional [min_x, max_x, min_y, max_y] blocker before marker detection.
     # Keep disabled by default because the full NavigateThroughPoses request

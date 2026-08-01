@@ -16,3 +16,18 @@ imu_noise_simulator:
     imu_linear_accel_noise_std: 0.109544
     publish_rate_hz: 20.0
     frame_id_imu: "imu_link"
+
+# UM982 dual-antenna GNSS/heading receiver model.  It consumes SimNode's
+# truth odometry and publishes the same map-frame odometry contract used on
+# the vessel by ekf_global.yaml.
+um982_odometry_simulator:
+  ros__parameters:
+    input_odom_topic: "/odom"
+    output_odom_topic: "/odometry/gps/um982"
+    frame_id: "map"
+    child_frame_id: "base_link"
+    publish_rate_hz: 10.0
+    position_noise_std_m: 0.10
+    position_bias_random_walk_std_m_per_sqrt_s: 0.005
+    yaw_noise_std_deg: 1.0
+    yaw_bias_random_walk_std_deg_per_sqrt_s: 0.05

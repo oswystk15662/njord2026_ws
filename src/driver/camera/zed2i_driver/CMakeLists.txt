@@ -150,20 +150,26 @@ if(ZED2I_DRIVER_USE_ZED_SDK)
     ${OpenCV_LIBRARIES}
     ${ZED_LIBRARIES}
   )
+  # libnvjpeg is unusable on some Jetson Orin images (nvjpegCreate fails with
+  # NVJPEG_STATUS_EXECUTION_FAILED because /dev/nvhost-nvjpg* is not exposed
+  # to userspace there -- see the note at the top of ground_video_streamer.cu)
+  # so this streamer only needs CUDA (for the GPU resize kernel) and
+  # GStreamer's appsrc/nvjpegenc/rtpjpegpay elements to do the actual JPEG
+  # encoding and RTP payloading; it does not link libnvjpeg at all.
   set(ZED2I_DRIVER_HAS_GROUND_VIDEO OFF)
   if(ZED2I_DRIVER_HAS_CUDA AND PkgConfig_FOUND)
     pkg_check_modules(GSTREAMER QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
-    if(GSTREAMER_FOUND AND TARGET CUDA::nvjpeg)
+    if(GSTREAMER_FOUND)
       set(ZED2I_DRIVER_HAS_GROUND_VIDEO ON)
       target_sources(zed2i_sdk_component PRIVATE src/ground_video_streamer.cu)
       target_compile_definitions(zed2i_sdk_component PRIVATE ZED2I_DRIVER_HAS_GROUND_VIDEO=1)
-      target_link_libraries(zed2i_sdk_component CUDA::cudart CUDA::nvjpeg PkgConfig::GSTREAMER)
+      target_link_libraries(zed2i_sdk_component CUDA::cudart PkgConfig::GSTREAMER)
     endif()
   endif()
   if(ZED2I_DRIVER_HAS_GROUND_VIDEO)
-    message(STATUS "${PROJECT_NAME}: GPU JPEG ground-video streaming enabled")
+    message(STATUS "${PROJECT_NAME}: GPU-resize + GStreamer nvjpegenc ground-video streaming enabled")
   else()
-    message(STATUS "${PROJECT_NAME}: ground-video streaming unavailable; requires ZED, CUDA, nvJPEG, and GStreamer appsrc")
+    message(STATUS "${PROJECT_NAME}: ground-video streaming unavailable; requires ZED, CUDA, and GStreamer appsrc")
   endif()
   if(ZED2I_DRIVER_HAS_GPU_PERCEPTION)
     target_sources(zed2i_sdk_component PRIVATE
