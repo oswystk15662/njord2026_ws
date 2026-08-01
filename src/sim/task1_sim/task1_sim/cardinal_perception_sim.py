@@ -10,11 +10,12 @@ has no camera/LiDAR, so nothing publishes that topic and
 
 This node closes that gap without inventing new marker geometry: it reuses
 `buoy_position_xy` from `task1_params.yaml` (the same source
-`task1_orchestrator` uses) and the cardinal mark broadcast on
-`/sim/cardinal_mark`, and only emits a detection once the simulated boat
-pose is within the sensor's range + field of view of a marker -- mirroring
-the real driver's detection gate instead of teleporting knowledge of every
-marker onto the topic from t=0.
+`task1_orchestrator` uses) and the per-marker cardinal marks broadcast as a
+JSON array on `/sim/cardinal_mark` (aligned index-wise with
+`buoy_position_xy`, e.g. `["S", "N", "S"]`), and only emits a detection once
+the simulated boat pose is within the sensor's range + field of view of a
+marker -- mirroring the real driver's detection gate instead of teleporting
+knowledge of every marker onto the topic from t=0.
 
 Detection range/FOV defaults are taken directly from the real driver
 configs:
@@ -127,11 +128,14 @@ class CardinalPerceptionSim(Node):
             "auto_trigger_inference"
         ).get_parameter_value().bool_value
 
-        # Cardinal mark is unknown until /sim/cardinal_mark reports one that
-        # task1_orchestrator has confirmed (on_start_inference). "N" mirrors
-        # the orchestrator's own pre-inference placeholder but is not used
-        # for classification until have_mark is True.
-        self.current_mark = "N"
+        # Cardinal marks are unknown until /sim/cardinal_mark reports them.
+        # task1_orchestrator publishes a JSON array aligned index-wise with
+        # buoy_position_xy (e.g. '["S", "N", "S"]') so each marker keeps its
+        # own orientation instead of sharing a single mark across the whole
+        # course. Marks are not used for classification until have_mark is
+        # True (mirrors the real pipeline needing YOLO inference to confirm
+        # the marker type before it is trusted).
+        self.current_marks = []
         self.have_mark = False
         self.latest_odom = None
         self.inference_requested = False
@@ -148,10 +152,32 @@ class CardinalPerceptionSim(Node):
         self.timer = self.create_timer(period, self._on_timer)
 
     def _on_mark(self, msg: String):
-        mark = msg.data.strip().upper()
-        if mark in CARDINAL_CLASS_BY_MARK:
-            self.current_mark = mark
+        marks = self._parse_marks(msg.data)
+        if marks:
+            self.current_marks = marks
             self.have_mark = True
+
+    @staticmethod
+    def _parse_marks(data: str) -> list:
+        """Parse the JSON mark array published on /sim/cardinal_mark.
+
+        Also accepts a single legacy letter (e.g. "N") for backward
+        compatibility, applying it to every marker.
+        """
+        text = data.strip()
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+
+        if isinstance(parsed, list):
+            marks = [str(v).strip().upper() for v in parsed if isinstance(v, str)]
+            return [m for m in marks if m in CARDINAL_CLASS_BY_MARK]
+
+        legacy = text.strip().upper()
+        if legacy in CARDINAL_CLASS_BY_MARK:
+            return [legacy]
+        return []
 
     def _on_odom(self, msg: Odometry):
         self.latest_odom = msg
@@ -163,6 +189,19 @@ class CardinalPerceptionSim(Node):
         )
         lidar_ok = distance <= self.lidar_max_range_m and abs(bearing) <= self.lidar_fov_rad / 2.0
         return camera_ok and lidar_ok
+
+    def _mark_for_index(self, idx: int):
+        """Return the cardinal mark for buoy_positions[idx], if known.
+
+        Falls back to current_marks[0] when exactly one legacy mark was
+        received for a multi-marker course (backward compatibility with the
+        pre-per-marker /sim/cardinal_mark payload).
+        """
+        if idx < len(self.current_marks):
+            return self.current_marks[idx]
+        if len(self.current_marks) == 1:
+            return self.current_marks[0]
+        return None
 
     def _maybe_trigger_inference(self):
         if self.inference_requested or not self.auto_trigger_inference:
@@ -186,7 +225,7 @@ class CardinalPerceptionSim(Node):
             yaw = yaw_from_quaternion(self.latest_odom.pose.pose.orientation)
 
             any_in_range = False
-            for bx, by in self.buoy_positions:
+            for idx, (bx, by) in enumerate(self.buoy_positions):
                 dx = bx - x
                 dy = by - y
                 distance = math.hypot(dx, dy)
@@ -198,12 +237,15 @@ class CardinalPerceptionSim(Node):
                     # Sensor sees a marker-shaped object but classification
                     # (cardinal type) has not been confirmed yet.
                     continue
+                mark = self._mark_for_index(idx)
+                if mark is None:
+                    continue
                 confidence = max(
                     self.confidence_threshold,
                     1.0 - 0.5 * (distance / self.camera_max_range_m),
                 )
                 detection = BuoyDetection()
-                detection.class_id = CARDINAL_CLASS_BY_MARK[self.current_mark]
+                detection.class_id = CARDINAL_CLASS_BY_MARK[mark]
                 detection.confidence = float(confidence)
                 # Marker position expressed in output_frame (base_link),
                 # matching the real driver's `output_frame` contract.

@@ -1,16 +1,122 @@
 # Task 1: Maneuvering and Path Finding
-# Two-period sine-wave follow-test waypoint configuration.
+#
+# `task1_config` is the official NJORD 2026 Task1 competition scenario: a
+# Cartesian sim approximation of the "4 GPS point -> cardinal marker slalom"
+# course (see src/sim/task1_sim/README.md and task1_sim/config/task1_params.yaml,
+# which is the source of truth for the matching marker geometry). The boat
+# runs (50,-25) -> (24,-35) -> (15,-15) -> (8,-35) -> (0,-25), weaving past
+# three cardinal marks at y=-25 (S, N, S) that force the alternating-side
+# passage.
+#
+# `task1_follow_config` is the original two-period sine-wave follow-test
+# route (issue predates the cardinal-marker slalom); kept for regression
+# testing of plain waypoint following, not the competition scenario.
 #
 # Legacy pool rectangle reference points for Task 1.2:
 #   A: 35°40'03.0"N 139°47'37.9"E
 #   B: 35°40'03.9"N 139°47'36.8"E
 #   C: 35°40'03.3"N 139°47'36.1"E
-#
-# GPS points 1 and 2 define the start and finish of today's course.  The route
-# advances from GPS 1 to GPS 2 while tracing two complete sine-wave periods
-# with a 3 m lateral amplitude.  Each period is sampled at eight segments.
 
 task1_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  origin:
+    latitude: 34.5456666667
+    longitude: 135.5070555556
+    name: "GPS 1 - Slalom Start"
+  gps_points:
+    - id: 1
+      latitude: 34.5456666667
+      longitude: 135.5070555556
+      dms: '34°32''44.4"N 135°30''25.4"E'
+      name: "GPS 1 - Slalom Start"
+    - id: 2
+      latitude: 34.5459166667
+      longitude: 135.5074444444
+      dms: '34°32''45.3"N 135°30''26.8"E'
+      name: "GPS 2 - Slalom Finish"
+
+    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
+    # Reference points only; not used as route waypoints (route uses the
+    # Cartesian slalom coordinates below, matching task1_sim/config/task1_params.yaml).
+    - id: 3
+      latitude: 35.6675575459
+      longitude: 139.7933614800
+      name: "GPS 3 - Task1.2 diagonal start (corner C)"
+    - id: 4
+      latitude: 35.6674742121
+      longitude: 139.7938614790
+      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
+
+  # Cardinal-marker slalom route. Interior turns match
+  # task1_sim/config/task1_params.yaml's waypoint2_xy, and the marker
+  # geometry/orientation (S, N, S) matches its buoy_position_xy/buoy_marks so
+  # the sim's own goal-tracking and the actual Nav2 route agree.
+  #
+  # id 1 (50,0) is a transit point, not a competition GPS point: it keeps
+  # the boat east of/above the marker corridor (all markers sit at y=-25,
+  # x<=28) while crossing from spawn (0,0) out to the course, so it doesn't
+  # cut through the cardinal marks (and their /virtual_obstacles walls)
+  # before the slalom starts. Nav2 threads a single path through every pose
+  # in this list starting from wherever the boat currently is, so without
+  # this transit point the very first leg (spawn -> id 2) runs straight
+  # through the marker field.
+  waypoints:
+    - id: 1
+      x: 50.0000
+      y: 0.0000
+      yaw: -1.5708
+      type: "transit"
+      name: "Transit - clear of marker corridor"
+      tolerance_m: 2.0
+
+    - id: 2
+      x: 50.0000
+      y: -25.0000
+      yaw: -2.7744
+      type: "start"
+      name: "GPS 1 - Slalom Start"
+      tolerance_m: 2.0
+
+    - id: 3
+      x: 24.0000
+      y: -35.0000
+      yaw: 1.9937
+      type: "turn"
+      name: "Slalom turn 1 (pass south of marker 1, S)"
+      tolerance_m: 2.0
+
+    - id: 4
+      x: 15.0000
+      y: -15.0000
+      yaw: -1.9075
+      type: "turn"
+      name: "Slalom turn 2 (pass north of marker 2, N)"
+      tolerance_m: 2.0
+
+    - id: 5
+      x: 8.0000
+      y: -35.0000
+      yaw: 2.2455
+      type: "turn"
+      name: "Slalom turn 3 (pass south of marker 3, S)"
+      tolerance_m: 2.0
+
+    - id: 6
+      x: 0.0000
+      y: -25.0000
+      yaw: 2.2455
+      type: "goal"
+      name: "GPS 2 - Slalom Finish"
+      tolerance_m: 2.0
+
+  constraints:
+    follow_test: false
+    route_pattern: "cardinal_slalom"
+    cardinal_marker_detection: true
+    vision_halfway: false
+
+task1_follow_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   origin:
@@ -31,7 +137,7 @@ task1_config:
 
     # --- Task 1.2 (cardinal marker recognition, issue #46) ---
     # Reference points only; no TaskType/route exists yet for task1-2.
-    # Diagonal A<->C of the legacy pool rectangle; not used by this Task 1 route.
+    # Diagonal A<->C of the legacy pool rectangle; not used by this route.
     - id: 3
       latitude: 35.6675575459
       longitude: 139.7933614800

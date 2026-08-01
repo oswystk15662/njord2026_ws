@@ -25,6 +25,7 @@ from enum import Enum
 class TaskType(Enum):
     """Enumeration for supported task types"""
     TASK1 = "task1"
+    TASK1_FOLLOW = "task1_follow"
     TASK2 = "task2"
     TASK3_1 = "task3_1"
     TASK3_2 = "task3_2"
@@ -115,23 +116,26 @@ class WaypointPublisher(Node):
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
+            TaskType.TASK1_FOLLOW: 'task1_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
             TaskType.TASK3_2: 'task3_waypoints.yaml',
         }
-        
+
         config_file = package_share_dir / config_mapping[self.task_type]
-        
+
         if not config_file.exists():
             self.get_logger().error(f"Config file not found: {config_file}")
             raise FileNotFoundError(f"Config file not found: {config_file}")
-        
+
         with open(config_file, 'r') as f:
             full_config = yaml.safe_load(f)
-        
+
         # Extract relevant config based on task type
         if self.task_type == TaskType.TASK1:
             return full_config['task1_config']
+        elif self.task_type == TaskType.TASK1_FOLLOW:
+            return full_config['task1_follow_config']
         elif self.task_type == TaskType.TASK2:
             return full_config['task2_config']
         elif self.task_type == TaskType.TASK3_1:
@@ -150,7 +154,7 @@ class WaypointPublisher(Node):
         
         self.first_publish = False
         
-        if self.task_type in [TaskType.TASK1, TaskType.TASK2]:
+        if self.task_type in [TaskType.TASK1, TaskType.TASK1_FOLLOW, TaskType.TASK2]:
             self._publish_waypoints_single_stage()
         elif self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self._publish_task3_first_stage()

@@ -95,8 +95,10 @@ global_costmap:
       use_sim_time: false
       rolling_window: false
       width: 60
-      # Covers both the simulation task points (to y=-35) and the shared
-      # task1 waypoint publisher route (to y=27.83), with a 5 m margin.
+      # Covers the default competition slalom route (x:[0,50], y:[-35,-15],
+      # task_type=task1) and the spawn-to-course transit from (0,0), as well
+      # as the task1_follow lawnmower-survey route (x:[0,35.66], y:[0,27.83],
+      # task_type=task1_follow), all with margin.
       height: 75
       resolution: 0.1
       origin_x: -5.0
