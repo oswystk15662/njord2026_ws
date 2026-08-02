@@ -20,6 +20,7 @@ constexpr uint8_t kFetSwitchPin = 14;
 constexpr uint8_t kGreenLedPin = 25;
 constexpr uint8_t kYellowLedPin = 26;
 constexpr uint8_t kRedLedPin = 27;
+constexpr uint8_t kRelayPin = 2;
 
 constexpr size_t kThrusterCount = 4;
 constexpr uint8_t kEmergencyStopMask = 1U << 3;
@@ -79,6 +80,15 @@ void configurePins() {
   pinMode(kGreenLedPin, OUTPUT);
   pinMode(kYellowLedPin, OUTPUT);
   pinMode(kRedLedPin, OUTPUT);
+  pinMode(kRelayPin, INPUT_PULLUP);
+}
+
+bool physicalEStopActive() {
+  return digitalRead(kRelayPin) == LOW;
+}
+
+void reportRelayState() {
+  Serial.write(physicalEStopActive() ? 0x01 : 0x00);
 }
 
 void updateLeds(uint8_t controlFlags) {
@@ -128,11 +138,13 @@ bool processThrusterCommand(const uint8_t* raw, size_t rawLength) {
   hasValidCommand = true;
   updateLeds(controlFlags);
 
-  if ((controlFlags & kEmergencyStopMask) != 0U) {
+  if ((controlFlags & kEmergencyStopMask) != 0U ||
+      physicalEStopActive()) {
     enterSafeState();
   } else {
     updateThrusters(thrusts);
   }
+  reportRelayState();
   return true;
 }
 
@@ -178,8 +190,9 @@ void processSerialInput() {
 }
 
 void enforceSafety() {
-  if (hasValidCommand &&
-      millis() - lastValidCommandTimeMs > kCommandTimeoutMs) {
+  if (physicalEStopActive() ||
+      (hasValidCommand &&
+       millis() - lastValidCommandTimeMs > kCommandTimeoutMs)) {
     enterSafeState();
   }
 }
