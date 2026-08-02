@@ -52,9 +52,9 @@ raw frameは常に24 byteです。
 | 3 | `0x08` | Software emergency stop |
 | 4..7 | `0xF0` | Reserved |
 
-software emergency stopが1の場合、ESP32は全スラスターを中立にしてFETをLOWに
-します。それ以外の有効な指令ではFETをHIGHにして4スラスターの指令を反映します。
-GPIO2の物理E-stop入力はfirmwareでは使用しません。非常停止状態はラッチせず、
+software emergency stopが1、またはGPIO2の物理E-stop入力がLOWの場合、ESP32は
+全スラスターを中立にしてFETをLOWにします。それ以外の有効な指令ではFETをHIGHに
+して4スラスターの指令を反映します。非常停止状態はラッチせず、
 解除後の次の有効な指令から出力を再開します。
 
 有効な指令を1000 ms受信しなかった場合も、ESP32は全スラスターを中立にして
@@ -75,3 +75,9 @@ CRCはversionからpayload末尾までの22 byteを対象とします。
 
 CRC値はlittle-endianで格納します。長さ、version、type、CRC、有限なfloat値の
 いずれかが不正なフレームは出力へ反映しません。
+
+## Relay status response
+
+有効な指令フレームを処理するたび、ESP32はUARTへ1 byteのリレー状態を返します。
+bit0が`1`ならGPIO2はLOW（非常停止リレー動作中）、`0`なら解除状態です。bit1..7は
+常に`0`です。
