@@ -54,12 +54,14 @@ CRC は version から payload 末尾までの 22 byte を対象にする。
 
 不正 frame、CRC 不一致、非有限 float は出力へ反映しない。
 
-software emergency stop が 1、GPIO2 の物理 E-stop 入力が LOW、または有効な指令が
-1000 ms 途絶した場合、全スラスターを中立にして FET を LOW にする。
+software emergency stop が 1、または有効な指令が 1000 ms 途絶した場合、全スラスターを
+中立にして FET を LOW にする。GPIO15 の物理 E-stop リレー入力はスラスタ制御の判定には
+使用せず、状態を ROS2 側へ報告するだけに用いる（判定は ROS2 側で行う）。
 
 ## ESP → PC
 
-有効な指令フレームを処理するたび、firmware は 1 byte のリレー状態を返す。
+有効な指令フレームを処理するたび、firmware は GPIO15（物理 E-stop リレー入力）の
+状態を表す 1 byte を返す。
 
 ```
   bit7  bit6  bit5  bit4  bit3  bit2  bit1      bit0
