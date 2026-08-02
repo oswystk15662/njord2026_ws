@@ -1,0 +1,41 @@
+{
+  // zenoh-bridge-ros2dds : miniPC (Humble) 側
+  //   ROS_DOMAIN_ID=5 のローカル DDS と zenoh を橋渡しする。
+  //   Jetson とは DDS discovery を一切共有しないため、distro 混在による
+  //   ParticipantEntitiesInfo のデシリアライズ失敗（sequence size exceeds
+  //   remaining buffer）が起きない。
+  mode: "peer",
+
+  // Jetson 側ブリッジからの接続を受ける。IP は有線 NIC のもの。
+  listen: {
+    endpoints: ["tcp/0.0.0.0:7447"],
+  },
+
+  // 有線直結なのでマルチキャストスカウティングは不要。
+  scouting: {
+    multicast: { enabled: false },
+  },
+
+  plugins: {
+    ros2dds: {
+      domain: 5,
+
+      // 線に出してよいトピックだけを通す。
+      // Docs/two_machine_split.md「トピックの流れ」に対応。
+      allow: {
+        publishers: [
+          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/buoy_detections", "/buoy_detections_3d",
+          "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+        ],
+        subscribers: [
+          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/buoy_detections", "/buoy_detections_3d",
+          "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+        ],
+        service_servers: [], service_clients: [],
+        action_servers: [], action_clients: [],
+      },
+    },
+  },
+}
