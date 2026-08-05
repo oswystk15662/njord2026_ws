@@ -189,6 +189,7 @@ def generate_launch_description():
                 "serial_port": serial_port,
                 "baud": baud,
                 "command_topic": "/thruster_command",
+                "bms_topic": "micon/bms_cells",
                 "ground_station_heartbeat_topic": "/heartbeat/ground_station",
                 "ground_station_heartbeat_timeout_sec": 60.0,
                 "use_sim_time": False,
@@ -201,6 +202,12 @@ def generate_launch_description():
         "bms",
         ["launch", "bms.launch.py"],
         IfCondition(enable_bms),
+    )
+    foxglove_logger = Node(
+        package="foxglove_logger",
+        executable="foxglove_logger_node",
+        name="foxglove_logger",
+        output="screen",
     )
 
     alert_lamp_launch = include_launch(
@@ -329,6 +336,7 @@ def generate_launch_description():
             thruster_launch,
             micon_driver,
             bms_launch,
+            foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
             # foxglove_bridge_launch,

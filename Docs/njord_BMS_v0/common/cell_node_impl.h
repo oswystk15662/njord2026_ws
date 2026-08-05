@@ -29,6 +29,9 @@
 #ifndef ESPNOW_CHANNEL
 #define ESPNOW_CHANNEL 1
 #endif
+#ifndef CELL_TEMPERATURE_C
+#define CELL_TEMPERATURE_C 25.0F
+#endif
 
 namespace {
 
@@ -91,6 +94,9 @@ bms::CellTelemetry takeReading() {
   packet.sample_count = kSamplesPerReading;
   packet.adc_voltage_v = adc_voltage;
   packet.cell_voltage_v = cell_voltage;
+  // Placeholder until a LiPo-mounted temperature sensor is selected. Each
+  // cell node sends its own value so the master can report their average.
+  packet.temperature_c = CELL_TEMPERATURE_C;
   return packet;
 }
 
@@ -145,9 +151,9 @@ void loop() {
       esp_now_send(kBroadcastAddress,
                    reinterpret_cast<const uint8_t *>(&packet), sizeof(packet));
 
-  Serial.printf("cell=%u seq=%lu raw=%u adc=%.4fV cell=%.4fV queued=%s last=%s%s\n",
+  Serial.printf("cell=%u seq=%lu raw=%u adc=%.4fV cell=%.4fV temp=%.1fC queued=%s last=%s%s\n",
                 CELL_ID, static_cast<unsigned long>(packet.sequence),
-                packet.raw_adc, packet.adc_voltage_v, packet.cell_voltage_v,
+                packet.raw_adc, packet.adc_voltage_v, packet.cell_voltage_v, packet.temperature_c,
                 result == ESP_OK ? "yes" : "no", last_send_ok ? "ok" : "fail",
                 (packet.flags & bms::kAdcSaturated) ? " SATURATED" : "");
 }

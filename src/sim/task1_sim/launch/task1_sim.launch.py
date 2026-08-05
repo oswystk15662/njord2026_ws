@@ -283,11 +283,23 @@ def generate_launch_description():
         parameters=[{
             "battery_percent": 75.0,
             "cell_voltages": [4.00, 4.01, 4.00, 4.01],
+            "temperature_c": 25.0,
             "control_status": "auto",
             "publish_rate_hz": 1.0,
         }],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_gui_dummy_publishers")),
+    )
+    foxglove_logger = Node(
+        package="foxglove_logger",
+        executable="foxglove_logger_node",
+        name="foxglove_logger",
+        parameters=[{
+            "odometry_topic": "/odometry/filtered/global",
+            "plan_topic": "/plan",
+            "fix_topic": "/sensor/vehicle_gnss/fix/raw",
+        }],
+        output="screen",
     )
     foxglove_bridge = IncludeLaunchDescription(
         AnyLaunchDescriptionSource(
@@ -387,6 +399,7 @@ def generate_launch_description():
         actual_route,
         ground_speed,
         gui_status_dummy_publisher,
+        foxglove_logger,
         foxglove_bridge,
         sensor_layer_timer,
         nav2_layer_timer,

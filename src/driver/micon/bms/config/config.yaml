@@ -4,6 +4,8 @@ bms_node:
       # Decoded by micon_driver_fd/serial_writer. Float32MultiArray[4], unit V.
       input: "micon/bms_cells"
       output: "bms/cell_voltages"
+      temperature_input: "/micon/bms_temperature_c"
+      temperature_output: "/bms/temperature_c"
       diagnostics: "/diagnostics"
 
     low_voltage:

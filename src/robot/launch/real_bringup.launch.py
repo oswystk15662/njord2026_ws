@@ -160,6 +160,7 @@ def generate_launch_description():
                 "serial_port": serial_port,
                 "baud": baud,
                 "command_topic": "/thruster_command",
+                "bms_topic": "micon/bms_cells",
                 "use_sim_time": False,
             }
         ],
@@ -170,6 +171,12 @@ def generate_launch_description():
         "bms",
         ["launch", "bms.launch.py"],
         IfCondition(enable_thruster),
+    )
+    foxglove_logger = Node(
+        package="foxglove_logger",
+        executable="foxglove_logger_node",
+        name="foxglove_logger",
+        output="screen",
     )
 
     nav2_launch = include_launch(
@@ -274,6 +281,7 @@ def generate_launch_description():
             thruster_launch,
             serial_writer,
             bms_launch,
+            foxglove_logger,
             # nav2_launch,
         ]
     )

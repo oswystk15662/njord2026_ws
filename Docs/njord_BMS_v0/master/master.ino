@@ -81,6 +81,8 @@ void outputCsv() {
   bool all_valid = true;
   bool adc_fault = false;
   float total = 0.0F;
+  float temperature_total = 0.0F;
+  uint8_t temperature_count = 0;
 
   Serial.print(now);
   for (uint8_t i = 0; i < bms::kCellCount; ++i) {
@@ -92,13 +94,20 @@ void outputCsv() {
     adc_fault |= saturated;
     valid[i] = fresh && !saturated;
     all_valid &= valid[i];
-    if (valid[i]) total += snapshot[i].packet.cell_voltage_v;
+    if (valid[i]) {
+      total += snapshot[i].packet.cell_voltage_v;
+      temperature_total += snapshot[i].packet.temperature_c;
+      ++temperature_count;
+    }
     Serial.print(',');
     printValueOrNan(valid[i], snapshot[i].packet.cell_voltage_v);
   }
 
   Serial.print(',');
   printValueOrNan(all_valid, total);
+  Serial.print(',');
+  printValueOrNan(temperature_count == bms::kCellCount,
+                  temperature_count == 0 ? 0.0F : temperature_total / temperature_count);
 
   for (uint8_t i = 0; i < bms::kCellCount; ++i) {
     Serial.print(',');
@@ -120,7 +129,7 @@ void setup() {
   Serial.printf("Master ready, MAC=%s, channel=%u\n", WiFi.macAddress().c_str(),
                 ESPNOW_CHANNEL);
   Serial.println(
-      "ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,age1_ms,age2_ms,age3_ms,age4_ms,status");
+      "ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,temperature_C,age1_ms,age2_ms,age3_ms,age4_ms,status");
 }
 
 void loop() {

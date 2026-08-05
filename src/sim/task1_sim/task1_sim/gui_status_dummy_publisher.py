@@ -14,6 +14,7 @@ class GuiStatusDummyPublisher(Node):
 
         self.declare_parameter("battery_percent", 75.0)
         self.declare_parameter("cell_voltages", [4.00, 4.01, 4.00, 4.01])
+        self.declare_parameter("temperature_c", 25.0)
         self.declare_parameter("control_status", "auto")
         self.declare_parameter("publish_rate_hz", 1.0)
 
@@ -30,6 +31,8 @@ class GuiStatusDummyPublisher(Node):
             Float32, "/gui/battery_voltage_v", status_qos)
         self.cell_voltages_publisher = self.create_publisher(
             Float32MultiArray, "/bms/cell_voltages", status_qos)
+        self.temperature_publisher = self.create_publisher(
+            Float32, "/bms/temperature_c", status_qos)
         self.control_status_publisher = self.create_publisher(
             String, "/system/control_status", status_qos)
         self.operating_mode_publisher = self.create_publisher(
@@ -38,6 +41,7 @@ class GuiStatusDummyPublisher(Node):
         self.cell_voltages_message = Float32MultiArray(
             data=[float(cell) for cell in self.get_parameter("cell_voltages").value])
         self.battery_voltage_message = Float32(data=sum(self.cell_voltages_message.data))
+        self.temperature_message = Float32(data=float(self.get_parameter("temperature_c").value))
         self.control_status_message = String(data=str(control_status))
 
         self.publish()
@@ -47,6 +51,7 @@ class GuiStatusDummyPublisher(Node):
         self.battery_publisher.publish(self.battery_message)
         self.battery_voltage_publisher.publish(self.battery_voltage_message)
         self.cell_voltages_publisher.publish(self.cell_voltages_message)
+        self.temperature_publisher.publish(self.temperature_message)
         self.control_status_publisher.publish(self.control_status_message)
         self.operating_mode_publisher.publish(self.control_status_message)
 

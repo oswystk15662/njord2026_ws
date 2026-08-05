@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <functional>
+#include <cmath>
 #include <sstream>
 #include <string>
 
@@ -20,6 +21,10 @@ BmsNode::BmsNode(const rclcpp::NodeOptions & options)
     this->declare_parameter<std::string>("topics.output", "bms/cell_voltages");
   const std::string diagnostics_topic =
     this->declare_parameter<std::string>("topics.diagnostics", "/diagnostics");
+  const std::string temperature_input_topic =
+    this->declare_parameter<std::string>("topics.temperature_input", "/micon/bms_temperature_c");
+  const std::string temperature_output_topic =
+    this->declare_parameter<std::string>("topics.temperature_output", "/bms/temperature_c");
   warning_voltage_ = this->declare_parameter<double>("low_voltage.warning", 3.5);
   error_voltage_ = this->declare_parameter<double>("low_voltage.error", 3.3);
   full_voltage_ = this->declare_parameter<double>("battery.full_cell_voltage", 4.2);
@@ -27,14 +32,28 @@ BmsNode::BmsNode(const rclcpp::NodeOptions & options)
   pub_cells_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(output_topic, 10);
   pub_pack_voltage_ = this->create_publisher<std_msgs::msg::Float32>("/gui/battery_voltage_v", 10);
   pub_battery_percent_ = this->create_publisher<std_msgs::msg::Float32>("/gui/battery_percent", 10);
+  pub_temperature_ = this->create_publisher<std_msgs::msg::Float32>(temperature_output_topic, 10);
   pub_diagnostics_ =
     this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 10);
   sub_cells_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
     input_topic, 10, std::bind(&BmsNode::cellsCallback, this, std::placeholders::_1));
+  sub_temperature_ = this->create_subscription<std_msgs::msg::Float32>(
+    temperature_input_topic, 10, std::bind(&BmsNode::temperatureCallback, this, std::placeholders::_1));
 
   RCLCPP_INFO(
     this->get_logger(), "bms node started. input=%s output=%s",
     input_topic.c_str(), output_topic.c_str());
+}
+
+void BmsNode::temperatureCallback(const std_msgs::msg::Float32::SharedPtr msg)
+{
+  if (!std::isfinite(msg->data)) {
+    RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 2000,
+      "BMS temperature is not finite");
+    return;
+  }
+  temperature_c_ = msg->data;
+  pub_temperature_->publish(*msg);
 }
 
 void BmsNode::cellsCallback(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
@@ -95,6 +114,15 @@ void BmsNode::publishDiagnostics(const std::array<float, 4> & cells)
     ss << cells[i];
     kv.value = ss.str();
     status.values.push_back(kv);
+  }
+
+  if (temperature_c_) {
+    diagnostic_msgs::msg::KeyValue temperature_kv;
+    temperature_kv.key = "temperature_c";
+    std::ostringstream temperature_ss;
+    temperature_ss << *temperature_c_;
+    temperature_kv.value = temperature_ss.str();
+    status.values.push_back(temperature_kv);
   }
 
   diagnostic_msgs::msg::KeyValue min_kv;

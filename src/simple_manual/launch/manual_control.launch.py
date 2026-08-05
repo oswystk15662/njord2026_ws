@@ -175,6 +175,7 @@ def generate_launch_description():
             'serial_port': LaunchConfiguration('serial_port'),
             'baud': LaunchConfiguration('baud'),
             'command_topic': '/thruster_command',
+            'bms_topic': 'micon/bms_cells',
             'use_sim_time': False,
         }],
     )

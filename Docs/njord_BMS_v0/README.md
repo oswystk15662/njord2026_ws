@@ -29,11 +29,13 @@
 マスターを115200 bpsで開くと、1秒ごとに次のCSVを出力します。
 
 ```text
-ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,age1_ms,age2_ms,age3_ms,age4_ms,status
-1234,4.1010,4.0870,4.0930,4.0990,16.3800,41,38,44,40,OK
+ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,temperature_C,age1_ms,age2_ms,age3_ms,age4_ms,status
+1234,4.1010,4.0870,4.0930,4.0990,16.3800,25.0000,41,38,44,40,OK
 ```
 
 2秒以上受信していないセルは `nan`、`status` は `STALE` になります。ADCが上限付近まで飽和した場合は、そのセルを `nan` として `ADC_FAULT` を出力します。`total_V` は有効な4セルが揃った場合のみ出力します。
+
+`temperature_C` は4セル基板から受け取った温度の平均です。温度センサー選定前は、各セル基板が `CELL_TEMPERATURE_C` の定数（既定 `25.0` °C）を送ります。実測センサーを追加する際は、`cell_node_impl.h` のこの定数値をセンサー値へ置き換えます。
 
 ## ビルドと書き込み
 

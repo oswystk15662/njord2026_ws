@@ -1,0 +1,23 @@
+cmake_minimum_required(VERSION 3.8)
+project(foxglove_logger)
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+  add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
+
+find_package(ament_cmake REQUIRED)
+find_package(diagnostic_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
+find_package(njord_interfaces REQUIRED)
+find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+
+add_executable(foxglove_logger_node src/foxglove_logger_node.cpp)
+ament_target_dependencies(foxglove_logger_node
+  diagnostic_msgs nav_msgs njord_interfaces rclcpp sensor_msgs std_msgs)
+
+install(TARGETS foxglove_logger_node DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
+
+ament_package()

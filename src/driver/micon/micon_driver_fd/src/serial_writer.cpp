@@ -135,9 +135,9 @@ Packet encode_packet(
   return packet;
 }
 
-bool parse_bms_csv_line(const std::string & line, std::array<float, 4> * cells)
+bool parse_bms_csv_line(const std::string & line, BmsTelemetry * telemetry)
 {
-  if (cells == nullptr) {
+  if (telemetry == nullptr) {
     return false;
   }
 
@@ -148,12 +148,16 @@ bool parse_bms_csv_line(const std::string & line, std::array<float, 4> * cells)
   if (!std::getline(stream, field, ',')) {
     return false;
   }
-  for (float & cell : *cells) {
+  for (float & cell : telemetry->cells) {
     if (!std::getline(stream, field, ',') || !parse_float(field, &cell)) {
       return false;
     }
   }
-  return true;
+  // total_V is retained in the firmware CSV for human inspection.
+  if (!std::getline(stream, field, ',')) {
+    return false;
+  }
+  return std::getline(stream, field, ',') && parse_float(field, &telemetry->temperature_c);
 }
 
 SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
@@ -163,6 +167,8 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
   baud_ = declare_parameter<int>("baud", 115200);
   command_topic_ = declare_parameter<std::string>("command_topic", "/thruster_command");
   bms_topic_ = declare_parameter<std::string>("bms_topic", "/bms");
+  bms_temperature_topic_ = declare_parameter<std::string>(
+    "bms_temperature_topic", "/micon/bms_temperature_c");
   ground_station_heartbeat_topic_ = declare_parameter<std::string>(
     "ground_station_heartbeat_topic", "/heartbeat/ground_station");
   ground_station_heartbeat_timeout_sec_ = declare_parameter<double>(
@@ -184,6 +190,7 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
       std::bind(&SerialWriter::ground_station_heartbeat_cb, this, std::placeholders::_1));
   }
   pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
+  pub_bms_temperature_ = create_publisher<std_msgs::msg::Float32>(bms_temperature_topic_, 10);
   pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
   pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
     "/safety/emergency_stop", rclcpp::QoS(1).transient_local());
@@ -329,13 +336,14 @@ void SerialWriter::read_bms()
   while ((newline = serial_rx_buffer_.find('\n')) != std::string::npos) {
     const std::string line = serial_rx_buffer_.substr(0, newline);
     serial_rx_buffer_.erase(0, newline + 1);
-    std::array<float, 4> cells;
-    if (!parse_bms_csv_line(line, &cells)) {
+    BmsTelemetry telemetry;
+    if (!parse_bms_csv_line(line, &telemetry)) {
       continue;  // Header, diagnostics, stale data, and malformed records.
     }
     std_msgs::msg::Float32MultiArray message;
-    message.data.assign(cells.begin(), cells.end());
+    message.data.assign(telemetry.cells.begin(), telemetry.cells.end());
     pub_bms_->publish(message);
+    pub_bms_temperature_->publish(std_msgs::msg::Float32().set__data(telemetry.temperature_c));
   }
 
   constexpr size_t kMaxPendingLineLength = 4096;
