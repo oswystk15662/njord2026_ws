@@ -24,6 +24,7 @@ setup(
     entry_points={
         "console_scripts": [
             "task3_orchestrator = task3_sim.orchestrator:main",
+            "task3_gui_status_dummy = task3_sim.gui_status_dummy:main",
         ],
     },
 )

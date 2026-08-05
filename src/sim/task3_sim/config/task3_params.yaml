@@ -29,3 +29,10 @@ sensor_noise_simulator:
     frame_id_imu: "imu_link"
     frame_id_gps: "base_link"
     frame_id_compass: "base_link"
+
+task3_gui_status_dummy:
+  ros__parameters:
+    publish_rate_hz: 1.0
+    battery_percent: 86.0
+    cell_voltages: [4.05, 4.04, 4.06, 4.05]
+    control_status: "auto"

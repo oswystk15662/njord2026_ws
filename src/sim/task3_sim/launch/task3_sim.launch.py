@@ -108,6 +108,16 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Simulated BMS and operating-mode telemetry for the Foxglove overview
+    # indicators. These mirror the real-vessel GUI topic contracts.
+    gui_status_dummy = Node(
+        package="task3_sim",
+        executable="task3_gui_status_dummy",
+        name="task3_gui_status_dummy",
+        parameters=[config],
+        output="screen",
+    )
+
     heading_arrow = Node(
         package="tf_frame_arrow_publisher",
         executable="arrow_publisher",
@@ -243,6 +253,7 @@ def generate_launch_description():
             sim_dynamics,
             sensor_noise_launch,
             task3_orchestrator,
+            gui_status_dummy,
             ground_speed,
             thruster_driver_node,
             twist_mux,
