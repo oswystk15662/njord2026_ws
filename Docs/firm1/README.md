@@ -54,15 +54,12 @@ CRC は version から payload 末尾までの 22 byte を対象にする。
 
 不正 frame、CRC 不一致、非有限 float は出力へ反映しない。
 
-software emergency stop が 1、または有効な指令が 1000 ms 途絶した場合、
-全スラスターを中立にして FET を LOW にする。GPIO2 の物理 E-stop 入力は
-firmware では使用しない。
+software emergency stop が 1、GPIO2 の物理 E-stop 入力が LOW、または有効な指令が
+1000 ms 途絶した場合、全スラスターを中立にして FET を LOW にする。
 
 ## ESP → PC
 
-現 firmware は protocol frame の応答を返さない。
-
-旧 firmware は 1 byte のリレー状態を返していた。
+有効な指令フレームを処理するたび、firmware は 1 byte のリレー状態を返す。
 
 ```
   bit7  bit6  bit5  bit4  bit3  bit2  bit1      bit0
@@ -72,3 +69,54 @@ firmware では使用しない。
 | ビット | 内容 |
 |---|---|
 | bit0 | 緊急停止リレーの動作状態（1 = 動作中） |
+
+---
+
+## ESP32 への書き込み（この環境）
+
+このディレクトリにはスケッチ本体 (`firm1.ino`) と必要なヘッダが同居している。
+ここでは搭載ボードを **ESP32 Dev Module**（FQBN: `esp32:esp32:esp32`）としている。
+異なるESP32派生ボードの場合は、FQBNを対象ボードのものに置き換えること。
+
+### 1. 接続確認
+
+データ通信できるUSBケーブルでESP32を接続し、ポートを確認する。
+
+```bash
+arduino-cli board list
+```
+
+出力の `Port` 列に表示された値（例: `/dev/ttyUSB0` または `/dev/ttyACM0`）を以降の
+`<PORT>` に指定する。ポートが表示されない場合は、ケーブル、USB-serialドライバ、
+およびボードのBOOT/EN操作を確認する。権限エラー時はログインし直すか、利用者を
+`dialout` グループに追加してから再ログインする。
+
+### 2. ビルド
+
+この環境では `arduino-cli 1.5.1` と `esp32:esp32 3.3.10` を確認済みである。
+未導入の環境では先にESP32 coreを導入する。
+
+```bash
+arduino-cli core update-index
+arduino-cli core install esp32:esp32
+arduino-cli compile --fqbn esp32:esp32:esp32 Docs/firm1
+```
+
+### 3. 書き込み
+
+スラスター電源を切り、プロペラに触れない安全な状態で実行する。
+
+```bash
+arduino-cli upload --fqbn esp32:esp32:esp32 --port <PORT> Docs/firm1
+```
+
+`Connecting...` で止まる場合は、ESP32の **BOOT** を押したままコマンドを開始し、
+接続が始まったら離す。書き込み後はUSBシリアルを使うROSノードを起動する前に、
+他のシリアルモニタを閉じる。
+
+### 4. 動作確認
+
+ESP32は115200 bpsで動作する。有効なスラスタ指令フレームを処理するたびに、
+GPIO2の状態を1 byteで返信する。`0x01` は物理E-stop（リレー）が動作中、`0x00` は
+非動作を示す。GPIO2がLOWの間は、指令内容に関わらず全スラスターが中立、FETはLOW
+になる。

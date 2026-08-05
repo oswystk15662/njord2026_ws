@@ -69,6 +69,9 @@ def generate_launch_description():
                 # Sim-only: duty counts come from sim_thruster_command_adapter,
                 # not from the real Float32MultiArray /thruster_command.
                 "topic_thruster_command": "/sim/thruster_duty",
+                # Simulation uses geometric body-frame forces directly; do
+                # not apply the real vessel's port-side wiring correction.
+                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
             },
         ],
         output="screen",
@@ -130,6 +133,8 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
+                "allocation.wrench_sign": [1.0, 1.0, 1.0],
+                "thrusters.reverse": [False, False, False, False],
             },
         ],
         output="screen",

@@ -1,9 +1,13 @@
 #include "micon_driver_fd/serial_writer.hpp"
 
 #include <cstring>
+#include <cerrno>
+#include <cmath>
+#include <cstdlib>
 #include <fcntl.h>
 #include <functional>
 #include <limits>
+#include <sstream>
 #include <termios.h>
 #include <unistd.h>
 
@@ -81,6 +85,24 @@ Packet cobs_encode(const Packet & raw)
   return encoded;
 }
 
+bool parse_float(const std::string & field, float * value)
+{
+  char * end = nullptr;
+  errno = 0;
+  const float parsed = std::strtof(field.c_str(), &end);
+  if (end == field.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
+    return false;
+  }
+  while (*end == ' ' || *end == '\t' || *end == '\r') {
+    ++end;
+  }
+  if (*end != '\0') {
+    return false;
+  }
+  *value = parsed;
+  return true;
+}
+
 }  // namespace
 
 Packet encode_packet(
@@ -113,12 +135,34 @@ Packet encode_packet(
   return packet;
 }
 
+bool parse_bms_csv_line(const std::string & line, std::array<float, 4> * cells)
+{
+  if (cells == nullptr) {
+    return false;
+  }
+
+  std::stringstream stream(line);
+  std::string field;
+  // The master output starts with milliseconds, which is not part of the
+  // voltage message.
+  if (!std::getline(stream, field, ',')) {
+    return false;
+  }
+  for (float & cell : *cells) {
+    if (!std::getline(stream, field, ',') || !parse_float(field, &cell)) {
+      return false;
+    }
+  }
+  return true;
+}
+
 SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 : Node("serial_writer", options)
 {
   serial_port_ = declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
   baud_ = declare_parameter<int>("baud", 115200);
   command_topic_ = declare_parameter<std::string>("command_topic", "/thruster_command");
+  bms_topic_ = declare_parameter<std::string>("bms_topic", "/bms");
 
   sub_thrust_ = create_subscription<std_msgs::msg::Float32MultiArray>(
     command_topic_, 10, std::bind(&SerialWriter::thrust_cb, this, std::placeholders::_1));
@@ -130,6 +174,7 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
     "/yellow", 10, std::bind(&SerialWriter::yellow_cb, this, std::placeholders::_1));
   sub_green_ = create_subscription<std_msgs::msg::Bool>(
     "/green", 10, std::bind(&SerialWriter::green_cb, this, std::placeholders::_1));
+  pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
 
   fd_ = open_serial(serial_port_, baud_);
   timer_ = create_wall_timer(
@@ -179,6 +224,7 @@ void SerialWriter::green_cb(const std_msgs::msg::Bool::SharedPtr msg)
 void SerialWriter::timer_cb()
 {
   if (fd_ < 0) {return;}
+  read_bms();
   Packet packet;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -187,6 +233,41 @@ void SerialWriter::timer_cb()
   const ssize_t result = write(fd_, packet.data(), packet.size());
   if (result != static_cast<ssize_t>(packet.size())) {
     RCLCPP_WARN(get_logger(), "serial write failed or incomplete");
+  }
+}
+
+void SerialWriter::read_bms()
+{
+  char buffer[256];
+  const ssize_t count = read(fd_, buffer, sizeof(buffer));
+  if (count < 0) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "serial read failed");
+    }
+    return;
+  }
+  if (count == 0) {
+    return;
+  }
+
+  serial_rx_buffer_.append(buffer, static_cast<size_t>(count));
+  size_t newline = 0;
+  while ((newline = serial_rx_buffer_.find('\n')) != std::string::npos) {
+    const std::string line = serial_rx_buffer_.substr(0, newline);
+    serial_rx_buffer_.erase(0, newline + 1);
+    std::array<float, 4> cells;
+    if (!parse_bms_csv_line(line, &cells)) {
+      continue;  // Header, diagnostics, stale data, and malformed records.
+    }
+    std_msgs::msg::Float32MultiArray message;
+    message.data.assign(cells.begin(), cells.end());
+    pub_bms_->publish(message);
+  }
+
+  constexpr size_t kMaxPendingLineLength = 4096;
+  if (serial_rx_buffer_.size() > kMaxPendingLineLength) {
+    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "discarding oversized serial line");
+    serial_rx_buffer_.clear();
   }
 }
 
@@ -230,7 +311,7 @@ int SerialWriter::open_serial(const std::string & device, int baud)
     return -1;
   }
   int file_flags = fcntl(fd, F_GETFL, 0);
-  fcntl(fd, F_SETFL, file_flags & ~O_NONBLOCK);
+  fcntl(fd, F_SETFL, file_flags | O_NONBLOCK);
   return fd;
 }
 

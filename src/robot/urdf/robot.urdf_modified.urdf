@@ -4,12 +4,6 @@
 <!-- |    EDITING THIS FILE BY HAND IS NOT RECOMMENDED                                 | -->
 <!-- =================================================================================== -->
 <robot name="njord_asv">
-  <link name="base_footprint"/>
-  <joint name="base_joint" type="fixed">
-    <parent link="base_footprint"/>
-    <child link="base_link"/>
-    <origin rpy="0 0 0" xyz="0 0 0.25"/>
-  </joint>
   <link name="base_link">
     <visual>
       <geometry>
@@ -25,6 +19,13 @@
       </geometry>
     </collision>
   </link>
+  <!-- ZED2i left camera optical-origin frame, rigidly mounted at the bow. -->
+  <link name="zed2i_left_camera_frame"/>
+  <joint name="zed2i_left_camera_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="zed2i_left_camera_frame"/>
+    <origin rpy="0 0 0" xyz="0.48 0 0.47"/>
+  </joint>
   <link name="livox_frame">
     <visual>
       <geometry>
@@ -91,7 +92,7 @@
   <joint name="gnss_sub_joint" type="fixed">
     <parent link="base_link"/>
     <child link="gnss_sub_link"/>
-    <origin rpy="0 0 0" xyz="-0.5 -0.4 1.0"/>
+    <origin rpy="0 0 0" xyz="0.5 -0.4 1.0"/>
   </joint>
   <link name="thruster_FR">
     <visual>

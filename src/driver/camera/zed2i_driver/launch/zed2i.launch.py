@@ -37,8 +37,14 @@ def launch_setup(context, *args, **kwargs):
                         {
                             "enable_gpu_perception": LaunchConfiguration("enable_gpu_perception"),
                             "engine_path": LaunchConfiguration("engine_path"),
+                            "publish_debug_detections": LaunchConfiguration("publish_debug_detections"),
                             "camera_resolution": LaunchConfiguration("camera_resolution"),
                             "framerate": LaunchConfiguration("framerate"),
+                            "fov_ellipse_enable": LaunchConfiguration("fov_ellipse_enable"),
+                            "fov_ellipse_cx_ratio": LaunchConfiguration("fov_ellipse_cx_ratio"),
+                            "fov_ellipse_cy_ratio": LaunchConfiguration("fov_ellipse_cy_ratio"),
+                            "fov_ellipse_a_ratio": LaunchConfiguration("fov_ellipse_a_ratio"),
+                            "fov_ellipse_b_ratio": LaunchConfiguration("fov_ellipse_b_ratio"),
                             "enable_ground_video": LaunchConfiguration("enable_ground_video"),
                             "ground_video_host": LaunchConfiguration("ground_video_host"),
                             "ground_video_port": LaunchConfiguration("ground_video_port"),
@@ -69,11 +75,30 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
             DeclareLaunchArgument("engine_path", default_value=""),
             DeclareLaunchArgument(
+                "publish_debug_detections",
+                default_value="false",
+                description="Publish the GPU perception BuoyDetectionArray on "
+                "detection_topic (from the params_file, default "
+                "/buoy_detections_3d). Only takes effect when "
+                "enable_gpu_perception:=true.",
+            ),
+            DeclareLaunchArgument(
                 "camera_resolution",
                 default_value="HD720",
                 description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
             ),
             DeclareLaunchArgument("framerate", default_value="15"),
+            DeclareLaunchArgument(
+                "fov_ellipse_enable",
+                default_value="false",
+                description="Enable the human-FOV-like elliptical region of "
+                "interest; outside the ellipse is skipped/invalidated across "
+                "RGB, depth, points, GPU perception, and ground video.",
+            ),
+            DeclareLaunchArgument("fov_ellipse_cx_ratio", default_value="0.5"),
+            DeclareLaunchArgument("fov_ellipse_cy_ratio", default_value="0.5"),
+            DeclareLaunchArgument("fov_ellipse_a_ratio", default_value="0.5"),
+            DeclareLaunchArgument("fov_ellipse_b_ratio", default_value="0.5"),
             DeclareLaunchArgument("enable_ground_video", default_value="false"),
             DeclareLaunchArgument("ground_video_host", default_value=""),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),

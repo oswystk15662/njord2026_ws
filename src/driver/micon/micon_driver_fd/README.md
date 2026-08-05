@@ -9,7 +9,8 @@ be added alongside it without changing the manual-control package.
 - subscribes `command_topic` (`std_msgs/msg/Float32MultiArray`), first 4 thrust commands in N
 - subscribes `/emg`, `/red`, `/yellow`, `/green` (`std_msgs/msg/Bool`)
 - parameters: `serial_port` (default `/dev/ttyUSB0`), `baud` (default `115200`),
-  and `command_topic` (default `/thruster_command` from `thruster_driver`)
+  `command_topic` (default `/thruster_command` from `thruster_driver`), and
+  `bms_topic` (default `/bms`)
 
 Every 50 ms, `serial_writer` sends a `THRUSTER_COMMAND` frame compatible with
 `Docs/PROTOCOL.md`:
@@ -25,3 +26,10 @@ values followed by `control_flags`: `bit3=emg`, `bit2=green`, `bit1=yellow`,
 
 Emergency stop enforcement is the Micon firmware's responsibility and requires
 hardware validation.
+
+## BMS receive
+
+`Docs/njord_BMS_v0/master` sends one CSV row per second over the same serial
+port. `serial_writer` extracts `cell1_V` through `cell4_V` and publishes them
+as a four-element `std_msgs/msg/Float32MultiArray` on `bms_topic`. CSV headers,
+stale rows containing `nan`, and malformed rows are ignored.

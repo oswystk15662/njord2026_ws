@@ -9,13 +9,19 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/task1_sim.launch.py"]),
+        ("share/" + package_name + "/launch", [
+            "launch/task1_navigation.launch.py",
+            "launch/task1_sim.launch.py",
+            "launch/task1_sim_truth.launch.py",
+            "launch/task1_sim_sensor_parity.launch.py",
+        ]),
         ("share/" + package_name + "/behavior_trees", [
             "behavior_trees/navigate_through_poses_w_replanning_and_recovery.xml",
         ]),
         ("share/" + package_name + "/config", [
             "config/task1_params.yaml",
             "config/task1_nav2_params.yaml",
+            "config/task1_ekf_local.yaml",
         ]),
     ],
     install_requires=["setuptools"],

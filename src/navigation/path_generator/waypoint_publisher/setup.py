@@ -12,6 +12,7 @@ setup(
         ("share/" + package_name + "/launch", ["launch/waypoint_publisher.launch.py"]),
         ("share/" + package_name + "/config", [
             "config/task1_waypoints.yaml",
+            "config/task1_follow_waypoints.yaml",
             "config/task2_waypoints.yaml",
             "config/task3_waypoints.yaml",
         ]),

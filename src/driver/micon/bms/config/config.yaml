@@ -9,3 +9,7 @@ bms_node:
     low_voltage:
       warning: 3.5
       error: 3.3
+
+    battery:
+      # Used only for the GUI's remaining-charge estimate. Tune for the pack chemistry.
+      full_cell_voltage: 4.2

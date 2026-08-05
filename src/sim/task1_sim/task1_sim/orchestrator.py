@@ -136,7 +136,9 @@ class Task1Orchestrator(Node):
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
         self.pub_cardinal = self.create_publisher(String, "/sim/cardinal_mark", 10)
-        self.pub_virtual_obstacles = self.create_publisher(PointCloud2, "/virtual_obstacles", 10)
+        # Fixed simulator geometry is distinct from perception-derived
+        # cardinal walls, which own /virtual_obstacles.
+        self.pub_sim_obstacles = self.create_publisher(PointCloud2, "/sim_obstacles", 10)
         self.pub_status = self.create_publisher(String, "/sim/task1_status", 10)
         self.pub_boundary_markers = self.create_publisher(MarkerArray, "/sim/boundary_markers", transient_qos)
         self.pub_cardinal_markers = self.create_publisher(
@@ -149,7 +151,7 @@ class Task1Orchestrator(Node):
         self.srv_infer = self.create_service(Trigger, "/yolo/start_inference", self.on_start_inference)
 
         self.publish_start()
-        self.publish_virtual_obstacles()
+        self.publish_sim_obstacles()
         self.publish_boundary_markers()
         self.publish_cardinal_markers()
 
@@ -197,7 +199,7 @@ class Task1Orchestrator(Node):
         self._init_buoy_states()
         self.avoidance_failed = False
         self.avoidance_results = []
-        self.publish_virtual_obstacles()
+        self.publish_sim_obstacles()
         self.publish_cardinal_markers()
 
         response.success = True
@@ -255,41 +257,16 @@ class Task1Orchestrator(Node):
         except (TypeError, ValueError):
             return []
 
-    def _append_cardinal_walls(self, points: list[list[float]]):
-        spacing = max(self.obstacle_spacing, self.wall_radius / max(self.wall_points, 1))
-        for bx, by in self.buoy_positions:
-            x = bx - self.wall_radius
-            while x <= bx + self.wall_radius + 1.0e-6:
-                y = by - self.wall_radius
-                while y <= by + self.wall_radius + 1.0e-6:
-                    if math.hypot(x - bx, y - by) <= self.wall_radius:
-                        forbidden = (
-                            (self.current_mark == "N" and y <= by)
-                            or (self.current_mark == "S" and y >= by)
-                            or (self.current_mark == "E" and x <= bx)
-                            or (self.current_mark == "W" and x >= bx)
-                        )
-                        if forbidden:
-                            points.append([x, y, 0.0])
-                    y += spacing
-                x += spacing
-
-    def build_virtual_obstacle_points(self) -> list[list[float]]:
+    def build_sim_obstacle_points(self) -> list[list[float]]:
         points = []
         self._append_course_boundary(points)
         self._append_center_line(points)
-
-        if self.inference_done:
-            self._append_cardinal_walls(points)
-        else:
-            self._append_rect_fill(points, self.pre_inference_block)
-
         return points
 
-    def publish_virtual_obstacles(self):
+    def publish_sim_obstacles(self):
         stamp = self.get_clock().now().to_msg()
-        points = self.build_virtual_obstacle_points()
-        self.pub_virtual_obstacles.publish(make_pointcloud2(self.frame_id, points, stamp))
+        points = self.build_sim_obstacle_points()
+        self.pub_sim_obstacles.publish(make_pointcloud2(self.frame_id, points, stamp))
 
     def publish_boundary_markers(self):
         min_x, max_x, min_y, max_y = self.course_bounds
@@ -443,7 +420,7 @@ class Task1Orchestrator(Node):
         cardinal = String()
         cardinal.data = self.current_mark
         self.pub_cardinal.publish(cardinal)
-        self.publish_virtual_obstacles()
+        self.publish_sim_obstacles()
         self.publish_boundary_markers()
         self.publish_cardinal_markers()
 

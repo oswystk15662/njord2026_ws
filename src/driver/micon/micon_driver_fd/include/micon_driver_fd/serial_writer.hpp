@@ -37,6 +37,10 @@ Packet encode_packet(
   const Flags & flags,
   uint16_t sequence = 0);
 
+// Parses one CSV line emitted by Docs/njord_BMS_v0/master.  The first field is
+// a timestamp, followed by the four cell voltages in volts.
+bool parse_bms_csv_line(const std::string & line, std::array<float, 4> * cells);
+
 class SerialWriter : public rclcpp::Node
 {
 public:
@@ -50,6 +54,7 @@ private:
   void yellow_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void green_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void timer_cb();
+  void read_bms();
   int open_serial(const std::string & device, int baud);
 
   Flags flags_;
@@ -60,11 +65,14 @@ private:
   std::string serial_port_;
   int baud_{115200};
   std::string command_topic_;
+  std::string bms_topic_;
+  std::string serial_rx_buffer_;
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_thrust_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_emg_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_red_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_yellow_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_green_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_bms_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 

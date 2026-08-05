@@ -1,4 +1,9 @@
-zed2i:
+# Key must be the node's FULLY QUALIFIED name. zed2i.launch.py loads this node
+# as name="zed2i" inside namespace="/zed2i", so its FQN is /zed2i/zed2i and a
+# bare "zed2i:" key matches nothing -- the whole file was silently ignored and
+# every parameter fell back to its declare_parameter() default.
+# Note: this key is tied to the launch file's `namespace` argument (/zed2i).
+/zed2i/zed2i:
   ros__parameters:
     left_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0
     right_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index1
@@ -16,6 +21,14 @@ zed2i:
     cy: 360.0
     depth_min_m: 0.3
     depth_max_m: 20.0
+    # Human-FOV-like elliptical region of interest. Disabled by default to
+    # preserve existing behavior; when enabled, RGB/depth/points/perception/
+    # ground-video are all restricted to inside the ellipse.
+    fov_ellipse_enable: false
+    fov_ellipse_cx_ratio: 0.5
+    fov_ellipse_cy_ratio: 0.5
+    fov_ellipse_a_ratio: 0.5
+    fov_ellipse_b_ratio: 0.5
     # A Jetson deployment must set engine_path and enable this only after the
     # matching local TensorRT engine has been generated.
     enable_gpu_perception: false
@@ -46,7 +59,8 @@ zed2i:
     lidar_min_cluster_points: 5
     lidar_max_cluster_points: 5000
     fusion_max_range_delta_m: 2.0
-    enable_virtual_wall: true
+    # Nav2 obstacles are generated downstream from /buoy_detections_3d.
+    enable_virtual_wall: false
     virtual_wall_topic: /virtual_obstacles
     wall_frame: map
     channel_heading_rad: .nan

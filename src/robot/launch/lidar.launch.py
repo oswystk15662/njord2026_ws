@@ -35,13 +35,62 @@ def launch_setup(context, *args, **kwargs):
         LaunchConfiguration("enable_glim").perform(context).lower()
         in ("true", "1", "yes", "on")
     )
+    glim_headless = (
+        LaunchConfiguration("glim_headless").perform(context).lower()
+        in ("true", "1", "yes", "on")
+    )
 
     user_config_path = PathJoinSubstitution(
         [FindPackageShare("robot"), "config", "livox", config_file]
     )
 
-    components = [
-        ComposableNode(
+    lidar_source = LaunchConfiguration("lidar_source").perform(context).lower()
+
+    if lidar_source == "bag":
+        # Replay a recorded mcap bag from INSIDE this container in place of the
+        # real Livox driver. Publishing /livox/lidar + /livox/imu here (unique_ptr,
+        # SensorDataQoS) keeps the zero-copy intra-process path to glim/pcl_det
+        # identical to the live driver, only the data source changes. Used to
+        # bench the intra-process pipeline on-device without the MID360 hardware.
+        bag_path = LaunchConfiguration("bag_path").perform(context)
+        bag_rate = float(LaunchConfiguration("bag_rate").perform(context))
+        # restamp must stay OFF: Livox PointCloud2 carries per-point absolute
+        # timestamps that GLIM uses, and rewriting only header.stamp desyncs
+        # LiDAR (bag time) from IMU (rewritten), which crashes GLIM's estimator.
+        # Keeping the bag timeline keeps points/IMU consistent; real-time pacing
+        # is preserved by the replayer regardless.
+        bag_restamp = (
+            LaunchConfiguration("bag_restamp").perform(context).lower()
+            in ("true", "1", "yes", "on")
+        )
+        # loop=false for GLIM benches: on loop the bag timestamps jump backward
+        # by the bag duration, which GLIM reads as a time rewind and crashes its
+        # estimator (IndeterminantLinearSystem). The bag (~586s) is far longer
+        # than a bench window, so a single pass is enough.
+        bag_loop = (
+            LaunchConfiguration("bag_loop").perform(context).lower()
+            in ("true", "1", "yes", "on")
+        )
+        source_component = ComposableNode(
+            package="livox_bag_replayer",
+            plugin="livox_bag_replayer::BagReplayerNode",
+            name="livox_lidar_publisher",
+            parameters=[
+                {
+                    "bag_path": bag_path,
+                    "storage_id": "mcap",
+                    "lidar_topic": "/livox/lidar",
+                    "imu_topic": "/livox/imu",
+                    "loop": bag_loop,
+                    "rate": bag_rate,
+                    "restamp": bag_restamp,
+                    "frame_id": FRAME_ID,
+                }
+            ],
+            extra_arguments=[{"use_intra_process_comms": True}],
+        )
+    else:
+        source_component = ComposableNode(
             package="livox_ros_driver2",
             plugin="livox_ros::DriverNode",
             name="livox_lidar_publisher",
@@ -60,7 +109,8 @@ def launch_setup(context, *args, **kwargs):
             ],
             extra_arguments=[{"use_intra_process_comms": True}],
         )
-    ]
+
+    components = [source_component]
 
     if enable_buoy_detection:
         components.append(
@@ -86,6 +136,7 @@ def launch_setup(context, *args, **kwargs):
     # It still receives IMU over the normal topic path because that publisher
     # is not part of this container.
     if enable_glim:
+        glim_config_dir = "glim_config_headless" if glim_headless else "glim_config"
         components.append(
             ComposableNode(
                 package="glim_ros",
@@ -94,7 +145,7 @@ def launch_setup(context, *args, **kwargs):
                 parameters=[
                     {
                         "config_path": PathJoinSubstitution(
-                            [FindPackageShare("robot"), "config", "glim_config"]
+                            [FindPackageShare("robot"), "config", glim_config_dir]
                         ),
                         "use_sim_time": False,
                     }
@@ -124,11 +175,46 @@ def generate_launch_description():
                 default_value="mid360",
                 choices=["mid360", "mid360s"],
             ),
+            DeclareLaunchArgument(
+                "lidar_source",
+                default_value="driver",
+                choices=["driver", "bag"],
+                description="driver=real Livox MID360, bag=in-container mcap replayer (intra-process bench)",
+            ),
+            DeclareLaunchArgument(
+                "bag_path",
+                default_value="/home/ibo/njord2026_ws/rosbag2_2026_07_21-16_22_30",
+                description="mcap bag replayed when lidar_source:=bag",
+            ),
+            DeclareLaunchArgument(
+                "bag_rate",
+                default_value="1.0",
+                description="Playback speed multiplier for lidar_source:=bag",
+            ),
+            DeclareLaunchArgument(
+                "bag_loop",
+                default_value="true",
+                description="Loop the bag. Set false for GLIM benches: looping "
+                "rewinds bag timestamps and crashes GLIM's estimator",
+            ),
+            DeclareLaunchArgument(
+                "bag_restamp",
+                default_value="false",
+                description="Rewrite header.stamp to now(); keep false for GLIM "
+                "(Livox per-point timestamps would desync from IMU otherwise)",
+            ),
             DeclareLaunchArgument("enable_buoy_detection", default_value="false"),
             DeclareLaunchArgument(
                 "enable_glim",
                 default_value="true",
                 description="Load GLIM into the Livox component container",
+            ),
+            DeclareLaunchArgument(
+                "glim_headless",
+                default_value="false",
+                description="Use glim_config_headless (no GUI viewer extensions) "
+                "instead of glim_config; required when no X11/OpenGL display "
+                "is available",
             ),
             DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
             DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),

@@ -7,6 +7,7 @@
 #include <diagnostic_msgs/msg/diagnostic_status.hpp>
 #include <diagnostic_msgs/msg/key_value.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
+#include <std_msgs/msg/float32.hpp>
 
 #include <array>
 
@@ -28,10 +29,13 @@ private:
 
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_cells_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_cells_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_pack_voltage_;
+  rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr pub_battery_percent_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr pub_diagnostics_;
 
   double warning_voltage_{3.5};
   double error_voltage_{3.3};
+  double full_voltage_{4.2};
 };
 
 }  // namespace bms

@@ -29,11 +29,11 @@ private:
     double x{0.0};
     double y{0.0};
     double angle_rad{0.0};
+    double max_thrust{40.0};
     double force_per_duty{1.0};
     double forward_gain{1.0};
     double reverse_gain{1.0};
     double offset{0.0};
-    double max_thrust;
     bool reverse{false};
   };
 
@@ -104,6 +104,7 @@ private:
   double damping_quadratic_yaw_{0.0};
 
   double allocation_regularization_{1e-4};
+  std::vector<double> allocation_wrench_sign_{1.0, 1.0, 1.0};
   double deadzone_pos_{0.0};
   double deadzone_neg_{0.0};
 

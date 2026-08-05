@@ -22,8 +22,11 @@ BmsNode::BmsNode(const rclcpp::NodeOptions & options)
     this->declare_parameter<std::string>("topics.diagnostics", "/diagnostics");
   warning_voltage_ = this->declare_parameter<double>("low_voltage.warning", 3.5);
   error_voltage_ = this->declare_parameter<double>("low_voltage.error", 3.3);
+  full_voltage_ = this->declare_parameter<double>("battery.full_cell_voltage", 4.2);
 
   pub_cells_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(output_topic, 10);
+  pub_pack_voltage_ = this->create_publisher<std_msgs::msg::Float32>("/gui/battery_voltage_v", 10);
+  pub_battery_percent_ = this->create_publisher<std_msgs::msg::Float32>("/gui/battery_percent", 10);
   pub_diagnostics_ =
     this->create_publisher<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 10);
   sub_cells_ = this->create_subscription<std_msgs::msg::Float32MultiArray>(
@@ -58,6 +61,14 @@ void BmsNode::publishCells(const std::array<float, 4> & cells)
   std_msgs::msg::Float32MultiArray out;
   out.data = {cells[0], cells[1], cells[2], cells[3]};
   pub_cells_->publish(out);
+
+  const float pack_voltage = cells[0] + cells[1] + cells[2] + cells[3];
+  const float lowest_cell_voltage = *std::min_element(cells.begin(), cells.end());
+  const double usable_range = std::max(0.01, full_voltage_ - error_voltage_);
+  const float percentage = static_cast<float>(std::clamp(
+    100.0 * (lowest_cell_voltage - error_voltage_) / usable_range, 0.0, 100.0));
+  pub_pack_voltage_->publish(std_msgs::msg::Float32().set__data(pack_voltage));
+  pub_battery_percent_->publish(std_msgs::msg::Float32().set__data(percentage));
 }
 
 void BmsNode::publishDiagnostics(const std::array<float, 4> & cells)

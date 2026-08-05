@@ -25,3 +25,5 @@ imgui.ini
 
 rosbag2*
 
+# Local git worktrees used by Codex and other agents.
+_worktrees/

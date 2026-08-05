@@ -9,6 +9,8 @@
 #include "rcl_interfaces/msg/set_parameters_result.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "std_msgs/msg/bool.hpp"
+#include "std_msgs/msg/empty.hpp"
+#include "std_msgs/msg/string.hpp"
 
 namespace simple_manual
 {
@@ -23,6 +25,8 @@ struct JoyConfig
   int64_t green_button{1};
   int64_t yellow_button{2};
   int64_t red_button{3};
+  int64_t manual_mode_button{3};
+  int64_t auto_mode_button{2};
   double linear_x_scale{0.2};
   double linear_y_scale{0.2};
   double angular_z_scale{0.2};
@@ -35,6 +39,8 @@ struct JoyOutput
   bool green{false};
   bool yellow{false};
   bool red{false};
+  bool manual_mode{true};
+  bool auto_mode{false};
 };
 
 JoyOutput convert_joy(const sensor_msgs::msg::Joy & msg, const JoyConfig & config);
@@ -55,9 +61,17 @@ private:
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_emg_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_safety_emergency_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_operating_mode_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_control_status_;
+  rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr pub_heartbeat_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_green_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_yellow_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_red_;
+  rclcpp::TimerBase::SharedPtr heartbeat_timer_;
+  bool manual_mode_{true};
+  bool previous_manual_button_{false};
+  bool previous_auto_button_{false};
 };
 
 }  // namespace simple_manual
