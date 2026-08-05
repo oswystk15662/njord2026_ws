@@ -122,6 +122,26 @@ TEST(SerialPacket, EncodesFloatsAndFlags)
   expect_thruster_command_frame(packet, thrust, 0x0D, 42);
 }
 
+TEST(BmsCsv, ParsesFourCellVoltages)
+{
+  std::array<float, 4> cells{};
+  ASSERT_TRUE(micon_driver_fd::parse_bms_csv_line(
+      "1234,4.1010,4.0870,4.0930,4.0990,16.3800,41,38,44,40,OK", &cells));
+  EXPECT_FLOAT_EQ(cells[0], 4.1010F);
+  EXPECT_FLOAT_EQ(cells[1], 4.0870F);
+  EXPECT_FLOAT_EQ(cells[2], 4.0930F);
+  EXPECT_FLOAT_EQ(cells[3], 4.0990F);
+}
+
+TEST(BmsCsv, RejectsHeaderAndInvalidCellVoltage)
+{
+  std::array<float, 4> cells{};
+  EXPECT_FALSE(micon_driver_fd::parse_bms_csv_line(
+      "ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,age1_ms,age2_ms,age3_ms,age4_ms,status", &cells));
+  EXPECT_FALSE(micon_driver_fd::parse_bms_csv_line(
+      "1234,4.1010,nan,4.0930,4.0990,nan,41,38,44,40,STALE", &cells));
+}
+
 TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
 {
   int master_fd = -1;
