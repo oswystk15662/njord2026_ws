@@ -48,6 +48,9 @@ Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が param
 miniPC 側で映像を見たい場合は DDS ではなく既存の GPU-JPEG → RTP/UDP 経路を使う:
 `zed2i_driver/src/ground_video_streamer.cu`（送信、Jetson）と `zed2i_driver/launch/ground_video_receiver.launch.py`（受信、miniPC）。
 `jetson_bringup.launch.py` の `enable_ground_video:=true ground_video_host:=<miniPC の IP>` で有効化する。
+起動順序(受信側を先に起動)・再ビルド必須・ポート二重起動禁止・実測レートといった手順の詳細は
+最上位 `README.md` と `src/driver/camera/zed2i_driver/README.md` の
+「陸上映像伝送(ground video)の正しい起動手順」を参照。
 
 ### 時刻同期は必須
 
