@@ -71,6 +71,10 @@ def generate_launch_description():
     back_cam_ground_video_host = LaunchConfiguration("back_cam_ground_video_host")
     back_cam_ground_video_port = LaunchConfiguration("back_cam_ground_video_port")
     back_cam_ground_video_codec = LaunchConfiguration("back_cam_ground_video_codec")
+    enable_back_cam_jpeg_ground_video = LaunchConfiguration("enable_back_cam_jpeg_ground_video")
+    back_cam_jpeg_ground_video_host = LaunchConfiguration("back_cam_jpeg_ground_video_host")
+    back_cam_jpeg_ground_video_port = LaunchConfiguration("back_cam_jpeg_ground_video_port")
+    back_cam_jpeg_ground_video_fps = LaunchConfiguration("back_cam_jpeg_ground_video_fps")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
@@ -247,6 +251,20 @@ def generate_launch_description():
         },
     )
 
+    # Keep the original CPU JPEG/RTP transport available separately from the
+    # VA-API H.26x route above.  It uses its own enable flag and UDP port, so
+    # both streams can be enabled concurrently for compatibility testing.
+    back_cam_jpeg_ground_video_launch = include_launch(
+        "zed2i_driver",
+        ["launch", "back_cam_jpeg_ground_video.launch.py"],
+        IfCondition(enable_back_cam_jpeg_ground_video),
+        {
+            "host": back_cam_jpeg_ground_video_host,
+            "port": back_cam_jpeg_ground_video_port,
+            "fps": back_cam_jpeg_ground_video_fps,
+        },
+    )
+
     nav2_launch = include_launch(
         "robot",
         ["launch", "nav2.launch.py"],
@@ -342,6 +360,7 @@ def generate_launch_description():
             # foxglove_bridge_launch,
             back_cam_launch,
             back_cam_ground_video_launch,
+            back_cam_jpeg_ground_video_launch,
             nav2_launch,
         ]
     )

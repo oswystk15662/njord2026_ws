@@ -107,6 +107,13 @@ def test_minipc_bringup_source_has_no_gpu_packages():
         )
 
 
+def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert 'back_cam_h26x_ground_video.launch.py' in source
+    assert 'back_cam_jpeg_ground_video.launch.py' in source
+    assert '"enable_back_cam_jpeg_ground_video"' in source
+
+
 def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'executable="command_arbiter_node"' in source
