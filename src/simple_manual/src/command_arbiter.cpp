@@ -46,6 +46,8 @@ public:
       "/autonomy/ready", 10,
       [this](std_msgs::msg::Bool::SharedPtr message) {autonomy_ready_ = message->data;});
     command_pub_ = create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
+    control_status_pub_ = create_publisher<std_msgs::msg::String>(
+      "/system/control_status", rclcpp::QoS(1).transient_local());
     heartbeat_pub_ = create_publisher<std_msgs::msg::Empty>("/heartbeat/high_level", 10);
     timer_ = create_wall_timer(std::chrono::milliseconds(50),
       std::bind(&CommandArbiter::publish, this));
@@ -71,6 +73,8 @@ private:
       }
     }
     command_pub_->publish(command);
+    control_status_pub_->publish(std_msgs::msg::String().set__data(
+        emergency_stop_ ? "emergency_stop" : mode_));
   }
 
   double timeout_sec_{0.5};
@@ -88,6 +92,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr emergency_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr ready_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr command_pub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr control_status_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;

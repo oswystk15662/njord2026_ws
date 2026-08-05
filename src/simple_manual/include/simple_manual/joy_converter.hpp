@@ -62,7 +62,6 @@ private:
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_soft_emg_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_operating_mode_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_control_status_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr pub_heartbeat_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_green_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_yellow_;

@@ -107,6 +107,13 @@ def test_minipc_bringup_source_has_no_gpu_packages():
         )
 
 
+def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert 'executable="command_arbiter_node"' in source
+    assert 'name="command_arbiter"' in source
+    assert 'package="twist_mux"' not in source
+
+
 def test_jetson_bringup_source_has_no_minipc_only_packages():
     source = _read_launch_source("jetson_bringup.launch.py")
     for package_name in _MINIPC_ONLY_PACKAGES:

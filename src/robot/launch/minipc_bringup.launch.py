@@ -156,15 +156,12 @@ def generate_launch_description():
         ],
     )
 
-    twist_mux = Node(
-        package="twist_mux",
-        executable="twist_mux",
-        name="twist_mux",
+    command_arbiter = Node(
+        package="simple_manual",
+        executable="command_arbiter_node",
+        name="command_arbiter",
         output="screen",
-        parameters=[
-            PathJoinSubstitution([FindPackageShare("robot"), "config", "twist_mux.yaml"])
-        ],
-        remappings=[("cmd_vel_out", "/cmd_vel")],
+        parameters=[{"initial_mode": "manual"}],
     )
 
     thruster_launch = include_launch(
@@ -282,7 +279,7 @@ def generate_launch_description():
             imu_node,
             joy_node,
             joy_converter,
-            twist_mux,
+            command_arbiter,
             thruster_launch,
             micon_driver,
             bms_launch,
