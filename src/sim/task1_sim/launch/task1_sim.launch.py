@@ -78,15 +78,15 @@ def generate_launch_description():
     pkg_thruster = get_package_share_directory("thruster_driver")
 
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
-    nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params.yaml")
+    nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params_jazzy.yaml")
     nav_through_poses_bt_xml = os.path.join(
         pkg_share,
         "behavior_trees",
         "navigate_through_poses_w_replanning_and_recovery.xml",
     )
     nav_to_pose_bt_xml = os.path.join(
-        get_package_share_directory("nav2_bt_navigator"),
-        "behavior_trees",
+        pkg_robot,
+        "config",
         "navigate_to_pose_w_replanning_and_recovery.xml",
     )
     robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")

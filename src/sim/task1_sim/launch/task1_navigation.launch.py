@@ -8,6 +8,7 @@ so it owns the lifecycle list explicitly.
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
+from nav2_common.launch import RewrittenYaml
 from launch_ros.actions import Node
 
 
@@ -15,7 +16,20 @@ def generate_launch_description():
     params_file = LaunchConfiguration("params_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
-    params = [params_file, {"use_sim_time": use_sim_time}]
+    params = [
+        RewrittenYaml(
+            source_file=params_file,
+            root_key=None,
+            param_rewrites={
+                "bt_navigator.ros__parameters.default_nav_to_pose_bt_xml":
+                    LaunchConfiguration("nav_to_pose_bt_xml"),
+                "bt_navigator.ros__parameters.default_nav_through_poses_bt_xml":
+                    LaunchConfiguration("nav_through_poses_bt_xml"),
+            },
+            convert_types=True,
+        ),
+        {"use_sim_time": use_sim_time},
+    ]
     remappings = [("/tf", "tf"), ("/tf_static", "tf_static")]
     lifecycle_nodes = [
         "controller_server",
@@ -30,6 +44,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("params_file"),
+        DeclareLaunchArgument("nav_to_pose_bt_xml"),
+        DeclareLaunchArgument("nav_through_poses_bt_xml"),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("autostart", default_value="true"),
         Node(package="nav2_controller", executable="controller_server",

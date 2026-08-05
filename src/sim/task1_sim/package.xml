@@ -19,6 +19,7 @@
   <depend>njord_interfaces</depend>
   <depend>buoy_obstacle_publisher</depend>
   <depend>nav2_bringup</depend>
+  <depend>nav2_common</depend>
   <depend>natural_cubic_spline</depend>
   <depend>waypoint_publisher</depend>
   <depend>operation_validator</depend>
