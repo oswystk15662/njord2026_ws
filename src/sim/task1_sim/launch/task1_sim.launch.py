@@ -6,7 +6,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -289,10 +289,15 @@ def generate_launch_description():
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_gui_dummy_publishers")),
     )
-    foxglove_bridge = include_launch(
-        "foxglove_bridge",
-        ["launch", "foxglove_bridge_launch.xml"],
-        IfCondition(LaunchConfiguration("use_foxglove_bridge")),
+    foxglove_bridge = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            os.path.join(
+                get_package_share_directory("foxglove_bridge"),
+                "launch",
+                "foxglove_bridge_launch.xml",
+            )
+        ),
+        condition=IfCondition(LaunchConfiguration("use_foxglove_bridge")),
     )
 
     validator = include_launch(
@@ -359,12 +364,6 @@ def generate_launch_description():
     startup_message = LogInfo(msg="========== Task1 Sim Bringup Started ==========")
 
     return LaunchDescription([
-        startup_message,
-        heading_arrow,
-        actual_route,
-        ground_speed,
-        gui_status_dummy_publisher,
-        foxglove_bridge,
         use_dynamics_arg,
         use_nav2_arg,
         use_thruster_driver_arg,
@@ -382,6 +381,13 @@ def generate_launch_description():
         goal_delay_arg,
         params_arg,
         nav2_params_arg,
+        # Declare every configuration before an action can evaluate it.
+        startup_message,
+        heading_arrow,
+        actual_route,
+        ground_speed,
+        gui_status_dummy_publisher,
+        foxglove_bridge,
         sensor_layer_timer,
         nav2_layer_timer,
         goal_layer_timer,
