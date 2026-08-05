@@ -13,6 +13,11 @@ def generate_launch_description():
         default_value='/gps/fix',
         description='Output topic for the simulated NavSatFix message',
     )
+    imu_topic_arg = DeclareLaunchArgument(
+        'imu_topic',
+        default_value='/wit/imu',
+        description='Output topic for the simulated IMU message',
+    )
 
     gnss_sim_node = Node(
         package='sensor_sim_with_noise',
@@ -28,6 +33,7 @@ def generate_launch_description():
         executable='imu_noise_simulator',
         name='imu_noise_simulator',
         parameters=[config_file],
+        remappings=[('/wit/imu', LaunchConfiguration('imu_topic'))],
         output='screen'
     )
 
@@ -41,6 +47,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         fix_topic_arg,
+        imu_topic_arg,
         gnss_sim_node,
         imu_sim_node,
         um982_odom_sim_node

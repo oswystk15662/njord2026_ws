@@ -48,7 +48,7 @@ def generate_launch_description():
         'task_type', default_value='task3_2',
         description='Task type: task3_1 or task3_2')
     full_sequence_arg = DeclareLaunchArgument(
-        'run_full_sequence', default_value='false',
+        'run_full_sequence', default_value='true',
         description='For task3_1, continue through task3_2 and finish at GPS10')
     enable_diagnostics_arg = DeclareLaunchArgument(
         'enable_diagnostics', default_value='true',
@@ -79,7 +79,7 @@ def generate_launch_description():
         output="screen"
     )
 
-    # Sensor noise simulator: /odom → /wit/imu, legacy GPS/compass, and
+    # Sensor noise simulator: /odom → /livox/imu, legacy GPS/compass, and
     # /odometry/gps/um982 for the global EKF.
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     sensor_noise_launch = IncludeLaunchDescription(
@@ -89,6 +89,8 @@ def generate_launch_description():
             # The Foxglove GNSS Map Telemetry panel subscribes to this
             # real-vessel GNSS contract.
             'fix_topic': '/sensor/vehicle_gnss/fix/raw',
+            # Keep Task3's localization interface aligned with the vessel.
+            'imu_topic': '/livox/imu',
         }.items(),
     )
 
@@ -188,29 +190,16 @@ def generate_launch_description():
         }]
     )
 
-    # EKF local: /odom + /wit/imu -> odometry/filtered/local topic only.
-    # This is a sim-specific config; the real-vessel /livox/imu contract stays
-    # untouched in robot/config/ekf_local.yaml.
-    local_ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node_local',
-        output='screen',
-        parameters=[
-            os.path.join(pkg_task3_sim, 'config', 'task3_ekf_local.yaml'),
-            {'publish_tf': False},
-        ],
-        remappings=[('odometry/filtered', 'odometry/filtered/local')]
-    )
-
-    # EKF global: UM982 odometry -> odometry/filtered/global topic only.
+    # Task3 localization: simulated UM982 position + /livox/imu orientation
+    # and angular velocity. /odom remains simulation truth only and is not
+    # fused into the navigation estimate.
     global_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node_global',
         output='screen',
         parameters=[
-            os.path.join(pkg_robot, 'config', 'ekf_global.yaml'),
+            os.path.join(pkg_task3_sim, 'config', 'task3_ekf_global.yaml'),
             {'publish_tf': False},
         ],
         remappings=[('odometry/filtered', 'odometry/filtered/global')]
@@ -258,7 +247,6 @@ def generate_launch_description():
             thruster_driver_node,
             twist_mux,
             robot_state_pub_node,
-            local_ekf_node,
             global_ekf_node,
             field_boundary_node,
             buoy_costmap_node,

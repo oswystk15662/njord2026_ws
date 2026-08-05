@@ -59,7 +59,15 @@ def generate_launch_description():
             Node(package="nav2_behaviors", executable="behavior_server", name="behavior_server",
                  remappings=tf_remappings + [("cmd_vel", "/cmd_vel_nav_raw")], **common),
             Node(package="nav2_bt_navigator", executable="bt_navigator", name="bt_navigator",
-                 remappings=tf_remappings, **common),
+                 remappings=tf_remappings,
+                 parameters=[configured_params, {
+                     "error_code_names": [
+                         "compute_path_error_code",
+                         "follow_path_error_code",
+                     ],
+                 }],
+                 arguments=common["arguments"], output=common["output"],
+                 respawn=common["respawn"], respawn_delay=common["respawn_delay"]),
             Node(package="nav2_waypoint_follower", executable="waypoint_follower", name="waypoint_follower",
                  remappings=tf_remappings, **common),
             Node(

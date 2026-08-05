@@ -14,6 +14,7 @@ const L = (() => {
 
 const FIX_TOPIC = "/sensor/vehicle_gnss/fix/raw";
 const SPEED_TOPIC = "/gui/ground_speed_mps";
+const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
 const WORLD_FRAME = "map";
@@ -191,11 +192,13 @@ function initGnssMapTelemetry(context) {
       `<div>HDG&nbsp; ${format(state.headingDegrees, 1, "°")}</div>`,
       '<div class="gnss-telemetry-separator">',
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
+      `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
     ].join("");
   }
 
   context.subscribe([
-    {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
+    {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
+    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
   ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
@@ -207,6 +210,8 @@ function initGnssMapTelemetry(context) {
           if (typeof message.longitude === "number") state.longitude = message.longitude;
         } else if (event.topic === SPEED_TOPIC && typeof message.data === "number") {
           state.speedMps = message.data;
+        } else if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
+          state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
           updateTransforms(message);
         }

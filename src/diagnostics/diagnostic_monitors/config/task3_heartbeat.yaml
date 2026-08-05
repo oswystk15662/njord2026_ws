@@ -10,7 +10,7 @@ topic_heartbeat_profiles:
       stale_timeout: 2.0
       qos_reliability: best_effort
     - monitor_name: imu
-      topic: /wit/imu
+      topic: /livox/imu
       topic_type: sensor_msgs/msg/Imu
       mode: required_frequency
       expected_frequency: 50.0

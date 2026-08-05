@@ -12,7 +12,7 @@ setup(
         ("share/" + package_name + "/launch", ["launch/task3_sim.launch.py"]),
         ("share/" + package_name + "/config", [
             "config/task3_params.yaml",
-            "config/task3_ekf_local.yaml",
+            "config/task3_ekf_global.yaml",
         ]),
     ],
     install_requires=["setuptools"],
