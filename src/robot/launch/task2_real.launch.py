@@ -12,7 +12,7 @@ copy-pasted from them:
     planner_real.launch.py        MPPI planner + waypoint source
                                   (asv_trajectory_planner)     [enable_mppi]
     navigation_launch_task2.py    Task2 Nav2 stack with
-                                  nav2_params_task2.yaml       [enable_nav2]
+                                  nav2_params_task2_jazzy.yaml [enable_nav2]
     diagnostics.launch.py         topic heartbeat monitors     [enable_debug_topics]
                                   (real_bringup does NOT launch diagnostics,
                                   so there is no double launch)
@@ -28,7 +28,7 @@ micon serial_writer) receives true ONLY when ALL THREE of the following hold:
     dry_run == 'false'
     send_thruster_commands == 'true'
 
-In a dry run, Nav2 + MPPI run normally and /cmd_vel_thruster (output of the
+In a dry run, Nav2 + MPPI run normally and /cmd_vel_nav (output of the
 Nav2 velocity_smoother) is fully observable, but thruster_driver and
 serial_writer are never started, so no /thruster_command is produced and no
 bytes reach the ESP32. That is the safety boundary: to actually actuate you
@@ -127,7 +127,7 @@ def generate_launch_description():
         ["launch", "real_bringup.launch.py"],
         launch_arguments={
             # Nav2 from real_bringup is ALWAYS disabled here; the Task2 Nav2
-            # stack (navigation_launch_task2.py + nav2_params_task2.yaml) is
+            # stack (navigation_launch_task2.py + nav2_params_task2_jazzy.yaml) is
             # launched below, gated by enable_nav2.
             "enable_nav2": "false",
             "enable_mid360": enable_lidar,
@@ -190,11 +190,12 @@ def generate_launch_description():
                 [
                     FindPackageShare("robot"),
                     "config",
-                    "nav2_params_task2.yaml",
+                    "nav2_params_task2_jazzy.yaml",
                 ]
             ),
             "use_sim_time": "false",
             "autostart": "true",
+            "auto_cmd_vel_topic": "/cmd_vel_nav",
         },
     )
 

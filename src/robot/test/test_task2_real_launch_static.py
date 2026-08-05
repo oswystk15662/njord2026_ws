@@ -30,7 +30,7 @@ REPO_ROOT = os.path.dirname(
 )
 
 NAV2_PARAMS_FILE = os.path.join(
-    REPO_ROOT, "src", "robot", "config", "nav2_params_task2.yaml"
+    REPO_ROOT, "src", "robot", "config", "nav2_params_task2_jazzy.yaml"
 )
 PLANNER_NODE_FILE = os.path.join(
     REPO_ROOT,
