@@ -22,25 +22,33 @@ find_package(pcl_ros REQUIRED)
 find_package(PCL REQUIRED COMPONENTS common kdtree segmentation)
 find_package(OpenCV REQUIRED)
 find_package(cv_bridge REQUIRED)
-find_package(CUDAToolkit QUIET)
 find_package(PkgConfig QUIET)
 include(CheckLanguage)
 
+find_package(njord_platform REQUIRED)
+njord_detect_platform()
+
+# cv_bridge's C++ header was renamed from cv_bridge.h to cv_bridge.hpp partway
+# through the Humble lifecycle (via a patch release), so a distro-name-based
+# guess is not reliable here. Probe for whichever header actually exists.
+njord_find_header(ZED2I_DRIVER_CV_BRIDGE_HEADER "${cv_bridge_INCLUDE_DIRS}"
+  cv_bridge/cv_bridge.hpp
+  cv_bridge/cv_bridge.h
+)
+message(STATUS "${PROJECT_NAME}: cv_bridge header=${ZED2I_DRIVER_CV_BRIDGE_HEADER}")
+
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/cv_bridge_include.hpp.in
+  ${CMAKE_CURRENT_BINARY_DIR}/include/${PROJECT_NAME}/cv_bridge_include.hpp
+  @ONLY
+)
+
 option(ZED2I_DRIVER_BUILD_GPU_PERCEPTION
   "Build CUDA/TensorRT buoy perception when all GPU dependencies are available" ON)
-find_path(ZED2I_DRIVER_NVINFER_INCLUDE_DIR NvInfer.h)
-find_library(ZED2I_DRIVER_NVINFER_LIBRARY nvinfer)
 
-set(ZED2I_DRIVER_CUDA_VARIANT "none")
-if(CUDAToolkit_FOUND)
-  if(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.0")
-    set(ZED2I_DRIVER_CUDA_VARIANT "cuda13")
-  elseif(CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.0")
-    set(ZED2I_DRIVER_CUDA_VARIANT "cuda12")
-  else()
-    set(ZED2I_DRIVER_CUDA_VARIANT "legacy")
-  endif()
-  message(STATUS "${PROJECT_NAME}: detected CUDA Toolkit ${CUDAToolkit_VERSION} (${ZED2I_DRIVER_CUDA_VARIANT})")
+set(ZED2I_DRIVER_CUDA_VARIANT "${NJORD_CUDA_VARIANT}")
+if(NJORD_HAS_CUDA)
+  message(STATUS "${PROJECT_NAME}: detected CUDA Toolkit ${NJORD_CUDA_VERSION} (${ZED2I_DRIVER_CUDA_VARIANT})")
 else()
   message(STATUS "${PROJECT_NAME}: CUDA Toolkit not found; SDK node will be disabled unless ZED SDK resolves without CUDA")
 endif()
@@ -88,49 +96,27 @@ rclcpp_components_register_node(zed2i_cpu_component
 
 option(ZED2I_DRIVER_BUILD_SDK_NODE "Build the ZED SDK backed node when the Stereolabs SDK is available" ON)
 
-# Stereolabs installs a lower-case package configuration file
-# (``/usr/local/zed/zed-config.cmake``), not ``ZEDConfig.cmake``.  Do not try
-# to load it with an incompatible CUDA toolkit: the SDK config calls
-# ``find_package(CUDA <SDK-major> REQUIRED)`` internally and would otherwise
-# make the CPU/stub fallback impossible to configure.
+# ZED SDK / CUDA / TensorRT availability is detected once by njord_platform's
+# njord_detect_platform() (called above), including the "do not load
+# zed-config.cmake with an incompatible CUDA toolkit" guard. Here we just
+# combine that with this package's own build-time toggles.
 set(ZED2I_DRIVER_USE_ZED_SDK OFF)
-if(ZED2I_DRIVER_BUILD_SDK_NODE)
-  set(_zed_config "/usr/local/zed/zed-config.cmake")
-  if(DEFINED ZED_DIR AND EXISTS "${ZED_DIR}/zed-config.cmake")
-    set(_zed_config "${ZED_DIR}/zed-config.cmake")
-  endif()
-  if(EXISTS "${_zed_config}")
-    file(STRINGS "${_zed_config}" _zed_cuda_version
-      REGEX "^[ \\t]*SET\\(ZED_CUDA_VERSION[ \\t]+[0-9]+\\)")
-    string(REGEX MATCH "[0-9]+" _zed_cuda_major "${_zed_cuda_version}")
-  endif()
-
-  if(_zed_cuda_major AND CUDAToolkit_FOUND AND
-     CUDAToolkit_VERSION_MAJOR EQUAL _zed_cuda_major)
-    get_filename_component(ZED_DIR "${_zed_config}" DIRECTORY)
-    find_package(zed QUIET CONFIG PATHS "${ZED_DIR}" NO_DEFAULT_PATH)
-    if(ZED_FOUND)
-      set(ZED2I_DRIVER_USE_ZED_SDK ON)
-    endif()
-  elseif(_zed_cuda_major)
-    message(STATUS
-      "${PROJECT_NAME}: ZED SDK requires CUDA ${_zed_cuda_major}.x but the "
-      "detected CUDA Toolkit is ${CUDAToolkit_VERSION}; building SDK stub")
-  endif()
+if(ZED2I_DRIVER_BUILD_SDK_NODE AND NJORD_HAS_ZED_SDK)
+  set(ZED2I_DRIVER_USE_ZED_SDK ON)
 endif()
 
 set(ZED2I_DRIVER_HAS_CUDA OFF)
-if(ZED2I_DRIVER_USE_ZED_SDK AND CUDAToolkit_FOUND)
-  check_language(CUDA)
-  if(CMAKE_CUDA_COMPILER)
-    enable_language(CUDA)
-    set(ZED2I_DRIVER_HAS_CUDA ON)
-  endif()
+if(ZED2I_DRIVER_USE_ZED_SDK AND NJORD_HAS_CUDA)
+  enable_language(CUDA)
+  set(ZED2I_DRIVER_HAS_CUDA ON)
 endif()
+
+set(ZED2I_DRIVER_NVINFER_INCLUDE_DIR "${NJORD_TENSORRT_INCLUDE_DIR}")
+set(ZED2I_DRIVER_NVINFER_LIBRARY "${NJORD_TENSORRT_LIBRARY}")
 
 set(ZED2I_DRIVER_HAS_GPU_PERCEPTION OFF)
 if(ZED2I_DRIVER_BUILD_GPU_PERCEPTION AND ZED2I_DRIVER_HAS_CUDA AND
-   ZED2I_DRIVER_NVINFER_INCLUDE_DIR AND ZED2I_DRIVER_NVINFER_LIBRARY)
+   NJORD_HAS_TENSORRT AND ZED2I_DRIVER_USE_ZED_SDK)
   set(ZED2I_DRIVER_HAS_GPU_PERCEPTION ON)
 endif()
 if(ZED2I_DRIVER_HAS_GPU_PERCEPTION)
@@ -141,9 +127,9 @@ endif()
 
 if(ZED2I_DRIVER_USE_ZED_SDK)
   message(STATUS "${PROJECT_NAME}: ZED SDK found; building SDK node")
-  if(CUDAToolkit_FOUND AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "13.0")
+  if(NJORD_CUDA_VARIANT STREQUAL "cuda13")
     message(STATUS "${PROJECT_NAME}: using CUDA 13.x compatible ZED SDK build path")
-  elseif(CUDAToolkit_FOUND AND CUDAToolkit_VERSION VERSION_GREATER_EQUAL "12.0")
+  elseif(NJORD_CUDA_VARIANT STREQUAL "cuda12")
     message(STATUS "${PROJECT_NAME}: using CUDA 12.x compatible ZED SDK build path")
   endif()
   add_library(zed2i_sdk_component SHARED
@@ -164,20 +150,26 @@ if(ZED2I_DRIVER_USE_ZED_SDK)
     ${OpenCV_LIBRARIES}
     ${ZED_LIBRARIES}
   )
+  # libnvjpeg is unusable on some Jetson Orin images (nvjpegCreate fails with
+  # NVJPEG_STATUS_EXECUTION_FAILED because /dev/nvhost-nvjpg* is not exposed
+  # to userspace there -- see the note at the top of ground_video_streamer.cu)
+  # so this streamer only needs CUDA (for the GPU resize kernel) and
+  # GStreamer's appsrc/nvjpegenc/rtpjpegpay elements to do the actual JPEG
+  # encoding and RTP payloading; it does not link libnvjpeg at all.
   set(ZED2I_DRIVER_HAS_GROUND_VIDEO OFF)
   if(ZED2I_DRIVER_HAS_CUDA AND PkgConfig_FOUND)
     pkg_check_modules(GSTREAMER QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
-    if(GSTREAMER_FOUND AND TARGET CUDA::nvjpeg)
+    if(GSTREAMER_FOUND)
       set(ZED2I_DRIVER_HAS_GROUND_VIDEO ON)
       target_sources(zed2i_sdk_component PRIVATE src/ground_video_streamer.cu)
       target_compile_definitions(zed2i_sdk_component PRIVATE ZED2I_DRIVER_HAS_GROUND_VIDEO=1)
-      target_link_libraries(zed2i_sdk_component CUDA::cudart CUDA::nvjpeg PkgConfig::GSTREAMER)
+      target_link_libraries(zed2i_sdk_component CUDA::cudart PkgConfig::GSTREAMER)
     endif()
   endif()
   if(ZED2I_DRIVER_HAS_GROUND_VIDEO)
-    message(STATUS "${PROJECT_NAME}: GPU JPEG ground-video streaming enabled")
+    message(STATUS "${PROJECT_NAME}: GPU-resize + GStreamer nvjpegenc ground-video streaming enabled")
   else()
-    message(STATUS "${PROJECT_NAME}: ground-video streaming unavailable; requires ZED, CUDA, nvJPEG, and GStreamer appsrc")
+    message(STATUS "${PROJECT_NAME}: ground-video streaming unavailable; requires ZED, CUDA, and GStreamer appsrc")
   endif()
   if(ZED2I_DRIVER_HAS_GPU_PERCEPTION)
     target_sources(zed2i_sdk_component PRIVATE
@@ -209,6 +201,9 @@ if(PkgConfig_FOUND)
 endif()
 if(GSTREAMER_APP_FOUND)
   add_executable(back_cam_ground_video_streamer src/back_cam_ground_video_streamer.cpp)
+  target_include_directories(back_cam_ground_video_streamer PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/include
+  )
   ament_target_dependencies(back_cam_ground_video_streamer rclcpp sensor_msgs cv_bridge)
   target_link_libraries(back_cam_ground_video_streamer ${OpenCV_LIBRARIES} PkgConfig::GSTREAMER_APP)
 else()

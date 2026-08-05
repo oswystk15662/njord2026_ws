@@ -8,6 +8,7 @@ from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 import rclpy
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_ros import Buffer, TransformException, TransformListener
 import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
@@ -60,10 +61,20 @@ class CardinalWallPublisher(Node):
             if not math.isfinite(detection.position.x) or not math.isfinite(detection.position.y):
                 continue
             point = PointStamped()
-            point.header = msg.header
+            point.header.frame_id = msg.header.frame_id
+            # Request the latest available transform (Time() == time zero)
+            # instead of msg.header.stamp. This callback runs on the same
+            # single-threaded executor as the TF listener, so a lookup for
+            # an exact recent stamp can never be satisfied: the /tf message
+            # that would complete it can't be processed until this callback
+            # returns, and the wait always times out as "extrapolation into
+            # the future" even though the requested time is only
+            # milliseconds ahead. Static cardinal markers don't need
+            # sub-frame timing precision, so the latest transform is fine.
+            point.header.stamp = Time().to_msg()
             point.point = detection.position
             try:
-                mapped = self.tf_buffer.transform(point, self.map_frame, timeout=Duration(seconds=0.1))
+                mapped = self.tf_buffer.transform(point, self.map_frame, timeout=Duration(seconds=0.2))
             except TransformException as error:
                 self.get_logger().debug(f'Cannot transform cardinal detection: {error}')
                 continue

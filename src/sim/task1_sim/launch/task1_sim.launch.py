@@ -1,13 +1,14 @@
 import os
 
+import yaml
+
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, TimerAction
+from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
-from nav2_common.launch import RewrittenYaml
 
 
 def include_launch(package_name, relative_path, condition, launch_arguments=None):
@@ -17,6 +18,56 @@ def include_launch(package_name, relative_path, condition, launch_arguments=None
         condition=condition,
         launch_arguments=(launch_arguments or {}).items(),
     )
+
+
+def launch_cardinal_walls(context):
+    """Read course bounds from the orchestrator config, our sole source."""
+    with open(LaunchConfiguration("params").perform(context), "r") as params_file:
+        params = yaml.safe_load(params_file) or {}
+    bounds = params.get("task1_orchestrator", {}).get("ros__parameters", {}).get(
+        "course_bounds", [-5.0, 55.0, -40.0, 35.0]
+    )
+    return [Node(
+        package="buoy_obstacle_publisher",
+        executable="cardinal_wall_publisher",
+        name="cardinal_wall_publisher",
+        parameters=[{
+            "detection_topic": "/buoy_detections_3d",
+            "output_topic": "/virtual_obstacles",
+            "map_frame": "map",
+            "course_bounds": bounds,
+            "wall_width_m": 0.2,
+            "point_spacing_m": 0.05,
+            "confirmations_required": 2,
+        }],
+        output="screen",
+    )]
+
+
+def launch_cardinal_perception_sim(context):
+    """Sim stand-in for the ZED2i+Mid-360 intra-process cardinal-marker
+    pipeline. Reuses buoy_position_xy from the orchestrator config so marker
+    geometry has a single source of truth."""
+    with open(LaunchConfiguration("params").perform(context), "r") as params_file:
+        params = yaml.safe_load(params_file) or {}
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    buoy_position_xy = orchestrator_params.get(
+        "buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
+    )
+    return [Node(
+        package="task1_sim",
+        executable="cardinal_perception_sim",
+        name="cardinal_perception_sim",
+        parameters=[{
+            "odom_topic": "/odom",
+            "cardinal_mark_topic": "/sim/cardinal_mark",
+            "detection_topic": "/buoy_detections_3d",
+            "output_frame": "base_link",
+            "buoy_position_xy": buoy_position_xy,
+        }],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_cardinal_perception_sim")),
+    )]
 
 
 def generate_launch_description():
@@ -42,7 +93,8 @@ def generate_launch_description():
     robot_description = open(robot_description_file, "r").read()
 
     # Startup timing (mirrors task2/task3):
-    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, thruster_driver, orchestrator, EKF, navsat
+    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise (including UM982),
+    #            thruster_driver, orchestrator, EKFs
     #   t=5.0  NAV2 layer:   Nav2 bringup (needs SimNode TF + filtered odometry)
     #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
     use_dynamics_arg = DeclareLaunchArgument("use_dynamics", default_value="true")
@@ -51,9 +103,14 @@ def generate_launch_description():
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
     use_sensor_noise_arg = DeclareLaunchArgument("use_sensor_noise", default_value="true")
+    use_cardinal_perception_sim_arg = DeclareLaunchArgument(
+        "use_cardinal_perception_sim",
+        default_value="true",
+        description="Emit simulated /buoy_detections_3d once the boat is within ZED2i/Mid-360 "
+                     "range+FOV of a cardinal marker, so cardinal_wall_publisher can build /virtual_obstacles",
+    )
     use_local_ekf_arg = DeclareLaunchArgument("use_local_ekf", default_value="true")
     use_global_ekf_arg = DeclareLaunchArgument("use_global_ekf", default_value="true")
-    use_navsat_arg = DeclareLaunchArgument("use_navsat", default_value="true")
     task_type_arg = DeclareLaunchArgument(
         "task_type",
         default_value="task1",
@@ -78,7 +135,7 @@ def generate_launch_description():
     nav2_params_arg = DeclareLaunchArgument("nav2_params", default_value=nav2_params)
 
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
-    # SimNode is the sole simulation TF authority (publish_tf=True). EKF/navsat
+    # SimNode is the sole simulation TF authority (publish_tf=True). Both EKFs
     # run with publish_tf=False so they only produce filtered odometry topics.
     dynamics = Node(
         package="dutyed_tf_pub_with_disturbance",
@@ -123,15 +180,14 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_thruster_driver")),
     )
 
-    # Keep the simulation on the vessel command path.  Nav2's collision
-    # monitor publishes /cmd_vel_auto; twist_mux is the sole owner of /cmd_vel.
+    # Shared Nav2 publishes /cmd_vel_nav after smoothing and collision checking.
+    # twist_mux is the sole publisher on /cmd_vel.
     twist_mux = Node(
         package="twist_mux",
         executable="twist_mux",
         name="twist_mux",
         parameters=[
             os.path.join(pkg_robot, "config", "twist_mux.yaml"),
-            {"topics.navigation.topic": "/cmd_vel_auto"},
         ],
         remappings=[("cmd_vel_out", "/cmd_vel")],
         output="screen",
@@ -174,29 +230,6 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_global_ekf")),
     )
 
-    navsat_transform_node = Node(
-        package="robot_localization",
-        executable="navsat_transform_node",
-        name="navsat_transform_node",
-        output="screen",
-        parameters=[{
-            "frequency": 10.0,
-            "magnetic_declination_radians": 0.0,
-            "yaw_offset": 0.0,
-            "zero_altitude": True,
-            "broadcast_utm_transform": False,
-            "publish_filtered_gps": True,
-            "use_odometry_yaw": False,
-            "wait_for_datum": False,
-        }],
-        remappings=[
-            ("imu", "/wit/imu"),
-            ("gps/fix", "/gps/fix"),
-            ("odometry/filtered", "odometry/filtered/local"),
-        ],
-        condition=IfCondition(LaunchConfiguration("use_navsat")),
-    )
-
     orchestrator = Node(
         package="task1_sim",
         executable="task1_orchestrator",
@@ -211,21 +244,8 @@ def generate_launch_description():
         IfCondition(LaunchConfiguration("use_validator")),
     )
 
-    cardinal_walls = Node(
-        package="buoy_obstacle_publisher",
-        executable="cardinal_wall_publisher",
-        name="cardinal_wall_publisher",
-        parameters=[{
-            "detection_topic": "/buoy_detections_3d",
-            "output_topic": "/virtual_obstacles",
-            "map_frame": "map",
-            "course_bounds": [-5.0, 55.0, -40.0, 15.0],
-            "wall_width_m": 0.2,
-            "point_spacing_m": 0.05,
-            "confirmations_required": 2,
-        }],
-        output="screen",
-    )
+    cardinal_walls = OpaqueFunction(function=launch_cardinal_walls)
+    cardinal_perception_sim = OpaqueFunction(function=launch_cardinal_perception_sim)
 
     sensor_layer_timer = TimerAction(
         period=LaunchConfiguration("driver_delay"),
@@ -237,32 +257,23 @@ def generate_launch_description():
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
-            navsat_transform_node,
             validator,
             orchestrator,
             cardinal_walls,
+            cardinal_perception_sim,
         ],
     )
 
     # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
-    configured_nav2_params = RewrittenYaml(
-        source_file=LaunchConfiguration("nav2_params"),
-        root_key=None,
-        param_rewrites={
-            "bt_navigator.ros__parameters.default_nav_through_poses_bt_xml": nav_through_poses_bt_xml,
-            "bt_navigator.ros__parameters.default_nav_to_pose_bt_xml": nav_to_pose_bt_xml,
-        },
-        convert_types=True,
-    )
-
     nav2 = include_launch(
         "task1_sim",
         ["launch", "task1_navigation.launch.py"],
         IfCondition(LaunchConfiguration("use_nav2")),
         {
-            "params_file": configured_nav2_params,
-            "use_sim_time": "false",
-            "autostart": "true",
+            "params_file": LaunchConfiguration("nav2_params"),
+            "nav_through_poses_bt_xml": nav_through_poses_bt_xml,
+            "nav_to_pose_bt_xml": nav_to_pose_bt_xml,
+            "enable_diagnostics": "false",
         },
     )
 
@@ -298,9 +309,9 @@ def generate_launch_description():
         use_waypoints_arg,
         use_validator_arg,
         use_sensor_noise_arg,
+        use_cardinal_perception_sim_arg,
         use_local_ekf_arg,
         use_global_ekf_arg,
-        use_navsat_arg,
         task_type_arg,
         driver_delay_arg,
         nav2_delay_arg,

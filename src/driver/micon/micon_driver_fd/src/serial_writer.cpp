@@ -197,8 +197,8 @@ void SerialWriter::thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr m
 
 void SerialWriter::emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
 {
-  // Emergency stop is triggered by the physical hardware button for now, so
-  // the software path never asserts the packet's emergency bit.
+  // Latched into the packet's emergency bit (control_flags bit3); the ESP32
+  // firmware also enforces its own hardware/watchdog E-stop independently.
   std::lock_guard<std::mutex> lock(mutex_);
   flags_.emergency = msg->data;
 }

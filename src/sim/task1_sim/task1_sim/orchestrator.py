@@ -51,6 +51,23 @@ def parse_xy_json(json_str: str) -> list[list[float]]:
     return points
 
 
+def parse_marks_json(json_str: str) -> list[str]:
+    """Parse a JSON array of cardinal-mark letters, e.g. '["S", "N", "S"]'."""
+    if not json_str:
+        return []
+    try:
+        parsed = json.loads(json_str)
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(parsed, list):
+        return []
+    marks = []
+    for value in parsed:
+        if isinstance(value, str):
+            marks.append(value.strip().upper())
+    return marks
+
+
 def sample_line(start: list[float], end: list[float], spacing: float) -> list[list[float]]:
     dx = end[0] - start[0]
     dy = end[1] - start[1]
@@ -72,6 +89,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("waypoint1_xy", "[]")
         self.declare_parameter("waypoint2_xy", "[]")
         self.declare_parameter("buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]")
+        self.declare_parameter("buoy_marks", "[\"S\", \"N\", \"S\"]")
         self.declare_parameter("wall_radius", 2.5)
         self.declare_parameter("wall_points", 24)
         self.declare_parameter("goal_radius", 2.0)
@@ -79,7 +97,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("avoidance_eval_radius", 8.0)
         self.declare_parameter("avoidance_margin", 0.5)
         self.declare_parameter("forced_mark", "")
-        self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 15.0])
+        self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 35.0])
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
         self.declare_parameter("pre_inference_block", "[]")
         self.declare_parameter("obstacle_spacing", 0.25)
@@ -109,6 +127,16 @@ class Task1Orchestrator(Node):
         self.avoidance_eval_radius = self.get_parameter("avoidance_eval_radius").get_parameter_value().double_value
         self.avoidance_margin = self.get_parameter("avoidance_margin").get_parameter_value().double_value
         self.forced_mark = self.get_parameter("forced_mark").get_parameter_value().string_value.strip().upper()
+
+        # Per-marker cardinal orientation, aligned index-wise with
+        # buoy_positions. forced_mark (if set) overrides every marker so
+        # existing single-mark test tooling keeps working.
+        if self.forced_mark in CARDINAL_MARKS:
+            self.buoy_marks = [self.forced_mark for _ in self.buoy_positions]
+        else:
+            buoy_marks_raw = parse_marks_json(self.get_parameter("buoy_marks").get_parameter_value().string_value)
+            self.buoy_marks = self._align_marks(buoy_marks_raw, len(self.buoy_positions))
+
         self.course_bounds = list(self.get_parameter("course_bounds").get_parameter_value().double_array_value)
         self.center_line = list(self.get_parameter("center_line").get_parameter_value().double_array_value)
         self.pre_inference_block = self._parse_rect_json(
@@ -125,7 +153,6 @@ class Task1Orchestrator(Node):
         self.required_waypoints = self._build_required_waypoints()
         self.next_waypoint_idx = 0
         self.random = random.Random(seed)
-        self.current_mark = "N"
         self.inference_done = False
         self.goal_announced = False
         self.avoidance_failed = False
@@ -166,11 +193,21 @@ class Task1Orchestrator(Node):
         required.extend(self.waypoint2_xy)
         return required
 
+    def _align_marks(self, marks: list[str], count: int) -> list[str]:
+        """Pad/truncate a parsed buoy_marks list to match buoy_positions,
+        defaulting missing entries to "N" and dropping invalid letters."""
+        aligned = []
+        for i in range(count):
+            mark = marks[i] if i < len(marks) else "N"
+            aligned.append(mark if mark in CARDINAL_MARKS else "N")
+        return aligned
+
     def _init_buoy_states(self):
         self.buoy_states = []
-        for buoy in self.buoy_positions:
+        for idx, buoy in enumerate(self.buoy_positions):
             self.buoy_states.append({
                 "xy": buoy,
+                "mark": self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N",
                 "in_zone": False,
                 "evaluated": False,
                 "closest_dist": float("inf"),
@@ -190,11 +227,9 @@ class Task1Orchestrator(Node):
         self._publish_status("start_published")
 
     def on_start_inference(self, _request, response):
-        if self.forced_mark in CARDINAL_MARKS:
-            self.current_mark = self.forced_mark
-        else:
-            self.current_mark = self.random.choice(CARDINAL_MARKS)
-
+        # Marker orientation is fixed by course design (buoy_marks /
+        # forced_mark), not chosen randomly here -- classification is simply
+        # confirmed once inference runs.
         self.inference_done = True
         self._init_buoy_states()
         self.avoidance_failed = False
@@ -203,16 +238,16 @@ class Task1Orchestrator(Node):
         self.publish_cardinal_markers()
 
         response.success = True
-        response.message = self.current_mark
-        self._publish_status(f"mark={self.current_mark}")
+        response.message = ",".join(self.buoy_marks)
+        self._publish_status(f"marks={','.join(self.buoy_marks)}")
         return response
 
-    def _signed_side_value(self, x: float, y: float, bx: float, by: float) -> float:
-        if self.current_mark == "N":
+    def _signed_side_value(self, mark: str, x: float, y: float, bx: float, by: float) -> float:
+        if mark == "N":
             return y - by
-        if self.current_mark == "S":
+        if mark == "S":
             return by - y
-        if self.current_mark == "E":
+        if mark == "E":
             return x - bx
         return bx - x
 
@@ -259,7 +294,9 @@ class Task1Orchestrator(Node):
 
     def build_sim_obstacle_points(self) -> list[list[float]]:
         points = []
-        self._append_course_boundary(points)
+        # The course boundary is a visual aid, not a physical wall. Including
+        # it in /sim_obstacles split the global costmap at y=15 and made the
+        # shared waypoint route impossible to plan through.
         self._append_center_line(points)
         return points
 
@@ -326,14 +363,16 @@ class Task1Orchestrator(Node):
         marker_array.markers.append(clear_marker)
 
         stamp = self.get_clock().now().to_msg()
-        dx, dy = {
+        arrow_by_mark = {
             "N": (0.0, 1.0),
             "E": (1.0, 0.0),
             "S": (0.0, -1.0),
             "W": (-1.0, 0.0),
-        }.get(self.current_mark, (0.0, 1.0))
+        }
 
         for idx, (bx, by) in enumerate(self.buoy_positions):
+            mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
+            dx, dy = arrow_by_mark.get(mark, (0.0, 1.0))
             marker = Marker()
             marker.header.frame_id = self.frame_id
             marker.header.stamp = stamp
@@ -402,7 +441,7 @@ class Task1Orchestrator(Node):
             distance = math.hypot(x - bx, y - by)
             if distance <= self.avoidance_eval_radius:
                 state["in_zone"] = True
-                signed = self._signed_side_value(x, y, bx, by)
+                signed = self._signed_side_value(state["mark"], x, y, bx, by)
                 if distance < state["closest_dist"]:
                     state["closest_dist"] = distance
                     state["signed_at_closest"] = signed
@@ -417,8 +456,11 @@ class Task1Orchestrator(Node):
                 )
 
     def on_timer(self):
+        # Published as a JSON array so each marker (buoy_positions[i]) keeps
+        # its own cardinal orientation (buoy_marks[i]) instead of sharing one
+        # mark across the whole course.
         cardinal = String()
-        cardinal.data = self.current_mark
+        cardinal.data = json.dumps(self.buoy_marks)
         self.pub_cardinal.publish(cardinal)
         self.publish_sim_obstacles()
         self.publish_boundary_markers()

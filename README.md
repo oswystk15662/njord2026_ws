@@ -8,6 +8,23 @@
 - clone、fetch、参照などのread-only操作は対象外です。
 
 # 環境について
+
+## 端末構成（Jetson / miniPC 2台）
+
+このワークスペースは **Jetson（ZED 2i + Livox MID360S の処理のみ）** と **miniPC（それ以外すべて）** の 2 台構成を前提にしている。同一ソースツリーが両方でビルドできるよう、CUDA / TensorRT / ZED SDK / ROS distro の有無をビルド時に自動検出して依存とリンク先を切り替える。
+
+ビルド前に必ず以下を source すること:
+
+```shell
+source /opt/ros/$ROS_DISTRO/setup.bash
+source scripts/njord_env.sh      # プロファイル判定と環境変数の export
+colcon build --symlink-install
+```
+
+`scripts/build.sh` は上記をまとめたラッパ。
+
+配線図・ノード配置・帯域の注意・ネットワーク設定（FastRTPS / Zenoh）・時刻同期・検証手順は **`Docs/two_machine_split.md`** にまとめてある。
+
 ## 環境構築
 まずはros2 humbleが入っているubuntu22.04を起動し、以下のコマンドでこのワークスペースをクローンしてください。
 
@@ -121,6 +138,140 @@ ros2ネットワークにそのままアクセスできるようにするため�
 sudo apt install ros-humble-foxglove-bridge
 ```
 をしてください。
+
+## ZED 2i 陸上映像伝送（ground video）の正しい起動手順
+
+Image トピックを DDS で流すと 1 本あたり約 442 Mbps になるため、陸上 PC で映像を見る場合は
+DDS ではなく **GPU JPEG → RTP/UDP** の専用経路を使う。送信は Jetson の `zed2i_driver`
+（`src/driver/camera/zed2i_driver/src/ground_video_streamer.cu`）、受信は陸上 PC の
+`ground_video_receiver.launch.py`。
+
+### 手順（この順序で起動する）
+
+**0. Jetson 側のソースを更新したら必ず再ビルドする（最重要）**
+
+```shell
+# Jetson 上で
+cd ~/njord2026_ws
+source /opt/ros/$ROS_DISTRO/setup.bash   # Jetson の実機は jazzy
+colcon build --symlink-install --packages-select zed2i_driver
+source install/setup.bash
+```
+
+`git pull` やソース修正だけして再ビルドしないと **古い `.so` がロードされ**、
+`Ground-video streaming disabled: nvjpegCreateSimple failed (nvJPEG status 6)`
+で映像が出ない。これは既に解決済みの旧実装（libnvjpeg 版）が動いているだけで、
+ハードやドライバの故障ではない。判別方法:
+
+```shell
+ls -l --time-style=long-iso ~/njord2026_ws/build/zed2i_driver/libzed2i_sdk_component.so
+strings ~/njord2026_ws/build/zed2i_driver/libzed2i_sdk_component.so | grep -c nvjpegenc  # 1 なら新実装
+```
+
+**1. 受信側（陸上 PC）を先に起動する。ポートごとに 1 プロセスだけ**
+
+```shell
+source /opt/ros/$ROS_DISTRO/setup.bash
+source install/setup.bash
+
+# ZED 2i left camera
+ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5600
+
+# back camera（別端末）
+ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5601
+```
+
+同じポートを掴むプロセスを二重に起動してはいけない。UDP の unicast は
+`SO_REUSEADDR` で bind しても片方のソケットにしか配送されないため、
+後から起動した側が奪って**先の受信ウィンドウが黒画面のまま止まる**。確認:
+
+```shell
+ss -lunp | grep -E '5600|5601'   # 各ポートに 1 行だけであること
+```
+
+**2. 受信側の IP を確認する。`ground_video_host` はここで見えた実 IP を渡す**
+
+```shell
+ip -4 -o addr show scope global | awk '{print $2, $4}'
+```
+
+Jetson と共有しているサブネット側の IP を選ぶ（有線 `192.168.1.x` 系が本線）。
+ホスト名や `localhost` は不可。空文字のままだと送信そのものが無効になる。
+
+**3. 送信側（Jetson）を起動する**
+
+単体で確認する場合:
+
+```shell
+# Jetson 上で
+ros2 launch zed2i_driver zed2i.launch.py \
+  enable_ground_video:=true \
+  ground_video_host:=192.168.1.2 \
+  ground_video_port:=5600 \
+  ground_video_fps:=5.0
+```
+
+実運用の bringup 経由:
+
+```shell
+ros2 launch robot jetson_bringup.launch.py \
+  enable_ground_video:=true \
+  ground_video_host:=192.168.1.2 \
+  ground_video_port:=5600
+```
+
+注意: `jetson_bringup.launch.py` が転送するのは `enable_ground_video` /
+`ground_video_host` / `ground_video_port` の 3 つだけ。fps・解像度・JPEG 品質を変えたい場合は
+`src/driver/camera/zed2i_driver/config/zed2i_jetson_orin_nano.yaml` 側を編集する。
+
+### 起動が成功したかの判定
+
+送信側ログに次の行が出れば Tegra の NVJPG ハードウェアエンコーダが動いている:
+
+```
+NvMMLiteBlockCreate : Block : BlockType = 1
+```
+
+`nvjpeg` 関連の ERROR が出ていないことも確認する。この経路は **libnvjpeg を使わない**
+（GStreamer の `nvjpegenc` エレメント経由）。Jetson Orin Nano Super の
+L4T 39.2 / CUDA 13.2 イメージでは `nvjpegCreateSimple()` が
+`NVJPEG_STATUS_EXECUTION_FAILED`（status 6）を返し `/dev/nvhost-nvjpg*` も存在しないため、
+libnvjpeg には依存させていない。詳細は `ground_video_streamer.cu` 冒頭のコメント。
+
+### ZED はプロセス排他。二重起動しない
+
+ZED 2i は 1 プロセスからしか open できない。既に別端末で起動していると
+`CAMERA STREAM FAILED TO START` になる。また `Failed to grab a ZED frame` を
+連発する状態に陥ったノードはカメラを掴んだまま復帰しないので、止めてから起動し直す:
+
+```shell
+pgrep -af zed2i_container
+kill -INT <pid>   # 落ちなければ kill -9
+```
+
+### 受信レートの実測値（既知の挙動）
+
+`ground_video_fps:=5.0` を指定しても**実測は 4.07〜4.13 fps** になる（2026-08-01 実測、640x360、約 920 kbps）。
+不具合ではなく間引きロジックの結果:
+
+- 送信側は「前回送信から 1/fps 秒未満なら捨てる」ゲート方式（`ground_video_streamer.cu`）
+- `/zed2i/left/image_rect` の実測は `framerate:=15` 指定でも約 13.7 Hz
+- 73 ms 周期の列に 200 ms ゲートを掛けると採用は 3 フレームおき（219 ms）が上限で、
+  grab のジッタで 4 フレームおき（267 ms）が混ざり平均 245 ms = 約 4.1 fps に落ちる
+
+RTP タイムスタンプ側は一定の 5 fps（+18000）を刻むため送信レートとずれる。
+受信パイプラインは必ず `sync=false`（`ground_video_receiver.launch.py` は既定でそうなっている）。
+`sync=true` にすると再生が徐々に遅れていく。
+
+### 切り分けコマンド
+
+```shell
+# カメラ側の実レート（Jetson）
+ros2 topic hz /zed2i/left/image_rect
+
+# 受信側に本当にパケットが来ているか（陸上 PC。受信ビューアを止めてから実行する）
+sudo tcpdump -ni any udp port 5600 -c 20
+```
 
 ## YOLOについて
 Jetson Nano + Ubuntu 20.04 + ROS2 Foxy では、ZED/ROS系とYOLO系を同じPython環境に混ぜないでください。

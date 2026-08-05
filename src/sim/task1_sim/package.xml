@@ -16,6 +16,8 @@
   <depend>sensor_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>visualization_msgs</depend>
+  <depend>njord_interfaces</depend>
+  <depend>buoy_obstacle_publisher</depend>
   <depend>nav2_bringup</depend>
   <depend>natural_cubic_spline</depend>
   <depend>waypoint_publisher</depend>

@@ -33,7 +33,7 @@ def _write_configured_bt_xml(source_file, replanning_frequency):
     return tmp.name
 
 
-def _launch_nav2(context, pkg_nav2_bringup, pkg_robot):
+def _launch_nav2(context, pkg_robot):
     params_file = LaunchConfiguration('params_file').perform(context)
     nav_to_pose_bt_xml = LaunchConfiguration('nav_to_pose_bt_xml').perform(context)
     nav_through_poses_bt_xml = LaunchConfiguration('nav_through_poses_bt_xml').perform(context)
@@ -78,7 +78,7 @@ def _launch_nav2(context, pkg_nav2_bringup, pkg_robot):
     return [
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(pkg_nav2_bringup, 'launch', 'navigation_launch.py')
+                os.path.join(pkg_robot, 'launch', 'navigation.launch.py')
             ),
             launch_arguments={
                 'params_file': configured_params,
@@ -91,7 +91,6 @@ def _launch_nav2(context, pkg_nav2_bringup, pkg_robot):
 
 
 def generate_launch_description():
-    pkg_nav2_bringup = get_package_share_directory('nav2_bringup')
     pkg_robot = get_package_share_directory('robot')
 
     default_params_file = os.path.join(
@@ -141,5 +140,5 @@ def generate_launch_description():
         nav_through_poses_bt_xml_arg,
         enable_diagnostics_arg,
         enable_collision_monitor_arg,
-        OpaqueFunction(function=_launch_nav2, args=[pkg_nav2_bringup, pkg_robot]),
+        OpaqueFunction(function=_launch_nav2, args=[pkg_robot]),
     ])

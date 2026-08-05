@@ -7,7 +7,7 @@
 #include <utility>
 #include <vector>
 
-#include <cv_bridge/cv_bridge.hpp>
+#include <zed2i_driver/cv_bridge_include.hpp>
 #include <gst/app/gstappsrc.h>
 #include <gst/gst.h>
 #include <opencv2/imgcodecs.hpp>
@@ -55,14 +55,19 @@ public:
       throw std::runtime_error("could not create back-camera ground-video pipeline: " + message);
     }
     appsrc_ = GST_APP_SRC(gst_bin_get_by_name(GST_BIN(pipeline_), "source"));
-    if (appsrc_ == nullptr ||
-      gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE)
-    {
-      throw std::runtime_error("could not start back-camera ground-video pipeline");
+    if (appsrc_ == nullptr) {
+      throw std::runtime_error("could not find back-camera ground-video appsrc element");
     }
+    // Caps MUST be set before the PLAYING transition: appsrc negotiates its
+    // source pad caps as part of that state change, and setting them
+    // afterwards can leave the pad unnegotiated, silently dropping every
+    // buffer downstream with no error ever surfacing here.
     GstCaps * caps = gst_caps_new_empty_simple("image/jpeg");
     gst_app_src_set_caps(appsrc_, caps);
     gst_caps_unref(caps);
+    if (gst_element_set_state(pipeline_, GST_STATE_PLAYING) == GST_STATE_CHANGE_FAILURE) {
+      throw std::runtime_error("could not start back-camera ground-video pipeline");
+    }
 
     subscription_ = create_subscription<sensor_msgs::msg::Image>(
       image_topic_, rclcpp::SensorDataQoS(),

@@ -39,7 +39,7 @@ planner_server:
     use_sim_time: false
     planner_plugins: ["GridBased"]
     GridBased:
-      plugin: "nav2_theta_star_planner::ThetaStarPlanner"
+      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
       how_many_corners: 8
       w_euc_cost: 1.0
       w_traversal_cost: 2.0
@@ -95,7 +95,11 @@ global_costmap:
       use_sim_time: false
       rolling_window: false
       width: 60
-      height: 55
+      # Covers the default competition slalom route (x:[0,50], y:[-35,-15],
+      # task_type=task1) and the spawn-to-course transit from (0,0), as well
+      # as the task1_follow lawnmower-survey route (x:[0,35.66], y:[0,27.83],
+      # task_type=task1_follow), all with margin.
+      height: 75
       resolution: 0.1
       origin_x: -5.0
       origin_y: -40.0
@@ -147,8 +151,8 @@ collision_monitor:
     use_sim_time: false
     base_frame_id: "base_link"
     odom_frame_id: "odom"
-    cmd_vel_in_topic: "cmd_vel_smoothed"
-    cmd_vel_out_topic: "cmd_vel_auto"
+    cmd_vel_in_topic: "/cmd_vel_smoothed"
+    cmd_vel_out_topic: "/cmd_vel_nav"
     state_topic: "collision_monitor_state"
     transform_tolerance: 0.2
     source_timeout: 1.0

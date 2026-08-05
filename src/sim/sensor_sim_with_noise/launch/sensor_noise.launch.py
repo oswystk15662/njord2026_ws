@@ -23,7 +23,16 @@ def generate_launch_description():
         output='screen'
     )
 
+    um982_odom_sim_node = Node(
+        package='sensor_sim_with_noise',
+        executable='um982_odometry_simulator',
+        name='um982_odometry_simulator',
+        parameters=[config_file],
+        output='screen'
+    )
+
     return LaunchDescription([
         gnss_sim_node,
-        imu_sim_node
+        imu_sim_node,
+        um982_odom_sim_node
     ])

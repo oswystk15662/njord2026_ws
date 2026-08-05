@@ -87,6 +87,10 @@ bool physicalEStopActive() {
   return digitalRead(kRelayPin) == LOW;
 }
 
+void reportRelayState() {
+  Serial.write(physicalEStopActive() ? 0x01 : 0x00);
+}
+
 void updateLeds(uint8_t settings) {
   digitalWrite(kGreenLedPin, (settings & kGreenLedMask) != 0);
   digitalWrite(kYellowLedPin, (settings & kYellowLedMask) != 0);
@@ -140,6 +144,7 @@ bool processThrusterCommand(const uint8_t* raw, size_t rawLength) {
   } else {
     updateThrusters(thrusts);
   }
+  reportRelayState();
   return true;
 }
 

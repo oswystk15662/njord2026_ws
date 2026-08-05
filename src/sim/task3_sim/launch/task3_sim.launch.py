@@ -20,13 +20,14 @@ def generate_launch_description():
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
-    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, orchestrator, EKF, navsat
+    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise (including UM982),
+    #            orchestrator and EKFs
     #   t=5.0  NAV2 layer:   Nav2 bringup (needs SimNode TF + filtered odometry)
     #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
     #
     # Why 5s for Nav2?
-    #   navsat_transform initializes on first GPS fix (~0.5s), publishes /odometry/gps.
-    #   global_ekf then starts publishing /odometry/filtered/global.
+    #   UM982 simulator starts on the first /odom truth message and publishes
+    #   /odometry/gps/um982. The global EKF then starts publishing global odometry.
     #   But lifecycle_manager configure+activate for all Nav2 nodes takes 2-5s.
     #   Total margin: 5s should be safe for sim where GPS is synthetic and instant.
     #
@@ -78,7 +79,8 @@ def generate_launch_description():
         output="screen"
     )
 
-    # Sensor noise simulator: /odom → /wit/imu + /gps/fix + /sensor/gnss/compass/raw
+    # Sensor noise simulator: /odom → /wit/imu, legacy GPS/compass, and
+    # /odometry/gps/um982 for the global EKF.
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -118,6 +120,18 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Match the vessel control contract used by the shared Nav2 launch:
+    # collision_monitor publishes /cmd_vel_nav and twist_mux is the only
+    # publisher of /cmd_vel consumed by the thruster driver.
+    twist_mux = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        name="twist_mux",
+        parameters=[os.path.join(pkg_robot, "config", "twist_mux.yaml")],
+        remappings=[("cmd_vel_out", "/cmd_vel")],
+        output="screen",
+    )
+
     # Robot state publisher: URDF → base_link→{imu_link, livox_frame, gnss_link, …}
     robot_state_pub_node = Node(
         package='robot_state_publisher',
@@ -130,20 +144,22 @@ def generate_launch_description():
         }]
     )
 
-    # EKF local: /odom + /wit/imu -> odometry/filtered/local topic only
+    # EKF local: /odom + /wit/imu -> odometry/filtered/local topic only.
+    # This is a sim-specific config; the real-vessel /livox/imu contract stays
+    # untouched in robot/config/ekf_local.yaml.
     local_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node_local',
         output='screen',
         parameters=[
-            os.path.join(pkg_robot, 'config', 'ekf_local.yaml'),
+            os.path.join(pkg_task3_sim, 'config', 'task3_ekf_local.yaml'),
             {'publish_tf': False},
         ],
         remappings=[('odometry/filtered', 'odometry/filtered/local')]
     )
 
-    # EKF global: local filtered odom + GPS -> odometry/filtered/global topic only
+    # EKF global: UM982 odometry -> odometry/filtered/global topic only.
     global_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
@@ -154,29 +170,6 @@ def generate_launch_description():
             {'publish_tf': False},
         ],
         remappings=[('odometry/filtered', 'odometry/filtered/global')]
-    )
-
-    # NavSat transform: /gps/fix + /wit/imu → /odometry/gps
-    navsat_transform_node = Node(
-        package='robot_localization',
-        executable='navsat_transform_node',
-        name='navsat_transform_node',
-        output='screen',
-        parameters=[{
-            'frequency': 10.0,
-            'magnetic_declination_radians': 0.0,
-            'yaw_offset': 0.0,
-            'zero_altitude': True,
-            'broadcast_utm_transform': False,  # Disabled: UTM coords appear millions of m away
-            'publish_filtered_gps': True,
-            'use_odometry_yaw': False,
-            'wait_for_datum': False,
-        }],
-        remappings=[
-            ('imu', '/wit/imu'),
-            ('gps/fix', '/gps/fix'),
-            ('odometry/filtered', 'odometry/filtered/local')
-        ]
     )
 
     # Field boundary costmap: latched — outside 40m×40m square = LETHAL
@@ -208,16 +201,16 @@ def generate_launch_description():
             sensor_noise_launch,
             task3_orchestrator,
             thruster_driver_node,
+            twist_mux,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
-            navsat_transform_node,
             field_boundary_node,
         ]
     )
 
     # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
-    # Start Nav2 after SimNode TF and EKF/navsat filtered odometry are available.
+    # Start Nav2 after SimNode TF and both EKF odometry topics are available.
     # lifecycle_manager will configure+activate: controller, smoother, planner,
     # behavior, bt_navigator, waypoint_follower, velocity_smoother (~3-5s).
     nav2_launch = IncludeLaunchDescription(
