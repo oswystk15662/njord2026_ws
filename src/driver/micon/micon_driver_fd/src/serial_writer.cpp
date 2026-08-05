@@ -163,6 +163,10 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
   baud_ = declare_parameter<int>("baud", 115200);
   command_topic_ = declare_parameter<std::string>("command_topic", "/thruster_command");
   bms_topic_ = declare_parameter<std::string>("bms_topic", "/bms");
+  ground_station_heartbeat_topic_ = declare_parameter<std::string>(
+    "ground_station_heartbeat_topic", "/heartbeat/ground_station");
+  ground_station_heartbeat_timeout_sec_ = declare_parameter<double>(
+    "ground_station_heartbeat_timeout_sec", 0.0);
 
   sub_thrust_ = create_subscription<std_msgs::msg::Float32MultiArray>(
     command_topic_, 10, std::bind(&SerialWriter::thrust_cb, this, std::placeholders::_1));
@@ -174,6 +178,11 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
     "/yellow", 10, std::bind(&SerialWriter::yellow_cb, this, std::placeholders::_1));
   sub_green_ = create_subscription<std_msgs::msg::Bool>(
     "/green", 10, std::bind(&SerialWriter::green_cb, this, std::placeholders::_1));
+  if (ground_station_heartbeat_timeout_sec_ > 0.0) {
+    sub_ground_station_heartbeat_ = create_subscription<std_msgs::msg::Empty>(
+      ground_station_heartbeat_topic_, 10,
+      std::bind(&SerialWriter::ground_station_heartbeat_cb, this, std::placeholders::_1));
+  }
   pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
   pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
   pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
@@ -203,7 +212,7 @@ void SerialWriter::soft_emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     soft_emg_ = msg->data;
-    flags_.emergency = soft_emg_;
+    flags_.emergency = soft_emg_ || ground_station_timeout_emg_;
   }
   publish_safety_state();
 }
@@ -226,8 +235,18 @@ void SerialWriter::green_cb(const std_msgs::msg::Bool::SharedPtr msg)
   flags_.green = msg->data;
 }
 
+void SerialWriter::ground_station_heartbeat_cb(const std_msgs::msg::Empty::SharedPtr)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  ground_station_heartbeat_received_ = true;
+  last_ground_station_heartbeat_ = std::chrono::steady_clock::now();
+  ground_station_timeout_emg_ = false;
+  flags_.emergency = soft_emg_;
+}
+
 void SerialWriter::timer_cb()
 {
+  update_ground_station_watchdog();
   if (fd_ < 0) {return;}
   read_bms();
   Packet packet;
@@ -242,13 +261,36 @@ void SerialWriter::timer_cb()
   publish_safety_state();
 }
 
+void SerialWriter::update_ground_station_watchdog()
+{
+  if (ground_station_heartbeat_timeout_sec_ <= 0.0) {
+    return;
+  }
+
+  bool timeout = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto elapsed = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - last_ground_station_heartbeat_).count();
+    timeout = !ground_station_heartbeat_received_ ||
+      elapsed > ground_station_heartbeat_timeout_sec_;
+    ground_station_timeout_emg_ = timeout;
+    flags_.emergency = soft_emg_ || ground_station_timeout_emg_;
+  }
+  if (timeout) {
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "ground-station heartbeat timed out; forcing software emergency stop");
+  }
+}
+
 void SerialWriter::publish_safety_state()
 {
   bool soft_emg = false;
   bool relay_active = false;
   {
     std::lock_guard<std::mutex> lock(mutex_);
-    soft_emg = soft_emg_;
+    soft_emg = soft_emg_ || ground_station_timeout_emg_;
     relay_active = relay_active_;
   }
   pub_relay_active_->publish(std_msgs::msg::Bool().set__data(relay_active));

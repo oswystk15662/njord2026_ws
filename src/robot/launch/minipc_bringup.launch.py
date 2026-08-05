@@ -189,6 +189,8 @@ def generate_launch_description():
                 "serial_port": serial_port,
                 "baud": baud,
                 "command_topic": "/thruster_command",
+                "ground_station_heartbeat_topic": "/heartbeat/ground_station",
+                "ground_station_heartbeat_timeout_sec": 60.0,
                 "use_sim_time": False,
             }
         ],

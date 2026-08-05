@@ -13,7 +13,10 @@ be added alongside it without changing the manual-control package.
   `HARD_EMG=2`
 - parameters: `serial_port` (default `/dev/ttyUSB0`), `baud` (default `115200`),
   `command_topic` (default `/thruster_command` from `thruster_driver`), and
-  `bms_topic` (default `/bms`)
+  `bms_topic` (default `/bms`). Set `ground_station_heartbeat_timeout_sec` to a
+  positive value to require `std_msgs/msg/Empty` messages on
+  `ground_station_heartbeat_topic` (default `/heartbeat/ground_station`); a
+  timeout forces `SOFT_EMG`.
 
 Every 50 ms, `serial_writer` sends a `THRUSTER_COMMAND` frame compatible with
 `Docs/PROTOCOL.md`:
@@ -29,8 +32,9 @@ values followed by `control_flags`: `bit3=emg`, `bit2=green`, `bit1=yellow`,
 
 The relay-state byte is telemetry only: GPIO15 follows the relay and can become
 active during a software stop, so it is not an independent physical-E-stop signal.
-`SOFT_EMG` is emitted whenever `/soft_emg` is true; otherwise an active relay is
-reported as `HARD_EMG` for operational status.
+`SOFT_EMG` is emitted whenever `/soft_emg` is true or the enabled ground-station
+heartbeat watchdog has timed out; otherwise an active relay is reported as
+`HARD_EMG` for operational status.
 
 ## BMS receive
 

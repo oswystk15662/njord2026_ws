@@ -35,6 +35,14 @@ def generate_launch_description():
         emulate_tty=True,
     )
 
+    ground_station_heartbeat = Node(
+        package="simple_manual",
+        executable="ground_station_heartbeat_node",
+        name="ground_station_heartbeat",
+        output="screen",
+        parameters=[{"topic": "/heartbeat/ground_station", "period_sec": 1.0}],
+    )
+
     foxglove_bridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(get_package_share_directory("foxglove_bridge"), "launch", "foxglove_bridge.launch.py")
@@ -44,6 +52,7 @@ def generate_launch_description():
     return LaunchDescription(
         [
             joy_node,
+            ground_station_heartbeat,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             foxglove_bridge_launch,
