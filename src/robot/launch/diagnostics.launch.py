@@ -42,26 +42,10 @@ def _monitor(
 
 PROFILES = {
     "localization": [
-        _monitor(
-            "glim_odom",
-            "/odom",
-            "nav_msgs/msg/Odometry",
-            "required_frequency",
-            10.0,
-            2.0,
-            1.0,
-            5.0,
-        ),
-        _monitor(
-            "imu",
-            "/adnav_driver/imu",
-            "sensor_msgs/msg/Imu",
-            "required_frequency",
-            20.0,
-            10.0,
-            0.5,
-            2.0,
-        ),
+        # This profile is used by the miniPC role.  GLIM runs on the Jetson
+        # and the Spatial IMU is optional, so neither topic is a required
+        # miniPC heartbeat.  The local EKF subscribes to /livox/imu received
+        # from the Jetson; its resulting local odometry is monitored below.
         _monitor(
             "gps_fix",
             "/sensor/vehicle_gnss/fix/raw",
