@@ -57,11 +57,14 @@
         "/sim/boundary_markers": {
           "visible": true
         },
+        "/sim/buoy_markers": {
+          "visible": true
+        },
         "/sim/cardinal_mark_markers": {
           "visible": true
         },
         "/task_waypoint_markers": {
-          "visible": false
+          "visible": true
         },
         "/task_waypoint_path": {
           "visible": true

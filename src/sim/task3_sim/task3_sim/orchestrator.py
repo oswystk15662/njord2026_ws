@@ -2,7 +2,7 @@ import math
 import struct
 
 import rclpy
-from geometry_msgs.msg import Point32, PolygonStamped, TransformStamped
+from geometry_msgs.msg import Point, Point32, PolygonStamped, TransformStamped
 from sensor_msgs.msg import PointCloud2, PointField
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -28,6 +28,8 @@ class Task3Orchestrator(Node):
         self.declare_parameter("goal_radius", 1.5)
         self.declare_parameter("dock_visit_radius", 1.5)
         self.declare_parameter("publish_rate_hz", 10.0)
+        self.declare_parameter("course_bounds", [-24.0, 24.0, -14.0, 14.0])
+        self.declare_parameter("boundary_marker_step", 4.0)
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         self.task_type = self.get_parameter("task_type").get_parameter_value().string_value
@@ -37,6 +39,8 @@ class Task3Orchestrator(Node):
         self.goal_radius = self.get_parameter("goal_radius").get_parameter_value().double_value
         self.dock_visit_radius = self.get_parameter("dock_visit_radius").get_parameter_value().double_value
         self.publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
+        self.course_bounds = list(self.get_parameter("course_bounds").value)
+        self.boundary_marker_step = max(0.5, float(self.get_parameter("boundary_marker_step").value))
 
         # Dynamically override parameters based on task type to form a point-symmetric virtual field
         if self.task_type == "task3_2":
@@ -66,6 +70,10 @@ class Task3Orchestrator(Node):
         self.pub_gps8_reached = self.create_publisher(Bool, "/sim/task3/gps8_reached", transient_qos)
         self.pub_dock_projection = self.create_publisher(PolygonStamped, "/sim/dock_projection", 10)
         self.pub_buoy_markers = self.create_publisher(MarkerArray, "/sim/buoy_markers", 10)
+        self.pub_boundary_markers = self.create_publisher(
+            MarkerArray, "/sim/boundary_markers", transient_qos)
+        self.pub_waypoint_markers = self.create_publisher(
+            MarkerArray, "/task_waypoint_markers", transient_qos)
 
         # Pointcloud publisher and TF listener
         self.pub_pointcloud = self.create_publisher(PointCloud2, "/pointcloud", 10)
@@ -80,6 +88,7 @@ class Task3Orchestrator(Node):
         self.gps8_visited = False
         self.gate_midpoints = {}
         self.publish_start_and_goal()
+        self.publish_boundary_markers()
 
         # Pre-generate static dock points in the global map frame
         self.static_map_points = self.generate_field_points()
@@ -162,6 +171,150 @@ class Task3Orchestrator(Node):
             markers.markers.append(marker)
 
         self.pub_buoy_markers.publish(markers)
+
+    def publish_boundary_markers(self):
+        """Publish the Task3 field perimeter as persistent GUI markers."""
+        min_x, max_x, min_y, max_y = self.course_bounds
+        stamp = self.get_clock().now().to_msg()
+        markers = MarkerArray()
+
+        outline = Marker()
+        outline.header.frame_id = self.frame_id
+        outline.header.stamp = stamp
+        outline.ns = "task3_boundary"
+        outline.id = 0
+        outline.type = Marker.LINE_STRIP
+        outline.action = Marker.ADD
+        outline.pose.orientation.w = 1.0
+        outline.scale.x = 0.16
+        outline.color.r = 0.95
+        outline.color.g = 0.75
+        outline.color.b = 0.05
+        outline.color.a = 0.95
+        for x, y in (
+            (min_x, min_y), (max_x, min_y), (max_x, max_y),
+            (min_x, max_y), (min_x, min_y),
+        ):
+            point = Point()
+            point.x = float(x)
+            point.y = float(y)
+            point.z = 0.05
+            outline.points.append(point)
+        markers.markers.append(outline)
+
+        marker_id = 1
+        for start, end in (
+            ((min_x, min_y), (max_x, min_y)),
+            ((max_x, min_y), (max_x, max_y)),
+            ((max_x, max_y), (min_x, max_y)),
+            ((min_x, max_y), (min_x, min_y)),
+        ):
+            dx, dy = end[0] - start[0], end[1] - start[1]
+            length = math.hypot(dx, dy)
+            steps = max(1, int(length / self.boundary_marker_step))
+            for index in range(steps + 1):
+                t = index / float(steps)
+                post = Marker()
+                post.header.frame_id = self.frame_id
+                post.header.stamp = stamp
+                post.ns = "task3_boundary_posts"
+                post.id = marker_id
+                marker_id += 1
+                post.type = Marker.CYLINDER
+                post.action = Marker.ADD
+                post.pose.position.x = start[0] + dx * t
+                post.pose.position.y = start[1] + dy * t
+                post.pose.position.z = 0.75
+                post.pose.orientation.w = 1.0
+                post.scale.x = 0.28
+                post.scale.y = 0.28
+                post.scale.z = 1.5
+                post.color.r = 0.95
+                post.color.g = 0.75
+                post.color.b = 0.05
+                post.color.a = 0.85
+                markers.markers.append(post)
+
+        self.pub_boundary_markers.publish(markers)
+
+    def publish_waypoint_markers(self):
+        """Publish active Task3 route waypoints; gate markers follow buoy TFs."""
+        gps8 = self.gate_midpoints.get("gps8", (18.0, 10.0))
+        gps9 = self.gate_midpoints.get("gps9", (-18.0, -10.0))
+        if self.task_type == "task3_2":
+            waypoints = [
+                ("GPS 9 start", 0.0, 0.0, "start"),
+                ("Task3.2 corridor", -12.0, 0.0, "corridor"),
+                ("GPS 9 gate", gps9[0], gps9[1], "gate"),
+                ("Berth 2 approach", -18.25, 0.0, "approach"),
+                ("Berth 2", -20.0, 0.0, "dock"),
+                ("GPS 10 finish", -18.0, -11.0, "goal"),
+            ]
+        else:
+            waypoints = [
+                ("GPS 7 start", 0.0, 0.0, "start"),
+                ("Task3.1 corridor", 12.0, 0.0, "corridor"),
+                ("GPS 8 gate", gps8[0], gps8[1], "gate"),
+                ("Berth 1 approach", 18.25, 1.065, "approach"),
+                ("Berth 1", 20.0, 1.065, "dock"),
+            ]
+            if self.run_full_sequence:
+                waypoints.extend([
+                    ("Berth 1 exit", 18.25, 1.065, "approach"),
+                    ("Task3.2 corridor", -12.0, 0.0, "corridor"),
+                    ("GPS 9 gate", gps9[0], gps9[1], "gate"),
+                    ("Berth 2 approach", -18.25, 0.0, "approach"),
+                    ("Berth 2", -20.0, 0.0, "dock"),
+                    ("GPS 10 finish", -18.0, -11.0, "goal"),
+                ])
+
+        colors = {
+            "start": (0.1, 0.9, 0.2), "corridor": (0.1, 0.7, 1.0),
+            "gate": (1.0, 0.85, 0.0), "approach": (0.9, 0.5, 0.1),
+            "dock": (0.85, 0.2, 0.9), "goal": (1.0, 0.15, 0.15),
+        }
+        stamp = self.get_clock().now().to_msg()
+        markers = MarkerArray()
+        for marker_id, (label, x, y, waypoint_type) in enumerate(waypoints):
+            red, green, blue = colors[waypoint_type]
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = "task3_waypoints"
+            marker.id = marker_id
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = 0.35
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = marker.scale.y = marker.scale.z = 0.7
+            marker.color.r = red
+            marker.color.g = green
+            marker.color.b = blue
+            marker.color.a = 0.95
+            markers.markers.append(marker)
+
+            text = Marker()
+            text.header.frame_id = self.frame_id
+            text.header.stamp = stamp
+            text.ns = "task3_waypoint_labels"
+            text.id = marker_id
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = float(x)
+            text.pose.position.y = float(y)
+            text.pose.position.z = 1.15
+            text.pose.orientation.w = 1.0
+            text.scale.z = 0.5
+            text.color.r = red
+            text.color.g = green
+            text.color.b = blue
+            text.color.a = 1.0
+            text.text = label
+            markers.markers.append(text)
+
+        self.pub_waypoint_markers.publish(markers)
 
     def update_gate_midpoints(self, buoy_positions):
         by_name = {buoy["name"]: buoy for buoy in buoy_positions}
@@ -304,6 +457,7 @@ class Task3Orchestrator(Node):
         self.update_gate_midpoints(buoy_positions)
         self.publish_dock_projection()
         self.publish_buoy_markers(buoy_positions)
+        self.publish_waypoint_markers()
 
         # Combine static dock and dynamic buoy points
         all_map_pts = self.static_map_points + buoy_pts
