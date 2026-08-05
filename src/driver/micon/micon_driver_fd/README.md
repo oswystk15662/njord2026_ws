@@ -1,2 +1,27 @@
-File Discriptorを用いることで、usb・socket通信でも何でも通信できるようになっているはずのやつ。
-ros2 socketcanとかmrosがうまく行かなかったら作り始める。
+# micon_driver_fd
+
+Transport package for communication with the Micon controller. The current
+implementation provides a serial file-descriptor transport; a UDP transport can
+be added alongside it without changing the manual-control package.
+
+## serial_writer
+
+- subscribes `command_topic` (`std_msgs/msg/Float32MultiArray`), first 4 thrust commands in N
+- subscribes `/emg`, `/red`, `/yellow`, `/green` (`std_msgs/msg/Bool`)
+- parameters: `serial_port` (default `/dev/ttyUSB0`), `baud` (default `115200`),
+  and `command_topic` (default `/thruster_command` from `thruster_driver`)
+
+Every 50 ms, `serial_writer` sends a `THRUSTER_COMMAND` frame compatible with
+`Docs/PROTOCOL.md`:
+
+```text
+COBS(raw_frame) || 0x00
+```
+
+The raw frame is 24 bytes: 5 byte header, 17 byte payload, and little-endian
+CRC-16/CCITT-FALSE. The payload contains four little-endian `float32` thrust
+values followed by `control_flags`: `bit3=emg`, `bit2=green`, `bit1=yellow`,
+`bit0=red`.
+
+Emergency stop enforcement is the Micon firmware's responsibility and requires
+hardware validation.

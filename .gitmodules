@@ -1,6 +1,6 @@
 [submodule "src/driver/imu/wit_node_ros2"]
 	path = src/driver/imu/wit_node_ros2
-	url = https://github.com/oswystk15662/wit_node_ros2.git
+	url = https://github.com/NaokiTakahashi12/witmotion_ros2.git
 [submodule "src/driver/lidar/Livox-SDK2"]
 	path = src/driver/lidar/Livox-SDK2
 	url = https://github.com/KeioRoboticsAssociation/Livox-SDK2.git
@@ -10,3 +10,6 @@
 [submodule "src/detection/pcl_segmentation"]
 	path = src/detection/pcl_segmentation
 	url = https://github.com/IBO-ASV/pcl_segmentation.git
+[submodule "src/driver/ins/ros2-driver"]
+	path = src/driver/ins/ros2-driver
+	url = https://github.com/advanced-navigation/ros2-driver.git

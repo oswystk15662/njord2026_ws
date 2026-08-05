@@ -8,7 +8,11 @@ endif()
 find_package(ament_cmake REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(action_msgs REQUIRED)
+find_package(nav2_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
 
 add_library(topic_heartbeat_monitor_component SHARED
@@ -32,6 +36,20 @@ rclcpp_components_register_nodes(
 add_executable(topic_heartbeat_monitor_node
   src/topic_heartbeat_monitor_node.cpp
 )
+
+add_executable(autonomy_supervisor_node
+  src/autonomy_supervisor.cpp
+)
+ament_target_dependencies(autonomy_supervisor_node
+  action_msgs
+  diagnostic_msgs
+  diagnostic_updater
+  nav2_msgs
+  nav_msgs
+  rclcpp
+  rclcpp_action
+  std_msgs
+)
 target_link_libraries(topic_heartbeat_monitor_node
   topic_heartbeat_monitor_component
 )
@@ -45,6 +63,7 @@ install(
 )
 install(
   TARGETS topic_heartbeat_monitor_component topic_heartbeat_monitor_node
+          autonomy_supervisor_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}

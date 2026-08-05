@@ -46,7 +46,7 @@
   "glim_ros": {
     // Backend modules
     "enable_local_mapping": true,
-    "enable_global_mapping": true,
+    "enable_global_mapping": false,
     // Points config
     "keep_raw_points": false,
     // IMU config

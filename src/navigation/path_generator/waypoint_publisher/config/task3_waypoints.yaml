@@ -2,19 +2,30 @@
 # Waypoint configuration for NJORD competition Task 3
 # Supports both normal docking (3.1) and parallel docking (3.2)
 #
-# Full competition sequence (task3_1 → task3_2):
-#   gps7(start) → gps8(gate) → berth1(normal dock) → gps8(exit) → gps9(gate2) → berth2(parallel dock) → gps10(finish)
+# Rulebook default sequence:
+#   task3_1: gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint, stop)
+#     -> berth1 approach -> berth1
+#     -> berth1 exit -> gps8(finish)
+#   task3_2: gps9(start) -> buoy corridor midpoint -> gps9 gate midpoint(stop)
+#     -> berth2 approach -> berth2
+#     -> gps10(finish)
+#
+# Optional continuous sequence (run_full_sequence:=true):
+#   gps7(start) -> buoy corridor midpoint -> gps8(gate midpoint, stop)
+#     -> berth1 approach -> berth1
+#     -> berth1 exit -> mirrored corridor midpoint -> gps9(gate midpoint)
+#     -> berth2 approach -> berth2 -> gps10(finish)
 #
 # Field geometry (point-symmetric about origin):
-#   Normal dock (3.1):   x=14~16, y=±2.0  (boat enters from west, heading=0)
-#   Parallel dock (3.2): x=-14~-16, y=±2.0 (boat enters from east, heading=π)
-#   Gate buoys 3.1:      x≈12, y=±4  (red/green)
-#   Gate buoys 3.2:      x≈-12, y=±4  (red/green)
+#   Normal dock (3.1):   x=19~21, y=±2.0  (boat enters from west, heading=0)
+#   Parallel dock (3.2): x=-19~-21, y=±2.0 (boat enters from east, heading=π)
+#   Gate buoys 3.1:      x≈18, y=10  (red/green midpoint)
+#   Gate buoys 3.2:      x≈-18, y=-10 (red/green midpoint)
 
 task3_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  scenario: "normal_docking_full"
+  scenario: "normal_docking_rulebook"
 
   waypoints:
     # GPS 7: start (origin)
@@ -26,18 +37,40 @@ task3_1_config:
       name: "GPS 7 - Start"
       tolerance_m: 2.0
 
-    # GPS 8: gate approach to normal dock field, come from south heading north
+    # GPS 8: gate center between b31_red_gate and b31_green_gate
     - id: 8
-      x: 13.0
-      y: 11.0
+      x: 18.0
+      y: 10.0
       yaw: 1.5708        # heading north (π/2)
       type: "gate"
       name: "GPS 8 - Normal Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b31_red_gate"
+        green_frame: "b31_green_gate"
+
+    # Midpoint of the deepest pair in the first three buoy sets.
+    # This keeps the global plan inside the red/green buoy corridor.
+    - id: "b31_corridor_gate"
+      x: 12.0
+      y: 0.0
+      yaw: 0.0
+      type: "corridor_gate"
+      name: "Task3.1 Buoy Corridor Gate"
+      tolerance_m: 1.0
+
+    # Safe mouth point before entering the normal dock slot.
+    - id: "berth1_approach"
+      x: 18.25
+      y: 1.065
+      yaw: 0.0
+      type: "dock_approach"
+      name: "Berth 1 - Approach"
+      tolerance_m: 0.8
 
     # Berth 1: normal docking (center berth, heading east into dock)
     - id: "berth1"
-      x: 15.0
+      x: 20.0
       y: 1.065
       yaw: 0.0           # heading east (into normal dock)
       type: "dock"
@@ -45,27 +78,48 @@ task3_1_config:
       tolerance_m: 0.8
       dock_type: "normal"
 
-    # GPS 8 again: undock and return to gate
-    - id: "8_exit"
-      x: 13.0
-      y: 11.0
-      yaw: -1.5708       # heading south (back out)
+    # Back out to the mouth before navigating away from the dock.
+    - id: "berth1_exit"
+      x: 18.25
+      y: 1.065
+      yaw: 3.14159
       type: "undock_exit"
-      name: "GPS 8 - Exit Normal Dock"
+      name: "Berth 1 - Exit"
       tolerance_m: 1.5
 
-    # GPS 9: gate approach to parallel dock field (point-symmetric side)
+    # GPS 9: gate center between b32_red_gate and b32_green_gate
     - id: 9
-      x: -13.0
-      y: 11.0
+      x: -18.0
+      y: -10.0
       yaw: -1.5708       # heading south toward parallel dock gate
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b32_red_gate"
+        green_frame: "b32_green_gate"
+
+    # Point-symmetric corridor gate for Task3.2.
+    - id: "b32_corridor_gate"
+      x: -12.0
+      y: 0.0
+      yaw: 3.14159
+      type: "corridor_gate"
+      name: "Task3.2 Buoy Corridor Gate"
+      tolerance_m: 1.0
+
+    # Safe mouth point before entering the parallel dock.
+    - id: "berth2_approach"
+      x: -18.25
+      y: 0.0
+      yaw: 3.14159
+      type: "dock_approach"
+      name: "Berth 2 - Approach"
+      tolerance_m: 0.8
 
     # Berth 2: parallel docking (heading west into parallel dock)
     - id: "berth2"
-      x: -15.0
+      x: -20.0
       y: 0.0
       yaw: 3.14159       # heading west (into parallel dock, π)
       type: "dock"
@@ -75,7 +129,7 @@ task3_1_config:
 
     # GPS 10: finish point (exit parallel dock, go south)
     - id: 10
-      x: -13.0
+      x: -18.0
       y: -11.0
       yaw: -1.5708       # heading south
       type: "goal"
@@ -86,10 +140,23 @@ task3_1_config:
     dock_identification: "ar_tag_detection"
     impact_minimization: true
     wait_time_s: 10           # wait at berth before undocking
+    second_wait_time_s: 5     # task3_2 wait during run_full_sequence
     wait_condition: "after_docking_stationary"
     reversal_requirement: true
     attempts: 2
     goal_tolerance: 1.0
+
+  stages:
+    stage_1_gate: [7, "b31_corridor_gate", 8]
+    stage_1: ["berth1_approach", "berth1"]
+    stage_2: ["berth1_exit", 8]
+    stage_3: []
+
+  full_sequence_stages:
+    stage_1_gate: [7, "b31_corridor_gate", 8]
+    stage_1: ["berth1_approach", "berth1"]
+    stage_2: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
+    stage_3: [10]
 
 
 # Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
@@ -108,18 +175,39 @@ task3_2_config:
       name: "GPS 9 - Start (standalone)"
       tolerance_m: 2.0
 
-    # Gate for parallel dock
+    # Gate for parallel dock, centered between b32_red_gate and b32_green_gate
     - id: "9_gate"
-      x: -13.0
-      y: 11.0
+      x: -18.0
+      y: -10.0
       yaw: -1.5708
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
       tolerance_m: 1.5
+      gate_pair:
+        red_frame: "b32_red_gate"
+        green_frame: "b32_green_gate"
+
+    # Midpoint of the deepest pair in the first three mirrored buoy sets.
+    - id: "b32_corridor_gate"
+      x: -12.0
+      y: 0.0
+      yaw: 3.14159
+      type: "corridor_gate"
+      name: "Task3.2 Buoy Corridor Gate"
+      tolerance_m: 1.0
+
+    # Safe mouth point before entering the parallel dock.
+    - id: "berth2_approach"
+      x: -18.25
+      y: 0.0
+      yaw: 3.14159
+      type: "dock_approach"
+      name: "Berth 2 - Approach"
+      tolerance_m: 0.8
 
     # Berth 2: parallel docking
     - id: "berth2"
-      x: -15.0
+      x: -20.0
       y: 0.0
       yaw: 3.14159
       type: "dock"
@@ -129,7 +217,7 @@ task3_2_config:
 
     # GPS 10: finish
     - id: 10
-      x: -13.0
+      x: -18.0
       y: -11.0
       yaw: -1.5708
       type: "goal"
@@ -145,34 +233,41 @@ task3_2_config:
     attempts: 2
     goal_tolerance: 1.0
 
+  stages:
+    stage_1_gate: [9, "b32_corridor_gate", "9_gate"]
+    stage_1: ["berth2_approach", "berth2"]
+    stage_2: []
+    stage_3: [10]
 
-# Multi-stage async flow for task3 (handled by waypoint_publisher_node.py state machine)
-# Stage 1: 7 → 8 → berth1       (approach + normal dock)
-# Wait:    stationary at berth1 for wait_time_s
-# Stage 2: 8_exit → 9 → berth2  (undock + gate + parallel dock)
-# Wait:    stationary at berth2 for wait_time_s
-# Stage 3: 10                    (exit + finish)
+
+# Reference full-sequence async flow for task3 (handled by waypoint_publisher_node.py)
+# The rulebook default uses task3_1_config.stages and task3_2_config.stages above.
 async_flow:
   stage_1:
-    name: "Approach Normal Dock"
-    waypoints: [7, 8, "berth1"]
+    name: "Approach GPS8 Gate"
+    waypoints: [7, "b31_corridor_gate", 8]
     next_trigger: "goal_reached"
 
   stage_2:
+    name: "Approach Normal Dock"
+    waypoints: ["berth1_approach", "berth1"]
+    next_trigger: "goal_reached"
+
+  stage_3:
     name: "Stationary Wait at Berth 1"
     duration_s: 10
     next_trigger: "timer_complete"
 
-  stage_3:
+  stage_4:
     name: "Undock and Approach Parallel Dock"
-    waypoints: ["8_exit", 9, "berth2"]
+    waypoints: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
     next_trigger: "goal_reached"
 
-  stage_4:
+  stage_5:
     name: "Stationary Wait at Berth 2"
     duration_s: 5
     next_trigger: "timer_complete"
 
-  stage_5:
+  stage_6:
     name: "Exit to Finish"
     waypoints: [10]

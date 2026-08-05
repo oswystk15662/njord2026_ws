@@ -3,14 +3,11 @@
 
 #include <rclcpp/rclcpp.hpp>
 
-#include <can_msgs/msg/frame.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/int16_multi_array.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
-#include <std_msgs/msg/u_int16.hpp>
 
-#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -32,14 +29,12 @@ private:
     double x{0.0};
     double y{0.0};
     double angle_rad{0.0};
+    double max_thrust{40.0};
     double force_per_duty{1.0};
     double forward_gain{1.0};
     double reverse_gain{1.0};
     double offset{0.0};
     bool reverse{false};
-    int can_id{0};
-    std::string mros_topic;
-    std::string can_topic;
   };
 
   void cmdVelCallback(const geometry_msgs::msg::Twist::SharedPtr msg);
@@ -56,7 +51,6 @@ private:
   double applyStaticMap(double value, const ThrusterConfig & thruster) const;
   double applyDeadzone(double value, double deadzone) const;
   void publishCommands(const std::vector<double> & commands);
-  std::uint16_t toUint16Command(double normalized) const;
   double clamp(double value, double min_value, double max_value) const;
   std::vector<double> getDoubleVector(
     const std::string & name,
@@ -65,9 +59,6 @@ private:
     const std::string & name,
     const std::vector<std::string> & defaults);
   std::vector<bool> getBoolVector(const std::string & name, const std::vector<bool> & defaults);
-  std::vector<int64_t> getIntVector(
-    const std::string & name,
-    const std::vector<int64_t> & defaults);
   static std::string toLower(std::string value);
 
   // Input subscriptions
@@ -75,19 +66,12 @@ private:
   rclcpp::Subscription<std_msgs::msg::Int16MultiArray>::SharedPtr sub_duty_array_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr sub_odom_;
 
-  rclcpp::Publisher<std_msgs::msg::Int16MultiArray>::SharedPtr pub_thruster_command_;
+  rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_thruster_command_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_current_force_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_dob_estimate_;
   rclcpp::TimerBase::SharedPtr control_timer_;
 
-  // mROS(USB) outputs (one ESP32 -> one ESC -> one UInt16)
-  std::vector<rclcpp::Publisher<std_msgs::msg::UInt16>::SharedPtr> pub_mros_;
-
-  // CAN outputs
-  std::vector<rclcpp::Publisher<can_msgs::msg::Frame>::SharedPtr> pub_can_;
-
   std::string input_mode_;
-  std::string transport_mode_;
 
   std::vector<ThrusterConfig> thrusters_;
 
@@ -96,12 +80,16 @@ private:
   double max_angular_z_{1.0};
   double control_rate_hz_{50.0};
   double watchdog_timeout_sec_{0.5};
+  bool use_velocity_feedback_{true};
   double feedback_timeout_sec_{0.5};
   bool stop_on_feedback_timeout_{true};
 
   double kp_surge_{1.0};
   double kp_sway_{1.0};
   double kp_yaw_{1.0};
+  double max_surge_wrench_{1.0};
+  double max_sway_wrench_{1.0};
+  double max_yaw_wrench_{1.0};
 
   bool dob_enable_{false};
   double dob_observer_gain_{1.0};
@@ -116,18 +104,11 @@ private:
   double damping_quadratic_yaw_{0.0};
 
   double allocation_regularization_{1e-4};
+  std::vector<double> allocation_wrench_sign_{1.0, 1.0, 1.0};
   double deadzone_pos_{0.0};
   double deadzone_neg_{0.0};
 
   int duty_resolution_{1000};
-
-  bool sim_output_enabled_{true};
-  bool can_enabled_{false};
-  bool mros_enabled_{false};
-
-  // Encoding to UInt16 for ESP32
-  int u16_neutral_{1000};
-  int u16_span_{1000};
 
   geometry_msgs::msg::Twist latest_cmd_;
   double meas_surge_{0.0};

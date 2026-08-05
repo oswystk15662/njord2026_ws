@@ -97,7 +97,6 @@ def generate_launch_description():
             os.path.join(pkg_thruster, "config", "config.yaml"),
             {
                 "robot_description": robot_description,
-                "transport_mode": "sim",
                 "control.dob.enable": False,
             },
         ],

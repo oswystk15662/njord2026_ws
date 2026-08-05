@@ -1,33 +1,40 @@
 ### Local EKF (odom -> base_link estimate) ###
-# GLIM odometry and the WIT Motion IMU are fused into a filtered odometry
-# topic. GLIM remains the TF authority on the real robot.
+# The local EKF is the sole odom -> base_link TF authority while GLIM is
+# disabled. Its LiDAR IMU supplies only its reported yaw; translational odometry
+# requires an additional local measurement source.
 ekf_filter_node_local:
   ros__parameters:
     frequency: 30.0
     two_d_mode: true
-    publish_tf: false
+    publish_tf: true
     map_frame: map
     odom_frame: odom
     base_link_frame: base_link
     world_frame: odom
     print_diagnostics: true
 
-    # GLIM LiDAR odometry
-    odom0: /odom
-    odom0_config: [true,  true,  true,
-                   true,  true,  true,
-                   false, false, false,
-                   false, false, false,
-                   false, false, false]
-    odom0_differential: false
+    # GLIM is disabled for this EKF-only fallback. Do not subscribe to /odom:
+    # an absent or stale GLIM source must not become a delayed measurement.
 
-    # WIT Motion IMU: use relative orientation changes in the local filter
-    imu0: /wit/imu
+    imu0: /livox/imu
+    # The MID-360 IMU has no attitude estimate. Its acceleration is reported
+    # in g (approximately -1.0 on Z while stationary), whereas
+    # robot_localization expects m/s^2. Do not integrate it as acceleration:
+    # doing so creates a fictitious local position/velocity that destabilizes
+    # the global EKF through odom0_differential. The raw gyro also has a
+    # substantial stationary bias, so do not integrate its yaw rate. Retain
+    # only the driver's identity yaw, which keeps navsat_transform's
+    # use_odometry_yaw reference stable until a calibrated heading source is
+    # enabled.
     imu0_config: [false, false, false,
-                  true,  true,  true,
+                  false, false, true,
                   false, false, false,
-                  true,  true,  true,
-                  true,  true,  true]
-    imu0_differential: false
-    imu0_relative: true
-    imu0_remove_gravitational_acceleration: true
+                  false, false, false,
+                  false, false, false]
+    
+    # imu1: /imu/data
+    # imu1_config: [false, false, false,
+    #               false, false, false,
+    #               true,  true,  true,
+    #               false, false, false,
+    #               true,  true,  true]
