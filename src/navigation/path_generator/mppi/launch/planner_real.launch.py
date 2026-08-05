@@ -21,13 +21,18 @@ simulation.
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
     own_odom_topic = LaunchConfiguration("own_odom_topic")
+    ignore_other_ship = LaunchConfiguration("ignore_other_ship")
+    other_ship_twist_topic = PythonExpression([
+        "'/other_ship/twist_ignored' if '", ignore_other_ship,
+        "' == 'true' else '/other_ship/twist'",
+    ])
 
     mppi_params_file = PathJoinSubstitution(
         [
@@ -67,7 +72,7 @@ def generate_launch_description():
             # except own_odom_topic which is configurable for the real stack.
             {
                 "own_odom_topic": own_odom_topic,
-                "other_ship_twist_topic": "/other_ship/twist",
+                "other_ship_twist_topic": other_ship_twist_topic,
                 "waypoint1_topic": "/waypoint1_pose",
                 "waypoint2_topic": "/waypoint2_pose",
                 "path_topic": "/planned_path_pruned",
@@ -139,6 +144,10 @@ def generate_launch_description():
         [
             # GLIM publishes /odom on the real vessel (same topic as sim).
             DeclareLaunchArgument("own_odom_topic", default_value="/odom"),
+            DeclareLaunchArgument(
+                "ignore_other_ship", default_value="false",
+                description="Ignore /other_ship/twist and plan without an opponent",
+            ),
             task2_waypoint_pose_publisher,
             planner_node,
             path_pruner_node,

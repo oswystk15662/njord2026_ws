@@ -76,6 +76,8 @@ class TrajectoryGenerator:
         other_twist: Optional[TwistStamped],
         waypoint1_pose: PoseStamped,
         waypoint2_pose: PoseStamped,
+        detected_buoys_map: Optional[List[Tuple[float, float]]] = None,
+        use_virtual_buoys: bool = False,
     ) -> Path:
         """
         planningはbase_link基準で行い、最後にmap基準Pathへ変換する。
@@ -110,6 +112,13 @@ class TrajectoryGenerator:
             own_yaw=own_map_yaw,
         )
 
+        detected_buoys_base = [
+            self._map_to_base_link(
+                x_m=x, y_m=y, own_x=own_map_x, own_y=own_map_y,
+                own_yaw=own_map_yaw)
+            for x, y in (detected_buoys_map or [])
+        ]
+
         # --------------------------------------------------
         # 4. 他船をMPPIへ渡すか判定
         # --------------------------------------------------
@@ -136,13 +145,15 @@ class TrajectoryGenerator:
         # --------------------------------------------------
         # 5. Path生成
         # --------------------------------------------------
-        if other_state_base is not None:
-            # 他船あり: MPPI避航Path
+        if other_state_base is not None or detected_buoys_base or use_virtual_buoys:
+            # 他船またはブイあり: MPPI避航Path
             points_base = self.planner.plan(
                 own=own_state_base,
                 other=other_state_base,
                 waypoint1=waypoint1_base,
                 waypoint2=waypoint2_base,
+                detected_buoys=detected_buoys_base,
+                use_virtual_buoys=use_virtual_buoys,
             )
 
             points_base = self._smooth_points(

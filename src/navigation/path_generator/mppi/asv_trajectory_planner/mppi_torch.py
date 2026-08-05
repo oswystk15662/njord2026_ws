@@ -877,19 +877,25 @@ class MPPIPlanner():
         other: Optional[VesselState],
         waypoint1: Tuple[float, float],
         waypoint2: Tuple[float, float],
+        detected_buoys: Optional[List[Tuple[float, float]]] = None,
+        use_virtual_buoys: bool = False,
     ) -> List[Tuple[float, float]]:
 
         others = [] if other is None else [other]  # 他船がなければ衝突コストなし
         path = [waypoint1, waypoint2]
 
-        # GPS point で作った直線に対して、左右に仮想ブイを配置する
-        # half_width_m=4.0 ならブイ間隔は約8m
-        gate_center, buoys = make_virtual_gate_from_path(
-            waypoint1,
-            waypoint2,
-            half_width_m=self.gate_half_width_m,
-            s_ratio=0.5,
-        )
+        # Normally, use measured buoy positions.  The historical GPS-derived
+        # virtual gate remains available only as an explicit fallback.
+        gate_center = None
+        if use_virtual_buoys:
+            gate_center, buoys = make_virtual_gate_from_path(
+                waypoint1,
+                waypoint2,
+                half_width_m=self.gate_half_width_m,
+                s_ratio=0.5,
+            )
+        else:
+            buoys = detected_buoys or []
 
         (
             predx,

@@ -79,6 +79,7 @@ class OpponentSelectorNode(Node):
             ("stale_timeout_sec", 2.0),
             ("publish_rate_hz", 10.0),
             ("twist_lowpass_alpha", 0.3),
+            ("min_absolute_speed_mps", 0.3),
             ("max_speed_mps", 5.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
@@ -99,6 +100,7 @@ class OpponentSelectorNode(Node):
         self.smoother = TwistSmoother(
             alpha=float(gp("twist_lowpass_alpha")),
             max_speed_mps=float(gp("max_speed_mps")))
+        self.min_absolute_speed_mps = float(gp("min_absolute_speed_mps"))
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -122,7 +124,8 @@ class OpponentSelectorNode(Node):
             f"opponent_selector: policy={self.policy}, "
             f"tracks={gp('tracked_objects_topic')}, "
             f"ego_odom={gp('ego_odom_topic')} -> {gp('twist_topic')} "
-            f"+ TF {self.map_frame} -> {self.opponent_frame}")
+            f"+ TF {self.map_frame} -> {self.opponent_frame}, "
+            f"min_abs_speed={self.min_absolute_speed_mps:.2f} m/s")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -170,47 +173,68 @@ class OpponentSelectorNode(Node):
             self.selected_id = None
             self.smoother.reset()
             return
-        selected = ranked[0]  # top-1; the ranked list is future multi-ship
-
-        try:
-            # Look up map<-base_link at the track's own stamp so an up-to-
-            # stale_timeout_sec old track is composed with the matching ego
-            # pose, not the latest one; fall back to latest if unavailable.
+        selected = None
+        tf_msg = None
+        pos_map = None
+        vel_map = None
+        for candidate in ranked:
             try:
-                tf_msg = self.tf_buffer.lookup_transform(
-                    self.map_frame, self.base_frame,
-                    Time(seconds=selected.stamp_sec))
-            except TransformException:
-                tf_msg = self.tf_buffer.lookup_transform(
-                    self.map_frame, self.base_frame, Time())
-        except TransformException as e:
-            self.get_logger().warning(
-                f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
+                # Look up map<-base_link at the track's own stamp so an
+                # up-to-stale_timeout_sec old track is composed with the
+                # matching ego pose, not the latest one; fall back to latest.
+                try:
+                    candidate_tf = self.tf_buffer.lookup_transform(
+                        self.map_frame, self.base_frame,
+                        Time(seconds=candidate.stamp_sec))
+                except TransformException:
+                    candidate_tf = self.tf_buffer.lookup_transform(
+                        self.map_frame, self.base_frame, Time())
+            except TransformException as e:
+                self.get_logger().warning(
+                    f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
+                    throttle_duration_sec=2.0)
+                return
+
+            q = candidate_tf.transform.rotation
+            t = candidate_tf.transform.translation
+            t_map_base = cloud_ops.make_transform(
+                cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w),
+                [t.x, t.y, t.z])
+
+            # The tracker reports a body-frame relative velocity.  Restore
+            # own-ship motion before applying the absolute-speed gate.
+            vel_abs_base = tracking_glue.ego_compensate(
+                candidate.velocity_base, self.ego_vel_base,
+                ego_yaw_rate=self.ego_yaw_rate, pos_base=candidate.position)
+            candidate_pos_map, candidate_vel_map = tracking_glue.to_map_frame(
+                candidate.position, vel_abs_base, t_map_base)
+            if np.hypot(candidate_vel_map[0], candidate_vel_map[1]) < \
+                    self.min_absolute_speed_mps:
+                continue
+
+            selected = candidate
+            tf_msg = candidate_tf
+            pos_map = candidate_pos_map
+            vel_map = candidate_vel_map
+            break
+
+        if selected is None:
+            self.get_logger().info(
+                "No valid track exceeds the absolute-speed threshold; "
+                "publishing no opponent output.",
                 throttle_duration_sec=2.0)
+            self.selected_id = None
+            self.smoother.reset()
             return
 
         if self.selected_id != selected.object_id:
             self.smoother.reset()
             self.selected_id = selected.object_id
             self.get_logger().info(
-                f"Selected opponent track id={selected.object_id} "
+                f"Selected moving opponent track id={selected.object_id} "
                 f"(dist={selected.distance:.1f} m)")
 
         q = tf_msg.transform.rotation
-        t = tf_msg.transform.translation
-        t_map_base = cloud_ops.make_transform(
-            cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w),
-            [t.x, t.y, t.z])
-
-        # Body-frame relative twist -> base_link axes -> + ego (linear AND
-        # omega x r; the tracker measures in the rotating base_link frame)
-        # -> map frame.
-        vel_rel_base = selected.velocity_base
-        vel_abs_base = tracking_glue.ego_compensate(
-            vel_rel_base, self.ego_vel_base,
-            ego_yaw_rate=self.ego_yaw_rate, pos_base=selected.position)
-        pos_map, vel_map = tracking_glue.to_map_frame(
-            selected.position, vel_abs_base, t_map_base)
 
         smoothed = self.smoother.update(vel_map[0], vel_map[1], selected.yaw_rate)
         if smoothed is None:

@@ -15,7 +15,8 @@ planner.
     v
 task2_cloud_filter                              [this package]
     TF livox_frame -> base_link (URDF owns the upside-down correction)
-    nonfinite -> range (0.5-60 m) -> self crop-box -> object height band
+    nonfinite -> range (1.5-60 m; own-hull radius excluded) -> self crop-box
+    -> object height band
     -> water removal (z band + guarded RANSAC horizontal plane)
     |
     v
@@ -60,13 +61,31 @@ MPPI planner (asv_trajectory_planner/planner_node.py,
 
 | Node (executable) | In | Out |
 |---|---|---|
-| `task2_cloud_filter` (`task2_cloud_filter_node`) | `/livox/lidar`, TF | `/task2/points_filtered`, `/task2/debug/*` (opt.) |
+| `task2_cloud_filter` (`task2_cloud_filter_node`) | `/livox/lidar`, TF | `/task2/points_filtered`, `/task2/points_filtered_visual` (display only), `/task2/self_vessel_marker`, `/task2/debug/*` (opt.) |
 | `opponent_selector` (`opponent_selector_node`) | `/tracked_objects`, `/odometry/filtered/local`, TF map->base_link | `/other_ship/twist`, TF map->opponent_vessel |
 
 Launch: `ros2 launch task2_perception task2_perception.launch.py`
 (args `enable_cloud_filter`, `enable_opponent_selector`, all default `true`).
 The submodule `classical_pipeline.launch.py` must be launched separately with
 the arguments shown above.
+
+## rosbag replay (one command)
+
+For an offline other-vessel recognition test, use the perception-only entry
+point. It starts rosbag playback, the required `odom -> base_link ->
+livox_frame` static TFs, cloud filtering, segmentation, tracking, and the
+opponent selector. It does **not** start actuators or physical sensors.
+
+```
+source install/setup.bash
+ros2 launch robot task2_bag_perception.launch.py \
+  bag_path:=/path/to/bag_directory
+```
+
+The default `bag_path` is the July 2026 collision-avoidance test bag on the
+development machine. Replay loops by default; set `loop:=false` to play once.
+If a bag needs recorded-topic QoS overrides, supply
+`qos_profile:=/path/to/qos_overrides.yaml`.
 
 ## Design notes
 
@@ -100,5 +119,17 @@ python3 -m pytest src/detection/task2_perception/test/ -q
 ## Parameters that MUST be measured on the vessel
 
 See `config/task2_perception_params.yaml`, marked `HUMAN: measure on vessel`:
-`waterline_z_m`, the `self_crop_*` box, and the URDF LiDAR mount
+`waterline_z_m`, `min_range_m` (own-hull exclusion radius), the `self_crop_*`
+box, and the URDF LiDAR mount
 angles/position.
+
+`/task2/self_vessel_marker` is a visualization-only pentagonal outline of the
+configured `self_crop_*` footprint. Its pointed bow faces `+X` (forward).
+Add it as a Marker in Foxglove with `base_link` (or its parent frame) as the
+fixed frame to see the own-vessel reference against the point cloud. It is
+enabled for rosbag debugging and disabled by `task2_real.launch.py`.
+
+`/task2/points_filtered_visual` is another visualization-only topic: it keeps
+x/y (the horizontal azimuth) unchanged and mirrors only z. Use it in a
+Foxglove panel instead of `/task2/points_filtered` when inspecting the
+upside-down LiDAR; do not connect it to perception or planning.

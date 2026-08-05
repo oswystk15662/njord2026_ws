@@ -26,6 +26,15 @@ planner_node:
     # Planning loop rate [Hz] (pre-existing parameter, kept as-is).
     planning_frequency: 2.0  # current default - human tuning expected; record any change
 
+    # Measured buoy positions from the YOLO + LiDAR fusion pipeline.  These
+    # are the normal source for buoy_outside_cost; GPS-derived virtual buoys
+    # remain available only for fallback experiments.
+    buoy_detections_topic: "/buoy_detections"
+    use_detected_buoys: true
+    use_virtual_buoys: false
+    buoy_detection_timeout_sec: 1.0
+    buoy_merge_distance_m: 1.0
+
     mppi:
       # Prediction horizon [steps] and step [s] (225 * 0.1 s = 22.5 s lookahead).
       horizon: 225           # current default - human tuning expected; record any change
@@ -51,10 +60,10 @@ planner_node:
       collision_cost_min: 10.0  # current default - human tuning expected; record any change
       collision_cost_max: 50.0  # current default - human tuning expected; record any change
 
-      # Virtual gate attraction cost (code: gate_cost_weight literal).
+      # Virtual gate attraction cost, used only when use_virtual_buoys=true.
       gate_cost_weight: 3.0   # current default - human tuning expected; record any change
 
-      # Virtual buoy corridor cost (code: buoy_cost_weight literal).
+      # Measured-buoy outside-corridor cost (code: buoy_cost_weight literal).
       buoy_cost_weight: 120.0  # current default - human tuning expected; record any change
 
       # Squared error to target speed (code: speed_cost).
@@ -73,10 +82,10 @@ planner_node:
       safe_distance_fore_loa: 6.4   # current default - human tuning expected; record any change
       safe_distance_aft_loa: 1.6    # current default - human tuning expected; record any change
 
-      # Virtual gate half width [m] around the GPS line (buoy spacing = 2x).
+      # Virtual gate half width [m], used only when use_virtual_buoys=true.
       gate_half_width_m: 4.0  # current default - human tuning expected; record any change
 
-      # Virtual buoy outside-margin [m] and longitudinal gating sigma [m]
+      # Buoy outside-margin [m] and longitudinal gating sigma [m]
       # (code: margin_m / longitudinal_sigma_m literals in buoy_outside_cost).
       buoy_margin_m: 1.0            # current default - human tuning expected; record any change
       buoy_longitudinal_sigma_m: 8.0  # current default - human tuning expected; record any change

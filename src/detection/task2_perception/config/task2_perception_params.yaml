@@ -12,8 +12,14 @@ task2_cloud_filter:
   ros__parameters:
     input_topic: "/livox/lidar"             # Livox driver PointCloud2 (~10 Hz)
     output_topic: "/task2/points_filtered"  # feed for the submodule preprocessing
+    # Foxglove-only copy: x/y are unchanged and only z is mirrored. Never use
+    # this topic as input to perception/planning because it is not a TF frame.
+    visual_output_topic: "/task2/points_filtered_visual"
+    publish_visual_z_mirror: true
     output_frame: "base_link"
-    min_range_m: 0.5        # [m] drop returns closer than this (near-field noise)
+    # LiDAR is mounted upside-down and sees the own hull.  Discard every
+    # point within this 3D radius of base_link before segmentation.
+    min_range_m: 1.5        # [m] self-hull / near-field exclusion radius
     max_range_m: 60.0       # [m] drop returns farther than this
     voxel_leaf_size_m: 0.0  # [m] 0 = off; the downstream pcl_preprocessing
                             # node voxelizes at 0.1 m — do not double-voxelize
@@ -45,6 +51,13 @@ task2_cloud_filter:
     self_crop_max_y: 0.8    # [m]
     self_crop_min_z: -0.5   # [m]
     self_crop_max_z: 1.5    # [m]
+    # Visualization only: boat-shaped pentagonal outline of the self-crop
+    # footprint. The bow points along +X (forward).
+    publish_self_marker: true
+    self_marker_topic: "/task2/self_vessel_marker"
+    self_marker_publish_rate_hz: 1.0
+    # 0 = bow along base_link +X. Set 180 if the physical bow is -X.
+    self_marker_yaw_deg: 0.0
     object_min_z_m: -0.2    # [m] object height band lower edge (base_link)
     object_max_z_m: 4.0     # [m] object height band upper edge
     publish_debug: false    # enables /task2/debug/* clouds
@@ -63,8 +76,13 @@ opponent_selector:
     target_track_id: -1       # used only with selection_policy: "track_id"
     min_length_m: 0.5         # [m] reject tracks with a smaller length (dimensions.x)
     max_length_m: 30.0        # [m] reject tracks with a larger length
-    min_point_count: 5        # [pts] cluster size gate
+    # ship_tracker_node receives PoseArray centroids, which do not carry the
+    # cluster point count; it therefore publishes point_count=0.  Keep this
+    # gate disabled until the tracker input/message is extended to preserve
+    # the count.
+    min_point_count: 0        # [pts] cluster size gate (0 = disabled)
     stale_timeout_sec: 2.0    # [s] tracks older than this are ignored
     publish_rate_hz: 10.0     # [Hz] output rate
     twist_lowpass_alpha: 0.3  # first-order IIR low-pass factor (0..1)
+    min_absolute_speed_mps: 0.3  # [m/s] ignore stationary objects after ego compensation
     max_speed_mps: 5.0        # [m/s] spike-rejection gate on opponent speed

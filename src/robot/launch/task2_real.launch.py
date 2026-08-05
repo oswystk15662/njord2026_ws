@@ -79,6 +79,7 @@ def generate_launch_description():
     enable_camera = LaunchConfiguration("enable_camera")
     enable_yolo = LaunchConfiguration("enable_yolo")
     enable_lidar = LaunchConfiguration("enable_lidar")
+    enable_buoy_perception = LaunchConfiguration("enable_buoy_perception")
     enable_ship_tracking = LaunchConfiguration("enable_ship_tracking")
     enable_mppi = LaunchConfiguration("enable_mppi")
     enable_nav2 = LaunchConfiguration("enable_nav2")
@@ -134,6 +135,7 @@ def generate_launch_description():
             "enable_zed2i": enable_camera,
             "enable_back_cam": "false",
             "enable_localization": "true",
+            "enable_pcl_buoy_detection": enable_buoy_perception,
             "enable_thruster": thruster_allowed,
         },
     )
@@ -155,6 +157,9 @@ def generate_launch_description():
         launch_arguments={
             "enable_cloud_filter": "true",
             "enable_opponent_selector": enable_ship_tracking,
+            # Self-vessel Marker is a Foxglove/RViz aid for bag debugging;
+            # do not publish it in the real-vessel runtime.
+            "publish_self_marker": "false",
         },
     )
 
@@ -210,6 +215,9 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_camera", default_value="true"),
             DeclareLaunchArgument("enable_yolo", default_value="true"),
             DeclareLaunchArgument("enable_lidar", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_buoy_perception", default_value="true",
+                description="Start YOLO-ROI + LiDAR buoy position detection for MPPI."),
             DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
             DeclareLaunchArgument("enable_mppi", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="true"),

@@ -6,6 +6,10 @@
 / water removal (z band + guarded RANSAC) / optional voxel
 -> /task2/points_filtered (frame = base_link, xyz + intensity).
 
+For Foxglove-only inspection, the node also publishes an optional copy with
+only z mirrored (/task2/points_filtered_visual).  That topic is deliberately
+not a physical TF frame and must never be connected to perception or planning.
+
 The upside-down LiDAR correction lives ONLY in the URDF (lidar_joint,
 roll = pi). This node just looks the transform up via TF. The
 lidar_inverted / lidar_*_deg parameters are an emergency manual pre-rotation
@@ -25,10 +29,12 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 
+from geometry_msgs.msg import Point
 from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs_py import point_cloud2
 from std_msgs.msg import Header
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker
 
 try:
     from tf2_ros import TransformException
@@ -93,6 +99,8 @@ class CloudFilterNode(Node):
         self.declare_parameters("", [
             ("input_topic", "/livox/lidar"),
             ("output_topic", "/task2/points_filtered"),
+            ("visual_output_topic", "/task2/points_filtered_visual"),
+            ("publish_visual_z_mirror", True),
             ("output_frame", "base_link"),
             ("min_range_m", 0.5),
             ("max_range_m", 60.0),
@@ -115,6 +123,10 @@ class CloudFilterNode(Node):
             ("self_crop_max_y", 0.8),
             ("self_crop_min_z", -0.5),
             ("self_crop_max_z", 1.5),
+            ("publish_self_marker", True),
+            ("self_marker_topic", "/task2/self_vessel_marker"),
+            ("self_marker_publish_rate_hz", 1.0),
+            ("self_marker_yaw_deg", 0.0),
             ("object_min_z_m", -0.2),
             ("object_max_z_m", 4.0),
             ("publish_debug", False),
@@ -122,6 +134,10 @@ class CloudFilterNode(Node):
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
         self.output_frame = str(gp("output_frame"))
+        self.visual_output_frame = self.output_frame
+        self.publish_visual_z_mirror = bool(gp("publish_visual_z_mirror"))
+        self.publish_self_marker_enabled = bool(gp("publish_self_marker"))
+        self.self_marker_yaw_rad = np.deg2rad(float(gp("self_marker_yaw_deg")))
         self.min_range = float(gp("min_range_m"))
         self.max_range = float(gp("max_range_m"))
         self.voxel_leaf = float(gp("voxel_leaf_size_m"))
@@ -167,6 +183,20 @@ class CloudFilterNode(Node):
         self.rng = np.random.default_rng(0)
 
         self.pub = self.create_publisher(PointCloud2, str(gp("output_topic")), 10)
+        self.visual_pub = self.create_publisher(
+            PointCloud2, str(gp("visual_output_topic")), 10)
+        # A boat-shaped outline makes the base_link origin and +X heading
+        # visible in Foxglove/RViz. It is visualization only and does not
+        # affect the filtered cloud.
+        self.self_marker_pub = None
+        self.self_marker_timer = None
+        if self.publish_self_marker_enabled:
+            self.self_marker_pub = self.create_publisher(
+                Marker, str(gp("self_marker_topic")), 1)
+            marker_period = 1.0 / max(
+                float(gp("self_marker_publish_rate_hz")), 1e-6)
+            self.self_marker_timer = self.create_timer(
+                marker_period, self.publish_self_marker)
         if self.publish_debug:
             self.pub_raw = self.create_publisher(
                 PointCloud2, "/task2/debug/raw_transformed", 1)
@@ -183,9 +213,49 @@ class CloudFilterNode(Node):
 
         self.get_logger().info(
             f"task2_cloud_filter: {gp('input_topic')} -> {gp('output_topic')} "
-            f"(frame={self.output_frame}, waterline_z={self.waterline_z} m)")
+            f"(frame={self.output_frame}, waterline_z={self.waterline_z} m, "
+            f"self marker={'on' if self.publish_self_marker_enabled else 'off'}, "
+            f"visual_z_mirror={self.publish_visual_z_mirror})")
 
     # ------------------------------------------------------------------
+    def publish_self_marker(self):
+        """Publish a pentagonal boat footprint; its bow points along +X."""
+        if self.self_marker_pub is None:
+            return
+        marker = Marker()
+        marker.header.stamp = self.get_clock().now().to_msg()
+        marker.header.frame_id = self.output_frame
+        marker.ns = "self_vessel"
+        marker.id = 0
+        marker.type = Marker.LINE_STRIP
+        marker.action = Marker.ADD
+        marker.pose.orientation.w = 1.0
+        marker.scale.x = 0.08  # LINE_STRIP width [m]
+        marker.color.r = 0.1
+        marker.color.g = 0.8
+        marker.color.b = 1.0
+        marker.color.a = 1.0
+        min_x, min_y, _ = self.self_min
+        max_x, max_y, _ = self.self_max
+        # Bow: max_x,+/-0. The shoulders sit 65% of the way aft, followed
+        # by a full-width transom at min_x. The closed outline is a clear
+        # five-sided ship silhouette even when viewed from above.
+        shoulder_x = min_x + 0.65 * (max_x - min_x)
+        outline = [
+            (max_x, 0.0),
+            (shoulder_x, max_y),
+            (min_x, max_y),
+            (min_x, min_y),
+            (shoulder_x, min_y),
+            (max_x, 0.0),
+        ]
+        c, s = np.cos(self.self_marker_yaw_rad), np.sin(self.self_marker_yaw_rad)
+        marker.points = [
+            Point(x=float(c * x - s * y), y=float(s * x + c * y), z=0.0)
+            for x, y in outline
+        ]
+        self.self_marker_pub.publish(marker)
+
     def _lookup(self, target: str, source: str, stamp) -> np.ndarray | None:
         try:
             tf_msg = self.tf_buffer.lookup_transform(target, source, stamp)
@@ -264,6 +334,15 @@ class CloudFilterNode(Node):
             points = np.vstack(list(self.accumulator))
 
         self.pub.publish(array_to_cloud(header, points))
+        if self.publish_visual_z_mirror:
+            # Visualization only: x/y (and therefore azimuth) are unchanged;
+            # only height is mirrored for an intuitive upside-down-LiDAR view.
+            visual_points = points.copy()
+            visual_points[:, 2] *= -1.0
+            visual_header = Header()
+            visual_header.stamp = header.stamp
+            visual_header.frame_id = self.visual_output_frame
+            self.visual_pub.publish(array_to_cloud(visual_header, visual_points))
 
 
 def main(args=None):

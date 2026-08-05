@@ -75,6 +75,18 @@
 | `publish_rate_hz` | double | Hz | 10.0 | 出力レート | − | | |
 | `twist_lowpass_alpha` | double | − (0..1) | 0.3 | 一次 IIR ローパス係数 | ○ | | ✓ |
 | `max_speed_mps` | double | m/s | 5.0 | スパイク棄却ゲート(超過サンプルは破棄) | ○ | | ✓ |
+| `min_absolute_speed_mps` | double | m/s | 0.3 | ego 補償後の絶対速度がこの値未満の物体を他船候補から除外 | ○ | | ✓ |
+
+## 3.1 MPPI ブイ外側コスト（パッケージ: asv_trajectory_planner）
+
+通常は `/buoy_detections` の LiDAR 融合位置を用い、GPS 直線に対して各ブイの外側へ出る軌道にコストを与える。`use_virtual_buoys` は旧来の GPS 由来仮想ブイへ戻すための明示的なフォールバックで、既定値は `false`。
+
+| Parameter | Default | Meaning |
+| --- | --- | --- |
+| `use_detected_buoys` | `true` | `/buoy_detections` を MPPI のブイ座標として使う |
+| `use_virtual_buoys` | `false` | GPS 直線上の仮想ブイを使う旧方式へ戻す |
+| `buoy_detection_timeout_sec` | `1.0` | この時間を超えた検出を破棄 |
+| `buoy_merge_distance_m` | `1.0` | 同一ブイとみなして統合する距離 |
 
 (コード内定数: スパイクゲートの yaw rate 上限 `max_yaw_rate_rps` = 1.5 rad/s、`TwistSmoother` の既定値でパラメータ非公開)
 

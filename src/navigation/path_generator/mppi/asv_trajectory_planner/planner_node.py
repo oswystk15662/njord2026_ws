@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 
+import math
+
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 
-from geometry_msgs.msg import PoseStamped, TwistStamped
+from geometry_msgs.msg import PointStamped, PoseStamped, TwistStamped
 from nav_msgs.msg import Odometry, Path
 
 from tf2_ros import Buffer, TransformListener
@@ -45,6 +47,11 @@ class PlannerNode(Node):
         self.declare_parameter("waypoint1_topic", "/waypoint1_pose")
         self.declare_parameter("waypoint2_topic", "/waypoint2_pose")
         self.declare_parameter("path_topic", "/planned_path")
+        self.declare_parameter("buoy_detections_topic", "/buoy_detections")
+        self.declare_parameter("use_detected_buoys", True)
+        self.declare_parameter("use_virtual_buoys", False)
+        self.declare_parameter("buoy_detection_timeout_sec", 1.0)
+        self.declare_parameter("buoy_merge_distance_m", 1.0)
 
         # TF frames
         self.declare_parameter("own_frame", "base_link")
@@ -104,6 +111,13 @@ class PlannerNode(Node):
         self.waypoint1_topic = self.get_parameter("waypoint1_topic").value
         self.waypoint2_topic = self.get_parameter("waypoint2_topic").value
         self.path_topic = self.get_parameter("path_topic").value
+        self.buoy_detections_topic = self.get_parameter("buoy_detections_topic").value
+        self.use_detected_buoys = self.get_parameter("use_detected_buoys").value
+        self.use_virtual_buoys = self.get_parameter("use_virtual_buoys").value
+        self.buoy_detection_timeout_sec = float(
+            self.get_parameter("buoy_detection_timeout_sec").value)
+        self.buoy_merge_distance_m = float(
+            self.get_parameter("buoy_merge_distance_m").value)
 
         self.own_frame = self.get_parameter("own_frame").value
         self.other_ship_frame = self.get_parameter("other_ship_frame").value
@@ -180,6 +194,8 @@ class PlannerNode(Node):
         self.latest_other_ship_twist = None
         self.latest_waypoint1_pose = None
         self.latest_waypoint2_pose = None
+        # (x, y, receipt time in seconds), all expressed in frame_id.
+        self.detected_buoys = []
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -212,6 +228,13 @@ class PlannerNode(Node):
             10,
         )
 
+        self.buoy_detection_sub = self.create_subscription(
+            PointStamped,
+            self.buoy_detections_topic,
+            self.buoy_detection_callback,
+            10,
+        )
+
         self.path_pub = self.create_publisher(
             Path,
             self.path_topic,
@@ -226,6 +249,10 @@ class PlannerNode(Node):
         self.get_logger().info(f"Subscribe other_ship_twist: {self.other_ship_twist_topic}")
         self.get_logger().info(f"Subscribe waypoint1      : {self.waypoint1_topic}")
         self.get_logger().info(f"Subscribe waypoint2      : {self.waypoint2_topic}")
+        self.get_logger().info(f"Subscribe buoy detections: {self.buoy_detections_topic}")
+        self.get_logger().info(
+            f"Buoys detected/virtual  : {self.use_detected_buoys}/"
+            f"{self.use_virtual_buoys}")
         self.get_logger().info(f"TF own_frame             : {self.own_frame}")
         self.get_logger().info(f"TF other_ship_frame      : {self.other_ship_frame}")
         self.get_logger().info(f"Publish planned_path     : {self.path_topic}")
@@ -245,6 +272,38 @@ class PlannerNode(Node):
 
     def waypoint2_callback(self, msg: PoseStamped):
         self.latest_waypoint2_pose = msg
+
+    def buoy_detection_callback(self, msg: PointStamped):
+        """Store a map-frame buoy detection, merging repeated cluster outputs."""
+        try:
+            try:
+                tf_msg = self.tf_buffer.lookup_transform(
+                    self.frame_id, msg.header.frame_id,
+                    Time.from_msg(msg.header.stamp))
+            except TransformException:
+                tf_msg = self.tf_buffer.lookup_transform(
+                    self.frame_id, msg.header.frame_id, Time())
+        except TransformException as e:
+            self.get_logger().warning(
+                f"Cannot transform buoy detection to {self.frame_id}: {e}",
+                throttle_duration_sec=2.0)
+            return
+
+        q = tf_msg.transform.rotation
+        yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        c, s = math.cos(yaw), math.sin(yaw)
+        t = tf_msg.transform.translation
+        x = t.x + c * msg.point.x - s * msg.point.y
+        y = t.y + s * msg.point.x + c * msg.point.y
+        now_sec = self.get_clock().now().nanoseconds * 1e-9
+
+        for i, (old_x, old_y, _) in enumerate(self.detected_buoys):
+            if math.hypot(x - old_x, y - old_y) <= self.buoy_merge_distance_m:
+                self.detected_buoys[i] = (x, y, now_sec)
+                return
+        self.detected_buoys.append((x, y, now_sec))
 
     def timer_callback(self):
         if self.latest_own_odom is None:
@@ -285,12 +344,21 @@ class PlannerNode(Node):
 
                 other_transform = None
 
+        now_sec = self.get_clock().now().nanoseconds * 1e-9
+        self.detected_buoys = [
+            buoy for buoy in self.detected_buoys
+            if now_sec - buoy[2] <= self.buoy_detection_timeout_sec
+        ]
+        buoy_positions = [(x, y) for x, y, _ in self.detected_buoys]
+
         path = self.trajectory_generator.generate(
             own_odom=self.latest_own_odom,
             other_transform=other_transform,
             other_twist=self.latest_other_ship_twist,
             waypoint1_pose=self.latest_waypoint1_pose,
             waypoint2_pose=self.latest_waypoint2_pose,
+            detected_buoys_map=buoy_positions if self.use_detected_buoys else [],
+            use_virtual_buoys=bool(self.use_virtual_buoys),
         )
 
         now = self.get_clock().now().to_msg()
@@ -304,7 +372,8 @@ class PlannerNode(Node):
         self.path_pub.publish(path)
 
         self.get_logger().info(
-            f"Published path: {len(path.poses)} poses",
+            f"Published path: {len(path.poses)} poses, "
+            f"detected_buoys={len(buoy_positions)}",
             throttle_duration_sec=2.0,
         )
 
