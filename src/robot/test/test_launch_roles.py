@@ -136,3 +136,16 @@ def test_task_launch_files_declare_role_argument(filename):
     assert "'role'" in source or '"role"' in source
     assert "choices=['minipc', 'standalone']" in source or 'choices=["minipc", "standalone"]' in source
     assert "default_value='minipc'" in source or 'default_value="minipc"' in source
+
+
+def test_ground_pc_keeps_front_and_back_video_receivers_separate():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert "ground_video_receiver.launch.py" in source
+    assert "ground_h26x_receiver.launch.py" in source
+    assert '"front_video_port", default_value="5600"' in source
+    assert '"back_video_port", default_value="5601"' in source
+    assert '"front_video_topic", default_value="/ground_video/image/compressed"' in source
+    assert '"back_video_topic", default_value="/ground_video/back_cam/image_raw"' in source
+    assert '"topic": front_video_topic' in source
+    assert '"topic": back_video_topic' in source

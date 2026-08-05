@@ -14,11 +14,20 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     zed2i_share = FindPackageShare("zed2i_driver")
     zed2i_share_path = get_package_share_directory("zed2i_driver")
+    front_video_port = LaunchConfiguration("front_video_port")
+    front_video_topic = LaunchConfiguration("front_video_topic")
+    back_video_port = LaunchConfiguration("back_video_port")
+    back_video_codec = LaunchConfiguration("back_video_codec")
+    back_video_topic = LaunchConfiguration("back_video_topic")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
         ),
+        launch_arguments={
+            "port": front_video_port,
+            "topic": front_video_topic,
+        }.items(),
     )
 
     back_cam_jpeg_receiver_launch = IncludeLaunchDescription(
@@ -35,6 +44,11 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(zed2i_share_path, "launch", "ground_h26x_receiver.launch.py")
         ),
+        launch_arguments={
+            "port": back_video_port,
+            "codec": back_video_codec,
+            "topic": back_video_topic,
+        }.items(),
     )
 
     joy_node = Node(
@@ -61,6 +75,19 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
+            # The two receivers ingest different RTP streams and must keep
+            # separate UDP ports and ROS topics.
+            DeclareLaunchArgument("front_video_port", default_value="5600"),
+            DeclareLaunchArgument(
+                "front_video_topic", default_value="/ground_video/image/compressed"
+            ),
+            DeclareLaunchArgument("back_video_port", default_value="5601"),
+            DeclareLaunchArgument(
+                "back_video_codec", default_value="h264", choices=["h264", "h265"]
+            ),
+            DeclareLaunchArgument(
+                "back_video_topic", default_value="/ground_video/back_cam/image_raw"
+            ),
             joy_node,
             ground_station_heartbeat,
             ground_video_receiver_launch,
