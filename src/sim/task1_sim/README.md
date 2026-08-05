@@ -9,11 +9,13 @@ models that flow in a simulation-local `map` frame.
 
 ## Course geometry (default: `task_type:=task1`)
 
-The default route is a Cartesian sim approximation of the official
-NJORD 2026 Task1 cardinal-marker slalom:
+The default route is a Cartesian sim approximation of the full NJORD 2026
+Task1 course: the task1-1 maneuvering section followed by the cardinal-marker
+slalom:
 
 ```
-(50,-25) -> (24,-35) -> (15,-15) -> (8,-35) -> (0,-25)
+(0,0) -> (10,5) -> ... -> (40,0) -> (50,0) -> (50,-25) ->
+    (24,-35) -> (15,-15) -> (8,-35) -> (0,-25)
 ```
 
 Three cardinal marks sit at `y=-25` along that route and force an

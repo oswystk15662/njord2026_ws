@@ -53,21 +53,99 @@ task1_config:
       longitude: 139.7938614790
       name: "GPS 4 - Task1.2 diagonal goal (corner A)"
 
-  # Cardinal-marker slalom route. Interior turns match
-  # task1_sim/config/task1_params.yaml's waypoint2_xy, and the marker
-  # geometry/orientation (S, N, S) matches its buoy_position_xy/buoy_marks so
-  # the sim's own goal-tracking and the actual Nav2 route agree.
-  #
-  # id 1 (50,0) is a transit point, not a competition GPS point: it keeps
-  # the boat east of/above the marker corridor (all markers sit at y=-25,
-  # x<=28) while crossing from spawn (0,0) out to the course, so it doesn't
-  # cut through the cardinal marks (and their /virtual_obstacles walls)
-  # before the slalom starts. Nav2 threads a single path through every pose
-  # in this list starting from wherever the boat currently is, so without
-  # this transit point the very first leg (spawn -> id 2) runs straight
-  # through the marker field.
+  # Full Task1 route: task1-1's maneuvering waypoints, followed by the
+  # cardinal-marker S/N/S slalom. This order matches task1_sim's evaluation
+  # sequence (waypoint1_xy, GPS checkpoints, then waypoint2_xy).
   waypoints:
     - id: 1
+      x: 0.0000
+      y: 0.0000
+      yaw: 0.4636
+      type: "start"
+      name: "GPS 1 - Task1-1 Start"
+      tolerance_m: 2.0
+
+    - id: 2
+      x: 10.0000
+      y: 5.0000
+      yaw: -1.0304
+      type: "waypoint"
+      name: "Task1-1 waypoint 1"
+      tolerance_m: 2.0
+
+    - id: 3
+      x: 13.0000
+      y: 0.0000
+      yaw: -1.0304
+      type: "waypoint"
+      name: "Task1-1 waypoint 2"
+      tolerance_m: 2.0
+
+    - id: 4
+      x: 16.0000
+      y: -5.0000
+      yaw: 0.9828
+      type: "waypoint"
+      name: "Task1-1 waypoint 3"
+      tolerance_m: 2.0
+
+    - id: 5
+      x: 19.0000
+      y: -0.5000
+      yaw: 1.1384
+      type: "waypoint"
+      name: "Task1-1 waypoint 4"
+      tolerance_m: 2.0
+
+    - id: 6
+      x: 22.0000
+      y: 6.0000
+      yaw: -1.1071
+      type: "waypoint"
+      name: "Task1-1 waypoint 5"
+      tolerance_m: 2.0
+
+    - id: 7
+      x: 25.0000
+      y: 0.0000
+      yaw: -1.0304
+      type: "waypoint"
+      name: "Task1-1 waypoint 6"
+      tolerance_m: 2.0
+
+    - id: 8
+      x: 28.0000
+      y: -5.0000
+      yaw: 0.9273
+      type: "waypoint"
+      name: "Task1-1 waypoint 7"
+      tolerance_m: 2.0
+
+    - id: 9
+      x: 31.0000
+      y: -1.0000
+      yaw: 0.7854
+      type: "waypoint"
+      name: "Task1-1 waypoint 8"
+      tolerance_m: 2.0
+
+    - id: 10
+      x: 34.0000
+      y: 2.0000
+      yaw: -0.3218
+      type: "waypoint"
+      name: "Task1-1 waypoint 9"
+      tolerance_m: 2.0
+
+    - id: 11
+      x: 40.0000
+      y: 0.0000
+      yaw: 0.0000
+      type: "waypoint"
+      name: "Task1-1 waypoint 10"
+      tolerance_m: 2.0
+
+    - id: 12
       x: 50.0000
       y: 0.0000
       yaw: -1.5708
@@ -75,15 +153,15 @@ task1_config:
       name: "Transit - clear of marker corridor"
       tolerance_m: 2.0
 
-    - id: 2
+    - id: 13
       x: 50.0000
       y: -25.0000
       yaw: -2.7744
       type: "start"
-      name: "GPS 1 - Slalom Start"
+      name: "GPS 2 - Slalom Start"
       tolerance_m: 2.0
 
-    - id: 3
+    - id: 14
       x: 24.0000
       y: -35.0000
       yaw: 1.9937
@@ -91,7 +169,7 @@ task1_config:
       name: "Slalom turn 1 (pass south of marker 1, S)"
       tolerance_m: 2.0
 
-    - id: 4
+    - id: 15
       x: 15.0000
       y: -15.0000
       yaw: -1.9075
@@ -99,7 +177,7 @@ task1_config:
       name: "Slalom turn 2 (pass north of marker 2, N)"
       tolerance_m: 2.0
 
-    - id: 5
+    - id: 16
       x: 8.0000
       y: -35.0000
       yaw: 2.2455
@@ -107,7 +185,7 @@ task1_config:
       name: "Slalom turn 3 (pass south of marker 3, S)"
       tolerance_m: 2.0
 
-    - id: 6
+    - id: 17
       x: 0.0000
       y: -25.0000
       yaw: 2.2455
@@ -117,7 +195,7 @@ task1_config:
 
   constraints:
     follow_test: false
-    route_pattern: "cardinal_slalom"
+    route_pattern: "task1_1_then_cardinal_slalom"
     cardinal_marker_detection: true
     vision_halfway: false
 
