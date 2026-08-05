@@ -60,8 +60,7 @@ private:
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr parameter_callback_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr pub_cmd_vel_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_emg_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_safety_emergency_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_soft_emg_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_operating_mode_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_control_status_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr pub_heartbeat_;

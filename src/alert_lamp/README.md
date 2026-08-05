@@ -19,7 +19,7 @@ or RTK-status interfaces. The initial integration contract is therefore:
 | Input | Type | Default topic |
 | --- | --- | --- |
 | Operating mode | `std_msgs/msg/String` (`manual` or `auto`) | `/system/operating_mode` |
-| Emergency stop | `std_msgs/msg/Bool` | `/safety/emergency_stop` |
+| Emergency stop | `std_msgs/msg/UInt8` (`RUNNING=0`, `SOFT_EMG=1`, `HARD_EMG=2`) | `/safety/emergency_stop` |
 | Autonomy ready | `std_msgs/msg/Bool` | `/autonomy/ready` |
 | Localization | `nav_msgs/msg/Odometry` | `/odometry/filtered/global` |
 | GNSS / RTK quality | `sensor_msgs/msg/NavSatFix` | `/sensor/vehicle_gnss/fix/raw` |

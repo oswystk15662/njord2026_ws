@@ -90,10 +90,10 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
       "auto" ? OperatingMode::AUTO : OperatingMode::UNKNOWN;
       mode_received_ = true;
     });
-  emergency_sub_ = create_subscription<std_msgs::msg::Bool>(
+  emergency_sub_ = create_subscription<std_msgs::msg::UInt8>(
     declare_parameter<std::string>("topics.emergency_stop", "/safety/emergency_stop"), 10,
-    [this](const std_msgs::msg::Bool::SharedPtr message) {
-      emergency_stop_ = message->data; emergency_received_ = true;
+    [this](const std_msgs::msg::UInt8::SharedPtr message) {
+      emergency_stop_ = message->data != 0U; emergency_received_ = true;
                                                                                                                       });
   autonomy_ready_sub_ = create_subscription<std_msgs::msg::Bool>(
     declare_parameter<std::string>("topics.autonomy_ready", "/autonomy/ready"), 10,

@@ -7,7 +7,10 @@ be added alongside it without changing the manual-control package.
 ## serial_writer
 
 - subscribes `command_topic` (`std_msgs/msg/Float32MultiArray`), first 4 thrust commands in N
-- subscribes `/emg`, `/red`, `/yellow`, `/green` (`std_msgs/msg/Bool`)
+- subscribes `/soft_emg`, `/red`, `/yellow`, `/green` (`std_msgs/msg/Bool`)
+- publishes `/micon/relay_active` (`std_msgs/msg/Bool`) from the firmware's relay-state byte
+  and `/safety/emergency_stop` (`std_msgs/msg/UInt8`): `RUNNING=0`, `SOFT_EMG=1`,
+  `HARD_EMG=2`
 - parameters: `serial_port` (default `/dev/ttyUSB0`), `baud` (default `115200`),
   `command_topic` (default `/thruster_command` from `thruster_driver`), and
   `bms_topic` (default `/bms`)
@@ -24,8 +27,10 @@ CRC-16/CCITT-FALSE. The payload contains four little-endian `float32` thrust
 values followed by `control_flags`: `bit3=emg`, `bit2=green`, `bit1=yellow`,
 `bit0=red`.
 
-Emergency stop enforcement is the Micon firmware's responsibility and requires
-hardware validation.
+The relay-state byte is telemetry only: GPIO15 follows the relay and can become
+active during a software stop, so it is not an independent physical-E-stop signal.
+`SOFT_EMG` is emitted whenever `/soft_emg` is true; otherwise an active relay is
+reported as `HARD_EMG` for operational status.
 
 ## BMS receive
 

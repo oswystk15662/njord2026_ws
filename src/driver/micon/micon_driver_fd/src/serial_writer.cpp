@@ -166,8 +166,8 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 
   sub_thrust_ = create_subscription<std_msgs::msg::Float32MultiArray>(
     command_topic_, 10, std::bind(&SerialWriter::thrust_cb, this, std::placeholders::_1));
-  sub_emg_ = create_subscription<std_msgs::msg::Bool>(
-    "/emg", 10, std::bind(&SerialWriter::emg_cb, this, std::placeholders::_1));
+  sub_soft_emg_ = create_subscription<std_msgs::msg::Bool>(
+    "/soft_emg", 10, std::bind(&SerialWriter::soft_emg_cb, this, std::placeholders::_1));
   sub_red_ = create_subscription<std_msgs::msg::Bool>(
     "/red", 10, std::bind(&SerialWriter::red_cb, this, std::placeholders::_1));
   sub_yellow_ = create_subscription<std_msgs::msg::Bool>(
@@ -175,6 +175,9 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
   sub_green_ = create_subscription<std_msgs::msg::Bool>(
     "/green", 10, std::bind(&SerialWriter::green_cb, this, std::placeholders::_1));
   pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
+  pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
+  pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
+    "/safety/emergency_stop", rclcpp::QoS(1).transient_local());
 
   fd_ = open_serial(serial_port_, baud_);
   timer_ = create_wall_timer(
@@ -195,12 +198,14 @@ void SerialWriter::thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr m
   }
 }
 
-void SerialWriter::emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
+void SerialWriter::soft_emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
 {
-  // Latched into the packet's emergency bit (control_flags bit3); the ESP32
-  // firmware also enforces its own hardware/watchdog E-stop independently.
-  std::lock_guard<std::mutex> lock(mutex_);
-  flags_.emergency = msg->data;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    soft_emg_ = msg->data;
+    flags_.emergency = soft_emg_;
+  }
+  publish_safety_state();
 }
 
 void SerialWriter::red_cb(const std_msgs::msg::Bool::SharedPtr msg)
@@ -234,6 +239,25 @@ void SerialWriter::timer_cb()
   if (result != static_cast<ssize_t>(packet.size())) {
     RCLCPP_WARN(get_logger(), "serial write failed or incomplete");
   }
+  publish_safety_state();
+}
+
+void SerialWriter::publish_safety_state()
+{
+  bool soft_emg = false;
+  bool relay_active = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    soft_emg = soft_emg_;
+    relay_active = relay_active_;
+  }
+  pub_relay_active_->publish(std_msgs::msg::Bool().set__data(relay_active));
+  // GPIO15 follows relay state; it is not an independent physical E-stop input.
+  // A commanded soft stop has priority, because it can itself change relay state.
+  const auto state = soft_emg ? EmergencyStopState::SOFT_EMG :
+    relay_active ? EmergencyStopState::HARD_EMG : EmergencyStopState::RUNNING;
+  pub_safety_emergency_->publish(std_msgs::msg::UInt8().set__data(
+      static_cast<uint8_t>(state)));
 }
 
 void SerialWriter::read_bms()
@@ -250,7 +274,15 @@ void SerialWriter::read_bms()
     return;
   }
 
-  serial_rx_buffer_.append(buffer, static_cast<size_t>(count));
+  for (ssize_t index = 0; index < count; ++index) {
+    const auto byte = static_cast<uint8_t>(buffer[index]);
+    if (byte == 0x00U || byte == 0x01U) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      relay_active_ = byte == 0x01U;
+    } else {
+      serial_rx_buffer_.push_back(static_cast<char>(byte));
+    }
+  }
   size_t newline = 0;
   while ((newline = serial_rx_buffer_.find('\n')) != std::string::npos) {
     const std::string line = serial_rx_buffer_.substr(0, newline);

@@ -63,9 +63,7 @@ JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
   sub_ = create_subscription<sensor_msgs::msg::Joy>(
     "joy", 10, std::bind(&JoyConverter::joy_cb, this, std::placeholders::_1));
   pub_cmd_vel_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_manual", 10);
-  pub_emg_ = create_publisher<std_msgs::msg::Bool>("/emg", 10);
-  pub_safety_emergency_ = create_publisher<std_msgs::msg::Bool>(
-    "/safety/emergency_stop", 10);
+  pub_soft_emg_ = create_publisher<std_msgs::msg::Bool>("/soft_emg", 10);
   pub_operating_mode_ = create_publisher<std_msgs::msg::String>(
     "/system/operating_mode", rclcpp::QoS(1).transient_local());
   pub_control_status_ = create_publisher<std_msgs::msg::String>(
@@ -99,8 +97,7 @@ void JoyConverter::joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
   if (manual_mode_) {
     pub_cmd_vel_->publish(output.cmd_vel);
   }
-  pub_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
-  pub_safety_emergency_->publish(std_msgs::msg::Bool().set__data(output.emergency));
+  pub_soft_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
   pub_operating_mode_->publish(
     std_msgs::msg::String().set__data(manual_mode_ ? "manual" : "auto"));
   pub_control_status_->publish(std_msgs::msg::String().set__data(
