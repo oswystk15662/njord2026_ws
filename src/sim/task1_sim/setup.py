@@ -10,6 +10,7 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", [
+            "launch/task1_navigation.launch.py",
             "launch/task1_sim.launch.py",
             "launch/task1_sim_truth.launch.py",
             "launch/task1_sim_sensor_parity.launch.py",

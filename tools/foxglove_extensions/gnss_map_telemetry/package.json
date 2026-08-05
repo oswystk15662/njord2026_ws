@@ -1,0 +1,12 @@
+{
+  "name": "gnss-map-telemetry",
+  "displayName": "GNSS Map Telemetry",
+  "description": "Interactive GNSS map with a top-right latitude, longitude, and speed legend.",
+  "publisher": "KeioRoboticsAssociation",
+  "version": "0.1.1",
+  "license": "Apache-2.0",
+  "main": "./dist/extension.js",
+  "scripts": {
+    "package": "zip -r gnss-map-telemetry-0.1.1.foxe package.json dist"
+  }
+}

@@ -29,6 +29,14 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
   topic_thruster_command_ = this->declare_parameter<std::string>(
     "topic_thruster_command",
     "/thruster_command");
+  thruster_force_sign_ = this->declare_parameter<std::vector<double>>(
+    "thruster_force_sign", {1.0, 1.0, 1.0, 1.0});
+  if (thruster_force_sign_.size() != 4U || std::any_of(
+      thruster_force_sign_.begin(), thruster_force_sign_.end(),
+      [](double sign) {return sign != -1.0 && sign != 1.0;}))
+  {
+    throw std::runtime_error("thruster_force_sign must contain four values, each -1 or 1");
+  }
   topic_odom_ = this->declare_parameter<std::string>("topic_odom", "/odom");
 
   frame_world_ = this->declare_parameter<std::string>("frame_world", "world");
@@ -120,7 +128,7 @@ void SimNode::commandCallback(const std_msgs::msg::Float32MultiArray::SharedPtr 
 
   latest_forces_.resize(msg->data.size());
   for (size_t i = 0; i < msg->data.size(); ++i) {
-    latest_forces_[i] = static_cast<double>(msg->data[i]);
+    latest_forces_[i] = static_cast<double>(msg->data[i]) * thruster_force_sign_[i];
   }
 }
 

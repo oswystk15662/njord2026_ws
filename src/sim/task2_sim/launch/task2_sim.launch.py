@@ -53,7 +53,12 @@ def generate_launch_description():
         name="dutyed_tf_pub_with_disturbance_node",
         parameters=[
             os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {"publish_tf": True},
+            {
+                "publish_tf": True,
+                # Simulation uses geometric body-frame forces directly; do
+                # not apply the real vessel's port-side wiring correction.
+                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
+            },
         ],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_dynamics")),
@@ -98,6 +103,8 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
+                "allocation.wrench_sign": [1.0, 1.0, 1.0],
+                "thrusters.reverse": [False, False, False, False],
             },
         ],
         output="screen",

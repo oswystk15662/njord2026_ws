@@ -49,6 +49,9 @@ private:
   double update_rate_hz_{50.0};
   bool publish_tf_{true};
 
+  // /thruster_command follows the actuator wiring convention.  Convert it
+  // back to body-frame signed force before applying the vessel dynamics.
+  std::vector<double> thruster_force_sign_{1.0, 1.0, 1.0, 1.0};
   std::vector<double> latest_forces_;
 
   double x_{0.0};

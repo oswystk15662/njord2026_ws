@@ -16,9 +16,9 @@ std::vector<njord::thruster_driver::ThrusterGeometry> driverGeometry()
 {
   return {
     {0.1803, -0.2500, kPi / 4.0, 51.5, false},
-    {0.1803, 0.2500, -kPi / 4.0, 51.5, false},
+    {0.1803, 0.2500, -kPi / 4.0, 51.5, true},
     {-0.1803, -0.2500, 3.0 * kPi / 4.0, 51.5, false},
-    {-0.1803, 0.2500, -3.0 * kPi / 4.0, 51.5, false}};
+    {-0.1803, 0.2500, -3.0 * kPi / 4.0, 51.5, true}};
 }
 
 std::vector<njord::sim::SimThrusterGeometry> simulatorGeometry()
@@ -30,12 +30,25 @@ std::vector<njord::sim::SimThrusterGeometry> simulatorGeometry()
     {-0.1803, 0.2500, -3.0 * kPi / 4.0}};
 }
 
+std::vector<double> restorePhysicalForces(
+  const std::vector<double> & commands,
+  const std::vector<njord::thruster_driver::ThrusterGeometry> & geometry)
+{
+  std::vector<double> forces;
+  forces.reserve(commands.size());
+  for (std::size_t i = 0; i < commands.size(); ++i) {
+    const double wiring_sign = geometry[i].reverse ? -1.0 : 1.0;
+    forces.push_back(commands[i] * wiring_sign * geometry[i].force_per_duty);
+  }
+  return forces;
+}
+
 void expectMmgAxisMatchesAllocation(const std::array<double, 3> & requested)
 {
   const auto commands = njord::thruster_driver::allocateWrench(
     driverGeometry(), {requested[0], requested[1], requested[2]}, 1e-9);
-  const njord::sim::T200Model thrust_model(50.0, 50.0);
-  const auto input = njord::sim::dutiesToPlanarInput(commands, simulatorGeometry(), thrust_model);
+  const auto input = njord::sim::forcesToPlanarInput(
+    restorePhysicalForces(commands, driverGeometry()), simulatorGeometry());
 
   const std::array<double, 3> actual = {
     input.surge_force, input.sway_force, input.yaw_moment};
@@ -79,11 +92,7 @@ TEST(ThrusterMmgConsistency, ForceTopicMatchesDriverAllocation)
     std::array<double, 3>{0.0, 0.0, 0.25}}) {
     const auto commands = njord::thruster_driver::allocateWrench(
       geometry, {requested[0], requested[1], requested[2]}, 1e-9);
-    std::vector<double> forces;
-    forces.reserve(commands.size());
-    for (std::size_t i = 0; i < commands.size(); ++i) {
-      forces.push_back(commands[i] * geometry[i].force_per_duty);
-    }
+    const auto forces = restorePhysicalForces(commands, geometry);
 
     const auto driver_wrench = njord::thruster_driver::commandToWrench(geometry, commands);
     const auto sim_wrench = njord::sim::forcesToPlanarInput(forces, sim_geometry);

@@ -63,6 +63,7 @@ private:
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_emg_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_safety_emergency_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_operating_mode_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr pub_control_status_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr pub_heartbeat_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_green_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_yellow_;

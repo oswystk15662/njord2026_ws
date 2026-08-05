@@ -178,6 +178,47 @@ def generate_launch_description():
             'use_sim_time': False,
         }],
     )
+    bms = Node(
+        package='bms',
+        executable='bms_node',
+        name='bms_node',
+        output='screen',
+        parameters=[PathJoinSubstitution([FindPackageShare('bms'), 'config', 'config.yaml'])],
+    )
+    heading_arrow = Node(
+        package='tf_frame_arrow_publisher',
+        executable='arrow_publisher',
+        name='nav_arrow_publisher',
+        output='screen',
+    )
+    actual_route = Node(
+        package='tf_frame_arrow_publisher',
+        executable='full_path_publisher',
+        name='actual_route_publisher',
+        output='screen',
+        parameters=[{
+            'marker_topic': '/actual_path_marker',
+            'parent_frame': 'odom',
+            'child_frame': 'base_link',
+        }],
+    )
+    planned_route = Node(
+        package='tf_frame_arrow_publisher',
+        executable='planned_path_marker_publisher',
+        name='planned_route_publisher',
+        output='screen',
+        parameters=[{
+            'path_topic': '/plan_smoothed',
+            'marker_topic': '/planned_path_marker',
+        }],
+    )
+    ground_speed = Node(
+        package='tf_frame_arrow_publisher',
+        executable='ground_speed_publisher',
+        name='ground_speed_publisher',
+        output='screen',
+        parameters=[{'odometry_topic': '/odometry/feedback'}],
+    )
     um982_driver = Node(
         package='um982_driver',
         executable='um982_driver_node',
@@ -418,6 +459,11 @@ def generate_launch_description():
         joy_converter,
         command_arbiter,
         micon_driver,
+        bms,
+        heading_arrow,
+        actual_route,
+        planned_route,
+        ground_speed,
         # um982_driver,
         # um982_feedback,
         # drogger_rzs,
