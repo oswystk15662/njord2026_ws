@@ -200,6 +200,10 @@ if(PkgConfig_FOUND)
   pkg_check_modules(GSTREAMER_APP QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
 endif()
 if(GSTREAMER_APP_FOUND)
+  add_executable(ground_receiver src/ground_receiver.cpp)
+  ament_target_dependencies(ground_receiver rclcpp sensor_msgs)
+  target_link_libraries(ground_receiver PkgConfig::GSTREAMER_APP)
+
   add_executable(back_cam_ground_video_streamer src/back_cam_ground_video_streamer.cpp)
   target_include_directories(back_cam_ground_video_streamer PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/include
@@ -226,6 +230,12 @@ install(TARGETS
 
 if(TARGET back_cam_ground_video_streamer)
   install(TARGETS back_cam_ground_video_streamer
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
+
+if(TARGET ground_receiver)
+  install(TARGETS ground_receiver
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
 endif()
