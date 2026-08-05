@@ -103,6 +103,16 @@ def generate_launch_description():
     use_waypoints_arg = DeclareLaunchArgument("use_waypoints", default_value="true")
     use_validator_arg = DeclareLaunchArgument("use_validator", default_value="true")
     use_sensor_noise_arg = DeclareLaunchArgument("use_sensor_noise", default_value="true")
+    use_gui_dummy_publishers_arg = DeclareLaunchArgument(
+        "use_gui_dummy_publishers",
+        default_value="true",
+        description="Publish simulated battery percentage and autonomous control status for Foxglove",
+    )
+    use_foxglove_bridge_arg = DeclareLaunchArgument(
+        "use_foxglove_bridge",
+        default_value="true",
+        description="Launch Foxglove Bridge for the extensions and bundled layout",
+    )
     use_cardinal_perception_sim_arg = DeclareLaunchArgument(
         "use_cardinal_perception_sim",
         default_value="true",
@@ -159,6 +169,10 @@ def generate_launch_description():
             os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")
         ),
         condition=IfCondition(LaunchConfiguration("use_sensor_noise")),
+        launch_arguments={
+            # Match the GNSS topic consumed by the bundled Foxglove extension.
+            "fix_topic": "/sensor/vehicle_gnss/fix/raw",
+        }.items(),
     )
 
     # Thruster driver: cmd_vel -> /thruster_command with P + DOB velocity control.
@@ -255,6 +269,31 @@ def generate_launch_description():
             "child_frame": "base_link",
         }],
     )
+    ground_speed = Node(
+        package="tf_frame_arrow_publisher",
+        executable="ground_speed_publisher",
+        name="ground_speed_publisher",
+        parameters=[{"odometry_topic": "/odom"}],
+        output="screen",
+    )
+    gui_status_dummy_publisher = Node(
+        package="task1_sim",
+        executable="gui_status_dummy_publisher",
+        name="gui_status_dummy_publisher",
+        parameters=[{
+            "battery_percent": 75.0,
+            "cell_voltages": [4.00, 4.01, 4.00, 4.01],
+            "control_status": "auto",
+            "publish_rate_hz": 1.0,
+        }],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_gui_dummy_publishers")),
+    )
+    foxglove_bridge = include_launch(
+        "foxglove_bridge",
+        ["launch", "foxglove_bridge_launch.xml"],
+        IfCondition(LaunchConfiguration("use_foxglove_bridge")),
+    )
 
     validator = include_launch(
         "operation_validator",
@@ -323,12 +362,17 @@ def generate_launch_description():
         startup_message,
         heading_arrow,
         actual_route,
+        ground_speed,
+        gui_status_dummy_publisher,
+        foxglove_bridge,
         use_dynamics_arg,
         use_nav2_arg,
         use_thruster_driver_arg,
         use_waypoints_arg,
         use_validator_arg,
         use_sensor_noise_arg,
+        use_gui_dummy_publishers_arg,
+        use_foxglove_bridge_arg,
         use_cardinal_perception_sim_arg,
         use_local_ekf_arg,
         use_global_ekf_arg,

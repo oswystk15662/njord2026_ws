@@ -35,6 +35,7 @@ setup(
         "console_scripts": [
             "task1_orchestrator = task1_sim.orchestrator:main",
             "cardinal_perception_sim = task1_sim.cardinal_perception_sim:main",
+            "gui_status_dummy_publisher = task1_sim.gui_status_dummy_publisher:main",
         ],
     },
 )
