@@ -53,6 +53,80 @@ sl::RESOLUTION parse_camera_resolution(const std::string & value)
   throw std::invalid_argument("camera_resolution must be one of HD2K, HD1080, HD720, or VGA");
 }
 
+// Per-row [x_start, x_end) column bounds of the human-FOV-like elliptical
+// region of interest. Precomputing this once (per camera-info change) lets
+// every per-frame consumer (RGB, depth, point cloud) skip whole outside
+// spans with a memset/fill instead of testing every pixel against the
+// ellipse equation.
+struct EllipseRowSpans
+{
+  std::vector<int> x_start;
+  std::vector<int> x_end;  // exclusive
+};
+
+EllipseRowSpans compute_ellipse_row_spans(
+  int width, int height, double cx, double cy, double a, double b)
+{
+  EllipseRowSpans spans;
+  spans.x_start.assign(static_cast<size_t>(height), 0);
+  spans.x_end.assign(static_cast<size_t>(height), 0);
+  a = std::max(a, 1e-6);
+  b = std::max(b, 1e-6);
+  for (int y = 0; y < height; ++y) {
+    const double dy = (static_cast<double>(y) - cy) / b;
+    const double term = 1.0 - dy * dy;
+    if (term < 0.0) {
+      continue;
+    }
+    const double dx = a * std::sqrt(term);
+    int x0 = static_cast<int>(std::ceil(cx - dx));
+    int x1 = static_cast<int>(std::floor(cx + dx)) + 1;
+    x0 = std::clamp(x0, 0, width);
+    x1 = std::clamp(x1, 0, width);
+    if (x1 < x0) {
+      x1 = x0;
+    }
+    spans.x_start[static_cast<size_t>(y)] = x0;
+    spans.x_end[static_cast<size_t>(y)] = x1;
+  }
+  return spans;
+}
+
+// Blacks out the columns outside the precomputed per-row span of a BGRA8
+// image (4 bytes/pixel), leaving the inside untouched.
+void apply_ellipse_mask_bgra(cv::Mat & image, const EllipseRowSpans & spans)
+{
+  for (int y = 0; y < image.rows; ++y) {
+    auto * row = image.ptr<std::uint8_t>(y);
+    const int x0 = spans.x_start[static_cast<size_t>(y)];
+    const int x1 = spans.x_end[static_cast<size_t>(y)];
+    if (x0 > 0) {
+      std::memset(row, 0, static_cast<size_t>(x0) * 4);
+    }
+    if (x1 < image.cols) {
+      std::memset(
+        row + static_cast<size_t>(x1) * 4, 0,
+        static_cast<size_t>(image.cols - x1) * 4);
+    }
+  }
+}
+
+// Invalidates (NaN) the columns outside the precomputed per-row span of a
+// 32FC1 depth image. NaN matches the depth invalid convention already
+// checked by depth_to_point_cloud_msg (std::isfinite), so the point-cloud
+// builder automatically skips masked-out pixels with no further changes.
+void apply_ellipse_mask_depth(cv::Mat & depth, const EllipseRowSpans & spans)
+{
+  constexpr float kInvalid = std::numeric_limits<float>::quiet_NaN();
+  for (int y = 0; y < depth.rows; ++y) {
+    auto * row = depth.ptr<float>(y);
+    const int x0 = spans.x_start[static_cast<size_t>(y)];
+    const int x1 = spans.x_end[static_cast<size_t>(y)];
+    std::fill(row, row + x0, kInvalid);
+    std::fill(row + x1, row + depth.cols, kInvalid);
+  }
+}
+
 }  // namespace
 
 class SdkNode : public rclcpp::Node
@@ -71,6 +145,11 @@ public:
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
     engine_path_ = declare_parameter<std::string>("engine_path", "");
+    fov_ellipse_enable_ = declare_parameter<bool>("fov_ellipse_enable", false);
+    fov_ellipse_cx_ratio_ = declare_parameter<double>("fov_ellipse_cx_ratio", 0.5);
+    fov_ellipse_cy_ratio_ = declare_parameter<double>("fov_ellipse_cy_ratio", 0.5);
+    fov_ellipse_a_ratio_ = declare_parameter<double>("fov_ellipse_a_ratio", 0.5);
+    fov_ellipse_b_ratio_ = declare_parameter<double>("fov_ellipse_b_ratio", 0.5);
     const auto camera_resolution = declare_parameter<std::string>("camera_resolution", "HD720");
     const bool enable_ground_video = declare_parameter<bool>("enable_ground_video", false);
     const auto ground_video_codec = declare_parameter<std::string>("ground_video_codec", "jpeg");
@@ -177,6 +256,14 @@ public:
     if (baseline_m_ > 10.0) {
       baseline_m_ *= 0.001;
     }
+    ellipse_cx_ = fov_ellipse_cx_ratio_ * width_;
+    ellipse_cy_ = fov_ellipse_cy_ratio_ * height_;
+    ellipse_a_ = fov_ellipse_a_ratio_ * width_;
+    ellipse_b_ = fov_ellipse_b_ratio_ * height_;
+    if (fov_ellipse_enable_) {
+      ellipse_row_spans_ = compute_ellipse_row_spans(
+        width_, height_, ellipse_cx_, ellipse_cy_, ellipse_a_, ellipse_b_);
+    }
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
     if (detector_) {
       left_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
@@ -196,6 +283,11 @@ public:
       config.port = ground_video_config_.port;
       config.max_pending_frames = ground_video_config_.max_pending_frames;
       config.mtu = ground_video_config_.mtu;
+      config.fov_ellipse_enable = fov_ellipse_enable_;
+      config.fov_ellipse_cx_ratio = fov_ellipse_cx_ratio_;
+      config.fov_ellipse_cy_ratio = fov_ellipse_cy_ratio_;
+      config.fov_ellipse_a_ratio = fov_ellipse_a_ratio_;
+      config.fov_ellipse_b_ratio = fov_ellipse_b_ratio_;
       try {
         ground_video_streamer_ = std::make_unique<GroundVideoStreamer>(config);
         if (!left_gpu_.isInit()) {
@@ -364,6 +456,16 @@ private:
       mat.getStepBytes(sl::MEM::CPU));
   }
 
+  // Cheap per-detection ellipse membership test used to gate GPU perception
+  // output. width_/height_ and the ellipse_* members are fixed after the
+  // camera opens, so this is a handful of flops per detection.
+  bool ellipse_contains(double x, double y) const
+  {
+    const double dx = (x - ellipse_cx_) / std::max(ellipse_a_, 1e-6);
+    const double dy = (y - ellipse_cy_) / std::max(ellipse_b_, 1e-6);
+    return dx * dx + dy * dy <= 1.0;
+  }
+
   static cv::Mat sl_mat_to_cv_depth_view(const sl::Mat & mat)
   {
     const auto width = static_cast<int>(mat.getWidth());
@@ -440,6 +542,13 @@ private:
             std::vector<PositionedDetection> positioned;
             positioned.reserve(detections.size());
             for (const auto & detection : detections) {
+              if (fov_ellipse_enable_) {
+                const auto center_u = (detection.x1 + detection.x2) * 0.5F;
+                const auto center_v = (detection.y1 + detection.y2) * 0.5F;
+                if (!ellipse_contains(center_u, center_v)) {
+                  continue;
+                }
+              }
               PositionedDetection item{detection, nan_position(), PositionSource::kNone};
               const auto roi = central_depth_roi(
                 detection, static_cast<float>(depth_center_ratio_), width_, height_);
@@ -538,7 +647,10 @@ private:
         if (publish_left) {
           const auto download_error = left_gpu_.updateCPUfromGPU();
           if (download_error == sl::ERROR_CODE::SUCCESS) {
-            const auto left_bgra = sl_mat_to_cv_bgra_view(left_gpu_);
+            auto left_bgra = sl_mat_to_cv_bgra_view(left_gpu_);
+            if (fov_ellipse_enable_) {
+              apply_ellipse_mask_bgra(left_bgra, ellipse_row_spans_);
+            }
             left_image_pub_->publish(
               mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
             left_published = true;
@@ -556,14 +668,20 @@ private:
     if (publish_left && !left_published) {
       sl::Mat left;
       camera_.retrieveImage(left, sl::VIEW::LEFT);
-      const auto left_bgra = sl_mat_to_cv_bgra_view(left);
+      auto left_bgra = sl_mat_to_cv_bgra_view(left);
+      if (fov_ellipse_enable_) {
+        apply_ellipse_mask_bgra(left_bgra, ellipse_row_spans_);
+      }
       left_image_pub_->publish(mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
     }
 
     if (publish_right) {
       sl::Mat right;
       camera_.retrieveImage(right, sl::VIEW::RIGHT);
-      const auto right_bgra = sl_mat_to_cv_bgra_view(right);
+      auto right_bgra = sl_mat_to_cv_bgra_view(right);
+      if (fov_ellipse_enable_) {
+        apply_ellipse_mask_bgra(right_bgra, ellipse_row_spans_);
+      }
       right_image_pub_->publish(mat_to_image_msg(right_bgra, "bgra8", right_frame_id_, stamp));
     }
 
@@ -572,7 +690,13 @@ private:
       camera_.retrieveMeasure(depth, sl::MEASURE::DEPTH);
       // This is a non-owning view. Each requested ROS output copies it directly into its
       // final message allocation before the SDK buffer expires.
-      const auto depth_m = sl_mat_to_cv_depth_view(depth);
+      auto depth_m = sl_mat_to_cv_depth_view(depth);
+      if (fov_ellipse_enable_) {
+        // NaN matches the existing invalid-depth convention, so the point
+        // cloud loop below (which already tests std::isfinite) needs no
+        // further change to skip masked-out pixels.
+        apply_ellipse_mask_depth(depth_m, ellipse_row_spans_);
+      }
       if (publish_depth) {
         depth_pub_->publish(mat_to_image_msg(depth_m, "32FC1", depth_frame_id_, stamp));
       }
@@ -601,6 +725,16 @@ private:
   double cy_;
   double baseline_m_;
   std::string engine_path_;
+  bool fov_ellipse_enable_{false};
+  double fov_ellipse_cx_ratio_{0.5};
+  double fov_ellipse_cy_ratio_{0.5};
+  double fov_ellipse_a_ratio_{0.5};
+  double fov_ellipse_b_ratio_{0.5};
+  double ellipse_cx_{0.0};
+  double ellipse_cy_{0.0};
+  double ellipse_a_{0.0};
+  double ellipse_b_{0.0};
+  EllipseRowSpans ellipse_row_spans_;
   struct GroundVideoParameterStorage
   {
     int source_width{};

@@ -56,6 +56,13 @@ def _launch_nav2(context, pkg_nav2_bringup, pkg_robot):
                 configured_nav_to_pose_bt_xml,
             'bt_navigator.ros__parameters.default_nav_through_poses_bt_xml':
                 configured_nav_through_poses_bt_xml,
+            # Collision Monitor remains in Nav2's standard velocity pipeline. Disable
+            # both its worker and LiDAR source together: disabling only the worker
+            # still makes an absent LiDAR source trigger its fail-safe stop.
+            'collision_monitor.ros__parameters.enabled':
+                LaunchConfiguration('enable_collision_monitor'),
+            'collision_monitor.ros__parameters.livox.enabled':
+                LaunchConfiguration('enable_collision_monitor'),
         },
         convert_types=True,
     )
@@ -119,11 +126,20 @@ def generate_launch_description():
         default_value='true',
         description='Launch generic topic heartbeat diagnostics for Nav2 topics'
     )
+    enable_collision_monitor_arg = DeclareLaunchArgument(
+        'enable_collision_monitor',
+        default_value='true',
+        description=(
+            'Enable Collision Monitor obstacle processing. When false, its LiDAR '
+            'source and actions are disabled while it remains as a cmd_vel passthrough.'
+        ),
+    )
 
     return LaunchDescription([
         params_file_arg,
         nav_to_pose_bt_xml_arg,
         nav_through_poses_bt_xml_arg,
         enable_diagnostics_arg,
+        enable_collision_monitor_arg,
         OpaqueFunction(function=_launch_nav2, args=[pkg_nav2_bringup, pkg_robot]),
     ])

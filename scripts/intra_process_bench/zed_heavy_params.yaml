@@ -1,19 +1,14 @@
-# Key must be the node's FULLY QUALIFIED name. zed2i.launch.py loads this node
-# as name="zed2i" inside namespace="/zed2i", so its FQN is /zed2i/zed2i and a
-# bare "zed2i:" key matches nothing -- the whole file was silently ignored and
-# every parameter fell back to its declare_parameter() default.
-# Note: this key is tied to the launch file's `namespace` argument (/zed2i).
-/zed2i/zed2i:
+zed2i:
   ros__parameters:
     left_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0
     right_device: /dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index1
     left_frame_id: zed2i_left_camera_frame
     right_frame_id: zed2i_right_camera_frame
     depth_frame_id: zed2i_left_camera_frame
-    camera_resolution: HD720
+    camera_resolution: HD1080
     image_width: 1280
     image_height: 720
-    framerate: 15
+    framerate: 30
     baseline_m: 0.12
     fx: 1280.0
     fy: 1280.0
@@ -21,9 +16,6 @@
     cy: 360.0
     depth_min_m: 0.3
     depth_max_m: 20.0
-    # Human-FOV-like elliptical region of interest. Disabled by default to
-    # preserve existing behavior; when enabled, RGB/depth/points/perception/
-    # ground-video are all restricted to inside the ellipse.
     fov_ellipse_enable: false
     fov_ellipse_cx_ratio: 0.5
     fov_ellipse_cy_ratio: 0.5
@@ -59,14 +51,15 @@
     lidar_min_cluster_points: 5
     lidar_max_cluster_points: 5000
     fusion_max_range_delta_m: 2.0
-    # Nav2 obstacles are generated downstream from /buoy_detections_3d.
-    enable_virtual_wall: false
+    enable_virtual_wall: true
     virtual_wall_topic: /virtual_obstacles
     wall_frame: map
     channel_heading_rad: .nan
     wall_radius_m: 2.0
     wall_points_per_full_circle: 40
-    publish_pointcloud: false
-    pointcloud_stride: 2
+    # Heavy-load bench override: force full-resolution point cloud publish
+    # (shared config keeps this false/stride-2 for normal operation).
+    publish_pointcloud: true
+    pointcloud_stride: 1
     num_disparities: 128
     block_size: 5
