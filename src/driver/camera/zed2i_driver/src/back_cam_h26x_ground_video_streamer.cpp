@@ -57,6 +57,7 @@ public:
       "! videoconvert ! video/x-raw,format=NV12 "
       "! " + encoder + " bitrate=" + std::to_string(bitrate_kbps_) +
       " keyframe-period=" + std::to_string(keyframe_interval_) +
+      " cpb-length=100 max-bframes=0 " +
       " ! " + parser + " config-interval=1 ! " + payloader + " pt=96 mtu=" +
       std::to_string(mtu_) + " ! udpsink host=" + host_ + " port=" +
       std::to_string(port_) + " sync=false async=false";
