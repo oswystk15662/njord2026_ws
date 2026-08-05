@@ -50,7 +50,7 @@ void AlertLampDriver::onTimer()
     msg::AlertLampCommand command;
     command.color = msg::AlertLampCommand::COLOR_RED;
     command.pattern = msg::AlertLampCommand::PATTERN_BLINK;
-    command.period = 0.5F;
+    command.period = 0.05F;
     command.duty_ratio = 0.5F;
     command.reason = "manager command timeout";
     apply(command, true);
@@ -69,9 +69,9 @@ void AlertLampDriver::apply(const msg::AlertLampCommand & command, bool fallback
     const double phase = std::fmod(now().seconds(), period) / period;
     on = phase < command.duty_ratio;
   }
-  red_output_ = on && command.color == msg::AlertLampCommand::COLOR_RED;
-  yellow_output_ = on && command.color == msg::AlertLampCommand::COLOR_YELLOW;
-  green_output_ = on && command.color == msg::AlertLampCommand::COLOR_GREEN;
+  red_output_ = on && (command.color & msg::AlertLampCommand::COLOR_RED) != 0;
+  yellow_output_ = on && (command.color & msg::AlertLampCommand::COLOR_YELLOW) != 0;
+  green_output_ = on && (command.color & msg::AlertLampCommand::COLOR_GREEN) != 0;
   std_msgs::msg::Bool red; red.data = red_output_; red_pub_->publish(red);
   std_msgs::msg::Bool yellow; yellow.data = yellow_output_; yellow_pub_->publish(yellow);
   std_msgs::msg::Bool green; green.data = green_output_; green_pub_->publish(green);

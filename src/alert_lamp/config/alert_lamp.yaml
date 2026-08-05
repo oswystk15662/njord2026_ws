@@ -20,9 +20,9 @@ alert_lamp_manager_node:
       rtk_covariance_threshold: 0.01
       rtk_grace_period_sec: 10.0
     lamp:
-      green_blink_period_sec: 1.0
-      yellow_blink_period_sec: 1.0
-      red_blink_period_sec: 0.5
+      green_blink_period_sec: 0.1
+      yellow_blink_period_sec: 0.1
+      red_blink_period_sec: 0.05
       duty_ratio: 0.5
     topics:
       operating_mode: /system/operating_mode

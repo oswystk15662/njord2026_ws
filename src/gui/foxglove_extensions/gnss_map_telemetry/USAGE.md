@@ -25,7 +25,7 @@ ros2 topic echo /gui/ground_speed_mps --once
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。
 
 ```text
-tools/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.1.1.foxe
+src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.1.1.foxe
 ```
 
 Foxgloveの Settings > Extensions に **GNSS Map Telemetry** が表示され、有効になっていることを確認してください。

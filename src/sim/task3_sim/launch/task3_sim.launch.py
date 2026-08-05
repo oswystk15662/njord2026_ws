@@ -102,6 +102,24 @@ def generate_launch_description():
         output="screen",
     )
 
+    heading_arrow = Node(
+        package="tf_frame_arrow_publisher",
+        executable="arrow_publisher",
+        name="nav_arrow_publisher",
+        output="screen",
+    )
+    actual_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="full_path_publisher",
+        name="actual_route_publisher",
+        output="screen",
+        parameters=[{
+            "marker_topic": "/actual_path_marker",
+            "parent_frame": "odom",
+            "child_frame": "base_link",
+        }],
+    )
+
     # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
     thruster_driver_node = Node(
         package="thruster_driver",
@@ -259,6 +277,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         startup_message,
+        heading_arrow,
+        actual_route,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,

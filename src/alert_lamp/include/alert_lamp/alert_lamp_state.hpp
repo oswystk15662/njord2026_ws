@@ -1,12 +1,23 @@
 #pragma once
 
+#include <cstdint>
 #include <string>
 
 namespace alert_lamp
 {
 
 enum class OperatingMode {UNKNOWN, MANUAL, AUTO};
-enum class LampColor {OFF, GREEN, YELLOW, RED};
+// Bit flags so a display command can illuminate more than one lamp at once.
+enum class LampColor : uint8_t
+{
+  OFF = 0,
+  GREEN = 1,
+  YELLOW = 2,
+  RED = 4,
+  GREEN_YELLOW = 3,
+  GREEN_RED = 5,
+  YELLOW_RED = 6
+};
 enum class LampPattern {OFF, SOLID, BLINK};
 enum class AlertState
 {
