@@ -46,7 +46,13 @@ def generate_launch_description():
     nav2 = _include(
         'robot',
         'nav2.launch.py',
-        {'enable_diagnostics': LaunchConfiguration('enable_nav2_diagnostics')},
+        {
+            'enable_diagnostics': LaunchConfiguration('enable_nav2_diagnostics'),
+            # Task 1 currently navigates from UM982 odometry without LiDAR-based
+            # collision monitoring. Keep the Nav2 cmd_vel relay alive, but disable
+            # its LiDAR source and collision actions.
+            'enable_collision_monitor': 'false',
+        },
     )
     waypoints = _include(
         'waypoint_publisher',
