@@ -21,7 +21,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 
 LIDAR_CONFIGS = {
     'mid360': 'MID360_config.json',
-    'mid360s': 'MID360S_config.json',
+    'mid360s': 'MID360S_jetson_config.json',
 }
 
 

@@ -23,7 +23,7 @@ def generate_launch_description():
                         FindPackageShare("robot"),
                         "config",
                         "livox",
-                        "MID360S_config.json",
+                        "MID360S_minipc_config.json",
                     ]
                 ),
                 description="Path to the MID360S network configuration JSON",

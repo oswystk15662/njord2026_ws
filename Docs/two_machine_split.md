@@ -198,7 +198,7 @@ ros2 launch robot jetson_bringup.launch.py glim_backend:=cpu
 
 ### 有線 Ethernet
 
-Jetson と miniPC は有線で直結（またはスイッチ経由）する。Livox MID360S は Jetson 側の別 NIC に繋ぐ（host `192.168.1.5` / LiDAR `192.168.1.114`、`src/robot/config/livox/MID360S_config.json`）。
+Jetson と miniPC は有線で直結（またはスイッチ経由）する。Livox MID360S は Jetson 側の別 NIC に繋ぐ（host `192.168.1.5` / LiDAR `192.168.1.114`、`src/robot/config/livox/MID360S_jetson_config.json`）。miniPC から MID360S を起動する場合は `MID360S_minipc_config.json`（host `192.168.1.2`）を使用する。
 
 ### FastRTPS（既定）
 

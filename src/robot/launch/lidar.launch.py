@@ -20,7 +20,7 @@ CMDLINE_INPUT_BD_CODE = "livox0000000001"
 
 LIDAR_MODEL_TO_CONFIG_FILE = {
     "mid360": "MID360_config.json",
-    "mid360s": "MID360S_config.json",
+    "mid360s": "MID360S_jetson_config.json",
 }
 
 

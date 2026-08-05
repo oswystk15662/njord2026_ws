@@ -16,9 +16,9 @@ def test_mid360_config_is_valid_json():
     assert isinstance(config, dict)
 
 
-def test_mid360s_config_is_valid_json():
-    config = _load_config("MID360S_config.json")
-    assert isinstance(config, dict)
+def test_mid360s_platform_configs_are_valid_json():
+    for filename in ("MID360S_jetson_config.json", "MID360S_minipc_config.json"):
+        assert isinstance(_load_config(filename), dict)
 
 
 def test_mid360_net_info_key():
@@ -26,10 +26,18 @@ def test_mid360_net_info_key():
     assert "MID360" in config
 
 
-def test_mid360s_net_info_key():
-    config = _load_config("MID360S_config.json")
-    assert "Mid360s" in config
-    assert "MID360" not in config
+def test_mid360s_platform_configs_have_expected_host_ips():
+    expected_host_ips = {
+        "MID360S_jetson_config.json": "192.168.1.5",
+        "MID360S_minipc_config.json": "192.168.1.2",
+    }
+    for filename, expected_ip in expected_host_ips.items():
+        config = _load_config(filename)
+        assert "Mid360s" in config
+        assert "MID360" not in config
+        host_net_info = config["Mid360s"]["host_net_info"]
+        for field in ("cmd_data_ip", "push_msg_ip", "point_data_ip", "imu_data_ip"):
+            assert host_net_info[field] == expected_ip
 
 
 def test_mid360_lidar_type_is_8():
@@ -37,9 +45,9 @@ def test_mid360_lidar_type_is_8():
     assert config["lidar_summary_info"]["lidar_type"] == 8
 
 
-def test_mid360s_lidar_type_is_8():
-    config = _load_config("MID360S_config.json")
-    assert config["lidar_summary_info"]["lidar_type"] == 8
+def test_mid360s_platform_configs_lidar_type_is_8():
+    for filename in ("MID360S_jetson_config.json", "MID360S_minipc_config.json"):
+        assert _load_config(filename)["lidar_summary_info"]["lidar_type"] == 8
 
 
 def test_mid360_lidar_configs_present():
@@ -52,11 +60,12 @@ def test_mid360_lidar_configs_present():
     assert "host_net_info" in config["MID360"]
 
 
-def test_mid360s_lidar_configs_present():
-    config = _load_config("MID360S_config.json")
-    lidar_configs = config["lidar_configs"]
-    assert isinstance(lidar_configs, list)
-    assert len(lidar_configs) > 0
-    for entry in lidar_configs:
-        assert "ip" in entry
-    assert "host_net_info" in config["Mid360s"]
+def test_mid360s_platform_lidar_configs_present():
+    for filename in ("MID360S_jetson_config.json", "MID360S_minipc_config.json"):
+        config = _load_config(filename)
+        lidar_configs = config["lidar_configs"]
+        assert isinstance(lidar_configs, list)
+        assert len(lidar_configs) > 0
+        for entry in lidar_configs:
+            assert "ip" in entry
+        assert "host_net_info" in config["Mid360s"]
