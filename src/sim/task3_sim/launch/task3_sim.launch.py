@@ -84,7 +84,13 @@ def generate_launch_description():
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")))
+            os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")),
+        launch_arguments={
+            # The Foxglove GNSS Map Telemetry panel subscribes to this
+            # real-vessel GNSS contract.
+            'fix_topic': '/sensor/vehicle_gnss/fix/raw',
+        }.items(),
+    )
 
     # Task3 orchestrator: buoys (b31_* + b32_*), dock geometry, PointCloud2, TFs
     config = os.path.join(pkg_task3_sim, "config", "task3_params.yaml")
@@ -118,6 +124,16 @@ def generate_launch_description():
             "parent_frame": "odom",
             "child_frame": "base_link",
         }],
+    )
+
+    # Publish simulated SOG for the Foxglove GNSS Map Telemetry panel.  In
+    # simulation, /odom is the truth odometry and already carries ENU speed.
+    ground_speed = Node(
+        package="tf_frame_arrow_publisher",
+        executable="ground_speed_publisher",
+        name="ground_speed_publisher",
+        parameters=[{'odometry_topic': '/odom'}],
+        output="screen",
     )
 
     # Thruster driver: cmd_vel -> /thruster_command (Int16MultiArray)
@@ -212,18 +228,29 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Dynamic lethal obstacles around the Task3 buoy TF frames.  This also
+    # satisfies the task3 diagnostic monitor for /buoy_costmap.
+    buoy_costmap_node = Node(
+        package='buoy_obstacle_publisher',
+        executable='buoy_obstacle_publisher',
+        name='buoy_obstacle_publisher',
+        output='screen',
+    )
+
     sensor_layer_timer = TimerAction(
         period=driver_delay,
         actions=[
             sim_dynamics,
             sensor_noise_launch,
             task3_orchestrator,
+            ground_speed,
             thruster_driver_node,
             twist_mux,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
             field_boundary_node,
+            buoy_costmap_node,
         ]
     )
 
