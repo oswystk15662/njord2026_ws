@@ -6,7 +6,7 @@
 
   // <MINIPC_IP> は miniPC の有線 NIC の IP に置き換える。
   connect: {
-    endpoints: ["tcp/<MINIPC_IP>:7447"],
+    endpoints: ["tcp/gembu-EliteMini-Series.local:7447"],
   },
 
   scouting: {
@@ -22,11 +22,13 @@
           "/odom", "/tf", "/tf_static", "/livox/imu",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/joy", "/joy/set_feedback",
         ],
         subscribers: [
           "/odom", "/tf", "/tf_static", "/livox/imu",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/joy", "/joy/set_feedback",
         ],
         service_servers: [], service_clients: [],
         action_servers: [], action_clients: [],
