@@ -36,6 +36,43 @@ elif compgen -G "/usr/local/cuda*" >/dev/null 2>&1; then
   NJORD_DETECTED_HAS_CUDA=1
 fi
 
+# ---------------------------------------------------------------------------
+# 1b. Make sure nvcc is actually reachable on PATH, and that CMake's
+#     find_package(CUDAToolkit)/check_language(CUDA) can locate it too.
+#
+#     Jetson/JetPack installs CUDA under /usr/local/cuda (a symlink to
+#     /usr/local/cuda-<version>), but does not add its bin/ to PATH by
+#     default. Without nvcc on PATH, CMake's check_language(CUDA) fails even
+#     though find_package(CUDAToolkit) succeeds, which desyncs the shell's
+#     detection (NJORD_DETECTED_HAS_CUDA=1, profile=jetson) from CMake's
+#     NJORD_HAS_CUDA (OFF). Fix that up here so both agree.
+# ---------------------------------------------------------------------------
+if ! command -v nvcc >/dev/null 2>&1; then
+  NJORD_CUDA_BIN_DIR=""
+  if [[ -x "/usr/local/cuda/bin/nvcc" ]]; then
+    NJORD_CUDA_BIN_DIR="/usr/local/cuda/bin"
+  else
+    for _njord_cuda_dir in /usr/local/cuda-*; do
+      if [[ -x "${_njord_cuda_dir}/bin/nvcc" ]]; then
+        NJORD_CUDA_BIN_DIR="${_njord_cuda_dir}/bin"
+        break
+      fi
+    done
+    unset _njord_cuda_dir
+  fi
+
+  if [[ -n "${NJORD_CUDA_BIN_DIR}" ]]; then
+    case ":${PATH}:" in
+      *":${NJORD_CUDA_BIN_DIR}:"*) ;;
+      *) export PATH="${NJORD_CUDA_BIN_DIR}:${PATH}" ;;
+    esac
+    export CUDACXX="${NJORD_CUDA_BIN_DIR}/nvcc"
+    NJORD_DETECTED_HAS_CUDA=1
+    echo "[njord_env] added ${NJORD_CUDA_BIN_DIR} to PATH and set CUDACXX=${CUDACXX}"
+  fi
+  unset NJORD_CUDA_BIN_DIR
+fi
+
 NJORD_DETECTED_HAS_ZED_SDK=0
 if [[ -f "/usr/local/zed/zed-config.cmake" ]]; then
   NJORD_DETECTED_HAS_ZED_SDK=1

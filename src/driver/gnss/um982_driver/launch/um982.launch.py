@@ -17,8 +17,8 @@ def generate_launch_description():
     # シリアル接続設定
     arg_port = DeclareLaunchArgument(
         'gnss_port',
-        default_value='/dev/ttyUSB0',
-        description='Serial port for GNSS (e.g., /dev/ttyUSB0)'
+        default_value='/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0',
+        description='Stable /dev/serial/by-id path for the UM982 serial port'
     )
     arg_baud = DeclareLaunchArgument(
         'gnss_baudrate',

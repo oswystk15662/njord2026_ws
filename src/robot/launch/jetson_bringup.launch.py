@@ -114,7 +114,10 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
             DeclareLaunchArgument("enable_ground_video", default_value="false"),
-            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument(
+                "ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old

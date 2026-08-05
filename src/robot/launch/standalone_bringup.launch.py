@@ -123,7 +123,10 @@ def generate_launch_description():
             DeclareLaunchArgument("camera_resolution", default_value="HD720"),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
             DeclareLaunchArgument("enable_ground_video", default_value="false"),
-            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument(
+                "ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
             # Reproduce the staged sensor startup the pre-split
             # manual_control.launch.py used on the single Jetson.

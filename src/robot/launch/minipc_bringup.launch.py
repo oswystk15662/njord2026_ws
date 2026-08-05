@@ -66,6 +66,7 @@ def generate_launch_description():
     enable_bms = LaunchConfiguration("enable_bms")
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
     enable_foxglove = LaunchConfiguration("enable_foxglove")
+    enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
@@ -214,6 +215,12 @@ def generate_launch_description():
         IfCondition(enable_foxglove),
     )
 
+    back_cam_launch = include_launch(
+        "robot",
+        ["launch", "back_cam.launch.py"],
+        IfCondition(enable_back_cam),
+    )
+
     nav2_launch = include_launch(
         "robot",
         ["launch", "nav2.launch.py"],
@@ -262,6 +269,11 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
             DeclareLaunchArgument("enable_foxglove", default_value="true"),
             DeclareLaunchArgument(
+                "enable_back_cam",
+                default_value="true",
+                description="Start the miniPC-connected rear USB camera.",
+            ),
+            DeclareLaunchArgument(
                 "enable_nav2",
                 default_value="false",
                 description="task1/2/3 launch files start Nav2 themselves with a "
@@ -275,9 +287,9 @@ def generate_launch_description():
             localization_launch,
             um982_launch,
             um982_feedback_launch,
-            drogger_launch,
-            imu_node,
-            joy_node,
+            # drogger_launch,
+            # imu_node,
+            # joy_node,
             joy_converter,
             command_arbiter,
             thruster_launch,
@@ -285,7 +297,8 @@ def generate_launch_description():
             bms_launch,
             alert_lamp_launch,
             buoy_obstacle_launch,
-            foxglove_bridge_launch,
+            # foxglove_bridge_launch,
+            back_cam_launch,
             nav2_launch,
         ]
     )
