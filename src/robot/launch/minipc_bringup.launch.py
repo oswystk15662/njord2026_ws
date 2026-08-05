@@ -67,6 +67,10 @@ def generate_launch_description():
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
     enable_foxglove = LaunchConfiguration("enable_foxglove")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
+    enable_back_cam_ground_video = LaunchConfiguration("enable_back_cam_ground_video")
+    back_cam_ground_video_host = LaunchConfiguration("back_cam_ground_video_host")
+    back_cam_ground_video_port = LaunchConfiguration("back_cam_ground_video_port")
+    back_cam_ground_video_codec = LaunchConfiguration("back_cam_ground_video_codec")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
@@ -221,6 +225,19 @@ def generate_launch_description():
         IfCondition(enable_back_cam),
     )
 
+    # The miniPC has a Radeon 780M VA-API encoder.  This is intentionally a
+    # separate H.26x route from the Jetson's JPEG-only ground video path.
+    back_cam_ground_video_launch = include_launch(
+        "zed2i_driver",
+        ["launch", "back_cam_h26x_ground_video.launch.py"],
+        IfCondition(enable_back_cam_ground_video),
+        {
+            "host": back_cam_ground_video_host,
+            "port": back_cam_ground_video_port,
+            "codec": back_cam_ground_video_codec,
+        },
+    )
+
     nav2_launch = include_launch(
         "robot",
         ["launch", "nav2.launch.py"],
@@ -274,6 +291,21 @@ def generate_launch_description():
                 description="Start the miniPC-connected rear USB camera.",
             ),
             DeclareLaunchArgument(
+                "enable_back_cam_ground_video",
+                default_value="true",
+                description="Use the miniPC VA-API H.264/H.265 back-camera stream. "
+                "An empty host leaves the stream inactive.",
+            ),
+            DeclareLaunchArgument(
+                "back_cam_ground_video_host",
+                default_value="",
+                description="Ground-station IPv4 address for the back-camera stream.",
+            ),
+            DeclareLaunchArgument("back_cam_ground_video_port", default_value="5601"),
+            DeclareLaunchArgument(
+                "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
+            ),
+            DeclareLaunchArgument(
                 "enable_nav2",
                 default_value="false",
                 description="task1/2/3 launch files start Nav2 themselves with a "
@@ -299,6 +331,7 @@ def generate_launch_description():
             buoy_obstacle_launch,
             # foxglove_bridge_launch,
             back_cam_launch,
+            back_cam_ground_video_launch,
             nav2_launch,
         ]
     )

@@ -153,9 +153,9 @@ public:
     const auto camera_resolution = declare_parameter<std::string>("camera_resolution", "HD720");
     const bool enable_ground_video = declare_parameter<bool>("enable_ground_video", false);
     const auto ground_video_codec = declare_parameter<std::string>("ground_video_codec", "jpeg");
-    ground_video_config_.width = declare_parameter<int>("ground_video_width", 640);
+    ground_video_config_.width = declare_parameter<int>("ground_video_width", 480);
     ground_video_config_.height = declare_parameter<int>("ground_video_height", 360);
-    ground_video_config_.fps = declare_parameter<double>("ground_video_fps", 5.0);
+    ground_video_config_.fps = declare_parameter<double>("ground_video_fps", 4.0);
     ground_video_config_.jpeg_quality = declare_parameter<int>("ground_video_jpeg_quality", 70);
     ground_video_config_.host = declare_parameter<std::string>("ground_video_host", "");
     ground_video_config_.port = declare_parameter<int>("ground_video_port", 5600);

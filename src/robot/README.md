@@ -99,7 +99,7 @@ bringup 経由で有効化する場合の手順。**受信側(陸上 PC)を先�
 ```shell
 # 1. 陸上 PC(受信)。ポートごとに 1 プロセスだけ
 ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5600   # ZED 2i left
-ros2 launch zed2i_driver ground_video_receiver.launch.py port:=5601   # back cam
+ros2 launch zed2i_driver ground_h26x_receiver.launch.py port:=5601 codec:=h264 # back cam
 
 # 2. 受信側の実 IP を確認(ホスト名や localhost は不可)
 ip -4 -o addr show scope global | awk '{print $2, $4}'
@@ -112,11 +112,17 @@ ros2 launch robot jetson_bringup.launch.py \
   ground_video_port:=5600
 ```
 
-`jetson_bringup.launch.py` / `real_bringup.launch.py` が `zed2i_driver` へ転送するのは
-`enable_ground_video` / `ground_video_host` / `ground_video_port` の 3 つだけ。
-fps・解像度・JPEG 品質を変える場合は
-`src/driver/camera/zed2i_driver/config/zed2i_jetson_orin_nano.yaml` を編集する
-(`ground_video_fps` を launch 引数で渡したい場合は `zed2i_driver` の launch を直接使う)。
+`jetson_bringup.launch.py` は `enable_ground_video` / `ground_video_host` /
+`ground_video_port` に加え、`ground_video_width` / `ground_video_height` /
+`ground_video_fps` も `zed2i_driver` へ転送する。既定は JPEG 480x360・4 fps。
+
+miniPCのback_camはH.264・VA-API送信が既定で含まれる。送信先を指定して有効化する:
+
+```shell
+ros2 launch robot minipc_bringup.launch.py back_cam_ground_video_host:=192.168.1.2
+```
+
+`back_cam_ground_video_codec:=h265` でH.265を選択できる。空のhostでは送信ノードは安全に無効化される。
 
 つまずきやすい点:
 

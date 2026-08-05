@@ -57,6 +57,9 @@ def generate_launch_description():
     enable_ground_video = LaunchConfiguration("enable_ground_video")
     ground_video_host = LaunchConfiguration("ground_video_host")
     ground_video_port = LaunchConfiguration("ground_video_port")
+    ground_video_width = LaunchConfiguration("ground_video_width")
+    ground_video_height = LaunchConfiguration("ground_video_height")
+    ground_video_fps = LaunchConfiguration("ground_video_fps")
 
     mid360_launch = include_launch(
         "robot",
@@ -83,6 +86,9 @@ def generate_launch_description():
             "enable_ground_video": enable_ground_video,
             "ground_video_host": ground_video_host,
             "ground_video_port": ground_video_port,
+            "ground_video_width": ground_video_width,
+            "ground_video_height": ground_video_height,
+            "ground_video_fps": ground_video_fps,
         },
     )
 
@@ -119,6 +125,9 @@ def generate_launch_description():
                 default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
             ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("ground_video_width", default_value="480"),
+            DeclareLaunchArgument("ground_video_height", default_value="360"),
+            DeclareLaunchArgument("ground_video_fps", default_value="4.0"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old
             # single-machine setup, so both default to 0.0 (start immediately);

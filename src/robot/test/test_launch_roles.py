@@ -1,8 +1,8 @@
 """Regression tests for the Jetson / miniPC launch-role split.
 
 This is the most important regression test for the two-machine split: it
-guards against GPU-only packages (glim_ros, livox_ros_driver2, zed2i_driver,
-glim_config) accidentally being pulled into the miniPC bringup, and against
+guards against GPU-only packages (glim_ros, livox_ros_driver2, glim_config)
+accidentally being pulled into the miniPC bringup, and against
 CPU/serial-only packages (robot_localization, thruster_driver,
 micon_driver_fd, joy_node) accidentally being pulled into the Jetson
 bringup.
@@ -20,7 +20,7 @@ import pytest
 _THIS_DIR = os.path.dirname(__file__)
 _LAUNCH_DIR = os.path.normpath(os.path.join(_THIS_DIR, "..", "launch"))
 
-_GPU_ONLY_PACKAGES = ["glim_ros", "livox_ros_driver2", "zed2i_driver", "glim_config"]
+_GPU_ONLY_PACKAGES = ["glim_ros", "livox_ros_driver2", "glim_config"]
 _MINIPC_ONLY_PACKAGES = ["robot_localization", "thruster_driver", "micon_driver_fd", "joy_node"]
 
 _GENERATE_LAUNCH_DESCRIPTION_FILES = [

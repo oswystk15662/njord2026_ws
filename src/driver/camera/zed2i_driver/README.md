@@ -94,7 +94,7 @@ ros2 launch zed2i_driver zed2i.launch.py \
   enable_ground_video:=true \
   ground_video_host:=192.168.1.2 \
   ground_video_port:=5600 \
-  ground_video_fps:=5.0
+  ground_video_fps:=4.0
 ```
 
 bringup 経由の場合は `ros2 launch robot jetson_bringup.launch.py enable_ground_video:=true
@@ -109,8 +109,8 @@ fps・解像度・JPEG 品質は `config/zed2i_jetson_orin_nano.yaml` を編集�
 | `enable_ground_video` | `false` | |
 | `ground_video_host` | `""` | 空だと無効。受信 PC の実 IP を渡す |
 | `ground_video_port` | `5600` | back cam は 5601 |
-| `ground_video_width` / `ground_video_height` | `640` / `360` | |
-| `ground_video_fps` | `5.0` | 実測は下記のとおり 4.1 fps 程度 |
+| `ground_video_width` / `ground_video_height` | `480` / `360` | |
+| `ground_video_fps` | `4.0` | |
 | `ground_video_jpeg_quality` | `70` | |
 | `ground_video_max_pending_frames` | `1` | latest-wins |
 | `ground_video_mtu` | `1200` | |
@@ -136,7 +136,7 @@ libnvjpeg にはリンクしていない(`CMakeLists.txt` と `ground_video_stre
 I420(4:2:0)固定なのは `rtpjpegpay`(RFC 2435)の制約で、4:4:4 JPEG を payload すると
 `Invalid component` で全フレームが落ちるため。
 
-正常時の RTP は `payload=26 / type=1(4:2:0) / Q=255(量子化表インライン) / 640x360`、
+正常時の RTP は `payload=26 / type=1(4:2:0) / Q=255(量子化表インライン) / 480x360`、
 1 フレーム約 27.7 KB = 24 パケット(mtu 1200)、最終パケットに marker bit。
 
 ### ZED はプロセス排他。二重起動しない
@@ -152,7 +152,7 @@ kill -INT <pid>   # 落ちなければ kill -9
 
 ### 受信レートの実測値(既知の挙動)
 
-`ground_video_fps:=5.0` でも**実測 4.07〜4.13 fps**(2026-08-01、640x360、約 920 kbps、
+`ground_video_fps:=5.0` では**実測 4.07〜4.13 fps**だった(2026-08-01、640x360、約 920 kbps、
 フレーム間隔 平均 245 ms / min 199 ms / max 272 ms)。不具合ではない:
 
 - 送信側は「前回送信から 1/fps 秒未満なら捨てる」ゲート方式
@@ -171,6 +171,25 @@ ros2 topic hz /zed2i/left/image_rect              # カメラ側の実レート(
 ros2 param get /zed2i/zed2i ground_video_host     # 実際に渡った値の確認
 sudo tcpdump -ni any udp port 5600 -c 20          # 受信 PC。ビューアを止めてから
 ```
+
+## miniPC back_cam の H.264/H.265 陸上伝送
+
+miniPC (UM870 Slim) の背面カメラは VA-API ハードウェアエンコーダを用いる別経路で送る。
+既定は H.264、640x480、5 fps、800 kbps、port 5601。`codec:=h265` で H.265 を選べる。
+送信側は `minipc_bringup.launch.py` に既定で含まれるが、送信先を指定するまで無効である。
+
+```shell
+# miniPC (送信)
+ros2 launch robot minipc_bringup.launch.py \
+  back_cam_ground_video_host:=192.168.1.2
+
+# 陸上 PC (受信)
+ros2 launch zed2i_driver ground_h26x_receiver.launch.py port:=5601 codec:=h264
+```
+
+送信機に `vaapih264enc` / `vaapih265enc` が無い場合は起動を失敗させる。ソフトウェア
+エンコードへ黙ってフォールバックしないため、CPU負荷が増えた状態で運用されることはない。
+受信トピックは復号済みの `sensor_msgs/Image` (`/ground_video/back_cam/image_raw`) である。
 
 ## 発行トピック(SDKモードで確認済み)
 

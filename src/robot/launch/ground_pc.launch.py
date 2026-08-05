@@ -21,6 +21,12 @@ def generate_launch_description():
         ),
     )
 
+    back_cam_h26x_receiver_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(zed2i_share_path, "launch", "ground_h26x_receiver.launch.py")
+        ),
+    )
+
     joy_node = Node(
         package="joy",
         executable="joy_node",
@@ -39,6 +45,7 @@ def generate_launch_description():
         [
             joy_node,
             ground_video_receiver_launch,
+            back_cam_h26x_receiver_launch,
             foxglove_bridge_launch,
         ]
     )
