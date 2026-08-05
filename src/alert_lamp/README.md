@@ -19,7 +19,7 @@ or RTK-status interfaces. The initial integration contract is therefore:
 | Input | Type | Default topic |
 | --- | --- | --- |
 | Operating mode | `std_msgs/msg/String` (`manual` or `auto`) | `/system/operating_mode` |
-| Emergency stop | `std_msgs/msg/Bool` | `/safety/emergency_stop` |
+| Emergency stop | `std_msgs/msg/UInt8` (`RUNNING=0`, `SOFT_EMG=1`, `HARD_EMG=2`) | `/safety/emergency_stop` |
 | Autonomy ready | `std_msgs/msg/Bool` | `/autonomy/ready` |
 | Localization | `nav_msgs/msg/Odometry` | `/odometry/filtered/global` |
 | GNSS / RTK quality | `sensor_msgs/msg/NavSatFix` | `/sensor/vehicle_gnss/fix/raw` |
@@ -37,16 +37,18 @@ GNSS RTK quality is initially inferred from a valid `NavSatFix` with covariance 
 
 | State | Output |
 | --- | --- |
-| `INITIALIZING` / `CRITICAL_FAULT` | red blink, 0.5 s |
-| `MANUAL_NORMAL` | green solid |
-| `AUTO_NORMAL` | green blink, 1.0 s |
-| `AUTONOMY_NOT_READY` | yellow solid |
-| `GROUND_COMMUNICATION_LOST` | yellow blink, 1.0 s |
+| `INITIALIZING` / `CRITICAL_FAULT` | red blink, 0.05 s |
+| `MANUAL_NORMAL` | yellow solid |
+| `AUTO_NORMAL` | green blink, 0.1 s |
+| `AUTONOMY_NOT_READY` | green and yellow blink together, 0.1 s |
+| `GROUND_COMMUNICATION_LOST` in AUTO | green and red solid |
+| `GROUND_COMMUNICATION_LOST` in MANUAL | yellow and red solid |
 
 Critical faults have priority. In AUTO, loss of high-level, autonomy, or localization
-heartbeat is critical; loss of ground station is yellow blink only while localization
-remains stable. The driver also red-blinks if no manager command arrives within one
+heartbeat is critical; loss of ground station is shown only while localization remains
+stable. The driver also red-blinks at a 0.05 s period if no manager command arrives within one
 second.
+`AlertLampCommand.color` is a bit flag, so a command can turn on multiple lamps.
 
 ## Configuration and diagnostics
 

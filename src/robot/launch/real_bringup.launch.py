@@ -67,6 +67,8 @@ def generate_launch_description():
         {
             "lidar_model": lidar_model,
             "enable_buoy_detection": enable_pcl_buoy_detection,
+            "enable_glim": LaunchConfiguration("enable_glim"),
+            "glim_backend": LaunchConfiguration("glim_backend"),
         },
     )
 
@@ -176,6 +178,24 @@ def generate_launch_description():
         IfCondition(enable_nav2),
     )
 
+    heading_arrow = Node(
+        package="tf_frame_arrow_publisher",
+        executable="arrow_publisher",
+        name="nav_arrow_publisher",
+        output="screen",
+    )
+    actual_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="full_path_publisher",
+        name="actual_route_publisher",
+        output="screen",
+        parameters=[{
+            "marker_topic": "/actual_path_marker",
+            "parent_frame": "odom",
+            "child_frame": "base_link",
+        }],
+    )
+
     return LaunchDescription(
         [
             # Livox LiDAR(mid360/mid360s)を起動するか
@@ -185,6 +205,17 @@ def generate_launch_description():
                 "lidar_model",
                 default_value="mid360s",
                 choices=["mid360", "mid360s"],
+            ),
+            DeclareLaunchArgument(
+                "enable_glim",
+                default_value="true",
+                description="Load GLIM into the Livox component container",
+            ),
+            DeclareLaunchArgument(
+                "glim_backend",
+                default_value="gpu",
+                choices=["gpu", "cpu"],
+                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
@@ -228,6 +259,8 @@ def generate_launch_description():
                 "device",
                 default_value="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0",
             ),
+            heading_arrow,
+            actual_route,
             mid360_launch,
             zed2i_launch,
             # back_cam_launch,

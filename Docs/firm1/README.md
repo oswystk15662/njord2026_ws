@@ -54,12 +54,14 @@ CRC は version から payload 末尾までの 22 byte を対象にする。
 
 不正 frame、CRC 不一致、非有限 float は出力へ反映しない。
 
-software emergency stop が 1、GPIO2 の物理 E-stop 入力が LOW、または有効な指令が
-1000 ms 途絶した場合、全スラスターを中立にして FET を LOW にする。
+software emergency stop が 1、または有効な指令が 1000 ms 途絶した場合、全スラスターを
+中立にして FET を LOW にする。GPIO15 は物理 E-stop の独立した入力ではなく、リレーの
+状態を読む信号である。soft emergency stop によってリレーを切った場合もこの信号は変化
+し得るため、GPIO15だけから物理 E-stop の作動を判定してはならない。
 
 ## ESP → PC
 
-有効な指令フレームを処理するたび、firmware は 1 byte のリレー状態を返す。
+有効な指令フレームを処理するたび、firmware は GPIO15 のリレー状態を表す 1 byte を返す。
 
 ```
   bit7  bit6  bit5  bit4  bit3  bit2  bit1      bit0
@@ -68,7 +70,7 @@ software emergency stop が 1、GPIO2 の物理 E-stop 入力が LOW、または
 
 | ビット | 内容 |
 |---|---|
-| bit0 | 緊急停止リレーの動作状態（1 = 動作中） |
+| bit0 | リレーの動作状態（1 = 動作中）。物理 E-stop の独立した判定には使えない。 |
 
 ---
 
@@ -117,6 +119,5 @@ arduino-cli upload --fqbn esp32:esp32:esp32 --port <PORT> Docs/firm1
 ### 4. 動作確認
 
 ESP32は115200 bpsで動作する。有効なスラスタ指令フレームを処理するたびに、
-GPIO2の状態を1 byteで返信する。`0x01` は物理E-stop（リレー）が動作中、`0x00` は
-非動作を示す。GPIO2がLOWの間は、指令内容に関わらず全スラスターが中立、FETはLOW
-になる。
+GPIO15の状態を1 byteで返信する。`0x01` はリレーが動作中、`0x00` は非動作を示す。
+soft emergency stopでもこの値は変化し得るため、物理E-stopの状態として解釈しない。

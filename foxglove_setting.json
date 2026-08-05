@@ -57,11 +57,14 @@
         "/sim/boundary_markers": {
           "visible": true
         },
+        "/sim/buoy_markers": {
+          "visible": true
+        },
         "/sim/cardinal_mark_markers": {
           "visible": true
         },
         "/task_waypoint_markers": {
-          "visible": false
+          "visible": true
         },
         "/task_waypoint_path": {
           "visible": true
@@ -231,32 +234,15 @@
         "calibrationTopic": "/zed2i/left/camera_info"
       }
     },
-    "Indicator!battery": {
+    "Gauge!battery": {
       "path": "/gui/battery_percent.data",
-      "style": "bulb",
-      "fontSize": 36,
-      "fallbackColor": "#a0a0a0",
-      "fallbackLabel": "No BMS data",
-      "rules": [
-        {
-          "operator": ">=",
-          "rawValue": "50",
-          "color": "#51e358",
-          "label": "Battery OK (%)"
-        },
-        {
-          "operator": ">=",
-          "rawValue": "20",
-          "color": "#f7d13d",
-          "label": "Battery low (%)"
-        },
-        {
-          "operator": "<",
-          "rawValue": "20",
-          "color": "#f01a1a",
-          "label": "Battery critical (%)"
-        }
-      ],
+      "minValue": 0,
+      "maxValue": 100,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "reverse": false,
+      "reverseDirection": false,
+      "style": "dial",
       "foxglovePanelTitle": "Battery Remaining (%)"
     },
     "Indicator!35h1ahn": {
@@ -301,7 +287,7 @@
             "second": {
               "first": {
                 "first": "Image!3umscrg",
-                "second": "Indicator!battery",
+                "second": "Gauge!battery",
                 "direction": "row"
               },
               "second": {

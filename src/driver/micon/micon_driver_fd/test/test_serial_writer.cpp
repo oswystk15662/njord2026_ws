@@ -158,7 +158,7 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   auto publisher_node = std::make_shared<rclcpp::Node>("serial_writer_test_publisher");
   auto thrust_pub = publisher_node->create_publisher<std_msgs::msg::Float32MultiArray>(
     "/thruster_command", 10);
-  auto emg_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/emg", 10);
+  auto soft_emg_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/soft_emg", 10);
   auto green_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/green", 10);
   auto red_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/red", 10);
 
@@ -170,7 +170,7 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   const auto receive_deadline = std::chrono::steady_clock::now() + 300ms;
   while (std::chrono::steady_clock::now() < receive_deadline) {
     thrust_pub->publish(thrust);
-    emg_pub->publish(std_msgs::msg::Bool().set__data(true));
+    soft_emg_pub->publish(std_msgs::msg::Bool().set__data(true));
     green_pub->publish(std_msgs::msg::Bool().set__data(true));
     red_pub->publish(std_msgs::msg::Bool().set__data(true));
     executor.spin_some();
@@ -194,7 +194,7 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   const micon_driver_fd::Packet packet(
     received.begin() + static_cast<std::ptrdiff_t>(frame_begin),
     received.begin() + static_cast<std::ptrdiff_t>(last_delimiter_index + 1U));
-  expect_thruster_command_frame(packet, {0.1F, -0.2F, 0.3F, -0.4F}, 0x05, 0, false);
+  expect_thruster_command_frame(packet, {0.1F, -0.2F, 0.3F, -0.4F}, 0x0D, 0, false);
 
   close(master_fd);
   executor.remove_node(publisher_node);

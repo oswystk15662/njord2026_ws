@@ -18,10 +18,10 @@ with `enable_detection:=false`.
 ## Interfaces
 
 - `joy` (`sensor_msgs/msg/Joy`) is read by both manual nodes.
-- `joy_converter_node` publishes `/cmd_vel_manual`, `/emg`, `/red`, `/yellow`, and `/green`.
+- `joy_converter_node` publishes `/cmd_vel_manual`, `/soft_emg`, `/red`, `/yellow`, and `/green`.
   Hold controller button 12 to publish manual velocity; releasing it sends one zero command and
   returns control to Nav2 through `twist_mux` after its 0.5 s timeout.
-- `/emg` uses positive logic: button 0 sends `true` (emergency stop), while its
+- `/soft_emg` uses positive logic: button 0 sends `true` (emergency stop), while its
   normal released state sends `false` (emergency stop released).
 - `manual_control.launch.py` uses UM982-only feedback by default, without the
   EKF.  The UM982 driver natively publishes `odometry/feedback`

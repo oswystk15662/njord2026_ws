@@ -61,10 +61,10 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
   rtk_grace_period_sec_ = declare_parameter<double>("localization.rtk_grace_period_sec", 10.0);
   rtk_covariance_threshold_ = declare_parameter<double>("localization.rtk_covariance_threshold",
       0.01);
-  green_period_ = static_cast<float>(declare_parameter<double>("lamp.green_blink_period_sec", 1.0));
+  green_period_ = static_cast<float>(declare_parameter<double>("lamp.green_blink_period_sec", 0.1));
   yellow_period_ = static_cast<float>(declare_parameter<double>("lamp.yellow_blink_period_sec",
-      1.0));
-  red_period_ = static_cast<float>(declare_parameter<double>("lamp.red_blink_period_sec", 0.5));
+      0.1));
+  red_period_ = static_cast<float>(declare_parameter<double>("lamp.red_blink_period_sec", 0.05));
   duty_ratio_ = static_cast<float>(declare_parameter<double>("lamp.duty_ratio", 0.5));
 
   const auto generic_sub = [this](const std::string & name, const std::string & topic_key) {
@@ -90,10 +90,10 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
       "auto" ? OperatingMode::AUTO : OperatingMode::UNKNOWN;
       mode_received_ = true;
     });
-  emergency_sub_ = create_subscription<std_msgs::msg::Bool>(
+  emergency_sub_ = create_subscription<std_msgs::msg::UInt8>(
     declare_parameter<std::string>("topics.emergency_stop", "/safety/emergency_stop"), 10,
-    [this](const std_msgs::msg::Bool::SharedPtr message) {
-      emergency_stop_ = message->data; emergency_received_ = true;
+    [this](const std_msgs::msg::UInt8::SharedPtr message) {
+      emergency_stop_ = message->data != 0U; emergency_received_ = true;
                                                                                                                       });
   autonomy_ready_sub_ = create_subscription<std_msgs::msg::Bool>(
     declare_parameter<std::string>("topics.autonomy_ready", "/autonomy/ready"), 10,

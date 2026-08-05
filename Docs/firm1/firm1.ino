@@ -20,7 +20,7 @@ constexpr uint8_t kFetSwitchPin = 14;
 constexpr uint8_t kGreenLedPin = 25;
 constexpr uint8_t kYellowLedPin = 26;
 constexpr uint8_t kRedLedPin = 27;
-constexpr uint8_t kRelayPin = 2;
+constexpr uint8_t kRelayPin = 15;
 
 constexpr size_t kThrusterCount = 4;
 constexpr uint8_t kEmergencyStopMask = 1U << 3;
@@ -84,7 +84,7 @@ void configurePins() {
 }
 
 bool physicalEStopActive() {
-  return digitalRead(kRelayPin) == LOW;
+  return digitalRead(kRelayPin) == HIGH;
 }
 
 void reportRelayState() {
@@ -138,8 +138,7 @@ bool processThrusterCommand(const uint8_t* raw, size_t rawLength) {
   hasValidCommand = true;
   updateLeds(controlFlags);
 
-  if ((controlFlags & kEmergencyStopMask) != 0U ||
-      physicalEStopActive()) {
+  if ((controlFlags & kEmergencyStopMask) != 0U) {
     enterSafeState();
   } else {
     updateThrusters(thrusts);
@@ -190,9 +189,8 @@ void processSerialInput() {
 }
 
 void enforceSafety() {
-  if (physicalEStopActive() ||
-      (hasValidCommand &&
-       millis() - lastValidCommandTimeMs > kCommandTimeoutMs)) {
+  if (hasValidCommand &&
+      millis() - lastValidCommandTimeMs > kCommandTimeoutMs) {
     enterSafeState();
   }
 }

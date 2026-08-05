@@ -10,6 +10,7 @@
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 
 namespace micon_driver_fd
 {
@@ -20,6 +21,13 @@ struct Flags
   bool red{false};
   bool yellow{false};
   bool green{false};
+};
+
+enum class EmergencyStopState : uint8_t
+{
+  RUNNING = 0,
+  SOFT_EMG = 1,
+  HARD_EMG = 2,
 };
 
 constexpr uint8_t kProtocolVersion = 0x01;
@@ -49,12 +57,13 @@ public:
 
 private:
   void thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg);
-  void emg_cb(const std_msgs::msg::Bool::SharedPtr msg);
+  void soft_emg_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void red_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void yellow_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void green_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void timer_cb();
   void read_bms();
+  void publish_safety_state();
   int open_serial(const std::string & device, int baud);
 
   Flags flags_;
@@ -67,12 +76,16 @@ private:
   std::string command_topic_;
   std::string bms_topic_;
   std::string serial_rx_buffer_;
+  bool soft_emg_{false};
+  bool relay_active_{false};
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr sub_thrust_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_emg_;
+  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_soft_emg_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_red_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_yellow_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_green_;
   rclcpp::Publisher<std_msgs::msg::Float32MultiArray>::SharedPtr pub_bms_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_relay_active_;
+  rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr pub_safety_emergency_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 

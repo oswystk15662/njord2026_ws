@@ -7,6 +7,7 @@
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/empty.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 
 namespace simple_manual
 {
@@ -36,9 +37,11 @@ public:
           mode_ = message->data;
         }
       });
-    emergency_sub_ = create_subscription<std_msgs::msg::Bool>(
+    emergency_sub_ = create_subscription<std_msgs::msg::UInt8>(
       "/safety/emergency_stop", 10,
-      [this](std_msgs::msg::Bool::SharedPtr message) {emergency_stop_ = message->data;});
+      [this](std_msgs::msg::UInt8::SharedPtr message) {
+        emergency_stop_ = message->data != 0U;
+      });
     ready_sub_ = create_subscription<std_msgs::msg::Bool>(
       "/autonomy/ready", 10,
       [this](std_msgs::msg::Bool::SharedPtr message) {autonomy_ready_ = message->data;});
@@ -47,7 +50,7 @@ public:
     timer_ = create_wall_timer(std::chrono::milliseconds(50),
       std::bind(&CommandArbiter::publish, this));
     heartbeat_timer_ = create_wall_timer(std::chrono::seconds(1), [this]() {
-      heartbeat_pub_->publish(std_msgs::msg::Empty{});
+          heartbeat_pub_->publish(std_msgs::msg::Empty{});
     });
   }
 
@@ -82,7 +85,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr manual_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr auto_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr emergency_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr ready_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr command_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;

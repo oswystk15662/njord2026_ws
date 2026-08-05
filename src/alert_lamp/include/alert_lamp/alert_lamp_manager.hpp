@@ -12,6 +12,7 @@
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 
 #include "alert_lamp/msg/alert_lamp_command.hpp"
 #include "alert_lamp/alert_lamp_state.hpp"
@@ -58,7 +59,7 @@ private:
   std::shared_ptr<rclcpp::GenericSubscription> manual_heartbeat_sub_;
   std::shared_ptr<rclcpp::GenericSubscription> ground_heartbeat_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr mode_sub_;
-  rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr emergency_sub_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr emergency_sub_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr autonomy_ready_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr localization_sub_;
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr rtk_sub_;

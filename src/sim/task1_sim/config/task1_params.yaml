@@ -2,9 +2,10 @@ task1_orchestrator:
   ros__parameters:
     frame_id: "map"
 
-    # Simulation-local Cartesian approximation of NJORD 2026 Task1:
-    # GPS point 1 -> waypoint 1.1-1.10 -> GPS point 2 -> GPS point 3
-    # -> waypoint 3.1-3.3 -> GPS point 4.
+    # Full Task1 course (Cartesian sim approximation): task1-1's ten-point
+    # maneuvering section, then the cardinal-marker S/N/S slalom. GPS
+    # checkpoints bookend the two sections; waypoint1_xy and waypoint2_xy
+    # hold their interior points so task evaluation matches the Nav2 route.
     gps_checkpoint_xy: "[[0.0, 0.0], [50.0, 0.0], [50.0, -25.0], [0.0, -25.0]]"
     waypoint1_xy: >-
       [[10.0, 5.0], [13.0, 0.0], [16.0, -5.0], [19.0, -0.5], [22.0, 6.0],
@@ -12,17 +13,27 @@ task1_orchestrator:
     waypoint2_xy: "[[24.0, -35.0], [15.0, -15.0], [8.0, -35.0]]"
 
     buoy_position_xy: "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
+    # Cardinal orientation per marker, aligned index-wise with
+    # buoy_position_xy: S (pass south), N (pass north), S (pass south) --
+    # this is what makes the route above a slalom instead of a straight line.
+    buoy_marks: "[\"S\", \"N\", \"S\"]"
     wall_radius: 2.5
     wall_points: 24
     goal_radius: 2.0
     waypoint_reach_radius: 2.0
-    avoidance_eval_radius: 8.0
+    avoidance_eval_radius: 10.0
     avoidance_margin: 0.5
+    # Testing override only: forces every marker (not just one) to this
+    # cardinal mark, ignoring buoy_marks above. Leave empty for the
+    # competition S/N/S slalom.
     forced_mark: ""
 
-    # Matches the default Nav2 costmap window and keeps the spawn at (0, 0)
-    # inside the simulated course instead of on the boundary obstacle.
-    course_bounds: [-5.0, 55.0, -40.0, 15.0]
+    # This visual boundary includes spawn and every Task1-1/slalom waypoint.
+    # It is not added to /sim_obstacles, but cardinal_wall_publisher uses it
+    # as the far edge of a detected marker's one-sided exclusion wall.
+    course_bounds: [-5.0, 55.0, -40.0, 35.0]
+    # Physical divider between the task1-1 maneuvering section and the
+    # slalom. The route reaches the slalom via x=50, beyond this divider.
     center_line: [0.0, 40.0, -10.0, 0.05]
     # Optional [min_x, max_x, min_y, max_y] blocker before marker detection.
     # Keep disabled by default because the full NavigateThroughPoses request

@@ -20,7 +20,8 @@ setup(
         ]),
         ("share/" + package_name + "/config", [
             "config/task1_params.yaml",
-            "config/task1_nav2_params.yaml",
+            "config/task1_nav2_params_humble.yaml",
+            "config/task1_nav2_params_jazzy.yaml",
             "config/task1_ekf_local.yaml",
         ]),
     ],
@@ -33,6 +34,8 @@ setup(
     entry_points={
         "console_scripts": [
             "task1_orchestrator = task1_sim.orchestrator:main",
+            "cardinal_perception_sim = task1_sim.cardinal_perception_sim:main",
+            "gui_status_dummy_publisher = task1_sim.gui_status_dummy_publisher:main",
         ],
     },
 )

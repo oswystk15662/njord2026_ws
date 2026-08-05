@@ -39,6 +39,12 @@ def launch_setup(context, *args, **kwargs):
         LaunchConfiguration("glim_headless").perform(context).lower()
         in ("true", "1", "yes", "on")
     )
+    glim_backend = LaunchConfiguration("glim_backend").perform(context)
+    glim_config_dir = (
+        "glim_config_cpu" if glim_backend == "cpu"
+        else "glim_config_headless" if glim_headless
+        else "glim_config"
+    )
 
     user_config_path = PathJoinSubstitution(
         [FindPackageShare("robot"), "config", "livox", config_file]
@@ -136,7 +142,6 @@ def launch_setup(context, *args, **kwargs):
     # It still receives IMU over the normal topic path because that publisher
     # is not part of this container.
     if enable_glim:
-        glim_config_dir = "glim_config_headless" if glim_headless else "glim_config"
         components.append(
             ComposableNode(
                 package="glim_ros",
@@ -172,7 +177,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument(
                 "lidar_model",
-                default_value="mid360",
+                default_value="mid360s",
                 choices=["mid360", "mid360s"],
             ),
             DeclareLaunchArgument(
@@ -215,6 +220,12 @@ def generate_launch_description():
                 description="Use glim_config_headless (no GUI viewer extensions) "
                 "instead of glim_config; required when no X11/OpenGL display "
                 "is available",
+            ),
+            DeclareLaunchArgument(
+                "glim_backend",
+                default_value="gpu",
+                choices=["gpu", "cpu"],
+                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
             DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),

@@ -1,0 +1,38 @@
+{
+  // zenoh-bridge-ros2dds : Jetson (Jazzy) 側
+  //   ROS_DOMAIN_ID=6 のローカル DDS と zenoh を橋渡しする。
+  //   allow リストは bridge_minipc.json5 と一致させること。
+  mode: "peer",
+
+  // <MINIPC_IP> は miniPC の有線 NIC の IP に置き換える。
+  connect: {
+    endpoints: ["tcp/gembu-EliteMini-Series.local:7447"],
+  },
+
+  scouting: {
+    multicast: { enabled: false },
+  },
+
+  plugins: {
+    ros2dds: {
+      domain: 6,
+
+      allow: {
+        publishers: [
+          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/buoy_detections", "/buoy_detections_3d",
+          "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/joy", "/joy/set_feedback",
+        ],
+        subscribers: [
+          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/buoy_detections", "/buoy_detections_3d",
+          "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/joy", "/joy/set_feedback",
+        ],
+        service_servers: [], service_clients: [],
+        action_servers: [], action_clients: [],
+      },
+    },
+  },
+}

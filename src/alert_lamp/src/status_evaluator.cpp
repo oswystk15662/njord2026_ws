@@ -46,20 +46,25 @@ AlertState StatusEvaluator::evaluate(const SystemStatus & s) const
 }
 
 LampDisplay StatusEvaluator::displayFor(
-  AlertState state, float green_period, float yellow_period,
-  float red_period, float duty_ratio, const SystemStatus &) const
+  AlertState state, float green_period, float /*yellow_period*/,
+  float red_period, float duty_ratio, const SystemStatus & status) const
 {
   switch (state) {
     case AlertState::MANUAL_NORMAL:
-      return {LampColor::GREEN, LampPattern::SOLID, 0.0F, duty_ratio, "manual mode normal"};
+      return {LampColor::YELLOW, LampPattern::SOLID, 0.0F, duty_ratio, "manual mode normal"};
     case AlertState::AUTO_NORMAL:
       return {LampColor::GREEN, LampPattern::BLINK, green_period, duty_ratio,
         "automatic mode normal"};
     case AlertState::AUTONOMY_NOT_READY:
-      return {LampColor::YELLOW, LampPattern::SOLID, 0.0F, duty_ratio, "autonomy not ready"};
+      return {LampColor::GREEN_YELLOW, LampPattern::BLINK, green_period, duty_ratio,
+        "autonomy not ready"};
     case AlertState::GROUND_COMMUNICATION_LOST:
-      return {LampColor::YELLOW, LampPattern::BLINK, yellow_period, duty_ratio,
-        "ground station communication lost"};
+      if (status.mode == OperatingMode::MANUAL) {
+        return {LampColor::YELLOW_RED, LampPattern::SOLID, 0.0F, duty_ratio,
+          "ground station communication lost in manual mode"};
+      }
+      return {LampColor::GREEN_RED, LampPattern::SOLID, 0.0F, duty_ratio,
+        "ground station communication lost in automatic mode"};
     case AlertState::CRITICAL_FAULT:
       return {LampColor::RED, LampPattern::BLINK, red_period, duty_ratio,
         "critical fault or unknown state"};

@@ -5,17 +5,64 @@ Task1 needs collision monitoring for its command path but has no docking task,
 so it owns the lifecycle list explicitly.
 """
 
+import tempfile
+
+import yaml
+
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument
+from launch.actions import DeclareLaunchArgument, OpaqueFunction, SetLaunchConfiguration
 from launch.substitutions import LaunchConfiguration
+from nav2_common.launch import RewrittenYaml
 from launch_ros.actions import Node
+
+
+def _configure_bt_xmls(context):
+    """Expand the BT frequency placeholder before Nav2 loads the XML files."""
+    params_file = LaunchConfiguration("params_file").perform(context)
+    with open(params_file, "r") as params_stream:
+        params = yaml.safe_load(params_stream) or {}
+    bt_params = params.get("bt_navigator", {}).get("ros__parameters", {})
+    replanning_frequency = float(bt_params.get("replanning_frequency", 1.0))
+
+    configured = {}
+    for argument_name, config_name in (
+        ("nav_to_pose_bt_xml", "configured_nav_to_pose_bt_xml"),
+        ("nav_through_poses_bt_xml", "configured_nav_through_poses_bt_xml"),
+    ):
+        source_file = LaunchConfiguration(argument_name).perform(context)
+        with open(source_file, "r") as xml_stream:
+            xml = xml_stream.read()
+        xml = xml.replace("__REPLANNING_FREQUENCY__", f"{replanning_frequency:.6g}")
+        xml = xml.replace("<root ", '<root BTCPP_format="4" ', 1)
+        with tempfile.NamedTemporaryFile(
+            mode="w", prefix="task1_nav2_bt_", suffix=".xml", delete=False
+        ) as configured_file:
+            configured_file.write(xml)
+            configured[config_name] = configured_file.name
+
+    return [
+        SetLaunchConfiguration(name, path) for name, path in configured.items()
+    ]
 
 
 def generate_launch_description():
     params_file = LaunchConfiguration("params_file")
     use_sim_time = LaunchConfiguration("use_sim_time")
     autostart = LaunchConfiguration("autostart")
-    params = [params_file, {"use_sim_time": use_sim_time}]
+    params = [
+        RewrittenYaml(
+            source_file=params_file,
+            root_key=None,
+            param_rewrites={
+                "bt_navigator.ros__parameters.default_nav_to_pose_bt_xml":
+                    LaunchConfiguration("configured_nav_to_pose_bt_xml"),
+                "bt_navigator.ros__parameters.default_nav_through_poses_bt_xml":
+                    LaunchConfiguration("configured_nav_through_poses_bt_xml"),
+            },
+            convert_types=True,
+        ),
+        {"use_sim_time": use_sim_time},
+    ]
     remappings = [("/tf", "tf"), ("/tf_static", "tf_static")]
     lifecycle_nodes = [
         "controller_server",
@@ -30,8 +77,11 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument("params_file"),
+        DeclareLaunchArgument("nav_to_pose_bt_xml"),
+        DeclareLaunchArgument("nav_through_poses_bt_xml"),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument("autostart", default_value="true"),
+        OpaqueFunction(function=_configure_bt_xmls),
         Node(package="nav2_controller", executable="controller_server",
              name="controller_server", output="screen", parameters=params,
              remappings=remappings + [("cmd_vel", "cmd_vel_nav")]),

@@ -20,13 +20,14 @@ def generate_launch_description():
 
     # ── Launch arguments ──────────────────────────────────────────────────────
     # Startup timing rationale:
-    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise, orchestrator, EKF, navsat
+    #   t=0.0  SENSOR layer: sim_dynamics, sensor_noise (including UM982),
+    #            orchestrator and EKFs
     #   t=5.0  NAV2 layer:   Nav2 bringup (needs SimNode TF + filtered odometry)
     #   t=8.0  GOAL layer:   waypoint_publisher (needs NavigateThroughPoses action server)
     #
     # Why 5s for Nav2?
-    #   navsat_transform initializes on first GPS fix (~0.5s), publishes /odometry/gps.
-    #   global_ekf then starts publishing /odometry/filtered/global.
+    #   UM982 simulator starts on the first /odom truth message and publishes
+    #   /odometry/gps/um982. The global EKF then starts publishing global odometry.
     #   But lifecycle_manager configure+activate for all Nav2 nodes takes 2-5s.
     #   Total margin: 5s should be safe for sim where GPS is synthetic and instant.
     #
@@ -47,7 +48,7 @@ def generate_launch_description():
         'task_type', default_value='task3_2',
         description='Task type: task3_1 or task3_2')
     full_sequence_arg = DeclareLaunchArgument(
-        'run_full_sequence', default_value='false',
+        'run_full_sequence', default_value='true',
         description='For task3_1, continue through task3_2 and finish at GPS10')
     enable_diagnostics_arg = DeclareLaunchArgument(
         'enable_diagnostics', default_value='true',
@@ -78,11 +79,20 @@ def generate_launch_description():
         output="screen"
     )
 
-    # Sensor noise simulator: /odom → /wit/imu + /gps/fix + /sensor/gnss/compass/raw
+    # Sensor noise simulator: /odom → /livox/imu, legacy GPS/compass, and
+    # /odometry/gps/um982 for the global EKF.
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")))
+            os.path.join(pkg_sensor_noise, "launch", "sensor_noise.launch.py")),
+        launch_arguments={
+            # The Foxglove GNSS Map Telemetry panel subscribes to this
+            # real-vessel GNSS contract.
+            'fix_topic': '/sensor/vehicle_gnss/fix/raw',
+            # Keep Task3's localization interface aligned with the vessel.
+            'imu_topic': '/livox/imu',
+        }.items(),
+    )
 
     # Task3 orchestrator: buoys (b31_* + b32_*), dock geometry, PointCloud2, TFs
     config = os.path.join(pkg_task3_sim, "config", "task3_params.yaml")
@@ -97,6 +107,44 @@ def generate_launch_description():
                 "run_full_sequence": ParameterValue(run_full_sequence, value_type=bool),
             },
         ],
+        output="screen",
+    )
+
+    # Simulated BMS and operating-mode telemetry for the Foxglove overview
+    # indicators. These mirror the real-vessel GUI topic contracts.
+    gui_status_dummy = Node(
+        package="task3_sim",
+        executable="task3_gui_status_dummy",
+        name="task3_gui_status_dummy",
+        parameters=[config],
+        output="screen",
+    )
+
+    heading_arrow = Node(
+        package="tf_frame_arrow_publisher",
+        executable="arrow_publisher",
+        name="nav_arrow_publisher",
+        output="screen",
+    )
+    actual_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="full_path_publisher",
+        name="actual_route_publisher",
+        output="screen",
+        parameters=[{
+            "marker_topic": "/actual_path_marker",
+            "parent_frame": "odom",
+            "child_frame": "base_link",
+        }],
+    )
+
+    # Publish simulated SOG for the Foxglove GNSS Map Telemetry panel.  In
+    # simulation, /odom is the truth odometry and already carries ENU speed.
+    ground_speed = Node(
+        package="tf_frame_arrow_publisher",
+        executable="ground_speed_publisher",
+        name="ground_speed_publisher",
+        parameters=[{'odometry_topic': '/odom'}],
         output="screen",
     )
 
@@ -118,6 +166,18 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Match the vessel control contract used by the shared Nav2 launch:
+    # collision_monitor publishes /cmd_vel_nav and twist_mux is the only
+    # publisher of /cmd_vel consumed by the thruster driver.
+    twist_mux = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        name="twist_mux",
+        parameters=[os.path.join(pkg_robot, "config", "twist_mux.yaml")],
+        remappings=[("cmd_vel_out", "/cmd_vel")],
+        output="screen",
+    )
+
     # Robot state publisher: URDF → base_link→{imu_link, livox_frame, gnss_link, …}
     robot_state_pub_node = Node(
         package='robot_state_publisher',
@@ -130,53 +190,19 @@ def generate_launch_description():
         }]
     )
 
-    # EKF local: /odom + /wit/imu -> odometry/filtered/local topic only
-    local_ekf_node = Node(
-        package='robot_localization',
-        executable='ekf_node',
-        name='ekf_filter_node_local',
-        output='screen',
-        parameters=[
-            os.path.join(pkg_robot, 'config', 'ekf_local.yaml'),
-            {'publish_tf': False},
-        ],
-        remappings=[('odometry/filtered', 'odometry/filtered/local')]
-    )
-
-    # EKF global: local filtered odom + GPS -> odometry/filtered/global topic only
+    # Task3 localization: simulated UM982 position + /livox/imu orientation
+    # and angular velocity. /odom remains simulation truth only and is not
+    # fused into the navigation estimate.
     global_ekf_node = Node(
         package='robot_localization',
         executable='ekf_node',
         name='ekf_filter_node_global',
         output='screen',
         parameters=[
-            os.path.join(pkg_robot, 'config', 'ekf_global.yaml'),
+            os.path.join(pkg_task3_sim, 'config', 'task3_ekf_global.yaml'),
             {'publish_tf': False},
         ],
         remappings=[('odometry/filtered', 'odometry/filtered/global')]
-    )
-
-    # NavSat transform: /gps/fix + /wit/imu → /odometry/gps
-    navsat_transform_node = Node(
-        package='robot_localization',
-        executable='navsat_transform_node',
-        name='navsat_transform_node',
-        output='screen',
-        parameters=[{
-            'frequency': 10.0,
-            'magnetic_declination_radians': 0.0,
-            'yaw_offset': 0.0,
-            'zero_altitude': True,
-            'broadcast_utm_transform': False,  # Disabled: UTM coords appear millions of m away
-            'publish_filtered_gps': True,
-            'use_odometry_yaw': False,
-            'wait_for_datum': False,
-        }],
-        remappings=[
-            ('imu', '/wit/imu'),
-            ('gps/fix', '/gps/fix'),
-            ('odometry/filtered', 'odometry/filtered/local')
-        ]
     )
 
     # Field boundary costmap: latched — outside 40m×40m square = LETHAL
@@ -201,30 +227,41 @@ def generate_launch_description():
         output='screen',
     )
 
+    # Dynamic lethal obstacles around the Task3 buoy TF frames.  This also
+    # satisfies the task3 diagnostic monitor for /buoy_costmap.
+    buoy_costmap_node = Node(
+        package='buoy_obstacle_publisher',
+        executable='buoy_obstacle_publisher',
+        name='buoy_obstacle_publisher',
+        output='screen',
+    )
+
     sensor_layer_timer = TimerAction(
         period=driver_delay,
         actions=[
             sim_dynamics,
             sensor_noise_launch,
             task3_orchestrator,
+            gui_status_dummy,
+            ground_speed,
             thruster_driver_node,
+            twist_mux,
             robot_state_pub_node,
-            local_ekf_node,
             global_ekf_node,
-            navsat_transform_node,
             field_boundary_node,
+            buoy_costmap_node,
         ]
     )
 
     # ── NAV2 LAYER (t=5s) ────────────────────────────────────────────────────
-    # Start Nav2 after SimNode TF and EKF/navsat filtered odometry are available.
+    # Start Nav2 after SimNode TF and both EKF odometry topics are available.
     # lifecycle_manager will configure+activate: controller, smoother, planner,
     # behavior, bt_navigator, waypoint_follower, velocity_smoother (~3-5s).
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_robot, "launch", "nav2.launch.py")),
         launch_arguments={
-            'params_file': os.path.join(pkg_robot, 'config', 'nav2_params_task3.yaml'),
+            'params_file': os.path.join(pkg_robot, 'config', 'nav2_params_task3_jazzy.yaml'),
             'enable_diagnostics': 'false',
         }.items()
     )
@@ -266,6 +303,8 @@ def generate_launch_description():
 
     return LaunchDescription([
         startup_message,
+        heading_arrow,
+        actual_route,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,

@@ -60,20 +60,6 @@ macro(njord_detect_platform)
   find_package(CUDAToolkit QUIET)
   check_language(CUDA)
 
-  # check_language(CUDA) relies on nvcc being on PATH (or CUDACXX being
-  # set). On Jetson/JetPack, /usr/local/cuda/bin is not on PATH by default,
-  # so check_language(CUDA) can fail to set CMAKE_CUDA_COMPILER even though
-  # find_package(CUDAToolkit) already located the same nvcc via the CUDA
-  # Toolkit's own search logic (CUDAToolkit_NVCC_EXECUTABLE). Fall back to
-  # that path so NJORD_HAS_CUDA reflects reality instead of PATH quirks.
-  # This does not change behavior on a real miniPC: without CUDA installed,
-  # CUDAToolkit_FOUND is false and CUDAToolkit_NVCC_EXECUTABLE is unset, so
-  # NJORD_HAS_CUDA stays OFF and the stub fallback is preserved.
-  if(NOT CMAKE_CUDA_COMPILER AND CUDAToolkit_FOUND AND CUDAToolkit_NVCC_EXECUTABLE)
-    set(CMAKE_CUDA_COMPILER "${CUDAToolkit_NVCC_EXECUTABLE}")
-    message(STATUS "njord_platform: check_language(CUDA) did not find nvcc on PATH; using CUDAToolkit_NVCC_EXECUTABLE=${CUDAToolkit_NVCC_EXECUTABLE}")
-  endif()
-
   set(NJORD_HAS_CUDA OFF)
   if(CUDAToolkit_FOUND AND CMAKE_CUDA_COMPILER)
     set(NJORD_HAS_CUDA ON)
