@@ -133,6 +133,43 @@ ros2 launch robot task1.launch.py          # role:=minipc が既定
 
 `task2.launch.py` / `task3.launch.py` も同様。
 
+### systemd による基盤 bringup の常駐化
+
+`jetson_bringup` と `minipc_bringup` は、タスクに依存しない基盤として
+systemd 常駐にできる。workspace をビルドした後、それぞれの端末で実行する。
+
+```bash
+# Jetson（Jazzy の例）
+scripts/install_bringup_service.sh --role jetson --ros-distro jazzy --domain-id 0
+
+# miniPC（Humble の例）
+scripts/install_bringup_service.sh --role minipc --ros-distro humble --domain-id 0
+```
+
+このスクリプトは通常ユーザーで ROS プロセスを実行する
+`njord-jetson-bringup.service` または `njord-minipc-bringup.service` を登録し、
+有線ネットワークと時刻同期の後に起動する。service 内でも
+`scripts/njord_env.sh` を source するため、`ROS_DOMAIN_ID` と `NJORD_RMW` が両機で
+一致するよう、導入時に同じ値を指定すること。
+
+miniPC service は `enable_nav2:=false` 固定である。Nav2、waypoint publisher、
+autonomy supervisor は task manager が start/stop を管理するタスク層であり、
+常駐 service に含めない。
+
+確認・停止・無効化:
+
+```bash
+sudo systemctl status njord-jetson-bringup.service   # Jetson
+sudo systemctl status njord-minipc-bringup.service   # miniPC
+journalctl -u njord-minipc-bringup.service -f
+sudo systemctl disable --now njord-minipc-bringup.service
+```
+
+接続デバイスの権限は service の実行ユーザーに引き継がれる。miniPC では少なくとも
+`dialout`（serial）、必要に応じて `video` / `render` グループへそのユーザーを追加し、
+再ログインしてから導入する。最初の起動前に、時刻同期・DDS 通信・各
+`/dev/serial/by-id/...` パスを手動で確認すること。
+
 ### 1台構成（回帰確認用）
 
 Jetson 1台で分割前と同じ構成を動かす:
