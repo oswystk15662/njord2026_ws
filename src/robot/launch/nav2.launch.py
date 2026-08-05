@@ -96,7 +96,7 @@ def generate_launch_description():
     default_params_file = os.path.join(
         pkg_robot,
         'config',
-        'nav2_params.yaml'
+        'nav2_params_humble.yaml'
     )
     default_nav_to_pose_bt_xml = os.path.join(
         pkg_robot, 'config', 'navigate_to_pose_w_replanning_and_recovery.xml'

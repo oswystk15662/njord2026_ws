@@ -204,7 +204,7 @@ def generate_launch_description():
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_robot, "launch", "nav2.launch.py")),
         launch_arguments={
-            "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2.yaml"),
+            "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2_jazzy.yaml"),
             "enable_diagnostics": "false",
         }.items(),
         condition=IfCondition(LaunchConfiguration("use_nav2")),
