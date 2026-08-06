@@ -50,12 +50,34 @@ const PANEL_CSS = `
 .gnss-telemetry{position:absolute;right:12px;top:12px;z-index:1100;min-width:225px;padding:10px 12px;border:1px solid #526375;border-radius:6px;background:rgba(12,18,28,.92);color:#f4f7fb;font:14px/1.5 system-ui,sans-serif;pointer-events:none}
 .gnss-telemetry-title{color:#a9c7e8;font-size:12px;font-weight:700;letter-spacing:.06em}.gnss-telemetry-separator{border-top:1px solid #526375;margin-top:5px;padding-top:5px}
 .gnss-map-error{display:none;position:absolute;left:50%;bottom:34px;z-index:1100;transform:translateX(-50%);padding:7px 10px;border-radius:4px;background:rgba(137,28,28,.92);color:#fff;font:13px system-ui,sans-serif;pointer-events:none}.gnss-map-error.visible{display:block}
-.vessel-icon{height:34px;width:34px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:34px;width:34px;transform-origin:17px 17px}.vessel-arrow path{fill:#00cceb;stroke:#063946;stroke-width:1.5;stroke-linejoin:round}
-.vessel-dot{display:none;position:absolute;left:10px;top:10px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
+	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{fill:#00cceb;stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
+	.vessel-dot{display:none;position:absolute;left:13px;top:13px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
+	`;
+
+const BATTERY_PANEL_CSS = `
+.battery-root{height:100%;min-height:150px;display:flex;align-items:center;justify-content:center;background:#111827;color:#f9fafb;font-family:system-ui,sans-serif;overflow:hidden}
+.battery-card{width:min(92%,360px);display:flex;flex-direction:column;align-items:center;gap:12px}
+.battery-title{font-size:13px;font-weight:700;letter-spacing:.08em;color:#cbd5e1}
+.battery-shell{position:relative;width:min(82%,250px);height:82px;border:5px solid #e5edf5;border-radius:8px;background:#1f2937;box-sizing:border-box;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.battery-shell::after{content:"";position:absolute;right:-17px;top:24px;width:12px;height:26px;border-radius:0 5px 5px 0;background:#e5edf5}
+.battery-fill{position:absolute;left:6px;top:6px;bottom:6px;width:0%;border-radius:4px;background:#22c55e;transition:width .2s ease,background-color .2s ease}
+.battery-percent{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.65)}
+.battery-meta{font-size:13px;color:#cbd5e1}
 `;
 
 function format(value, digits, suffix) {
   return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : "--";
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function batteryColor(percent) {
+  if (!Number.isFinite(percent)) return "#64748b";
+  if (percent <= 20) return "#ef4444";
+  if (percent <= 50) return "#eab308";
+  return "#22c55e";
 }
 
 function normalizeFrame(frame) {
@@ -110,11 +132,17 @@ function quaternionToBearingDegrees(rotation) {
 }
 
 function vesselIcon() {
+  const points = [
+    [11, 3], [7, 11], [7, 30], [11, 37], [15, 30], [15, 22],
+    [25, 22], [25, 30], [29, 37], [33, 30], [33, 11], [29, 3],
+    [25, 11], [25, 18], [15, 18], [15, 11],
+  ];
+  const bodyPath = `${points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x} ${y}`).join(" ")} Z`;
   return L.divIcon({
     className: "",
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-    html: '<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 34 34" aria-label="Catamaran vessel heading"><path d="M5 30 L8 7 L12 2 L15 30 Z"/><path d="M19 30 L22 2 L26 7 L29 30 Z"/><path d="M9 15 H25 V20 H9 Z"/><path d="M13 15 L17 9 L21 15 Z"/></svg><div class="vessel-dot"></div></div>',
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><path class="vessel-body" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
   });
 }
 
@@ -234,8 +262,64 @@ function initGnssMapTelemetry(context) {
   };
 }
 
+function initBatteryStatus(context) {
+  const root = context.panelElement;
+  root.replaceChildren();
+  root.className = "battery-root";
+
+  const style = document.createElement("style");
+  style.textContent = BATTERY_PANEL_CSS;
+  root.appendChild(style);
+
+  const card = document.createElement("div");
+  card.className = "battery-card";
+  card.innerHTML = [
+    '<div class="battery-title">BATTERY REMAINING</div>',
+    '<div class="battery-shell"><div class="battery-fill"></div><div class="battery-percent">--%</div></div>',
+    '<div class="battery-meta">/gui/battery_percent</div>',
+  ].join("");
+  root.appendChild(card);
+
+  const fill = card.querySelector(".battery-fill");
+  const percentText = card.querySelector(".battery-percent");
+  let batteryPercent;
+
+  function renderBattery() {
+    if (!Number.isFinite(batteryPercent)) {
+      fill.style.width = "0%";
+      fill.style.backgroundColor = batteryColor(undefined);
+      percentText.textContent = "--%";
+      return;
+    }
+    const percent = clamp(batteryPercent, 0, 100);
+    fill.style.width = `${percent}%`;
+    fill.style.backgroundColor = batteryColor(percent);
+    percentText.textContent = `${Math.round(percent)}%`;
+  }
+
+  context.subscribe([{topic: BATTERY_PERCENT_TOPIC}]);
+  context.watch("currentFrame");
+  context.onRender = (renderState, done) => {
+    try {
+      for (const event of renderState.currentFrame || []) {
+        const message = event.message || {};
+        if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
+          batteryPercent = message.data;
+        }
+      }
+      renderBattery();
+    } finally {
+      done();
+    }
+  };
+
+  renderBattery();
+  return () => root.replaceChildren();
+}
+
 function activate(extensionContext) {
   extensionContext.registerPanel({name: "gnss-map-telemetry", initPanel: initGnssMapTelemetry});
+  extensionContext.registerPanel({name: "battery-status", initPanel: initBatteryStatus});
 }
 
 module.exports = {
