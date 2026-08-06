@@ -297,8 +297,17 @@ class CloudFilterNode(Node):
 
     def cloud_callback(self, msg: PointCloud2):
         stamp_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
-        if self.process_period_ns and self.last_processed_stamp_ns is not None and \
-                stamp_ns - self.last_processed_stamp_ns < self.process_period_ns:
+        process, clock_rolled_back = cloud_ops.frame_timestamp_decision(
+            stamp_ns, self.last_processed_stamp_ns, self.process_period_ns)
+        if clock_rolled_back:
+            # rosbag --loop (and a restarted sensor clock) moves the message
+            # timestamp backwards.  Reset state so the new sequence is not
+            # rejected forever as an apparently too-fast frame stream.
+            self.accumulator.clear()
+            self.get_logger().info(
+                "LiDAR timestamp moved backwards; resetting cloud filter "
+                "rate gate and accumulation history.")
+        if not process:
             return
         self.last_processed_stamp_ns = stamp_ns
         transform = self._lookup(

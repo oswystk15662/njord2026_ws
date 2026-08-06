@@ -132,6 +132,25 @@ def voxel_downsample(points: np.ndarray, leaf_size_m: float) -> np.ndarray:
     return out
 
 
+def frame_timestamp_decision(
+    stamp_ns: int,
+    last_stamp_ns: int | None,
+    min_period_ns: int,
+) -> tuple[bool, bool]:
+    """Decide whether a cloud may pass a timestamp-based rate gate.
+
+    Returns ``(process, clock_rolled_back)``.  rosbag ``--loop`` restarts
+    message timestamps at the beginning of the recording.  Such a backwards
+    jump must reset the rate gate instead of being discarded forever as a
+    negative time interval.
+    """
+    if last_stamp_ns is None or min_period_ns <= 0:
+        return True, False
+    if stamp_ns < last_stamp_ns:
+        return True, True
+    return stamp_ns - last_stamp_ns >= min_period_ns, False
+
+
 # ---------------------------------------------------------------------------
 # Water surface removal
 # ---------------------------------------------------------------------------

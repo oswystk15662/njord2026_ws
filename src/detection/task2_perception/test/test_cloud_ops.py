@@ -16,6 +16,17 @@ def make_mount_transform(roll=np.pi, pitch=0.0, yaw=0.0, xyz=LIDAR_XYZ):
     return cloud_ops.make_transform(rot, xyz)
 
 
+class TestFrameTimestampDecision:
+    def test_first_frame_is_accepted(self):
+        assert cloud_ops.frame_timestamp_decision(100, None, 200) == (True, False)
+
+    def test_frame_inside_rate_period_is_dropped(self):
+        assert cloud_ops.frame_timestamp_decision(250, 100, 200) == (False, False)
+
+    def test_bag_loop_timestamp_rollback_is_accepted_and_reported(self):
+        assert cloud_ops.frame_timestamp_decision(100, 1_000, 200) == (True, True)
+
+
 class TestInvertedMountTransform:
     """Test 1: equivalence check of the URDF roll=pi correction."""
 
