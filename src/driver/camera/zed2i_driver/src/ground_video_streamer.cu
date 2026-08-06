@@ -36,9 +36,8 @@
 // 4:4:4 JPEG produces "Invalid component" and drops every frame -- so the
 // pipeline below (I420 all the way to nvjpegenc) satisfies that constraint
 // by construction. This file therefore only uses CUDA for the cheap GPU-side
-// resize + device-to-host copy of the downscaled BGR frame; the appsrc feeds
-// raw BGR video into videoconvert/nvvidconv/nvjpegenc, which does the actual
-// JPEG encoding.
+// resize + BGRA-to-I420 conversion and the device-to-host copy of that
+// downscaled I420 frame; appsrc feeds it directly to nvvidconv/nvjpegenc.
 
 namespace zed2i_driver
 {
@@ -52,7 +51,24 @@ void check_cuda(cudaError_t result, const char * operation)
   }
 }
 
-__global__ void resize_bgra_to_bgri(
+__device__ std::uint8_t clamp_byte(int value)
+{
+  return static_cast<std::uint8_t>(max(0, min(255, value)));
+}
+
+__device__ void load_resized_bgr(
+  const std::uint8_t * source, std::size_t source_pitch, int source_width, int source_height,
+  int destination_width, int destination_height, int x, int y, int & b, int & g, int & r)
+{
+  const int source_x = x * source_width / destination_width;
+  const int source_y = y * source_height / destination_height;
+  const auto * input = source + static_cast<std::size_t>(source_y) * source_pitch + source_x * 4;
+  b = input[0];
+  g = input[1];
+  r = input[2];
+}
+
+__global__ void resize_bgra_to_i420(
   const std::uint8_t * source, std::size_t source_pitch, int source_width, int source_height,
   std::uint8_t * destination, int destination_width, int destination_height)
 {
@@ -61,13 +77,42 @@ __global__ void resize_bgra_to_bgri(
   if (x >= destination_width || y >= destination_height) {
     return;
   }
-  const int source_x = x * source_width / destination_width;
-  const int source_y = y * source_height / destination_height;
-  const auto * input = source + static_cast<std::size_t>(source_y) * source_pitch + source_x * 4;
-  auto * output = destination + (static_cast<std::size_t>(y) * destination_width + x) * 3;
-  output[0] = input[0];
-  output[1] = input[1];
-  output[2] = input[2];
+  int b = 0;
+  int g = 0;
+  int r = 0;
+  load_resized_bgr(
+    source, source_pitch, source_width, source_height,
+    destination_width, destination_height, x, y, b, g, r);
+  destination[static_cast<std::size_t>(y) * destination_width + x] =
+    clamp_byte(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
+
+  if ((x & 1) != 0 || (y & 1) != 0) {
+    return;
+  }
+  int sum_b = 0;
+  int sum_g = 0;
+  int sum_r = 0;
+  for (int dy = 0; dy < 2; ++dy) {
+    for (int dx = 0; dx < 2; ++dx) {
+      load_resized_bgr(
+        source, source_pitch, source_width, source_height,
+        destination_width, destination_height, x + dx, y + dy, b, g, r);
+      sum_b += b;
+      sum_g += g;
+      sum_r += r;
+    }
+  }
+  b = (sum_b + 2) / 4;
+  g = (sum_g + 2) / 4;
+  r = (sum_r + 2) / 4;
+  const std::size_t luma_bytes =
+    static_cast<std::size_t>(destination_width) * destination_height;
+  const std::size_t chroma_index =
+    static_cast<std::size_t>(y / 2) * (destination_width / 2) + x / 2;
+  destination[luma_bytes + chroma_index] =
+    clamp_byte(((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128);
+  destination[luma_bytes + luma_bytes / 4 + chroma_index] =
+    clamp_byte(((112 * r - 94 * g - 18 * b + 128) >> 8) + 128);
 }
 
 }  // namespace
@@ -86,8 +131,8 @@ public:
       slots_.resize(static_cast<std::size_t>(config_.max_pending_frames + 1));
       for (auto & slot : slots_) {
         check_cuda(cudaMalloc(&slot.bgra, max_bgra_bytes()), "cudaMalloc BGRA slot");
-        check_cuda(cudaMalloc(&slot.bgri, max_bgri_bytes()), "cudaMalloc BGR slot");
-        check_cuda(cudaMallocHost(&slot.host, max_bgri_bytes()), "cudaMallocHost BGR slot");
+        check_cuda(cudaMalloc(&slot.i420, i420_bytes()), "cudaMalloc I420 slot");
+        check_cuda(cudaMallocHost(&slot.host, i420_bytes()), "cudaMallocHost I420 slot");
         check_cuda(cudaEventCreateWithFlags(&slot.ready, cudaEventDisableTiming), "cudaEventCreateWithFlags");
       }
       worker_ = std::thread(&Impl::run, this);
@@ -164,7 +209,7 @@ private:
   struct Slot
   {
     std::uint8_t * bgra{nullptr};
-    std::uint8_t * bgri{nullptr};
+    std::uint8_t * i420{nullptr};
     std::uint8_t * host{nullptr};
     cudaEvent_t ready{nullptr};
     int source_width{};
@@ -181,7 +226,8 @@ private:
   void validate() const
   {
     if (config_.host.empty() || config_.source_width <= 0 || config_.source_height <= 0 ||
-      config_.width <= 0 || config_.height <= 0 || config_.fps <= 0.0 ||
+      config_.width <= 0 || config_.height <= 0 || (config_.width & 1) != 0 ||
+      (config_.height & 1) != 0 || config_.fps <= 0.0 ||
       config_.jpeg_quality < 1 || config_.jpeg_quality > 100 || config_.port < 1 ||
       config_.port > 65535 || config_.max_pending_frames < 1 || config_.max_pending_frames > 3 ||
       config_.mtu < 256 || config_.mtu > 65507)
@@ -194,21 +240,19 @@ private:
   {
     return static_cast<std::size_t>(config_.source_width) * config_.source_height * 4;
   }
-  std::size_t max_bgri_bytes() const
+  std::size_t i420_bytes() const
   {
-    return static_cast<std::size_t>(config_.width) * config_.height * 3;
+    return static_cast<std::size_t>(config_.width) * config_.height * 3 / 2;
   }
 
   void create_pipeline()
   {
     GError * error = nullptr;
-    // appsrc feeds packed BGR raw video (from the GPU resize kernel, copied to
-    // pinned host memory).  videoconvert produces I420, nvvidconv copies it
-    // into an NVMM buffer, and nvjpegenc drives the Tegra hardware JPEG
-    // encoder on that NVMM buffer -- see the note above libnvjpeg is not used
-    // here because it does not work on this device.
+    // CUDA produces I420 directly, so no CPU-side videoconvert is needed.
+    // nvvidconv copies it into an NVMM buffer and nvjpegenc drives the Tegra
+    // hardware JPEG encoder -- see the note above for why libnvjpeg is unused.
     const std::string description = "appsrc name=source is-live=true format=time block=false "
-      "do-timestamp=false ! videoconvert ! video/x-raw,format=I420 ! nvvidconv ! "
+      "do-timestamp=false ! nvvidconv ! "
       "video/x-raw(memory:NVMM),format=I420 ! nvjpegenc quality=" +
       std::to_string(config_.jpeg_quality) + " ! jpegparse ! rtpjpegpay mtu=" +
       std::to_string(config_.mtu) + " ! udpsink host=" + config_.host + " port=" +
@@ -235,7 +279,7 @@ private:
     int fps_denominator = 1;
     gst_util_double_to_fraction(config_.fps, &fps_numerator, &fps_denominator);
     GstCaps * caps = gst_caps_new_simple(
-      "video/x-raw", "format", G_TYPE_STRING, "BGR", "width", G_TYPE_INT, config_.width,
+      "video/x-raw", "format", G_TYPE_STRING, "I420", "width", G_TYPE_INT, config_.width,
       "height", G_TYPE_INT, config_.height, "framerate", GST_TYPE_FRACTION, fps_numerator,
       fps_denominator, nullptr);
     gst_app_src_set_caps(appsrc_, caps);
@@ -293,18 +337,18 @@ private:
     const dim3 blocks(
       static_cast<unsigned int>((config_.width + threads.x - 1) / threads.x),
       static_cast<unsigned int>((config_.height + threads.y - 1) / threads.y));
-    resize_bgra_to_bgri<<<blocks, threads, 0, stream_>>>(
+    resize_bgra_to_i420<<<blocks, threads, 0, stream_>>>(
       slot.bgra, static_cast<std::size_t>(slot.source_width) * 4, slot.source_width, slot.source_height,
-      slot.bgri, config_.width, config_.height);
-    check_cuda(cudaGetLastError(), "resize_bgra_to_bgri");
+      slot.i420, config_.width, config_.height);
+    check_cuda(cudaGetLastError(), "resize_bgra_to_i420");
     // JPEG encoding itself happens downstream in the GStreamer pipeline
-    // (videoconvert -> nvvidconv -> nvjpegenc), because libnvjpeg is broken
-    // on this device (see note above). This D2H copy of the packed BGR
+    // (nvvidconv -> nvjpegenc), because libnvjpeg is broken on this device
+    // (see note above). This D2H copy of the packed I420
     // frame is the sole device-to-host transfer in the streaming path.
-    const std::size_t bytes = max_bgri_bytes();
-    check_cuda(cudaMemcpyAsync(slot.host, slot.bgri, bytes, cudaMemcpyDeviceToHost, stream_),
-      "cudaMemcpyAsync BGR to host");
-    check_cuda(cudaStreamSynchronize(stream_), "cudaStreamSynchronize BGR copy");
+    const std::size_t bytes = i420_bytes();
+    check_cuda(cudaMemcpyAsync(slot.host, slot.i420, bytes, cudaMemcpyDeviceToHost, stream_),
+      "cudaMemcpyAsync I420 to host");
+    check_cuda(cudaStreamSynchronize(stream_), "cudaStreamSynchronize I420 copy");
     auto * lease = new BufferLease{this, index};
     GstBuffer * buffer = gst_buffer_new_wrapped_full(
       GST_MEMORY_FLAG_READONLY, slot.host, bytes, 0, bytes, lease, release_wrapped_buffer);
@@ -345,7 +389,7 @@ private:
     for (auto & slot : slots_) {
       if (slot.ready != nullptr) {cudaEventDestroy(slot.ready);}
       if (slot.host != nullptr) {cudaFreeHost(slot.host);}
-      if (slot.bgri != nullptr) {cudaFree(slot.bgri);}
+      if (slot.i420 != nullptr) {cudaFree(slot.i420);}
       if (slot.bgra != nullptr) {cudaFree(slot.bgra);}
     }
     if (stream_ != nullptr) {cudaStreamDestroy(stream_);}
