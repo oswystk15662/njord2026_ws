@@ -190,11 +190,20 @@ def generate_launch_description():
     mppi_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_mppi, "launch", "planner_with_follow_path.launch.py")
-        ),
-        condition=IfCondition(LaunchConfiguration("use_mppi")),
+        )
     )
 
-    goal_layer_timer = TimerAction(period=goal_delay, actions=[mppi_launch])
+    # Put the condition on the timer, rather than on the nested include.  A
+    # condition on the include was not reliably expanded when it was executed
+    # from TimerAction, leaving Nav2 active but no planner/follow-path nodes.
+    goal_layer_timer = TimerAction(
+        period=goal_delay,
+        actions=[
+            LogInfo(msg="Starting Task2 MPPI -> FollowPath chain"),
+            mppi_launch,
+        ],
+        condition=IfCondition(LaunchConfiguration("use_mppi")),
+    )
 
     return LaunchDescription([
         LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
