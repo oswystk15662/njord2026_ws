@@ -25,6 +25,11 @@ def generate_launch_description():
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
     use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="true")
+    use_sim_time = DeclareLaunchArgument(
+        "use_sim_time",
+        default_value="true",
+        description="Use the /clock topic.",
+    )
     params_arg = DeclareLaunchArgument("params", default_value=config)
     opponent_params_arg = DeclareLaunchArgument("opponent_params", default_value=opponent_config)
     driver_delay_arg = DeclareLaunchArgument(
@@ -146,7 +151,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             os.path.join(pkg_robot, "config", "ekf_local.yaml"),
-            {"publish_tf": False},
+            {"publish_tf": False, "use_sim_time": LaunchConfiguration("use_sim_time")},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/local")],
     )
@@ -158,7 +163,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             os.path.join(pkg_robot, "config", "ekf_global.yaml"),
-            {"publish_tf": False},
+            {"publish_tf": False, "use_sim_time": LaunchConfiguration("use_sim_time")},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/global")],
     )
@@ -169,6 +174,8 @@ def generate_launch_description():
         name="navsat_transform_node",
         output="screen",
         parameters=[{
+            "world_frame": "map",
+            "use_sim_time": LaunchConfiguration("use_sim_time"),
             "frequency": 10.0,
             "magnetic_declination_radians": 0.0,
             "yaw_offset": 0.0,
@@ -233,6 +240,7 @@ def generate_launch_description():
         use_dynamics,
         use_nav2,
         use_waypoints,
+        use_sim_time,
         params_arg,
         opponent_params_arg,
         driver_delay_arg,

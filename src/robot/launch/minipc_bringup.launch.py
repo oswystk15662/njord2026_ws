@@ -89,6 +89,7 @@ def generate_launch_description():
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     enable_autonomy_supervisor = LaunchConfiguration("enable_autonomy_supervisor")
+    use_sim_time = LaunchConfiguration("use_sim_time")
     use_ekf_local = LaunchConfiguration("use_ekf_local")
     use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
@@ -108,6 +109,7 @@ def generate_launch_description():
             "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
             "use_glim_fb": use_glim_fb,
+            "use_sim_time": use_sim_time,
         },
     )
 
@@ -457,6 +459,11 @@ def generate_launch_description():
                 "task-specific params file; leave this false in that case.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the /clock topic (set true when replaying a rosbag).",
+            ),
             DeclareLaunchArgument(
                 "enable_autonomy_supervisor",
                 default_value="true",

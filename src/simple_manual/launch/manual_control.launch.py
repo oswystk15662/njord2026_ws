@@ -305,7 +305,10 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_filter_node_local',
         output='screen',
-        parameters=[PathJoinSubstitution([robot_share, 'config', 'ekf_local.yaml'])],
+        parameters=[
+            PathJoinSubstitution([robot_share, 'config', 'ekf_local.yaml']),
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+        ],
         remappings=[('odometry/filtered', 'odometry/filtered/local')],
     )
     global_ekf = Node(
@@ -313,7 +316,10 @@ def generate_launch_description():
         executable='ekf_node',
         name='ekf_filter_node_global',
         output='screen',
-        parameters=[PathJoinSubstitution([robot_share, 'config', 'ekf_global.yaml'])],
+        parameters=[
+            PathJoinSubstitution([robot_share, 'config', 'ekf_global.yaml']),
+            {'use_sim_time': LaunchConfiguration('use_sim_time')},
+        ],
         remappings=[('odometry/filtered', 'odometry/filtered/global')],
     )
     navsat_transform = Node(
@@ -323,6 +329,8 @@ def generate_launch_description():
         output='screen',
         arguments=['--ros-args', '--log-level', 'ERROR'],
         parameters=[{
+            'world_frame': 'map',
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
             'frequency': 10.0, 'magnetic_declination_radians': 0.0, 'yaw_offset': 0.0,
             'zero_altitude': True, 'broadcast_utm_transform': True, 'publish_filtered_gps': True,
             'use_odometry_yaw': True, 'wait_for_datum': False,
@@ -401,6 +409,10 @@ def generate_launch_description():
             ),
         ),
         DeclareLaunchArgument('baud', default_value='115200'),
+        DeclareLaunchArgument(
+            'use_sim_time', default_value='false',
+            description='Use the /clock topic (set true when replaying a rosbag).',
+        ),
         DeclareLaunchArgument('auto_topic', default_value='/cmd_vel_nav'),
         DeclareLaunchArgument(
             'um982_port',
