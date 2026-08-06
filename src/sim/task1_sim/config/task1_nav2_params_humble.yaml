@@ -34,7 +34,10 @@ controller_server:
       min_lookahead_dist: 0.5
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
-      rotate_to_heading_at_start: true
+      # In the simulation the initial EKF position has a small offset from
+      # the first GPS point. Humble's rotate-in-place mode can oscillate at
+      # that point indefinitely, so let RPP converge while moving instead.
+      use_rotate_to_heading: false
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
