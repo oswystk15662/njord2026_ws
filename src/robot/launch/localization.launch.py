@@ -197,7 +197,10 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
         ),
-        launch_arguments={"profile": "localization"}.items(),
+        launch_arguments={
+            "profile": "localization",
+            "enable_global_ekf": LaunchConfiguration("enable_global_ekf"),
+        }.items(),
         condition=IfCondition(LaunchConfiguration("enable_diagnostics")),
     )
 
