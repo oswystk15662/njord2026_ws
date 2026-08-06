@@ -46,6 +46,21 @@ def generate_launch_description():
         ],
     )
 
+    map_frame_relay = Node(
+        package="robot",
+        executable="odometry_frame_relay.py",
+        name="um982_odometry_map_relay",
+        output="screen",
+        parameters=[
+            {
+                "use_sim_time": use_sim_time,
+                "input_topic": "/playback/odometry/gps/um982",
+                "output_topic": "/playback/odometry/gps/map",
+                "target_frame": "map",
+            }
+        ],
+    )
+
     global_ekf_node = Node(
         package="robot_localization",
         executable="ekf_node",
@@ -55,7 +70,7 @@ def generate_launch_description():
             PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"]),
             {
                 "use_sim_time": use_sim_time,
-                "odom0": "/playback/odometry/gps/um982",
+                "odom0": "/playback/odometry/gps/map",
             },
         ],
         remappings=[("odometry/filtered", "/playback/odometry/filtered/global")],
@@ -69,6 +84,7 @@ def generate_launch_description():
                 description="Use the rosbag /clock topic.",
             ),
             navsat_transform_node,
+            map_frame_relay,
             global_ekf_node,
         ]
     )
