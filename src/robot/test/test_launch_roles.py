@@ -317,24 +317,40 @@ def test_bringups_start_hierarchical_health_heartbeats():
     jetson_source = _read_launch_source("jetson_bringup.launch.py")
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     heartbeat_source = _read_launch_source("heartbeat.launch.py")
+    minipc_heartbeat_path = os.path.join(
+        _THIS_DIR,
+        "..",
+        "..",
+        "diagnostics",
+        "diagnostic_monitors",
+        "config",
+        "minipc_heartbeat.yaml",
+    )
+    with open(minipc_heartbeat_path, encoding="utf-8") as config_file:
+        minipc_heartbeat = yaml.safe_load(config_file)["minipc_heartbeat"]
 
     assert '"role": "jetson"' in jetson_source
     assert '"role": "minipc"' in minipc_source
     assert '"/heartbeat/driver/camera/front"' in heartbeat_source
-    assert '"/heartbeat/driver/camera/back"' in heartbeat_source
     assert '"/heartbeat/driver/lidar"' in heartbeat_source
-    assert '"/heartbeat/driver/gnss"' in heartbeat_source
-    assert '"/heartbeat/driver/micon"' in heartbeat_source
-    assert '"/heartbeat/driver"' in heartbeat_source
-    assert '"/heartbeat/localization"' in heartbeat_source
-    for argument in [
-        "heartbeat_monitor_zed2i",
-        "heartbeat_monitor_lidar",
-        "heartbeat_monitor_ekf_local",
-        "heartbeat_monitor_ekf_global",
+    assert '"heartbeat_monitor_zed2i"' in heartbeat_source
+    assert '"heartbeat_monitor_lidar"' in heartbeat_source
+    assert "minipc_heartbeat.yaml" in heartbeat_source
+    assert "heartbeat_monitor_" not in minipc_source
+    assert "enable_heartbeats" not in minipc_source
+    heartbeat_topics = {
+        input_config["topic"]
+        for gate in minipc_heartbeat
+        for input_config in gate["inputs"]
+    }
+    heartbeat_topics.update(gate["output_topic"] for gate in minipc_heartbeat)
+    for topic in [
+        "/heartbeat/driver/camera/back",
+        "/heartbeat/driver/gnss",
+        "/heartbeat/driver/micon",
+        "/heartbeat/driver",
     ]:
-        assert f'"{argument}"' in heartbeat_source
-        assert f'"{argument}"' in minipc_source
+        assert topic in heartbeat_topics
 
 
 def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():

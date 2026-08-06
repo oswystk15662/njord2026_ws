@@ -1,5 +1,9 @@
 """Hierarchical health-derived heartbeat tree for vessel processes."""
 
+import os
+
+import yaml
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -25,22 +29,52 @@ def _gate(name, inputs, output, timeout=2.0, grace=15.0):
     )
 
 
+def _minipc_gates_from_config():
+    """Build the miniPC heartbeat tree from its readable YAML inventory."""
+    config_path = os.path.join(
+        get_package_share_directory("diagnostic_monitors"),
+        "config",
+        "minipc_heartbeat.yaml",
+    )
+    with open(config_path, encoding="utf-8") as config_file:
+        config = yaml.safe_load(config_file) or {}
+
+    gates = config.get("minipc_heartbeat")
+    if not isinstance(gates, list):
+        raise RuntimeError(f"{config_path} must contain a 'minipc_heartbeat' list.")
+
+    result = []
+    for gate in gates:
+        try:
+            inputs = [
+                (input_config["topic"], input_config["topic_type"])
+                for input_config in gate["inputs"]
+            ]
+            result.append(
+                _gate(
+                    gate["name"],
+                    inputs,
+                    gate["output_topic"],
+                    timeout=gate.get("timeout", 2.0),
+                    grace=gate.get("startup_grace_sec", 15.0),
+                )
+            )
+        except (KeyError, TypeError) as error:
+            raise RuntimeError(f"Invalid heartbeat entry in {config_path}: {gate!r}") from error
+    return result
+
+
 def _launch_setup(context, *args, **kwargs):
     role = LaunchConfiguration("role").perform(context)
+    if role == "minipc":
+        return _minipc_gates_from_config()
+
     def enabled(argument):
         value = LaunchConfiguration(argument).perform(context).strip().lower()
         return value in {"1", "true", "yes", "on"}
 
     monitor_zed2i = enabled("heartbeat_monitor_zed2i")
     monitor_lidar = enabled("heartbeat_monitor_lidar")
-    monitor_ekf_local = enabled("heartbeat_monitor_ekf_local")
-    monitor_gnss_compass = enabled("heartbeat_monitor_gnss_compass")
-    # An intentionally disabled EKF has no odometry publisher.  Do not make
-    # that absence unhealthy merely because its heartbeat monitor was enabled.
-    monitor_ekf_global = (
-        enabled("heartbeat_monitor_ekf_global") and enabled("enable_global_ekf")
-    )
-
     if role == "jetson":
         gates = []
         if monitor_zed2i:
@@ -62,94 +96,6 @@ def _launch_setup(context, *args, **kwargs):
             ))
         return gates
 
-    if role == "minipc":
-        gnss_inputs = [
-            ("/sensor/vehicle_gnss/fix/raw", "sensor_msgs/msg/NavSatFix"),
-        ]
-        if monitor_gnss_compass:
-            gnss_inputs.append(
-                (
-                    "/sensor/vehicle_gnss/compass/raw",
-                    "geometry_msgs/msg/PoseWithCovarianceStamped",
-                )
-            )
-
-        leaves = [
-            _gate(
-                "heartbeat_driver_camera_back",
-                [("/back_cam/image_raw", "sensor_msgs/msg/Image")],
-                "/heartbeat/driver/camera/back",
-                timeout=1.0,
-            ),
-            _gate(
-                "heartbeat_driver_gnss",
-                gnss_inputs,
-                "/heartbeat/driver/gnss",
-                timeout=1.0,
-            ),
-            _gate(
-                "heartbeat_driver_micon",
-                [("/micon/bms_cells", "std_msgs/msg/Float32MultiArray")],
-                "/heartbeat/driver/micon",
-                timeout=3.0,
-            ),
-        ]
-        if monitor_ekf_local:
-            leaves.append(_gate(
-                "heartbeat_localization_local",
-                [("/odometry/filtered/local", "nav_msgs/msg/Odometry")],
-                "/heartbeat/localization/local",
-                timeout=1.0,
-            ))
-        if monitor_ekf_global:
-            leaves.append(_gate(
-                "heartbeat_localization_global",
-                [("/odometry/filtered/global", "nav_msgs/msg/Odometry")],
-                "/heartbeat/localization/global",
-                timeout=1.0,
-            ))
-        camera_inputs = [("/heartbeat/driver/camera/back", "std_msgs/msg/Empty")]
-        driver_inputs = [
-            ("/heartbeat/driver/gnss", "std_msgs/msg/Empty"),
-            ("/heartbeat/driver/micon", "std_msgs/msg/Empty"),
-        ]
-        localization_inputs = []
-        if monitor_zed2i:
-            camera_inputs.insert(0, ("/heartbeat/driver/camera/front", "std_msgs/msg/Empty"))
-        if monitor_lidar:
-            driver_inputs.insert(0, ("/heartbeat/driver/lidar", "std_msgs/msg/Empty"))
-        if monitor_ekf_local:
-            localization_inputs.append(("/heartbeat/localization/local", "std_msgs/msg/Empty"))
-        if monitor_ekf_global:
-            localization_inputs.append(("/heartbeat/localization/global", "std_msgs/msg/Empty"))
-
-        groups = [
-            _gate(
-                "heartbeat_driver_camera",
-                camera_inputs,
-                "/heartbeat/driver/camera",
-                timeout=1.5,
-            ),
-            _gate(
-                "heartbeat_driver",
-                [
-                    ("/heartbeat/driver/camera", "std_msgs/msg/Empty"),
-                ] + driver_inputs,
-                "/heartbeat/driver",
-                timeout=1.5,
-            ),
-        ]
-        if localization_inputs:
-            groups.append(
-                _gate(
-                    "heartbeat_localization",
-                    localization_inputs,
-                    "/heartbeat/localization",
-                    timeout=1.5,
-                )
-            )
-        return leaves + groups
-
     raise RuntimeError(f"Unknown heartbeat role: {role}")
 
 
@@ -161,14 +107,6 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
-            DeclareLaunchArgument("heartbeat_monitor_ekf_local", default_value="true"),
-            DeclareLaunchArgument("heartbeat_monitor_ekf_global", default_value="true"),
-            DeclareLaunchArgument(
-                "heartbeat_monitor_gnss_compass",
-                default_value="false",
-                description="Include UM982 compass output in the GNSS heartbeat.",
-            ),
-            DeclareLaunchArgument("enable_global_ekf", default_value="true"),
             OpaqueFunction(function=_launch_setup),
         ]
     )

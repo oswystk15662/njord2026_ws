@@ -93,10 +93,6 @@ def generate_launch_description():
             "enable_buoy_costmap": LaunchConfiguration("enable_buoy_costmap"),
             "enable_nav2": LaunchConfiguration("enable_nav2"),
             "enable_diagnostics": LaunchConfiguration("enable_diagnostics"),
-            "heartbeat_monitor_zed2i": LaunchConfiguration("heartbeat_monitor_zed2i"),
-            "heartbeat_monitor_lidar": LaunchConfiguration("heartbeat_monitor_lidar"),
-            "heartbeat_monitor_ekf_local": LaunchConfiguration("heartbeat_monitor_ekf_local"),
-            "heartbeat_monitor_ekf_global": LaunchConfiguration("heartbeat_monitor_ekf_global"),
             "thruster_config_file": LaunchConfiguration("thruster_config_file"),
             "thruster_robot_description_file": LaunchConfiguration(
                 "thruster_robot_description_file"
@@ -183,8 +179,6 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="false"),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
-            DeclareLaunchArgument("heartbeat_monitor_ekf_local", default_value="true"),
-            DeclareLaunchArgument("heartbeat_monitor_ekf_global", default_value="true"),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
                 "thruster_robot_description_file", default_value=default_thruster_urdf
