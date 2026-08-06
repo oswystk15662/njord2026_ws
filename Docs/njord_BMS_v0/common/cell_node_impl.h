@@ -7,6 +7,11 @@
 
 #include "telemetry_protocol.h"
 
+#ifdef ENABLE_DHT20
+#include <Wire.h>
+#include "dht20_sensor.h"
+#endif
+
 #ifndef CELL_ID
 #error "CELL_ID must be defined before including cell_node_impl.h"
 #endif
@@ -29,13 +34,19 @@
 #ifndef ESPNOW_CHANNEL
 #define ESPNOW_CHANNEL 1
 #endif
-#ifndef CELL_TEMPERATURE_C
-#define CELL_TEMPERATURE_C 25.0F
+#ifndef DHT20_SDA_PIN
+#define DHT20_SDA_PIN D4
+#endif
+#ifndef DHT20_SCL_PIN
+#define DHT20_SCL_PIN D5
 #endif
 
 namespace {
 
 constexpr uint32_t kSendIntervalMs = 250;
+#ifdef ENABLE_DHT20
+constexpr uint32_t kDht20ReadIntervalMs = 2000;
+#endif
 constexpr uint8_t kSamplesPerReading = 32;
 constexpr uint16_t kAdcMaxCount = 4095;
 constexpr uint8_t kBroadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
@@ -43,6 +54,30 @@ constexpr uint8_t kBroadcastAddress[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 uint32_t sequence_number = 0;
 uint32_t next_send_ms = 0;
 volatile bool last_send_ok = false;
+
+#ifdef ENABLE_DHT20
+Dht20Sensor dht20;
+bool dht20_initialized = false;
+bool dht20_reading_valid = false;
+uint32_t next_dht20_read_ms = 0;
+float latest_temperature_c = NAN;
+float latest_humidity_percent = NAN;
+
+void updateDht20(uint32_t now) {
+  if (static_cast<int32_t>(now - next_dht20_read_ms) < 0) return;
+  next_dht20_read_ms = now + kDht20ReadIntervalMs;
+
+  if (!dht20_initialized) dht20_initialized = dht20.begin();
+  dht20_reading_valid =
+      dht20_initialized &&
+      dht20.read(latest_temperature_c, latest_humidity_percent);
+  if (!dht20_reading_valid) {
+    latest_temperature_c = NAN;
+    latest_humidity_percent = NAN;
+    dht20_initialized = false;
+  }
+}
+#endif
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
 void onDataSent(const wifi_tx_info_t *, esp_now_send_status_t status) {
@@ -94,9 +129,20 @@ bms::CellTelemetry takeReading() {
   packet.sample_count = kSamplesPerReading;
   packet.adc_voltage_v = adc_voltage;
   packet.cell_voltage_v = cell_voltage;
-  // Placeholder until a LiPo-mounted temperature sensor is selected. Each
-  // cell node sends its own value so the master can report their average.
-  packet.temperature_c = CELL_TEMPERATURE_C;
+#ifdef ENABLE_DHT20
+  if (dht20_reading_valid) {
+    packet.flags |= bms::kTemperatureValid;
+    packet.temperature_c = latest_temperature_c;
+    packet.humidity_percent = latest_humidity_percent;
+  } else {
+    packet.flags |= bms::kDht20Error;
+    packet.temperature_c = NAN;
+    packet.humidity_percent = NAN;
+  }
+#else
+  packet.temperature_c = NAN;
+  packet.humidity_percent = NAN;
+#endif
   return packet;
 }
 
@@ -132,6 +178,12 @@ void setup() {
 
   analogReadResolution(12);
   analogSetPinAttenuation(ADC_PIN, ADC_11db);
+#ifdef ENABLE_DHT20
+  Wire.begin(DHT20_SDA_PIN, DHT20_SCL_PIN);
+  dht20_initialized = dht20.begin();
+  Serial.printf("DHT20 %s, SDA=D%u, SCL=D%u\n",
+                dht20_initialized ? "ready" : "not found", 4U, 5U);
+#endif
   setupRadio();
 
   // Stagger nodes that are powered on together to reduce RF collisions.
@@ -146,14 +198,27 @@ void loop() {
   if (static_cast<int32_t>(now - next_send_ms) < 0) return;
   next_send_ms = now + kSendIntervalMs;
 
+#ifdef ENABLE_DHT20
+  updateDht20(now);
+#endif
+
   const bms::CellTelemetry packet = takeReading();
   const esp_err_t result =
       esp_now_send(kBroadcastAddress,
                    reinterpret_cast<const uint8_t *>(&packet), sizeof(packet));
 
-  Serial.printf("cell=%u seq=%lu raw=%u adc=%.4fV cell=%.4fV temp=%.1fC queued=%s last=%s%s\n",
+  Serial.printf("cell=%u seq=%lu raw=%u adc=%.4fV cell=%.4fV",
                 CELL_ID, static_cast<unsigned long>(packet.sequence),
-                packet.raw_adc, packet.adc_voltage_v, packet.cell_voltage_v, packet.temperature_c,
-                result == ESP_OK ? "yes" : "no", last_send_ok ? "ok" : "fail",
+                packet.raw_adc, packet.adc_voltage_v, packet.cell_voltage_v);
+#ifdef ENABLE_DHT20
+  if (packet.flags & bms::kTemperatureValid) {
+    Serial.printf(" temp=%.2fC humidity=%.2f%%", packet.temperature_c,
+                  packet.humidity_percent);
+  } else {
+    Serial.print(" temp=ERROR humidity=ERROR");
+  }
+#endif
+  Serial.printf(" queued=%s last=%s%s\n", result == ESP_OK ? "yes" : "no",
+                last_send_ok ? "ok" : "fail",
                 (packet.flags & bms::kAdcSaturated) ? " SATURATED" : "");
 }
