@@ -87,6 +87,7 @@ def generate_launch_description():
     )
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
+    enable_autonomy_supervisor = LaunchConfiguration("enable_autonomy_supervisor")
     use_ekf_local = LaunchConfiguration("use_ekf_local")
     use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
@@ -325,6 +326,17 @@ def generate_launch_description():
         IfCondition(enable_nav2),
     )
 
+    # The supervisor owns the readiness and liveness signals consumed by the
+    # command arbiter and alert lamp.  It can start before Nav2: it reports
+    # ready only after the action server and a fresh waypoint plan appear.
+    autonomy_supervisor = Node(
+        package="diagnostic_monitors",
+        executable="autonomy_supervisor_node",
+        name="autonomy_supervisor",
+        output="screen",
+        condition=IfCondition(enable_autonomy_supervisor),
+    )
+
     heartbeat_launch = include_launch(
         "robot",
         ["launch", "heartbeat.launch.py"],
@@ -448,6 +460,11 @@ def generate_launch_description():
                 "task-specific params file; leave this false in that case.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_autonomy_supervisor",
+                default_value="true",
+                description="Publish /autonomy/ready and /heartbeat/autonomy from Nav2 and waypoint health.",
+            ),
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
             DeclareLaunchArgument(
                 "heartbeat_monitor_zed2i",
@@ -504,6 +521,7 @@ def generate_launch_description():
             back_cam_ground_video_launch,
             back_cam_jpeg_ground_video_launch,
             nav2_launch,
+            autonomy_supervisor,
             heartbeat_launch,
         ]
     )

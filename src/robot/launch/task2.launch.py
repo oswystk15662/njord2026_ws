@@ -58,12 +58,6 @@ def generate_launch_description():
         'waypoint_publisher.launch.py',
         {'task_type': 'task2', 'frame_id': 'map', 'publish_rate_hz': '2.0'},
     )
-    autonomy_supervisor = Node(
-        package='diagnostic_monitors',
-        executable='autonomy_supervisor_node',
-        name='autonomy_supervisor',
-        output='screen',
-    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -91,7 +85,6 @@ def generate_launch_description():
         DeclareLaunchArgument('waypoint_start_delay', default_value='45.0'),
         minipc_role,
         standalone_role,
-        autonomy_supervisor,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

@@ -123,6 +123,17 @@ def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     assert 'package="twist_mux"' not in source
 
 
+def test_minipc_bringup_starts_the_autonomy_supervisor_once():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+
+    assert 'package="diagnostic_monitors"' in minipc_source
+    assert 'executable="autonomy_supervisor_node"' in minipc_source
+    assert '"enable_autonomy_supervisor",' in minipc_source
+
+    for filename in ["task1.launch.py", "task2.launch.py", "task3.launch.py"]:
+        assert "autonomy_supervisor_node" not in _read_launch_source(filename)
+
+
 def test_operator_nodes_have_single_machine_owners():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     ground_source = _read_launch_source("ground_pc.launch.py")
