@@ -16,6 +16,7 @@ import importlib.util
 import os
 
 import pytest
+import yaml
 
 _THIS_DIR = os.path.dirname(__file__)
 _LAUNCH_DIR = os.path.normpath(os.path.join(_THIS_DIR, "..", "launch"))
@@ -121,6 +122,35 @@ def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     assert 'package="twist_mux"' not in source
 
 
+def test_operator_nodes_have_single_machine_owners():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    ground_source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'executable="joy_node"' not in minipc_source
+    assert '"enable_joy"' not in minipc_source
+    assert 'foxglove_bridge_launch.xml' not in minipc_source
+    assert 'executable="foxglove_logger_node"' in minipc_source
+
+    assert 'executable="joy_node"' in ground_source
+    assert 'foxglove_bridge_launch.xml' in ground_source
+
+
+def test_disabled_minipc_serial_drivers_default_to_false():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"enable_drogger_rzs", default_value="false"' in source
+    assert '"enable_imu", default_value="false"' in source
+
+
+def test_minipc_video_and_glim_feedback_defaults_are_safe():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert 'default_value="osw-Stealth-14-AI-Studio-A1VGG.local"' in source
+    assert '"back_cam_ground_video_fps", default_value="4.0"' in source
+    assert '"back_cam_ground_video_width", default_value="480"' in source
+    assert '"back_cam_ground_video_height", default_value="360"' in source
+    assert '"use_glim_fb"' in source
+    assert 'default_value="false"' in source
+
+
 def test_jetson_bringup_source_has_no_minipc_only_packages():
     source = _read_launch_source("jetson_bringup.launch.py")
     for package_name in _MINIPC_ONLY_PACKAGES:
@@ -128,6 +158,32 @@ def test_jetson_bringup_source_has_no_minipc_only_packages():
             f"jetson_bringup.launch.py must not reference miniPC-only package "
             f"'{package_name}'; that belongs in minipc_bringup.launch.py"
         )
+
+
+def test_jetson_heavy_features_and_startup_are_opt_in_or_staggered():
+    source = _read_launch_source("jetson_bringup.launch.py")
+    assert '"enable_glim",\n                default_value="false"' in source
+    assert '"enable_pcl_buoy_detection",\n                default_value="false"' in source
+    assert '"enable_ground_video", default_value="true"' in source
+    assert '"camera_start_delay",\n                default_value="5.0"' in source
+
+
+def test_glim_does_not_publish_the_shared_tf_topic():
+    source = _read_launch_source("lidar.launch.py")
+    assert '("/glim_node/odom", "/odom")' in source
+    assert '("/tf", "/glim/tf_unused")' in source
+
+
+def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
+    config_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_global_glim.yaml")
+    )
+    with open(config_path, "r") as stream:
+        params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+
+    assert params["odom1"] == "/odom"
+    assert params["publish_tf"] is True
+    assert params["world_frame"] == "map"
 
 
 @pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
@@ -149,3 +205,38 @@ def test_ground_pc_keeps_front_and_back_video_receivers_separate():
     assert '"back_video_topic", default_value="/ground_video/back_cam/image_raw"' in source
     assert '"topic": front_video_topic' in source
     assert '"topic": back_video_topic' in source
+    assert '"back_video_jitter_latency_ms"' in source
+    assert 'default_value="50"' in source
+
+
+def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():
+    path = os.path.normpath(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "driver",
+            "camera",
+            "zed2i_driver",
+            "launch",
+            "back_cam_h26x_ground_video.launch.py",
+        )
+    )
+    with open(path, "r") as stream:
+        source = stream.read()
+
+    assert "DeclareLaunchArgument('fps', default_value='4.0')" in source
+    assert "DeclareLaunchArgument('width', default_value='480')" in source
+    assert "DeclareLaunchArgument('height', default_value='360')" in source
+
+
+@pytest.mark.parametrize("filename", ["bridge_minipc.json5", "bridge_24.json5"])
+def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
+    path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", filename)
+    )
+    with open(path, "r") as stream:
+        source = stream.read()
+
+    assert '"/livox/imu"' in source
+    assert '"/livox/lidar"' not in source

@@ -1,4 +1,4 @@
-# Jetson / miniPC 2台構成
+# Jetson / miniPC / Ground PC 構成
 
 ## なぜ分割したか
 
@@ -15,19 +15,25 @@ Jetson Orin Nano Super 1台で全ノードを動かしていた構成は、実�
 | ノード | パッケージ | 理由 |
 |---|---|---|
 | `livox_ros::DriverNode` | `livox_ros_driver2` | `/livox/lidar` は約 42 Mbps。GLIM / pcl_det と intra-process で同居させ、線に出さない |
-| `glim::GlimROS` | `glim_ros` | `VGICP_GPU`。出力は `/odom` と TF のみ |
-| `pcl_det::PclBuoyDetectionNode` | `pcl_det` | CPU only だが `/livox/lidar` を食うので同居必須 |
-| `zed2i_driver::SdkNode` | `zed2i_driver` | ZED SDK + CUDA + TensorRT。`/livox/lidar` も購読する |
+| `glim::GlimROS` | `glim_ros` | `enable_glim:=true`時だけ起動。`/odom`を出すが、共有TFはminiPCのEKFが所有する |
+| `pcl_det::PclBuoyDetectionNode` | `pcl_det` | 単体LiDAR検出を明示試験する場合だけ起動（既定false） |
+| `zed2i_driver::SdkNode` | `zed2i_driver` | ZED SDK + CUDA + TensorRT。通常のブイ検出と、ZED depth不成立時だけ使うMID360クラスタfallbackを担当 |
 
 上 3 つは `lidar.launch.py` の `livox_perception_container`（`component_container_mt` + `use_intra_process_comms: True`）に載る。
 
 ### miniPC（`minipc_bringup.launch.py`）
 
-`robot_state_publisher` / static TF / `um982_driver` / `um982_feedback_filter` / `drogger_wired_flex` / `witmotion_imu_driver` / `ekf_local` / `ekf_global` / `navsat_transform_node` / `joy_node` / `joy_converter` / `twist_mux` / `thruster_driver` / `micon_driver_fd serial_writer` / `bms` / `alert_lamp` / `buoy_obstacle_publisher` / `diagnostic_monitors` / `foxglove_bridge`
+`robot_state_publisher` / static TF / `um982_driver` / `um982_feedback_filter` / `ekf_local` / `ekf_global` / `navsat_transform_node` / `joy_converter` / `command_arbiter` / `thruster_driver` / `micon_driver_fd serial_writer` / `bms` / `alert_lamp` / `buoy_obstacle_publisher` / `diagnostic_monitors` / `foxglove_logger` / back camera + H.26x sender
 
-**USB シリアル機器は全て miniPC 側に接続する**（ESP32 micon = スラスタとランプ、UM982 GNSS、Drogger、WIT IMU、joy パッド）。
+ESP32 Micon、UM982 GNSS、後方USBカメラはminiPCに接続する。DroggerとWIT IMUはlaunch定義を残しているが、現在は起動リストから外してあり引数も既定falseである。ゲームパッドはGround PCに接続する。
 
 Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が params ファイルを選んで起動する。
+
+### Ground PC（`ground_pc.launch.py`）
+
+`joy_node` / ground-station heartbeat / 前方JPEG-RTP受信 / 後方H.264/H.265-RTP受信 / `foxglove_bridge`
+
+`foxglove_logger`は船体側のBMS・GNSS・EKF・制御状態をローカルに集約するためminiPCに置き、FoxgloveクライアントへのWebSocket bridgeだけをGround PCで起動する。
 
 ## トピックの流れ
 
@@ -45,16 +51,14 @@ Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が param
 | `/zed2i/depth/image` | 32FC1 1280x720 @15 | 約 442 Mbps |
 | `/zed2i/points` | PointCloud2 | 数 Gbps（既定で publish 無効） |
 
-miniPC 側で映像を見たい場合は DDS ではなく既存の GPU-JPEG → RTP/UDP 経路を使う:
-`zed2i_driver/src/ground_video_streamer.cu`（送信、Jetson）と `zed2i_driver/launch/ground_video_receiver.launch.py`（受信、miniPC）。
-`jetson_bringup.launch.py` の `enable_ground_video:=true ground_video_host:=<miniPC の IP>` で有効化する。
+Ground PCで映像を見る場合はDDSではなく既存のRTP/UDP経路を使う。前方はJetsonのJPEG、後方はminiPCのH.264/H.265で、既定送信先はGround PCのAvahi名`osw-Stealth-14-AI-Studio-A1VGG.local`、映像サイズとレートはどちらも480x360 @ 4 fpsである。
 起動順序(受信側を先に起動)・再ビルド必須・ポート二重起動禁止・実測レートといった手順の詳細は
 最上位 `README.md` と `src/driver/camera/zed2i_driver/README.md` の
 「陸上映像伝送(ground video)の正しい起動手順」を参照。
 
 ### 時刻同期は必須
 
-`pcl_det` は `/livox/lidar` と `/buoy_roi` をヘッダ時刻で相関させ、ROI が 0.5 秒より古いクラウドを捨てる。両機の時刻がずれると検出が出なくなる。
+GLIMの`/odom`などtimestamp付きデータを計算機間で利用するため、時刻同期は維持する。通常のZED/MID360 fallbackはJetson内で完結する。
 
 ```bash
 sudo apt install chrony
@@ -249,7 +253,7 @@ colcon build --symlink-install
 colcon test --packages-select robot && colcon test-result --verbose
 ```
 
-`src/robot/test/test_launch_roles.py` が分割の回帰テスト。`minipc_bringup.launch.py` が GPU 側パッケージ（`glim_ros` / `livox_ros_driver2` / `zed2i_driver` / `glim_config`）を参照しないこと、`jetson_bringup.launch.py` が miniPC 側パッケージ（`robot_localization` / `thruster_driver` / `micon_driver_fd` / `joy_node`）を参照しないことを assert する。
+`src/robot/test/test_launch_roles.py` が分割の回帰テスト。GPUセンサ処理がminiPCへ戻らないこと、Jetsonに制御ノードが入らないこと、joy/Foxglove bridgeの所有、映像既定値、GLIM/TF、ZenohのLivox raw許可範囲を確認する。
 
 `src/robot/test/test_platform_manifest.py` は `platform.yaml` の妥当性を検証する。
 

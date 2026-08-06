@@ -23,6 +23,8 @@
       // 線に出してよいトピックだけを通す。
       // Docs/two_machine_split.md「トピックの流れ」に対応。地上側の
       // /ground_video/image/compressed は意図的に含めず、Jetson へ戻さない。
+      // LivoxのrawデータはminiPCのlocal EKFが使う/livox/imuだけを通し、
+      // 大容量の/livox/lidarはJetson内に閉じ込める。
       allow: {
         publishers: [
           "/odom", "/tf", "/tf_static", "/livox/imu",

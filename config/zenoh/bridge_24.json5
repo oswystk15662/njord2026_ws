@@ -3,6 +3,8 @@
   //   ROS_DOMAIN_ID=6 のローカル DDS と zenoh を橋渡しする。
   //   allow リストは bridge_minipc.json5 と一致させること。地上側で
   //   RTP/JPEG を受けて生成する /ground_video/image/compressed は含めない。
+  //   Livoxのrawデータは/livox/imuだけを通し、/livox/lidarはJetson内に
+  //   閉じ込める。
   mode: "peer",
 
   // <MINIPC_IP> は miniPC の有線 NIC の IP に置き換える。

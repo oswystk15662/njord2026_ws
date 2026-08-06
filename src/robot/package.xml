@@ -19,6 +19,8 @@
   <exec_depend>dwb_core</exec_depend>
   <exec_depend>dwb_critics</exec_depend>
   <exec_depend>dwb_plugins</exec_depend>
+  <exec_depend>foxglove_bridge</exec_depend>
+  <exec_depend>foxglove_logger</exec_depend>
   <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">glim_ros</exec_depend>
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>

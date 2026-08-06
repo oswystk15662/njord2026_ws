@@ -3,10 +3,11 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
-from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
-from launch.substitutions import LaunchConfiguration
+from launch.launch_description_sources import (
+    AnyLaunchDescriptionSource,
+    PythonLaunchDescriptionSource,
+)
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -19,6 +20,9 @@ def generate_launch_description():
     back_video_port = LaunchConfiguration("back_video_port")
     back_video_codec = LaunchConfiguration("back_video_codec")
     back_video_topic = LaunchConfiguration("back_video_topic")
+    back_video_jitter_latency_ms = LaunchConfiguration(
+        "back_video_jitter_latency_ms"
+    )
 
     ground_video_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -30,16 +34,6 @@ def generate_launch_description():
         }.items(),
     )
 
-    back_cam_jpeg_receiver_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
-        ),
-        launch_arguments={
-            "port": "5602",
-            "topic": "/ground_video/back_cam_jpeg/compressed",
-        }.items(),
-    )
-
     back_cam_h26x_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(zed2i_share_path, "launch", "ground_h26x_receiver.launch.py")
@@ -48,7 +42,16 @@ def generate_launch_description():
             "port": back_video_port,
             "codec": back_video_codec,
             "topic": back_video_topic,
+            "jitter_latency_ms": back_video_jitter_latency_ms,
         }.items(),
+    )
+
+    foxglove_bridge_launch = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("foxglove_bridge"), "launch", "foxglove_bridge_launch.xml"]
+            )
+        )
     )
 
     joy_node = Node(
@@ -67,12 +70,6 @@ def generate_launch_description():
         parameters=[{"topic": "/heartbeat/ground_station", "period_sec": 1.0}],
     )
 
-    foxglove_bridge_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(
-            os.path.join(get_package_share_directory("foxglove_bridge"), "launch", "foxglove_bridge.launch.py")
-        ),
-    )
-
     return LaunchDescription(
         [
             # The two receivers ingest different RTP streams and must keep
@@ -88,11 +85,16 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "back_video_topic", default_value="/ground_video/back_cam/image_raw"
             ),
+            DeclareLaunchArgument(
+                "back_video_jitter_latency_ms",
+                default_value="50",
+                description="RTP jitter buffer for the back-camera stream. "
+                "Use 0 only for controlled low-latency tests.",
+            ),
             joy_node,
             ground_station_heartbeat,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
-            back_cam_jpeg_receiver_launch,
             foxglove_bridge_launch,
         ]
     )

@@ -1,11 +1,11 @@
-"""miniPC-side bringup: everything except MID360S/GLIM/ZED 2i.
+"""miniPC-side bringup: vessel control and non-GPU sensors.
 
 x86_64 Ubuntu 22.04 / ROS 2 Humble, no CUDA / no ZED SDK. Owns every USB
-serial device (micon, UM982, Drogger, WIT IMU, joy pad), localization
+serial device that is enabled here (Micon and UM982 by default), localization
 (robot_state_publisher, TF, both EKFs, navsat_transform via
-localization.launch.py), thrusters, and the operator-facing links
-(foxglove bridge). GLIM/MID360S/ZED 2i live on the Jetson side
-(jetson_bringup.launch.py) and must not be duplicated here.
+localization.launch.py), thrusters, and the back camera. The joy pad and
+Foxglove bridge live on the ground PC. GLIM/MID360S/ZED 2i live on the
+Jetson side (jetson_bringup.launch.py) and must not be duplicated here.
 """
 
 import os
@@ -61,22 +61,20 @@ def generate_launch_description():
     enable_imu = LaunchConfiguration("enable_imu")
     enable_localization = LaunchConfiguration("enable_localization")
     enable_thruster = LaunchConfiguration("enable_thruster")
-    enable_joy = LaunchConfiguration("enable_joy")
     enable_alert_lamp = LaunchConfiguration("enable_alert_lamp")
     enable_bms = LaunchConfiguration("enable_bms")
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
-    enable_foxglove = LaunchConfiguration("enable_foxglove")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
     enable_back_cam_ground_video = LaunchConfiguration("enable_back_cam_ground_video")
     back_cam_ground_video_host = LaunchConfiguration("back_cam_ground_video_host")
     back_cam_ground_video_port = LaunchConfiguration("back_cam_ground_video_port")
     back_cam_ground_video_codec = LaunchConfiguration("back_cam_ground_video_codec")
-    enable_back_cam_jpeg_ground_video = LaunchConfiguration("enable_back_cam_jpeg_ground_video")
-    back_cam_jpeg_ground_video_host = LaunchConfiguration("back_cam_jpeg_ground_video_host")
-    back_cam_jpeg_ground_video_port = LaunchConfiguration("back_cam_jpeg_ground_video_port")
-    back_cam_jpeg_ground_video_fps = LaunchConfiguration("back_cam_jpeg_ground_video_fps")
+    back_cam_ground_video_fps = LaunchConfiguration("back_cam_ground_video_fps")
+    back_cam_ground_video_width = LaunchConfiguration("back_cam_ground_video_width")
+    back_cam_ground_video_height = LaunchConfiguration("back_cam_ground_video_height")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
+    use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
 
@@ -92,6 +90,7 @@ def generate_launch_description():
             "enable_global_ekf": "true",
             "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
+            "use_glim_fb": use_glim_fb,
         },
     )
 
@@ -142,15 +141,6 @@ def generate_launch_description():
         ],
         remappings=[("~/imu/raw", "/wit/imu")],
         condition=IfCondition(enable_imu),
-    )
-
-    joy_node = Node(
-        package="joy",
-        executable="joy_node",
-        name="joy_node",
-        output="screen",
-        emulate_tty=True,
-        condition=IfCondition(enable_joy),
     )
 
     joy_converter = Node(
@@ -226,12 +216,6 @@ def generate_launch_description():
         IfCondition(enable_buoy_costmap),
     )
 
-    foxglove_bridge_launch = include_launch(
-        "foxglove_bridge",
-        ["launch", "foxglove_bridge_launch.xml"],
-        IfCondition(enable_foxglove),
-    )
-
     back_cam_launch = include_launch(
         "robot",
         ["launch", "back_cam.launch.py"],
@@ -248,20 +232,9 @@ def generate_launch_description():
             "host": back_cam_ground_video_host,
             "port": back_cam_ground_video_port,
             "codec": back_cam_ground_video_codec,
-        },
-    )
-
-    # Keep the original CPU JPEG/RTP transport available separately from the
-    # VA-API H.26x route above.  It uses its own enable flag and UDP port, so
-    # both streams can be enabled concurrently for compatibility testing.
-    back_cam_jpeg_ground_video_launch = include_launch(
-        "zed2i_driver",
-        ["launch", "back_cam_jpeg_ground_video.launch.py"],
-        IfCondition(enable_back_cam_jpeg_ground_video),
-        {
-            "host": back_cam_jpeg_ground_video_host,
-            "port": back_cam_jpeg_ground_video_port,
-            "fps": back_cam_jpeg_ground_video_fps,
+            "fps": back_cam_ground_video_fps,
+            "width": back_cam_ground_video_width,
+            "height": back_cam_ground_video_height,
         },
     )
 
@@ -303,15 +276,13 @@ def generate_launch_description():
             DeclareLaunchArgument("imu_port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument("imu_baud", default_value="9600"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
-            DeclareLaunchArgument("enable_drogger_rzs", default_value="true"),
+            DeclareLaunchArgument("enable_drogger_rzs", default_value="false"),
             DeclareLaunchArgument("enable_imu", default_value="false"),
             DeclareLaunchArgument("enable_localization", default_value="true"),
             DeclareLaunchArgument("enable_thruster", default_value="true"),
-            DeclareLaunchArgument("enable_joy", default_value="true"),
             DeclareLaunchArgument("enable_alert_lamp", default_value="true"),
             DeclareLaunchArgument("enable_bms", default_value="true"),
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
-            DeclareLaunchArgument("enable_foxglove", default_value="true"),
             DeclareLaunchArgument(
                 "enable_back_cam",
                 default_value="true",
@@ -325,12 +296,22 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "back_cam_ground_video_host",
-                default_value="",
-                description="Ground-station IPv4 address for the back-camera stream.",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+                description="Ground-station IPv4 address or Avahi .local hostname for "
+                "the back-camera stream.",
             ),
             DeclareLaunchArgument("back_cam_ground_video_port", default_value="5601"),
             DeclareLaunchArgument(
                 "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
+            ),
+            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="4.0"),
+            DeclareLaunchArgument("back_cam_ground_video_width", default_value="480"),
+            DeclareLaunchArgument("back_cam_ground_video_height", default_value="360"),
+            DeclareLaunchArgument(
+                "use_glim_fb",
+                default_value="false",
+                description="Fuse Jetson GLIM /odom into the global EKF. "
+                "Keep false when GLIM is disabled or cannot sustain real time.",
             ),
             DeclareLaunchArgument(
                 "enable_nav2",
@@ -348,7 +329,6 @@ def generate_launch_description():
             um982_feedback_launch,
             # drogger_launch,
             # imu_node,
-            # joy_node,
             joy_converter,
             command_arbiter,
             thruster_launch,
@@ -357,10 +337,8 @@ def generate_launch_description():
             foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
-            # foxglove_bridge_launch,
             back_cam_launch,
             back_cam_ground_video_launch,
-            back_cam_jpeg_ground_video_launch,
             nav2_launch,
         ]
     )

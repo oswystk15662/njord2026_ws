@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, PythonExpression
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -43,6 +43,19 @@ def generate_launch_description():
         "enable_spatial_navsat",
         default_value="false",
         description="Advanced Navigation Spatial navsat transform (adnav_driver submodule is not checked out)",
+    )
+    use_glim_fb_arg = DeclareLaunchArgument(
+        "use_glim_fb",
+        default_value="false",
+        description="Fuse the Jetson GLIM /odom topic into the global EKF",
+    )
+
+    global_ekf_config = PythonExpression(
+        [
+            "'ekf_global_glim.yaml' if '",
+            LaunchConfiguration("use_glim_fb"),
+            "'.lower() in ('true', '1', 'yes', 'on') else 'ekf_global.yaml'",
+        ]
     )
 
     robot_description = Command(
@@ -145,7 +158,7 @@ def generate_launch_description():
         name="ekf_filter_node_global",
         output="screen",
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"])
+            PathJoinSubstitution([robot_share, "config", global_ekf_config])
         ],
         remappings=[("odometry/filtered", "odometry/filtered/global")],
         condition=IfCondition(LaunchConfiguration("enable_global_ekf")),
@@ -195,6 +208,7 @@ def generate_launch_description():
             enable_global_ekf_arg,
             enable_navsat_transform_arg,
             enable_spatial_navsat_arg,
+            use_glim_fb_arg,
             robot_state_publisher,
             glim_node,
             spatial_navsat_transform_node,

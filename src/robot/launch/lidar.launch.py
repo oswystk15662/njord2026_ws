@@ -155,7 +155,13 @@ def launch_setup(context, *args, **kwargs):
                         "use_sim_time": False,
                     }
                 ],
-                remappings=[("/glim_node/odom", "/odom")],
+                remappings=[
+                    ("/glim_node/odom", "/odom"),
+                    # The miniPC EKFs are the only dynamic TF authorities.
+                    # GLIM still publishes odometry, but its map/odom/base TF
+                    # stays private to the Jetson and is not bridged.
+                    ("/tf", "/glim/tf_unused"),
+                ],
                 extra_arguments=[{"use_intra_process_comms": True}],
             )
         )

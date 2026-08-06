@@ -101,7 +101,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
                 "enable_glim",
-                default_value="true",
+                default_value="false",
                 description="Load GLIM into the Livox component container",
             ),
             DeclareLaunchArgument(
@@ -110,7 +110,12 @@ def generate_launch_description():
                 choices=["gpu", "cpu"],
                 description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
             ),
-            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_pcl_buoy_detection",
+                default_value="false",
+                description="Standalone LiDAR-only detector for explicit fallback testing. "
+                "Normal operation uses ZED detection with its in-node LiDAR depth fallback.",
+            ),
             DeclareLaunchArgument("enable_gpu_perception", default_value="true"),
             DeclareLaunchArgument("engine_path", default_value=default_engine),
             DeclareLaunchArgument(
@@ -119,7 +124,7 @@ def generate_launch_description():
                 description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
             ),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
-            DeclareLaunchArgument("enable_ground_video", default_value="false"),
+            DeclareLaunchArgument("enable_ground_video", default_value="true"),
             DeclareLaunchArgument(
                 "ground_video_host",
                 default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
@@ -130,7 +135,8 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_fps", default_value="4.0"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old
-            # single-machine setup, so both default to 0.0 (start immediately);
+            # single-machine setup, but starting the ZED/TensorRT stack after
+            # the Livox container avoids simultaneous device/model startup;
             # standalone_bringup.launch.py passes the original 18.0/20.0 values
             # to reproduce the pre-split behaviour.
             DeclareLaunchArgument(
@@ -140,7 +146,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "camera_start_delay",
-                default_value="0.0",
+                default_value="5.0",
                 description="Seconds to wait before starting the ZED 2i driver",
             ),
             TimerAction(
