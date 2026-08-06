@@ -79,6 +79,9 @@ public:
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
     const auto control_topic = declare_parameter<std::string>("control_status_topic", "/system/control_status");
     const auto diagnostics_topic = declare_parameter<std::string>("diagnostics_topic", "/diagnostics");
+    const auto log_topic = declare_parameter<std::string>("log_topic", "/foxglove_log");
+
+    log_pub_ = create_publisher<std_msgs::msg::String>(log_topic, 10);
 
     cells_sub_ = create_subscription<std_msgs::msg::Float32MultiArray>(cells_topic, 10,
       [this](std_msgs::msg::Float32MultiArray::SharedPtr msg) {cells_ = msg->data;});
@@ -105,6 +108,32 @@ public:
   }
 
 private:
+  enum class LogLevel
+  {
+    kInfo,
+    kWarn,
+    kError,
+  };
+
+  void publishLog(LogLevel level, const std::string & text) const
+  {
+    std_msgs::msg::String message;
+    message.data = text;
+    log_pub_->publish(message);
+
+    switch (level) {
+      case LogLevel::kInfo:
+        RCLCPP_INFO(get_logger(), "%s", text.c_str());
+        break;
+      case LogLevel::kWarn:
+        RCLCPP_WARN(get_logger(), "%s", text.c_str());
+        break;
+      case LogLevel::kError:
+        RCLCPP_ERROR(get_logger(), "%s", text.c_str());
+        break;
+    }
+  }
+
   void onBuoys(const njord_interfaces::msg::BuoyDetectionArray & msg)
   {
     if (msg.detections.empty()) {
@@ -209,7 +238,7 @@ private:
     out << " SOG=" << (speed ? std::to_string(*speed) + "m/s" : "N/A");
     const auto xte = planDeviation();
     out << " PLAN_XTE=" << (xte ? std::to_string(*xte) + "m" : "N/A");
-    RCLCPP_INFO(get_logger(), "%s", out.str().c_str());
+    publishLog(LogLevel::kInfo, out.str());
     publishControlStatus();
     publishDiagnosticSummary();
   }
@@ -218,11 +247,11 @@ private:
   {
     const std::string status = control_status_.value_or("N/A");
     if (status == "auto") {
-      RCLCPP_INFO(get_logger(), "CTRL_MODE=AUTO");
+      publishLog(LogLevel::kInfo, "CTRL_MODE=AUTO");
     } else if (status == "emergency_stop") {
-      RCLCPP_ERROR(get_logger(), "CTRL_MODE=EMERGENCY_STOP");
+      publishLog(LogLevel::kError, "CTRL_MODE=EMERGENCY_STOP");
     } else {
-      RCLCPP_WARN(get_logger(), "CTRL_MODE=%s", status.c_str());
+      publishLog(LogLevel::kWarn, "CTRL_MODE=" + status);
     }
   }
 
@@ -244,13 +273,13 @@ private:
         << " STALE=" << counts[3];
     for (const auto & issue : issues) {out << " | " << issue;}
     if (highest_level >= diagnostic_msgs::msg::DiagnosticStatus::ERROR) {
-      RCLCPP_ERROR(get_logger(), "%s", out.str().c_str());
+      publishLog(LogLevel::kError, out.str());
     } else if (highest_level == diagnostic_msgs::msg::DiagnosticStatus::WARN ||
       highest_level == diagnostic_msgs::msg::DiagnosticStatus::STALE)
     {
-      RCLCPP_WARN(get_logger(), "%s", out.str().c_str());
+      publishLog(LogLevel::kWarn, out.str());
     } else {
-      RCLCPP_INFO(get_logger(), "%s", out.str().c_str());
+      publishLog(LogLevel::kInfo, out.str());
     }
   }
 
@@ -273,6 +302,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
   rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_sub_;
+  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr log_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 
