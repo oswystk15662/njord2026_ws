@@ -34,6 +34,7 @@ def _launch_setup(context, *args, **kwargs):
     monitor_zed2i = enabled("heartbeat_monitor_zed2i")
     monitor_lidar = enabled("heartbeat_monitor_lidar")
     monitor_ekf_local = enabled("heartbeat_monitor_ekf_local")
+    monitor_gnss_compass = enabled("heartbeat_monitor_gnss_compass")
     # An intentionally disabled EKF has no odometry publisher.  Do not make
     # that absence unhealthy merely because its heartbeat monitor was enabled.
     monitor_ekf_global = (
@@ -62,6 +63,17 @@ def _launch_setup(context, *args, **kwargs):
         return gates
 
     if role == "minipc":
+        gnss_inputs = [
+            ("/sensor/vehicle_gnss/fix/raw", "sensor_msgs/msg/NavSatFix"),
+        ]
+        if monitor_gnss_compass:
+            gnss_inputs.append(
+                (
+                    "/sensor/vehicle_gnss/compass/raw",
+                    "geometry_msgs/msg/PoseWithCovarianceStamped",
+                )
+            )
+
         leaves = [
             _gate(
                 "heartbeat_driver_camera_back",
@@ -71,13 +83,7 @@ def _launch_setup(context, *args, **kwargs):
             ),
             _gate(
                 "heartbeat_driver_gnss",
-                [
-                    ("/sensor/vehicle_gnss/fix/raw", "sensor_msgs/msg/NavSatFix"),
-                    (
-                        "/sensor/vehicle_gnss/compass/raw",
-                        "geometry_msgs/msg/PoseWithCovarianceStamped",
-                    ),
-                ],
+                gnss_inputs,
                 "/heartbeat/driver/gnss",
                 timeout=1.0,
             ),
@@ -157,6 +163,11 @@ def generate_launch_description():
             DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_ekf_local", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_ekf_global", default_value="true"),
+            DeclareLaunchArgument(
+                "heartbeat_monitor_gnss_compass",
+                default_value="false",
+                description="Include UM982 compass output in the GNSS heartbeat.",
+            ),
             DeclareLaunchArgument("enable_global_ekf", default_value="true"),
             OpaqueFunction(function=_launch_setup),
         ]
