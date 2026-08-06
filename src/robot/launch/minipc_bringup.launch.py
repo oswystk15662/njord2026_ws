@@ -91,6 +91,7 @@ def generate_launch_description():
     enable_autonomy_supervisor = LaunchConfiguration("enable_autonomy_supervisor")
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_ekf_local = LaunchConfiguration("use_ekf_local")
+    use_ekf_global = LaunchConfiguration("use_ekf_global")
     use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
@@ -105,7 +106,7 @@ def generate_launch_description():
         {
             "enable_glim": "false",
             "enable_local_ekf": use_ekf_local,
-            "enable_global_ekf": "true",
+            "enable_global_ekf": use_ekf_global,
             "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
             "use_glim_fb": use_glim_fb,
@@ -474,6 +475,11 @@ def generate_launch_description():
                 default_value="false",
                 description="Replace the default UM982 feedback EKF with the "
                 "Livox-IMU local EKF. The two filters are mutually exclusive.",
+            ),
+            DeclareLaunchArgument(
+                "use_ekf_global",
+                default_value="true",
+                description="Enable the global EKF. The local EKF is always enabled.",
             ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(

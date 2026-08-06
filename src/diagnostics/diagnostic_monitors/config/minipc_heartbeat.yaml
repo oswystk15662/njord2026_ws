@@ -1,3 +1,6 @@
+#　If you want to disable all miniPC heartbeat monitoring, uncomment the following line.
+minipc_heartbeat: []
+
 # miniPC heartbeat tree. Each entry is a HeartbeatAggregator node.
 # Comment out a complete entry to stop monitoring it. Uncomment optional
 # entries (and add their output to the aggregate inputs) to monitor them.

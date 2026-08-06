@@ -115,6 +115,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
+                "world_frame": "map",
                 "use_sim_time": use_sim_time,
                 "frequency": 10.0,
                 "magnetic_declination_radians": 0.0,
