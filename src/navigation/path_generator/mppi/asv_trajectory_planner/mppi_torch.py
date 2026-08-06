@@ -929,12 +929,15 @@ class MPPIPlanner():
             debug=True
         )
 
-        # Exact candidate states/collision costs used in this optimization
-        # cycle.  This is read only by the visualization publisher.
+        # CRM inputs exactly as used in this optimization cycle.  The planner
+        # node uses them to render the complete instantaneous CRM field.
         self.last_mppi_debug = {
-            "predx": predx,
-            "predy": predy,
-            "cost_collision": cost_collision,
+            "own": [-own.y, own.x, own.u, (-own.yaw) % 360.0, self.loa],
+            "others": [
+                [-oth.y, oth.x, oth.u, (-oth.yaw) % 360.0, self.loa]
+                for oth in others
+            ],
+            "ax_gains": self.ax_gains,
         }
 
         opttraj = get_traj(

@@ -4,6 +4,7 @@ import math
 
 import numpy as np
 import rclpy
+import torch
 from rclpy.node import Node
 from rclpy.time import Time
 
@@ -19,6 +20,7 @@ except ImportError:
     TransformException = (LookupException, ConnectivityException, ExtrapolationException)
 
 from asv_trajectory_planner.trajectory_generator import TrajectoryGenerator
+from asv_trajectory_planner import crm_torch
 
 
 class PlannerNode(Node):
@@ -408,14 +410,14 @@ class PlannerNode(Node):
     def publish_mppi_crm_costmap(
         self, own_map_x: float, own_map_y: float, own_map_yaw: float
     ) -> None:
-        """Publish the current MPPI candidates' evaluated CRM costs.
+        """Publish the complete instantaneous CRM field used by MPPI.
 
-        Each occupied cell is a candidate predicted state.  Its value is the
-        collision cost returned by the very same ``get_opt`` invocation that
-        selected the path, normalized only for OccupancyGrid display.
+        The grid is evaluated at t=0 using the same ``timedomaincrm`` function
+        and own/other CRM states as the current MPPI optimization.  It is a
+        field over every map cell, not a plot of sampled candidate paths.
         """
         debug = getattr(self.trajectory_generator.planner, "last_mppi_debug", None)
-        if not debug:
+        if not debug or not debug["others"]:
             return
 
         resolution = float(self.get_parameter("mppi.crm_costmap_resolution_m").value)
@@ -425,32 +427,24 @@ class PlannerNode(Node):
         origin_y = float(self.get_parameter("mppi.crm_costmap_origin_y_m").value)
         cols, rows = round(width_m / resolution), round(height_m / resolution)
 
-        predx = np.asarray(debug["predx"], dtype=float).ravel()
-        predy = np.asarray(debug["predy"], dtype=float).ravel()
-        costs = np.asarray(debug["cost_collision"], dtype=float).reshape(-1)
-        if costs.size == 0 or predx.size == 0:
-            return
-        # One aggregate collision cost is returned for every candidate, while
-        # predx/predy contain all horizon points for that candidate.
-        horizon_points = predx.size // costs.size
-        if horizon_points <= 0:
-            return
-        costs = np.repeat(costs, horizon_points)[:predx.size]
+        xs = origin_x + (np.arange(cols) + 0.5) * resolution
+        ys = origin_y + (np.arange(rows) + 0.5) * resolution
+        map_x, map_y = np.meshgrid(xs, ys)
         c, s = math.cos(own_map_yaw), math.sin(own_map_yaw)
-        map_x = own_map_x + c * predx - s * predy
-        map_y = own_map_y + s * predx + c * predy
-        col = ((map_x - origin_x) / resolution).astype(int)
-        row = ((map_y - origin_y) / resolution).astype(int)
-        valid = (
-            np.isfinite(costs) & (col >= 0) & (col < cols) &
-            (row >= 0) & (row < rows)
-        )
-        grid = np.zeros(rows * cols, dtype=np.float64)
-        if np.any(valid):
-            max_cost = float(np.max(costs[valid]))
-            if max_cost > 0.0:
-                values = np.clip(costs[valid] / max_cost * 100.0, 0.0, 100.0)
-                np.maximum.at(grid, row[valid] * cols + col[valid], values)
+        dx, dy = map_x - own_map_x, map_y - own_map_y
+        # map -> base_link, then ROS base_link -> CRM coordinates.
+        base_x = c * dx + s * dy
+        base_y = -s * dx + c * dy
+        with torch.no_grad():
+            risk = crm_torch.timedomaincrm(
+                torch.as_tensor(-base_y, dtype=torch.float32),
+                torch.as_tensor(base_x, dtype=torch.float32),
+                torch.zeros((rows, cols), dtype=torch.float32),
+                debug["own"],
+                debug["others"],
+                turn=torch.zeros((rows, cols), dtype=torch.float32),
+                ax_gains=debug["ax_gains"],
+            ).cpu().numpy()
 
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -461,7 +455,7 @@ class PlannerNode(Node):
         msg.info.origin.position.x = origin_x
         msg.info.origin.position.y = origin_y
         msg.info.origin.orientation.w = 1.0
-        msg.data = np.rint(grid).astype(np.int8).tolist()
+        msg.data = np.rint(np.clip(risk, 0.0, 1.0) * 100.0).astype(np.int8).ravel().tolist()
         self.crm_costmap_pub.publish(msg)
 
 
