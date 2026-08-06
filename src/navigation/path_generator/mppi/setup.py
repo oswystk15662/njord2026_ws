@@ -42,6 +42,7 @@ setup(
                 "opponent_twist_from_tf_node = asv_trajectory_planner.opponent_twist_from_tf_node:main",
         "task2_waypoint_pose_publisher = asv_trajectory_planner.task2_waypoint_pose_publisher:main",
         "task2_autonomy_ready_node = asv_trajectory_planner.task2_autonomy_ready_node:main",
+        "crm_costmap_node = asv_trajectory_planner.crm_costmap_node:main",
 ],
     },
 )

@@ -109,6 +109,10 @@ def generate_launch_description():
             }
         ],
     )
+    crm_costmap = Node(
+        package="asv_trajectory_planner", executable="crm_costmap_node",
+        name="crm_costmap", output="screen",
+    )
 
     return LaunchDescription(
         [
@@ -117,5 +121,6 @@ def generate_launch_description():
             planner_node,
             path_pruner_node,
         follow_path_client_node,
+        crm_costmap,
         ]
     )
