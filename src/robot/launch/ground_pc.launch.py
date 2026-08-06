@@ -127,7 +127,7 @@ def generate_launch_description():
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,
-            foxglove_bridge_launch,
-            ntrip_caster,
+            # foxglove_bridge_launch,
+            # ntrip_caster,
         ]
     )
