@@ -87,6 +87,13 @@ opponent_selector:
     stale_timeout_sec: 2.0    # [s] tracks older than this are ignored
     publish_rate_hz: 10.0     # [Hz] output rate
     twist_lowpass_alpha: 0.3  # first-order IIR low-pass factor (0..1)
+    # `straight_line` is for the Task 2 vessel: it accepts only a track with
+    # enough consecutive observations and a settled EKF velocity estimate.
+    # `standard` keeps the ordinary confirmed/fresh/size/speed gates only.
+    # task2_autonomy.launch.py overrides this to straight_line by default.
+    motion_filter_mode: "standard"  # "standard" | "straight_line"
+    straight_min_hit_count: 15       # [frames] history required in straight_line
+    straight_max_velocity_stddev_mps: 0.30  # [m/s] largest horizontal EKF std-dev
     # Only recognize moving opponents within this absolute ground-speed band.
     # Values are knots for operator-facing configuration; /other_ship/twist
     # remains in SI units (m/s), as required by geometry_msgs/Twist.

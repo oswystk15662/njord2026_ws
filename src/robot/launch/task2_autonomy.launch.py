@@ -48,6 +48,7 @@ def generate_launch_description():
     enable_ship_tracking = LaunchConfiguration("enable_ship_tracking")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     own_odom_topic = LaunchConfiguration("own_odom_topic")
+    opponent_motion_mode = LaunchConfiguration("opponent_motion_mode")
 
     task2_perception = _include(
         "task2_perception",
@@ -57,6 +58,7 @@ def generate_launch_description():
             "enable_cloud_filter": "true",
             "enable_opponent_selector": enable_ship_tracking,
             "publish_self_marker": "false",
+            "motion_filter_mode": opponent_motion_mode,
         },
     )
     ship_tracking = _include(
@@ -66,6 +68,7 @@ def generate_launch_description():
         arguments={
             "lidar_topic": "/task2/points_filtered",
             "ego_odom_topic": own_odom_topic,
+            "motion_mode": opponent_motion_mode,
         },
     )
     mppi = _include(
@@ -102,6 +105,11 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_lidar", default_value="true"),
         DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
         DeclareLaunchArgument("enable_nav2", default_value="true"),
+        DeclareLaunchArgument(
+            "opponent_motion_mode", default_value="straight_line",
+            choices=["standard", "straight_line"],
+            description="standard: normal vessel tracking; straight_line: "
+                        "Task 2 constant-velocity confidence gates."),
         DeclareLaunchArgument(
             "own_odom_topic", default_value="/odom",
             description="Ego odometry already published by the manual-control stack.",

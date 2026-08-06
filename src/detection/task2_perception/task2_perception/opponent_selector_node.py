@@ -85,6 +85,11 @@ class OpponentSelectorNode(Node):
             # remains m/s, as required by geometry_msgs/Twist.
             ("min_absolute_speed_knots", 2.0),
             ("max_absolute_speed_knots", 3.0),
+            # `straight_line` trusts only a repeatedly observed, low-variance
+            # constant-velocity estimate. `standard` preserves legacy gating.
+            ("motion_filter_mode", "standard"),
+            ("straight_min_hit_count", 15),
+            ("straight_max_velocity_stddev_mps", 0.30),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -92,6 +97,17 @@ class OpponentSelectorNode(Node):
         self.base_frame = str(gp("base_frame"))
         self.opponent_frame = str(gp("opponent_frame"))
         self.policy = str(gp("selection_policy"))
+        self.motion_filter_mode = str(gp("motion_filter_mode"))
+        if self.motion_filter_mode not in ("standard", "straight_line"):
+            raise ValueError(
+                "motion_filter_mode must be 'standard' or 'straight_line'")
+        straight_min_hit_count = int(gp("straight_min_hit_count"))
+        straight_max_velocity_stddev_mps = float(
+            gp("straight_max_velocity_stddev_mps"))
+        if straight_min_hit_count < 1 or straight_max_velocity_stddev_mps <= 0.0:
+            raise ValueError(
+                "straight_min_hit_count must be >= 1 and "
+                "straight_max_velocity_stddev_mps must be > 0")
         self.selection_params = SelectionParams(
             confirmed_only=bool(gp("confirmed_only")),
             max_distance_m=float(gp("max_distance_m")),
@@ -102,6 +118,11 @@ class OpponentSelectorNode(Node):
             min_point_count=int(gp("min_point_count")),
             stale_timeout_sec=float(gp("stale_timeout_sec")),
             target_track_id=int(gp("target_track_id")),
+            min_hit_count=(straight_min_hit_count
+                           if self.motion_filter_mode == "straight_line" else 0),
+            max_velocity_stddev_mps=(straight_max_velocity_stddev_mps
+                                     if self.motion_filter_mode == "straight_line"
+                                     else float("inf")),
         )
         self.smoother = TwistSmoother(
             alpha=float(gp("twist_lowpass_alpha")),
@@ -134,6 +155,7 @@ class OpponentSelectorNode(Node):
         self.timer = self.create_timer(period, self.timer_callback)
         self.get_logger().info(
             f"opponent_selector: policy={self.policy}, "
+            f"motion_filter_mode={self.motion_filter_mode}, "
             f"tracks={gp('tracked_objects_topic')}, "
             f"ego_odom={gp('ego_odom_topic')} -> {gp('twist_topic')} "
             f"+ TF {self.map_frame} -> {self.opponent_frame}, "
@@ -147,6 +169,7 @@ class OpponentSelectorNode(Node):
             stamp = obj.header.stamp.sec + obj.header.stamp.nanosec * 1e-9
             pos = obj.state.pose.pose.position
             vel = obj.state.twist.twist.linear
+            twist_covariance = obj.state.twist.covariance
             tracks.append(Track(
                 object_id=int(obj.object_id),
                 position=np.array([pos.x, pos.y, pos.z]),
@@ -161,6 +184,8 @@ class OpponentSelectorNode(Node):
                 object_class=str(obj.object_class),
                 hit_count=int(obj.hit_count),
                 miss_count=int(obj.miss_count),
+                velocity_stddev_mps=math.sqrt(max(
+                    0.0, float(twist_covariance[0]), float(twist_covariance[7]))),
             ))
         self.tracks = tracks
 

@@ -126,6 +126,21 @@ class TestStaleAndGates:
         assert [track.object_id for track in ranked] == [3]
         assert [reason for _, reason in params.rejected] == ["too narrow", "too wide"]
 
+    def test_straight_line_confidence_gate(self):
+        short_history = make_track(
+            object_id=1, hit_count=8, velocity_stddev_mps=0.10)
+        uncertain = make_track(
+            object_id=2, hit_count=15, velocity_stddev_mps=0.40)
+        settled = make_track(
+            object_id=3, hit_count=15, velocity_stddev_mps=0.10)
+        params = SelectionParams(
+            min_hit_count=15, max_velocity_stddev_mps=0.30)
+        ranked = tracking_glue.select_opponent(
+            [short_history, uncertain, settled], now_sec=100.5, params=params)
+        assert [track.object_id for track in ranked] == [3]
+        assert [reason for _, reason in params.rejected] == [
+            "insufficient observation history", "velocity estimate too uncertain"]
+
     def test_policies(self):
         near_diverging = make_track(object_id=1,
                                     position=np.array([10.0, 0.0, 0.0]),

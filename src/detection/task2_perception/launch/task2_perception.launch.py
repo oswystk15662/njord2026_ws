@@ -46,6 +46,10 @@ def generate_launch_description():
             "ego_odom_topic", default_value="/odometry/filtered/local"),
         DeclareLaunchArgument("map_frame", default_value="map"),
         DeclareLaunchArgument("base_frame", default_value="base_link"),
+        DeclareLaunchArgument(
+            "motion_filter_mode", default_value="standard",
+            choices=["standard", "straight_line"],
+            description="Opponent motion confidence gate mode."),
 
         Node(
             package="task2_perception",
@@ -74,6 +78,7 @@ def generate_launch_description():
                     "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
                     "map_frame": LaunchConfiguration("map_frame"),
                     "base_frame": LaunchConfiguration("base_frame"),
+                    "motion_filter_mode": LaunchConfiguration("motion_filter_mode"),
                 },
             ],
             condition=IfCondition(

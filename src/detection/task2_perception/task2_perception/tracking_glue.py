@@ -46,6 +46,7 @@ class Track:
     object_class: str = "unknown"
     hit_count: int = 0
     miss_count: int = 0
+    velocity_stddev_mps: float = 0.0  # largest horizontal velocity std-dev [m/s]
 
     @property
     def velocity_base(self) -> np.ndarray:
@@ -126,6 +127,8 @@ class SelectionParams:
     min_width_m: float = 0.0
     max_width_m: float = float("inf")
     min_point_count: int = 5
+    min_hit_count: int = 0
+    max_velocity_stddev_mps: float = float("inf")
     stale_timeout_sec: float = 2.0
     target_track_id: int = -1
     rejected: list = field(default_factory=list)  # (track, reason) diagnostics
@@ -151,6 +154,10 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
         return "too wide"
     if track.point_count < params.min_point_count:
         return "too few points"
+    if track.hit_count < params.min_hit_count:
+        return "insufficient observation history"
+    if track.velocity_stddev_mps > params.max_velocity_stddev_mps:
+        return "velocity estimate too uncertain"
     return None
 
 
