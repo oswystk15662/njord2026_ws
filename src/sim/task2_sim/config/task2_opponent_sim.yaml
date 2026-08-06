@@ -11,9 +11,12 @@ opponent_vessel_node:
     start_delay_s: 0.0
     speed_mps: 1.2861                     # [m/s] = 2.5 kn
     start_xy: [60.0, 0.0]
-    opponent_start_xy: [90.0, 0.0]
+    # Cross the own vessel's straight route at (40.0, 0.0).  At 2.5 kn,
+    # the opponent travels 50 m in the same 38.88 s that the own vessel
+    # (2.0 kn) needs to reach this point from (0.0, 0.0).
+    opponent_start_xy: [40.0, -50.0]
     goal_xy: [0.0, 0.0]
-    opponent_goal_xy: [0.0, 0.0]
+    opponent_goal_xy: [40.0, 50.0]
     disturbance_amp_m: 0.0                # straight-line assumption
     disturbance_freq_hz: 0.1
     # disturbance_amp_m: 0.3
