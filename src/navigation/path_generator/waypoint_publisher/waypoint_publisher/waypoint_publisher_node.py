@@ -25,6 +25,7 @@ from enum import Enum
 class TaskType(Enum):
     """Enumeration for supported task types"""
     TASK1 = "task1"
+    TASK1_SKIP_1_1 = "task1_skip_1_1"
     TASK1_FOLLOW = "task1_follow"
     TASK2 = "task2"
     TASK3_1 = "task3_1"
@@ -116,6 +117,7 @@ class WaypointPublisher(Node):
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
+            TaskType.TASK1_SKIP_1_1: 'task1_skip_1_1_waypoints.yaml',
             TaskType.TASK1_FOLLOW: 'task1_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
@@ -134,6 +136,8 @@ class WaypointPublisher(Node):
         # Extract relevant config based on task type
         if self.task_type == TaskType.TASK1:
             return full_config['task1_config']
+        elif self.task_type == TaskType.TASK1_SKIP_1_1:
+            return full_config['task1_skip_1_1_config']
         elif self.task_type == TaskType.TASK1_FOLLOW:
             return full_config['task1_follow_config']
         elif self.task_type == TaskType.TASK2:
@@ -154,7 +158,12 @@ class WaypointPublisher(Node):
         
         self.first_publish = False
         
-        if self.task_type in [TaskType.TASK1, TaskType.TASK1_FOLLOW, TaskType.TASK2]:
+        if self.task_type in [
+            TaskType.TASK1,
+            TaskType.TASK1_SKIP_1_1,
+            TaskType.TASK1_FOLLOW,
+            TaskType.TASK2,
+        ]:
             self._publish_waypoints_single_stage()
         elif self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self._publish_task3_first_stage()

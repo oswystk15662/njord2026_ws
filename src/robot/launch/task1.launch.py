@@ -65,7 +65,11 @@ def generate_launch_description():
     waypoints = _include(
         'waypoint_publisher',
         'waypoint_publisher.launch.py',
-        {'task_type': 'task1', 'frame_id': 'odom', 'publish_rate_hz': '2.0'},
+        {
+            'task_type': LaunchConfiguration('task_type'),
+            'frame_id': 'odom',
+            'publish_rate_hz': '2.0',
+        },
     )
     cardinal_walls = Node(
         package='buoy_obstacle_publisher',
@@ -101,6 +105,15 @@ def generate_launch_description():
             default_value='/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0',
         ),
         DeclareLaunchArgument('enable_nav2_diagnostics', default_value='true'),
+        DeclareLaunchArgument(
+            'task_type',
+            default_value='task1',
+            choices=['task1', 'task1_skip_1_1'],
+            description=(
+                'task1: full course; task1_skip_1_1: omit the Task1-1 '
+                'maneuvering section and run the cardinal-slalom smoke test.'
+            ),
+        ),
         DeclareLaunchArgument(
             'lidar_start_delay',
             default_value='18.0',

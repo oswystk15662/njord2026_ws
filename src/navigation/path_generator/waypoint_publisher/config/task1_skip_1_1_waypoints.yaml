@@ -1,0 +1,70 @@
+# Task 1 smoke test: skip Task1-1 and traverse the two slalom endpoint areas.
+#
+# The route first visits a safe transit point and then follows the original
+# S/N/S turns.  Do not replace the turns with a direct start-to-goal segment:
+# it would cut through the cardinal-marker corridor.
+
+task1_skip_1_1_config:
+  frame_id: "map"
+  publish_rate_hz: 2.0
+  origin:
+    latitude: 34.5456666667
+    longitude: 135.5070555556
+    name: "GPS 2 - Slalom Start"
+  gps_points:
+    - id: 1
+      latitude: 34.5456666667
+      longitude: 135.5070555556
+      name: "GPS 2 - Slalom Start"
+    - id: 2
+      latitude: 34.5459166667
+      longitude: 135.5074444444
+      name: "GPS 2 - Slalom Finish"
+  waypoints:
+    - id: 1
+      x: 50.0000
+      y: 0.0000
+      yaw: -1.5708
+      type: "transit"
+      name: "Transit - clear of marker corridor"
+      tolerance_m: 2.0
+    - id: 2
+      x: 50.0000
+      y: -25.0000
+      yaw: -2.7744
+      type: "start"
+      name: "GPS 2 - Slalom Start"
+      tolerance_m: 2.0
+    - id: 3
+      x: 24.0000
+      y: -35.0000
+      yaw: 1.9937
+      type: "turn"
+      name: "Slalom turn 1 (pass south of marker 1, S)"
+      tolerance_m: 2.0
+    - id: 4
+      x: 15.0000
+      y: -15.0000
+      yaw: -1.9075
+      type: "turn"
+      name: "Slalom turn 2 (pass north of marker 2, N)"
+      tolerance_m: 2.0
+    - id: 5
+      x: 8.0000
+      y: -35.0000
+      yaw: 2.2455
+      type: "turn"
+      name: "Slalom turn 3 (pass south of marker 3, S)"
+      tolerance_m: 2.0
+    - id: 6
+      x: 0.0000
+      y: -25.0000
+      yaw: 2.2455
+      type: "goal"
+      name: "GPS 2 - Slalom Finish"
+      tolerance_m: 2.0
+  constraints:
+    follow_test: false
+    route_pattern: "cardinal_slalom_skip_task1_1"
+    cardinal_marker_detection: true
+    vision_halfway: false
