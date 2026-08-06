@@ -123,18 +123,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    # The simulation has no manual-control arbiter.  Feed the minimal Task 2
-    # Nav2 output through the same navigation -> /cmd_vel contract used by
-    # the dynamics-side thruster driver.
-    twist_mux = Node(
-        package="twist_mux",
-        executable="twist_mux",
-        name="twist_mux",
-        parameters=[os.path.join(pkg_robot, "config", "twist_mux.yaml")],
-        remappings=[("cmd_vel_out", "/cmd_vel")],
-        output="screen",
-    )
-
     robot_state_pub_node = Node(
         package="robot_state_publisher",
         executable="robot_state_publisher",
@@ -200,7 +188,6 @@ def generate_launch_description():
             task2_orchestrator,
             opponent_vessel,
             thruster_driver_node,
-            twist_mux,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
@@ -219,7 +206,9 @@ def generate_launch_description():
             "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2_jazzy.yaml"),
             "use_sim_time": "false",
             "autostart": "true",
-            "auto_cmd_vel_topic": "/cmd_vel_nav",
+            # No manual-control arbiter exists in simulation, so the
+            # velocity-smoother output drives the simulated thruster driver.
+            "auto_cmd_vel_topic": "/cmd_vel",
         }.items(),
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )
