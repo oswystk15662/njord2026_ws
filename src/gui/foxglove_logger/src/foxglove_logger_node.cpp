@@ -198,6 +198,22 @@ private:
     return std::hypot(velocity.x, velocity.y);
   }
 
+  static std::string controlStatusColor(const std::string & control_status)
+  {
+    // The command arbiter publishes emergency_stop whenever the kill switch
+    // stops propulsion, so it takes precedence over the selected mode.
+    if (control_status == "emergency_stop") {
+      return "Red";
+    }
+    if (control_status == "manual") {
+      return "Yellow";
+    }
+    if (control_status == "auto") {
+      return "Green";
+    }
+    return "N/A";
+  }
+
   void publishReport()
   {
     std::ostringstream out;
@@ -246,6 +262,7 @@ private:
     } else {
       out << control_status;
     }
+    out << '\n' << "STATUS_COLOR=" << controlStatusColor(control_status);
     publishLog(LogLevel::kInfo, out.str());
   }
 
