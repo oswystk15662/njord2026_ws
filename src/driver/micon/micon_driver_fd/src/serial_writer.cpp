@@ -2,12 +2,9 @@
 
 #include <cstring>
 #include <cerrno>
-#include <cmath>
-#include <cstdlib>
 #include <fcntl.h>
 #include <functional>
 #include <limits>
-#include <sstream>
 #include <termios.h>
 #include <unistd.h>
 
@@ -85,28 +82,6 @@ Packet cobs_encode(const Packet & raw)
   return encoded;
 }
 
-bool parse_float(const std::string & field, float * value)
-{
-  char * end = nullptr;
-  errno = 0;
-  const float parsed = std::strtof(field.c_str(), &end);
-  // The BMS master deliberately emits `nan` for an unavailable/stale cell.
-  // Preserve that value in the ROS telemetry so consumers can distinguish a
-  // live-but-invalid BMS link from a missing serial stream.  Infinity still
-  // indicates malformed input and is rejected.
-  if (end == field.c_str() || errno == ERANGE || std::isinf(parsed)) {
-    return false;
-  }
-  while (*end == ' ' || *end == '\t' || *end == '\r') {
-    ++end;
-  }
-  if (*end != '\0') {
-    return false;
-  }
-  *value = parsed;
-  return true;
-}
-
 }  // namespace
 
 Packet encode_packet(
@@ -139,40 +114,12 @@ Packet encode_packet(
   return packet;
 }
 
-bool parse_bms_csv_line(const std::string & line, BmsTelemetry * telemetry)
-{
-  if (telemetry == nullptr) {
-    return false;
-  }
-
-  std::stringstream stream(line);
-  std::string field;
-  // The master output starts with milliseconds, which is not part of the
-  // voltage message.
-  if (!std::getline(stream, field, ',')) {
-    return false;
-  }
-  for (float & cell : telemetry->cells) {
-    if (!std::getline(stream, field, ',') || !parse_float(field, &cell)) {
-      return false;
-    }
-  }
-  // total_V is retained in the firmware CSV for human inspection.
-  if (!std::getline(stream, field, ',')) {
-    return false;
-  }
-  return std::getline(stream, field, ',') && parse_float(field, &telemetry->temperature_c);
-}
-
 SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 : Node("serial_writer", options)
 {
   serial_port_ = declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
   baud_ = declare_parameter<int>("baud", 115200);
   command_topic_ = declare_parameter<std::string>("command_topic", "/thruster_command");
-  bms_topic_ = declare_parameter<std::string>("bms_topic", "/bms");
-  bms_temperature_topic_ = declare_parameter<std::string>(
-    "bms_temperature_topic", "/micon/bms_temperature_c");
   ground_station_heartbeat_topic_ = declare_parameter<std::string>(
     "ground_station_heartbeat_topic", "/heartbeat/ground_station");
   ground_station_heartbeat_timeout_sec_ = declare_parameter<double>(
@@ -193,8 +140,6 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
       ground_station_heartbeat_topic_, 10,
       std::bind(&SerialWriter::ground_station_heartbeat_cb, this, std::placeholders::_1));
   }
-  pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
-  pub_bms_temperature_ = create_publisher<std_msgs::msg::Float32>(bms_temperature_topic_, 10);
   pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
   pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
     "/safety/emergency_stop", rclcpp::QoS(1).transient_local());
@@ -259,7 +204,7 @@ void SerialWriter::timer_cb()
 {
   update_ground_station_watchdog();
   if (fd_ < 0) {return;}
-  read_bms();
+  read_relay_state();
   Packet packet;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -270,6 +215,25 @@ void SerialWriter::timer_cb()
     RCLCPP_WARN(get_logger(), "serial write failed or incomplete");
   }
   publish_safety_state();
+}
+
+void SerialWriter::read_relay_state()
+{
+  char buffer[256];
+  const ssize_t count = read(fd_, buffer, sizeof(buffer));
+  if (count < 0) {
+    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "serial read failed");
+    }
+    return;
+  }
+  for (ssize_t index = 0; index < count; ++index) {
+    const auto byte = static_cast<uint8_t>(buffer[index]);
+    if (byte == 0x00U || byte == 0x01U) {
+      std::lock_guard<std::mutex> lock(mutex_);
+      relay_active_ = byte == 0x01U;
+    }
+  }
 }
 
 void SerialWriter::update_ground_station_watchdog()
@@ -312,50 +276,6 @@ void SerialWriter::publish_safety_state()
   pub_safety_emergency_->publish(
     std_msgs::msg::UInt8().set__data(
       static_cast<uint8_t>(state)));
-}
-
-void SerialWriter::read_bms()
-{
-  char buffer[256];
-  const ssize_t count = read(fd_, buffer, sizeof(buffer));
-  if (count < 0) {
-    if (errno != EAGAIN && errno != EWOULDBLOCK) {
-      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "serial read failed");
-    }
-    return;
-  }
-  if (count == 0) {
-    return;
-  }
-
-  for (ssize_t index = 0; index < count; ++index) {
-    const auto byte = static_cast<uint8_t>(buffer[index]);
-    if (byte == 0x00U || byte == 0x01U) {
-      std::lock_guard<std::mutex> lock(mutex_);
-      relay_active_ = byte == 0x01U;
-    } else {
-      serial_rx_buffer_.push_back(static_cast<char>(byte));
-    }
-  }
-  size_t newline = 0;
-  while ((newline = serial_rx_buffer_.find('\n')) != std::string::npos) {
-    const std::string line = serial_rx_buffer_.substr(0, newline);
-    serial_rx_buffer_.erase(0, newline + 1);
-    BmsTelemetry telemetry;
-    if (!parse_bms_csv_line(line, &telemetry)) {
-      continue;  // Header, diagnostics, stale data, and malformed records.
-    }
-    std_msgs::msg::Float32MultiArray message;
-    message.data.assign(telemetry.cells.begin(), telemetry.cells.end());
-    pub_bms_->publish(message);
-    pub_bms_temperature_->publish(std_msgs::msg::Float32().set__data(telemetry.temperature_c));
-  }
-
-  constexpr size_t kMaxPendingLineLength = 4096;
-  if (serial_rx_buffer_.size() > kMaxPendingLineLength) {
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "discarding oversized serial line");
-    serial_rx_buffer_.clear();
-  }
 }
 
 int SerialWriter::open_serial(const std::string & device, int baud)

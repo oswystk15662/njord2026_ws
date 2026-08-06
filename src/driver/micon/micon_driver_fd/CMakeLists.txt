@@ -22,7 +22,27 @@ target_compile_features(serial_writer PUBLIC cxx_std_17)
 target_link_libraries(serial_writer serial_writer_lib)
 ament_target_dependencies(serial_writer rclcpp)
 
-install(TARGETS serial_writer_lib serial_writer
+# Keep serial_writer for existing standalone launch files; new bringup uses the
+# explicit role name below.
+add_executable(thruster_serial src/main.cpp)
+target_compile_features(thruster_serial PUBLIC cxx_std_17)
+target_link_libraries(thruster_serial serial_writer_lib)
+ament_target_dependencies(thruster_serial rclcpp)
+
+add_library(bms_serial_reader_lib src/bms_serial_reader.cpp)
+target_compile_features(bms_serial_reader_lib PUBLIC cxx_std_17)
+target_include_directories(bms_serial_reader_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(bms_serial_reader_lib rclcpp std_msgs)
+
+add_executable(bms_serial src/bms_serial_main.cpp)
+target_compile_features(bms_serial PUBLIC cxx_std_17)
+target_link_libraries(bms_serial bms_serial_reader_lib)
+ament_target_dependencies(bms_serial rclcpp)
+
+install(TARGETS serial_writer_lib serial_writer thruster_serial bms_serial_reader_lib bms_serial
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION lib/${PROJECT_NAME}
@@ -43,7 +63,7 @@ if(BUILD_TESTING)
   ament_lint_auto_find_test_dependencies()
 
   ament_add_gtest(test_serial_writer test/test_serial_writer.cpp)
-  target_link_libraries(test_serial_writer serial_writer_lib util)
+  target_link_libraries(test_serial_writer serial_writer_lib bms_serial_reader_lib util)
   ament_target_dependencies(test_serial_writer rclcpp std_msgs)
 endif()
 

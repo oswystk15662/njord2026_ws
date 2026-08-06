@@ -1,7 +1,7 @@
 bms_node:
   ros__parameters:
     topics:
-      # Decoded by micon_driver_fd/serial_writer. Float32MultiArray[4], unit V.
+      # Decoded by micon_driver_fd/bms_serial. Float32MultiArray[4], unit V.
       input: "micon/bms_cells"
       output: "bms/cell_voltages"
       temperature_input: "/micon/bms_temperature_c"

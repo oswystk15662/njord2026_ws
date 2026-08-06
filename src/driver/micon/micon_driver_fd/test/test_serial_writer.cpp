@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "gtest/gtest.h"
+#include "micon_driver_fd/bms_serial_reader.hpp"
 #include "micon_driver_fd/serial_writer.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "std_msgs/msg/bool.hpp"

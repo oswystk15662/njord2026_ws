@@ -224,17 +224,16 @@ def generate_launch_description():
         },
     )
 
-    micon_driver = Node(
+    thruster_serial = Node(
         package="micon_driver_fd",
-        executable="serial_writer",
-        name="serial_writer",
+        executable="thruster_serial",
+        name="thruster_serial",
         output="screen",
         parameters=[
             {
                 "serial_port": serial_port,
                 "baud": baud,
                 "command_topic": "/thruster_command",
-                "bms_topic": "micon/bms_cells",
                 "ground_station_heartbeat_topic": "/heartbeat/ground_station",
                 "ground_station_heartbeat_timeout_sec": 60.0,
                 "use_sim_time": False,
@@ -243,28 +242,22 @@ def generate_launch_description():
         condition=IfCondition(enable_thruster),
     )
 
-    # The BMS master is a separate XIAO ESP32-C3 serial device.  Reuse the
-    # serial reader while isolating its safety/relay topics from the thruster
-    # controller on the other USB port.
-    bms_serial_reader = Node(
+    # The BMS master is a separate XIAO ESP32-C3 serial device. Its reader is
+    # read-only: BMS telemetry cannot inject a thruster command or safety state.
+    bms_serial = Node(
         package="micon_driver_fd",
-        executable="serial_writer",
-        name="bms_serial_reader",
+        executable="bms_serial",
+        name="bms_serial",
         output="screen",
         parameters=[
             {
                 "serial_port": LaunchConfiguration("bms_serial_port"),
                 "baud": LaunchConfiguration("bms_serial_baud"),
-                "command_topic": "/bms_serial_reader/unused_thruster_command",
                 "bms_topic": "/micon/bms_cells",
                 "bms_temperature_topic": "/micon/bms_temperature_c",
                 "ground_station_heartbeat_timeout_sec": 0.0,
                 "use_sim_time": False,
             }
-        ],
-        remappings=[
-            ("/safety/emergency_stop", "/bms_serial_reader/safety_emergency_stop"),
-            ("/micon/relay_active", "/bms_serial_reader/relay_active"),
         ],
         condition=IfCondition(enable_bms),
     )
@@ -526,8 +519,8 @@ def generate_launch_description():
             joy_converter,
             command_arbiter,
             thruster_launch,
-            micon_driver,
-            bms_serial_reader,
+            thruster_serial,
+            bms_serial,
             bms_launch,
             # foxglove_logger,
             alert_lamp_launch,
