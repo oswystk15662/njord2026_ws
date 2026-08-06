@@ -909,7 +909,7 @@ class MPPIPlanner():
             w,
             self.opt_rudder,
             self.opt_acc,
-            cost_collision,
+            _,
 
         ) = self.mppi_controller.get_opt(
             own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc,
@@ -928,17 +928,6 @@ class MPPIPlanner():
             ax_gains=self.ax_gains,
             debug=True
         )
-
-        # CRM inputs exactly as used in this optimization cycle.  The planner
-        # node uses them to render the complete instantaneous CRM field.
-        self.last_mppi_debug = {
-            "own": [-own.y, own.x, own.u, (-own.yaw) % 360.0, self.loa],
-            "others": [
-                [-oth.y, oth.x, oth.u, (-oth.yaw) % 360.0, self.loa]
-                for oth in others
-            ],
-            "ax_gains": self.ax_gains,
-        }
 
         opttraj = get_traj(
             own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc, self.loa, self.mppi_controller.pred_dt,

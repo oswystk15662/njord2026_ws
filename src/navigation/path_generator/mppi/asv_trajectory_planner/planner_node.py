@@ -416,10 +416,6 @@ class PlannerNode(Node):
         and own/other CRM states as the current MPPI optimization.  It is a
         field over every map cell, not a plot of sampled candidate paths.
         """
-        debug = getattr(self.trajectory_generator.planner, "last_mppi_debug", None)
-        if not debug or not debug["others"]:
-            return
-
         resolution = float(self.get_parameter("mppi.crm_costmap_resolution_m").value)
         width_m = float(self.get_parameter("mppi.crm_costmap_width_m").value)
         height_m = float(self.get_parameter("mppi.crm_costmap_height_m").value)
@@ -430,32 +426,18 @@ class PlannerNode(Node):
         xs = origin_x + (np.arange(cols) + 0.5) * resolution
         ys = origin_y + (np.arange(rows) + 0.5) * resolution
         map_x, map_y = np.meshgrid(xs, ys)
-        c, s = math.cos(own_map_yaw), math.sin(own_map_yaw)
-        own_base = debug["own"]
         own_heading_crm = (-math.degrees(own_map_yaw)) % 360.0
-        # CRM's global axes are X=-ROS-y, Y=ROS-x.  Convert both vessels to
-        # those absolute map coordinates before evaluating every grid cell.
+        # Build CRM state directly in absolute map coordinates.  Do not reuse
+        # the planner's base_link-relative state: that loses the true map
+        # velocity and was the source of the visual offset.
         own_crm = [
             -own_map_y,
             own_map_x,
-            own_base[2],
+            float(self.latest_own_odom.twist.twist.linear.x),
             own_heading_crm,
-            own_base[4],
+            self.trajectory_generator.planner.loa,
         ]
-        others_crm = []
-        for other_base in debug["others"]:
-            # Invert the base-frame CRM conversion used by MPPI:
-            # crm_x=-base_y, crm_y=base_x.
-            other_base_x, other_base_y = other_base[1], -other_base[0]
-            other_map_x = own_map_x + c * other_base_x - s * other_base_y
-            other_map_y = own_map_y + s * other_base_x + c * other_base_y
-            others_crm.append([
-                -other_map_y,
-                other_map_x,
-                other_base[2],
-                (own_heading_crm + other_base[3]) % 360.0,
-                other_base[4],
-            ])
+        others_crm = self._other_ship_crm_state_in_map()
 
         crm_x, crm_y = -map_y, map_x
         with torch.no_grad():
@@ -469,7 +451,7 @@ class PlannerNode(Node):
                     (rows, cols), math.radians(own_heading_crm),
                     dtype=torch.float32,
                 ),
-                ax_gains=debug["ax_gains"],
+                ax_gains=self.trajectory_generator.planner.ax_gains,
             ).cpu().numpy()
 
         msg = OccupancyGrid()
@@ -483,6 +465,49 @@ class PlannerNode(Node):
         msg.info.origin.orientation.w = 1.0
         msg.data = np.rint(np.clip(risk, 0.0, 1.0) * 100.0).astype(np.int8).ravel().tolist()
         self.crm_costmap_pub.publish(msg)
+
+    def _other_ship_crm_state_in_map(self):
+        """Return opponent CRM state from absolute TF and velocity data."""
+        if self.latest_other_ship_twist is None:
+            return []
+        try:
+            other_tf = self.tf_buffer.lookup_transform(
+                self.frame_id, self.other_ship_frame, Time()
+            )
+            velocity_frame = self.latest_other_ship_twist.header.frame_id or self.frame_id
+            velocity_tf = self.tf_buffer.lookup_transform(
+                self.frame_id, velocity_frame, Time()
+            )
+        except TransformException as exc:
+            self.get_logger().warning(
+                f"Cannot build absolute CRM state: {exc}",
+                throttle_duration_sec=2.0,
+            )
+            return []
+
+        position = other_tf.transform.translation
+        other_yaw = self._yaw_from_quaternion(other_tf.transform.rotation)
+        velocity_yaw = self._yaw_from_quaternion(velocity_tf.transform.rotation)
+        twist = self.latest_other_ship_twist.twist
+        # Convert the reported velocity into map coordinates before projecting
+        # it onto the opponent's map-frame heading (VesselState.u).
+        vx = math.cos(velocity_yaw) * twist.linear.x - math.sin(velocity_yaw) * twist.linear.y
+        vy = math.sin(velocity_yaw) * twist.linear.x + math.cos(velocity_yaw) * twist.linear.y
+        other_u = math.cos(other_yaw) * vx + math.sin(other_yaw) * vy
+        return [[
+            -position.y,
+            position.x,
+            other_u,
+            (-math.degrees(other_yaw)) % 360.0,
+            self.trajectory_generator.planner.loa,
+        ]]
+
+    @staticmethod
+    def _yaw_from_quaternion(q) -> float:
+        return math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
 
 
 def main(args=None):
