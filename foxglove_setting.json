@@ -81,6 +81,9 @@
         "/waypoint_markers": {
           "visible": true
         },
+        "/sim/task1_waypoint_markers": {
+          "visible": true
+        },
         "/collision_monitor/collision_points_marker": {
           "visible": true
         },

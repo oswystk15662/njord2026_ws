@@ -45,6 +45,18 @@ def generate_launch_description():
         default_value='false',
         description='For task3_1, continue through task3_2 and finish at GPS10'
     )
+
+    waypoint_marker_topic_arg = DeclareLaunchArgument(
+        'waypoint_marker_topic',
+        default_value='/waypoint_markers',
+        description='MarkerArray topic used to visualize the configured waypoint sequence'
+    )
+
+    nav2_goal_tolerance_arg = DeclareLaunchArgument(
+        'nav2_goal_tolerance_m',
+        default_value='1.0',
+        description='Nav2 XY reach tolerance rendered around each waypoint in metres'
+    )
     
     # Create node
     waypoint_publisher_node = Node(
@@ -64,6 +76,11 @@ def generate_launch_description():
                     LaunchConfiguration('run_full_sequence'),
                     value_type=bool,
                 ),
+                'waypoint_marker_topic': LaunchConfiguration('waypoint_marker_topic'),
+                'nav2_goal_tolerance_m': ParameterValue(
+                    LaunchConfiguration('nav2_goal_tolerance_m'),
+                    value_type=float,
+                ),
             }
         ],
         output='screen',
@@ -77,6 +94,8 @@ def generate_launch_description():
         publish_rate_arg,
         dynamic_gate_arg,
         full_sequence_arg,
+        waypoint_marker_topic_arg,
+        nav2_goal_tolerance_arg,
         waypoint_publisher_node,
     ])
     

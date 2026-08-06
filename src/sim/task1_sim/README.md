@@ -75,6 +75,11 @@ Waypoint goals are sent by `waypoint_publisher` through Nav2's
 `/navigate_through_poses` action and visualized on `/waypoint_markers`.
 `task1_sim` does not publish `/goal_pose`.
 
+For the Task1 simulation, the full numbered goal sequence and the 1.0 m Nav2
+reach circles are published as `visualization_msgs/MarkerArray` on
+`/sim/task1_waypoint_markers`. The repository's `foxglove_setting.json`
+layout enables this topic by default.
+
 ## Usage
 
 ```bash

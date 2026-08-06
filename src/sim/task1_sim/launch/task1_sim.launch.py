@@ -78,7 +78,13 @@ def generate_launch_description():
     pkg_thruster = get_package_share_directory("thruster_driver")
 
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
-    nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params_jazzy.yaml")
+    ros_distro = os.environ.get("ROS_DISTRO", "")
+    nav2_config_name = (
+        "task1_nav2_params_humble.yaml"
+        if ros_distro == "humble"
+        else "task1_nav2_params_jazzy.yaml"
+    )
+    nav2_params = os.path.join(pkg_share, "config", nav2_config_name)
     nav_through_poses_bt_xml = os.path.join(
         pkg_share,
         "behavior_trees",
@@ -353,6 +359,8 @@ def generate_launch_description():
             "task_type": LaunchConfiguration("task_type"),
             "frame_id": "map",
             "publish_rate_hz": "2.0",
+            "waypoint_marker_topic": "/sim/task1_waypoint_markers",
+            "nav2_goal_tolerance_m": "1.0",
         },
     )
 

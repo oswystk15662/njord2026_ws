@@ -15,9 +15,11 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point, PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 from pathlib import Path
 from enum import Enum
@@ -58,6 +60,8 @@ class WaypointPublisher(Node):
         self.declare_parameter('use_dynamic_gate_midpoints', True)
         self.declare_parameter('run_full_sequence', False)
         self.declare_parameter('max_goal_retries', 1)
+        self.declare_parameter('waypoint_marker_topic', '/waypoint_markers')
+        self.declare_parameter('nav2_goal_tolerance_m', 1.0)
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -66,6 +70,10 @@ class WaypointPublisher(Node):
         self.use_dynamic_gate_midpoints = self.get_parameter('use_dynamic_gate_midpoints').value
         self.run_full_sequence = self.get_parameter('run_full_sequence').value
         self.max_goal_retries = int(self.get_parameter('max_goal_retries').value)
+        self.waypoint_marker_topic = self.get_parameter('waypoint_marker_topic').value
+        self.nav2_goal_tolerance_m = float(
+            self.get_parameter('nav2_goal_tolerance_m').value
+        )
         
         # Validate task type
         try:
@@ -76,6 +84,14 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
+
+        # Transient-local QoS lets a Foxglove session opened after bringup
+        # receive the static Task1 waypoint geometry.
+        marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.waypoint_marker_pub = self.create_publisher(
+            MarkerArray, self.waypoint_marker_topic, marker_qos
+        )
+        self._publish_waypoint_markers()
 
         # TF lookup is used to replace Task3 gate waypoints with the live midpoint
         # between the corresponding red and green buoys when those frames exist.
@@ -218,6 +234,101 @@ class WaypointPublisher(Node):
             poses.append(self._pose_from_waypoint(wp))
         
         return poses
+
+    def _publish_waypoint_markers(self):
+        """Publish numbered waypoint discs and their Nav2 reach radius."""
+        waypoints = self.config.get('waypoints', [])
+        if not waypoints:
+            return
+
+        stamp = self.get_clock().now().to_msg()
+        marker_array = MarkerArray()
+
+        route = Marker()
+        route.header.frame_id = self.frame_id
+        route.header.stamp = stamp
+        route.ns = 'task_waypoint_route'
+        route.id = 0
+        route.type = Marker.LINE_STRIP
+        route.action = Marker.ADD
+        route.pose.orientation.w = 1.0
+        route.scale.x = 0.12
+        route.color.r = 0.1
+        route.color.g = 0.9
+        route.color.b = 1.0
+        route.color.a = 0.9
+
+        for index, waypoint in enumerate(waypoints):
+            x = float(waypoint.get('x', 0.0))
+            y = float(waypoint.get('y', 0.0))
+
+            point = Point(x=x, y=y, z=0.08)
+            route.points.append(point)
+
+            reach_disc = Marker()
+            reach_disc.header.frame_id = self.frame_id
+            reach_disc.header.stamp = stamp
+            reach_disc.ns = 'task_waypoint_reach_radius'
+            reach_disc.id = index
+            reach_disc.type = Marker.CYLINDER
+            reach_disc.action = Marker.ADD
+            reach_disc.pose.position.x = x
+            reach_disc.pose.position.y = y
+            reach_disc.pose.position.z = 0.01
+            reach_disc.pose.orientation.w = 1.0
+            reach_disc.scale.x = 2.0 * self.nav2_goal_tolerance_m
+            reach_disc.scale.y = 2.0 * self.nav2_goal_tolerance_m
+            reach_disc.scale.z = 0.02
+            reach_disc.color.r = 0.1
+            reach_disc.color.g = 0.8
+            reach_disc.color.b = 1.0
+            reach_disc.color.a = 0.22
+            marker_array.markers.append(reach_disc)
+
+            waypoint_dot = Marker()
+            waypoint_dot.header.frame_id = self.frame_id
+            waypoint_dot.header.stamp = stamp
+            waypoint_dot.ns = 'task_waypoint_point'
+            waypoint_dot.id = index
+            waypoint_dot.type = Marker.SPHERE
+            waypoint_dot.action = Marker.ADD
+            waypoint_dot.pose.position.x = x
+            waypoint_dot.pose.position.y = y
+            waypoint_dot.pose.position.z = 0.18
+            waypoint_dot.pose.orientation.w = 1.0
+            waypoint_dot.scale.x = 0.35
+            waypoint_dot.scale.y = 0.35
+            waypoint_dot.scale.z = 0.35
+            waypoint_dot.color.r = 0.0
+            waypoint_dot.color.g = 0.95
+            waypoint_dot.color.b = 1.0
+            waypoint_dot.color.a = 1.0
+            marker_array.markers.append(waypoint_dot)
+
+            label = Marker()
+            label.header.frame_id = self.frame_id
+            label.header.stamp = stamp
+            label.ns = 'task_waypoint_label'
+            label.id = index
+            label.type = Marker.TEXT_VIEW_FACING
+            label.action = Marker.ADD
+            label.pose.position.x = x
+            label.pose.position.y = y
+            label.pose.position.z = 0.65
+            label.pose.orientation.w = 1.0
+            label.scale.z = 0.45
+            label.color.r = 1.0
+            label.color.g = 1.0
+            label.color.b = 1.0
+            label.color.a = 1.0
+            label.text = (
+                f"WP {waypoint.get('id', index + 1)}\\n"
+                f"reach {self.nav2_goal_tolerance_m:.1f} m"
+            )
+            marker_array.markers.append(label)
+
+        marker_array.markers.insert(0, route)
+        self.waypoint_marker_pub.publish(marker_array)
 
     def _build_poses_for_ids(self, waypoint_ids: list) -> list:
         """Build poses for the requested waypoint ids, preserving the id order."""
