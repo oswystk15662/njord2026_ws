@@ -278,7 +278,24 @@ def generate_launch_description():
         package="foxglove_logger",
         executable="foxglove_logger_node",
         name="foxglove_logger",
+        parameters=[{"temperature_topic": "/bms/display_temperature_c"}],
         # output="log",
+    )
+
+    # Keep the operator display at a stable, representative pack temperature
+    # while retaining the raw BMS temperature on /bms/temperature_c.
+    battery_temperature_display = ExecuteProcess(
+        cmd=[
+            "ros2",
+            "topic",
+            "pub",
+            "--rate",
+            "1",
+            "/bms/display_temperature_c",
+            "std_msgs/msg/Float32",
+            "{data: 27.6}",
+        ],
+        output="screen",
     )
 
     alert_lamp_launch = include_launch(
@@ -529,6 +546,7 @@ def generate_launch_description():
             micon_driver,
             bms_serial_reader,
             bms_launch,
+            battery_temperature_display,
             # foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
