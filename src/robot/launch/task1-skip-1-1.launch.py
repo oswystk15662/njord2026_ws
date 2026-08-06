@@ -1,9 +1,7 @@
-"""Real-vessel Task 1 smoke test with the Task1-1 maneuvering section skipped.
+"""Real-vessel two-point smoke test from Task1 GPS point 1 to point 2.
 
-This is a convenience entry point for testing navigation between the two
-Task1 slalom GPS areas.  It keeps the three intermediate slalom turns and the
-safe transit point, so the ASV does not take a direct path through cardinal
-markers.  Hardware and Nav2 arguments are identical to ``task1.launch.py``.
+The waypoint route contains only the configured start and goal poses. Hardware
+and Nav2 arguments are identical to ``task1.launch.py``.
 """
 
 from launch import LaunchDescription

@@ -111,7 +111,7 @@ def generate_launch_description():
             choices=['task1', 'task1_skip_1_1'],
             description=(
                 'task1: full course; task1_skip_1_1: omit the Task1-1 '
-                'maneuvering section and run the cardinal-slalom smoke test.'
+                'maneuvering section and run the GPS point 1-to-2 smoke test.'
             ),
         ),
         DeclareLaunchArgument(
