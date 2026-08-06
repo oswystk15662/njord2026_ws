@@ -4,7 +4,8 @@ Start this launch before playing a bag with ``ros2 bag play <bag> --clock``.
 It intentionally starts no hardware drivers: the bag supplies
 ``/odometry/filtered/local`` and ``/sensor/vehicle_gnss/fix/raw``.  The
 navsat transform emits map-frame GNSS odometry and the global EKF publishes
-the corresponding ``map -> odom`` transform.
+the corresponding ``map -> odom`` transform.  Replay outputs use the
+``/playback`` namespace so they cannot collide with legacy bag topics.
 """
 
 from launch import LaunchDescription
@@ -41,7 +42,7 @@ def generate_launch_description():
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
             ("odometry/filtered", "/odometry/filtered/local"),
-            ("odometry/gps", "/odometry/gps/um982"),
+            ("odometry/gps", "/playback/odometry/gps/um982"),
         ],
     )
 
@@ -52,9 +53,12 @@ def generate_launch_description():
         output="screen",
         parameters=[
             PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"]),
-            {"use_sim_time": use_sim_time},
+            {
+                "use_sim_time": use_sim_time,
+                "odom0": "/playback/odometry/gps/um982",
+            },
         ],
-        remappings=[("odometry/filtered", "/odometry/filtered/global")],
+        remappings=[("odometry/filtered", "/playback/odometry/filtered/global")],
     )
 
     return LaunchDescription(
