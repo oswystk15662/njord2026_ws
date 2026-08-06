@@ -1,6 +1,6 @@
 """Task 2 perception launch.
 
-Starts the two task2_perception nodes with task2_perception_params.yaml.
+Starts the two task2_perception nodes with the unified task2_params.yaml.
 
 NOTE: the pcl_segmentation submodule pipeline (classical_pipeline.launch.py
 with lidar_topic:=/task2/points_filtered and
@@ -27,7 +27,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     params_file = PathJoinSubstitution(
         [FindPackageShare("task2_perception"), "config",
-         "task2_perception_params.yaml"])
+         "task2_params.yaml"])
 
     return LaunchDescription([
         DeclareLaunchArgument(

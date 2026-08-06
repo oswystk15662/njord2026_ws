@@ -15,13 +15,13 @@
 | 区分 | パラメータ | 場所 | 公称値 | 理由 |
 |---|---|---|---|---|
 | ◎ 実測必須 | URDF LiDAR 取付角 `lidar_roll/pitch/yaw`・位置 `lidar_x/y/z` | `src/robot/urdf/robot.urdf.xacro` | roll=π, z=0.8 m | 上下逆さま補正の唯一の場所。実測せずに認識/GLIM を信用しない |
-| ◎ 実測必須 | `waterline_z_m` | task2_perception_params.yaml | 0.0 m | 喫水と LiDAR 高さに依存 |
+| ◎ 実測必須 | `waterline_z_m` | task2_params.yaml | 0.0 m | 喫水と LiDAR 高さに依存 |
 | ◎ 実測必須 | `self_crop_min/max_x/y/z`(6 値) | 同上 | x±1.2, y±0.8, z −0.5〜1.5 m | 船体・マスト実寸で決める |
 | ◎ 配置必須 | YOLO11s 重み(`model_path` / `yolo_model_path`) | yolo11s_params.yaml / launch 引数 | リポジトリ非含有 | 学習済み .pt / .engine を人が配置 |
 | ◎ 現地確定 | `task2_waypoints.yaml` の x/y(map 座標・オフライン事前計算) | waypoint_publisher/config | プール C→A 対角 約46 m | 実験水域の GPS で再生成 |
 | ○ 実機調整 | MPPI `mppi.*` 全般(特に target_speed, horizon, num_samples, CRM ゲイン) | mppi_params.yaml | 旧ハードコード値 | 変更時は値+日付+理由を YAML に記録する運用 |
 | ○ 実機調整 | YOLO [TUNE] 群(conf/iou/imgsz/inference_hz/class_names/buoy_class_names) | yolo11s_params.yaml | 下表 | 実コース映像で調整 |
-| ○ 実機調整 | opponent_selector ゲート群・平滑化 | task2_perception_params.yaml | 下表 | 実データでの追跡品質次第 |
+| ○ 実機調整 | opponent_selector ゲート群・平滑化 | task2_params.yaml | 下表 | 実データでの追跡品質次第 |
 | ○ 実機調整 | Nav2 速度上限・controller ゲイン | nav2_params_task2.yaml | 下表 | 実艇挙動で確認(read-only 参照 §8) |
 
 これ以外(topic 名・frame 名・出力トピック等)は「コードから決定できる値」であり、システム構成を変えない限り変更不要。
@@ -30,7 +30,7 @@
 
 ## 2. task2_cloud_filter(パッケージ: task2_perception)
 
-設定ファイル: `src/detection/task2_perception/config/task2_perception_params.yaml`
+設定ファイル: `src/detection/task2_perception/config/task2_params.yaml`
 
 | パラメータ名 | 型 | 単位 | デフォルト | 説明 | 人が調整 | Jetson確認 | 実機確認 |
 |---|---|---|---|---|---|---|---|

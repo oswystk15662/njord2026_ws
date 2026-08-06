@@ -11,9 +11,7 @@ def test_task2_autonomy_launch_wires_mppi_velocity_through_arbiter():
     assert '"opponent_motion_mode", default_value="straight_line"' in text
     assert '"motion_filter_mode": opponent_motion_mode' in text
     assert '"motion_mode": opponent_motion_mode' in text
-    assert '"task2_preprocessing_lite.yaml"' in text
-    assert '"task2_segmentation_lite.yaml"' in text
-    assert '"task2_tracker_lite.yaml"' in text
+    assert text.count('"task2_params.yaml"') == 3
     assert '"path_topic": "/planned_path_pruned"' in text
     assert "manual_control.launch.py" in text
     assert "command_arbiter_node" not in text

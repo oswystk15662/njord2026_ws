@@ -26,7 +26,7 @@
 |---|---|---|---|---|---|
 | `src/detection/task2_perception/package.xml` / `setup.py` / `setup.cfg` / `resource/task2_perception` / `task2_perception/__init__.py` | A | パッケージ定義(ament_python)。2 executable を登録 | 実機 | rclpy, sensor_msgs, tf2_ros, ship_perception_msgs(サブモジュール) | task2_perception.launch.py |
 | `src/detection/task2_perception/README.md` | A | パッケージ設計・チェーン・要実測パラメータの説明 | − | − | − |
-| `src/detection/task2_perception/config/task2_perception_params.yaml` | A | 2 ノードの全パラメータ(`HUMAN: measure on vessel` 注記付き) | 実機 | − | task2_perception.launch.py |
+| `src/detection/task2_perception/config/task2_params.yaml` | A | Task 2全ノードのパラメータ（用途・単位コメント付き） | 実機 | − | Task 2 launch群 |
 | `src/detection/task2_perception/launch/task2_perception.launch.py` | A | 2 ノード起動(enable_cloud_filter / enable_opponent_selector) | 実機 | − | task2_real.launch.py から include |
 | `src/detection/task2_perception/task2_perception/cloud_filter_node.py` | A | `task2_cloud_filter`: /livox/lidar → TF 変換+フィルタ → /task2/points_filtered | 実機 | tf2_ros, sensor_msgs_py | 上記 YAML |
 | `src/detection/task2_perception/task2_perception/opponent_selector_node.py` | A | `opponent_selector`: /tracked_objects → ゲート/選択/ego 補償/平滑化 → /other_ship/twist + TF | 実機 | ship_perception_msgs | 上記 YAML |

@@ -168,11 +168,11 @@ f7fd02a Declare missing package dependencies for Task 2 integration
 | 項目 | 場所 | 公称値 | 区分 |
 |---|---|---|---|
 | LiDAR 取付角 roll/pitch/yaw・位置 x/y/z | robot.urdf.xacro | π / 0 / 0 rad、(0, 0, 0.8) m | **実測必須** |
-| `waterline_z_m` | task2_perception_params.yaml | 0.0 m | **実測必須** |
+| `waterline_z_m` | task2_params.yaml | 0.0 m | **実測必須** |
 | `self_crop_{min,max}_{x,y,z}` | 同上 | ±1.2 / ±0.8 / −0.5〜1.5 m | **実測必須** |
 | YOLO11s 重み | yolo_model_path / model_path | 非同梱 | **配置必須** |
 | task2_waypoints.yaml の x/y | waypoint_publisher/config | プール C→A 対角 ≈46 m | **現地再生成** |
-| 水面除去帯・RANSAC しきい値 | task2_perception_params.yaml | −0.3/+0.15/0.05/0.9/0.3 m | 実機調整 |
+| 水面除去帯・RANSAC しきい値 | task2_params.yaml | −0.3/+0.15/0.05/0.9/0.3 m | 実機調整 |
 | opponent ゲート(距離 60 m、長さ 0.5–30 m、点数 5、鮮度 2 s)・α 0.3・スパイク 5 m/s | 同上 | 左記 | 実機調整 |
 | MPPI 全 `mppi.*`(target_speed 1.02889 m/s、horizon 225×0.1 s、samples 5000、λ 12、CRM 3.2/1.6/6.4/1.6 LOA ほか) | mppi_params.yaml | 左記 | 実機調整(変更を YAML に記録) |
 | YOLO [TUNE](conf 0.25、iou 0.45、imgsz 640、inference_hz 5、class_names、buoy_class_names、camera_fov_deg 90、fixed_range_m 5) | yolo11s_params.yaml | 左記 | 実映像調整 |

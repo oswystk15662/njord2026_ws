@@ -70,14 +70,11 @@ def generate_launch_description():
             "ego_odom_topic": own_odom_topic,
             "motion_mode": opponent_motion_mode,
             "preprocessing_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config",
-                 "task2_preprocessing_lite.yaml"]),
+                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
             "segmentation_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config",
-                 "task2_segmentation_lite.yaml"]),
+                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
             "tracker_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config",
-                 "task2_tracker_lite.yaml"]),
+                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
         },
     )
     mppi = _include(

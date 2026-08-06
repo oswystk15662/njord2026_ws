@@ -118,7 +118,7 @@ python3 -m pytest src/detection/task2_perception/test/ -q
 
 ## Parameters that MUST be measured on the vessel
 
-See `config/task2_perception_params.yaml`, marked `HUMAN: measure on vessel`:
+See the unified `config/task2_params.yaml`, marked `HUMAN: measure on vessel`:
 `waterline_z_m`, `min_range_m` (own-hull exclusion radius), the `self_crop_*`
 box, and the URDF LiDAR mount
 angles/position.

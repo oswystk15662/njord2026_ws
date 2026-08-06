@@ -152,7 +152,7 @@ src/
 │   ├── task2_perception/            # 新規パッケージ (Python)
 │   │   ├── task2_perception/        #   cloud_filter_node.py, opponent_selector_node.py
 │   │   │                            #   + 純Python 3 モジュール
-│   │   ├── config/task2_perception_params.yaml
+│   │   ├── config/task2_params.yaml
 │   │   ├── launch/task2_perception.launch.py
 │   │   └── test/                    #   pytest 26 件 (ROS 不要)
 │   ├── yolo/                        # 既存パッケージへ並置追加

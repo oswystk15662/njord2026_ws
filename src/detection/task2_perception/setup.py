@@ -11,10 +11,7 @@ setup(
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/launch", ["launch/task2_perception.launch.py"]),
         ("share/" + package_name + "/config", [
-            "config/task2_perception_params.yaml",
-            "config/task2_preprocessing_lite.yaml",
-            "config/task2_segmentation_lite.yaml",
-            "config/task2_tracker_lite.yaml",
+            "config/task2_params.yaml",
         ]),
     ],
     install_requires=["setuptools"],

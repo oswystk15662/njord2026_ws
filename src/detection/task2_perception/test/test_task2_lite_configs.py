@@ -8,13 +8,12 @@ import yaml
 CONFIG_DIR = Path(__file__).parents[1] / "config"
 
 
-def _params(name):
-    return yaml.safe_load((CONFIG_DIR / name).read_text())["/**"]["ros__parameters"]
+def _params():
+    return yaml.safe_load((CONFIG_DIR / "task2_params.yaml").read_text())
 
 
 def test_cloud_filter_profile_reduces_work_without_debug_changes():
-    params = yaml.safe_load(
-        (CONFIG_DIR / "task2_perception_params.yaml").read_text())
+    params = _params()
     cloud = params["task2_cloud_filter"]["ros__parameters"]
     assert cloud["max_range_m"] == 40.0
     assert cloud["process_rate_hz"] == 5.0
@@ -23,13 +22,16 @@ def test_cloud_filter_profile_reduces_work_without_debug_changes():
 
 
 def test_task2_lite_pipeline_uses_latest_compact_clouds():
-    preprocessing = _params("task2_preprocessing_lite.yaml")
-    segmentation = _params("task2_segmentation_lite.yaml")
-    tracker = _params("task2_tracker_lite.yaml")
+    params = _params()
+    preprocessing = params["preprocessing_node"]["ros__parameters"]
+    ground = params["ground_remover_node"]["ros__parameters"]
+    cluster = params["cluster_node"]["ros__parameters"]
+    tracker = params["ship_tracker_node"]["ros__parameters"]
     assert preprocessing["voxel_leaf_x"] == 0.15
     assert preprocessing["accumulate_frames"] is False
     assert preprocessing["input_queue_depth"] == 1
-    assert segmentation["input_queue_depth"] == 1
-    assert segmentation["ransac_max_iterations"] == 80
-    assert segmentation["min_cluster_size"] == 30
+    assert ground["input_queue_depth"] == 1
+    assert ground["ransac_max_iterations"] == 80
+    assert cluster["input_queue_depth"] == 1
+    assert cluster["min_cluster_size"] == 30
     assert tracker["straight_hits_to_confirm"] == 10

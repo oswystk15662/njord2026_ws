@@ -1,6 +1,0 @@
-/**:
-  ros__parameters:
-    # The lightweight Task 2 pipeline processes 5 observations per second.
-    # Ten consecutive observations retain a two-second confirmation window,
-    # rather than stretching the original 15-frame window to three seconds.
-    straight_hits_to_confirm: 10
