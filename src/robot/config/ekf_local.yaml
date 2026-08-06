@@ -1,7 +1,6 @@
 ### Local EKF (odom -> base_link estimate) ###
-# The local EKF is the sole odom -> base_link TF authority while GLIM is
-# disabled. Its LiDAR IMU supplies only its reported yaw; translational odometry
-# requires an additional local measurement source.
+# Optional Livox-IMU local EKF (odom -> base_link estimate). It replaces the
+# UM982 feedback EKF when minipc_bringup use_ekf_local:=true.
 ekf_filter_node_local:
   ros__parameters:
     frequency: 30.0
@@ -17,20 +16,17 @@ ekf_filter_node_local:
     # an absent or stale GLIM source must not become a delayed measurement.
 
     imu0: /livox/imu
-    # The MID-360 IMU has no attitude estimate. Its acceleration is reported
-    # in g (approximately -1.0 on Z while stationary), whereas
-    # robot_localization expects m/s^2. Do not integrate it as acceleration:
-    # doing so creates a fictitious local position/velocity that destabilizes
-    # the global EKF through odom0_differential. The raw gyro also has a
-    # substantial stationary bias, so do not integrate its yaw rate. Retain
-    # only the driver's identity yaw, which keeps navsat_transform's
-    # use_odometry_yaw reference stable until a calibrated heading source is
-    # enabled.
+    # MID-360 has no attitude estimate; fuse angular velocity and linear
+    # acceleration instead. With two_d_mode, robot_localization uses the planar
+    # components (yaw rate and X/Y acceleration) and ignores roll/pitch/Z.
+    # NOTE: livox_ros_driver2 labels acceleration as sensor_msgs/Imu but passes
+    # the sensor's g units through unchanged. robot_localization expects m/s^2,
+    # so calibrate/convert this stream before relying on metric dead reckoning.
     imu0_config: [false, false, false,
-                  false, false, true,
                   false, false, false,
                   false, false, false,
-                  false, false, false]
+                  true,  true,  true,
+                  true,  true,  true]
     
     # imu1: /imu/data
     # imu1_config: [false, false, false,

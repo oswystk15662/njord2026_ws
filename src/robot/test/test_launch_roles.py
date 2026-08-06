@@ -14,6 +14,7 @@ anything, and so it works the same way in CI.
 
 import importlib.util
 import os
+import xml.etree.ElementTree as ET
 
 import pytest
 import yaml
@@ -149,6 +150,67 @@ def test_minipc_video_and_glim_feedback_defaults_are_safe():
     assert '"back_cam_ground_video_height", default_value="360"' in source
     assert '"use_glim_fb"' in source
     assert 'default_value="false"' in source
+
+
+def test_local_ekf_is_opt_in_and_replaces_um982_feedback_ekf():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    localization_source = _read_launch_source("localization.launch.py")
+    standalone_source = _read_launch_source("standalone_bringup.launch.py")
+
+    assert '"use_ekf_local"' in minipc_source
+    assert '"enable_local_ekf": use_ekf_local' in minipc_source
+    assert "condition=UnlessCondition(use_ekf_local)" in minipc_source
+    assert '"enable_local_ekf",\n        default_value="false"' in localization_source
+    assert '"use_ekf_local": LaunchConfiguration("use_ekf_local")' in standalone_source
+    assert '"use_ekf_local",\n                default_value="false"' in standalone_source
+
+
+def test_standalone_does_not_restore_removed_or_unsafe_defaults():
+    source = _read_launch_source("standalone_bringup.launch.py")
+    assert '"enable_joy"' not in source
+    assert '"enable_foxglove"' not in source
+    assert '"enable_drogger_rzs", default_value="false"' in source
+    assert '"enable_glim",\n                default_value="false"' in source
+    assert '"enable_pcl_buoy_detection", default_value="false"' in source
+    assert '"enable_ground_video", default_value="true"' in source
+
+
+def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
+    config_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_local.yaml")
+    )
+    with open(config_path, "r") as stream:
+        params = yaml.safe_load(stream)["ekf_filter_node_local"]["ros__parameters"]
+
+    assert params["imu0"] == "/livox/imu"
+    assert params["imu0_config"] == [
+        False, False, False,
+        False, False, False,
+        False, False, False,
+        True, True, True,
+        True, True, True,
+    ]
+
+
+def test_camera_frames_match_measured_mounting_geometry():
+    urdf_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "urdf", "robot.urdf.xacro")
+    )
+    root = ET.parse(urdf_path).getroot()
+    joints = {joint.attrib["name"]: joint for joint in root.findall("joint")}
+
+    right = joints["zed2i_right_camera_joint"]
+    assert right.find("parent").attrib["link"] == "zed2i_left_camera_frame"
+    assert right.find("child").attrib["link"] == "zed2i_right_camera_frame"
+    assert right.find("origin").attrib == {"xyz": "0 -0.15 0", "rpy": "0 0 0"}
+
+    back = joints["back_cam_joint"]
+    assert back.find("parent").attrib["link"] == "zed2i_left_camera_frame"
+    assert back.find("child").attrib["link"] == "back_cam_link"
+    assert back.find("origin").attrib == {
+        "xyz": "-0.60 -0.075 0",
+        "rpy": "0 0 3.141592653589793",
+    }
 
 
 def test_jetson_bringup_source_has_no_minipc_only_packages():

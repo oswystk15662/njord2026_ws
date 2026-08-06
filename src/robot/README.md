@@ -6,9 +6,10 @@ this pkg is for launch and visualization
 
 | launch | 動かす端末 | 内容 |
 |---|---|---|
-| `jetson_bringup.launch.py` | Jetson | MID360S + GLIM + pcl_det + ZED 2i。TF publisher / EKF / スラスタ / micon / joy は**含まない** |
-| `minipc_bringup.launch.py` | miniPC | 上記以外すべて。USB シリアル機器(micon, UM982, Drogger, IMU, joy)は miniPC に接続する |
-| `standalone_bringup.launch.py` | Jetson 1台 | 上記2つを両方 include。分割前の構成を再現する回帰用 |
+| `ground_pc.launch.py` | Ground PC | joy、前後映像受信、Foxglove bridge、ground-station heartbeat |
+| `jetson_bringup.launch.py` | Jetson | MID360S + ZED 2i + GPU camera/LiDAR buoy detection。GLIMと単体PCL検出は既定OFF |
+| `minipc_bringup.launch.py` | miniPC | micon、UM982、localization、スラスタ、back camera、Foxglove logger。Drogger/WIT IMUノードは起動対象外 |
+| `standalone_bringup.launch.py` | Jetson 1台 | Jetson用とminiPC用bringupを両方includeする回帰用 |
 
 ```
 # Jetson
@@ -19,6 +20,11 @@ ros2 launch robot task1.launch.py           # role:=minipc が既定
 ```
 
 `task1/2/3.launch.py` は `role` 引数(`minipc` / `standalone`、既定 `minipc`)でどちらの bringup を使うか選ぶ。
+
+miniPCのlocal odometryは既定でUM982 feedback EKFを使う。
+`use_ekf_local:=true` のときだけ、これを停止してLivox IMU入力のlocal EKFへ
+排他的に切り替える。両方のEKFが同時に
+`/odometry/filtered/local` と `odom -> base_link` を出すことはない。
 
 `glim_backend`(`gpu` / `cpu`、既定 `gpu`)で GLIM の設定ディレクトリを切り替えられる。`cpu` は `config/glim_config_cpu/` を使い、OpenGL ビューアを外したヘッドレス構成になる。
 

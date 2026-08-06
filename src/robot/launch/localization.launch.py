@@ -29,7 +29,8 @@ def generate_launch_description():
     )
     enable_local_ekf_arg = DeclareLaunchArgument(
         "enable_local_ekf",
-        default_value="true",
+        default_value="false",
+        description="Launch the Livox-IMU local EKF (off by default)",
     )
     enable_global_ekf_arg = DeclareLaunchArgument(
         "enable_global_ekf",

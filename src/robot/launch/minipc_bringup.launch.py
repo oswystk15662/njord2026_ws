@@ -2,7 +2,7 @@
 
 x86_64 Ubuntu 22.04 / ROS 2 Humble, no CUDA / no ZED SDK. Owns every USB
 serial device that is enabled here (Micon and UM982 by default), localization
-(robot_state_publisher, TF, both EKFs, navsat_transform via
+(robot_state_publisher, TF, the selected local filter, global EKF, and navsat_transform via
 localization.launch.py), thrusters, and the back camera. The joy pad and
 Foxglove bridge live on the ground PC. GLIM/MID360S/ZED 2i live on the
 Jetson side (jetson_bringup.launch.py) and must not be duplicated here.
@@ -13,7 +13,7 @@ import os
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
-from launch.conditions import IfCondition
+from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
@@ -74,6 +74,7 @@ def generate_launch_description():
     back_cam_ground_video_height = LaunchConfiguration("back_cam_ground_video_height")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
+    use_ekf_local = LaunchConfiguration("use_ekf_local")
     use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
@@ -86,7 +87,7 @@ def generate_launch_description():
         IfCondition(enable_localization),
         {
             "enable_glim": "false",
-            "enable_local_ekf": "true",
+            "enable_local_ekf": use_ekf_local,
             "enable_global_ekf": "true",
             "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
@@ -105,15 +106,23 @@ def generate_launch_description():
         },
     )
 
-    um982_feedback_launch = include_launch(
-        "um982_feedback_filter",
-        ["launch", "um982_feedback.launch.py"],
-        IfCondition(enable_um982),
-        {
-            "feedback_mode": um982_feedback_mode,
-            "raw_topic": "/odometry/feedback",
-            "output_topic": "/odometry/filtered/local",
-        },
+    # Both filters publish /odometry/filtered/local.  The local Livox-IMU EKF
+    # therefore replaces, rather than supplements, the UM982 feedback EKF.
+    um982_feedback_launch = GroupAction(
+        scoped=True,
+        condition=UnlessCondition(use_ekf_local),
+        actions=[
+            include_launch(
+                "um982_feedback_filter",
+                ["launch", "um982_feedback.launch.py"],
+                IfCondition(enable_um982),
+                {
+                    "feedback_mode": um982_feedback_mode,
+                    "raw_topic": "/odometry/feedback",
+                    "output_topic": "/odometry/filtered/local",
+                },
+            )
+        ],
     )
 
     drogger_launch = include_launch(
@@ -320,6 +329,12 @@ def generate_launch_description():
                 "task-specific params file; leave this false in that case.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
+            DeclareLaunchArgument(
+                "use_ekf_local",
+                default_value="false",
+                description="Replace the default UM982 feedback EKF with the "
+                "Livox-IMU local EKF. The two filters are mutually exclusive.",
+            ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
                 "thruster_robot_description_file", default_value=default_thruster_urdf
