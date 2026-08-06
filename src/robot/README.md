@@ -32,7 +32,8 @@ LiDARのleaf heartbeatを生成し、miniPCがback camera、GNSS、Miconと合�
 `/heartbeat/localization` へ集約される。
 
 Ground PCではNTRIP casterも既定起動する。Drogger RWS/ETHMの接続設定は
-`192.168.1.72:2101`、mountpoint `RTCM3`、NTRIP v1 SOURCE方式とする。
+`192.168.1.72:2101`、mountpoint `RTCM3`、SOURCE password `osw` の
+NTRIP v1 SOURCE方式とする。
 Casterは `src/driver/gnss/ntripcaster` のsubmoduleをcolconでビルドし、
 workspaceのinstall spaceから起動する。既定のSOURCE/client資格情報は公開済みの
 試験値なので、閉じた実験LAN以外ではconfigを差し替えること。

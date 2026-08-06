@@ -120,7 +120,7 @@ def generate_launch_description():
                 default_value=PathJoinSubstitution(
                     [FindPackageShare("ntripcaster"), "config", "ntripcaster.json"]
                 ),
-                description="Caster config: 0.0.0.0:2101, SOURCE erb/RTCM3",
+                description="Caster config: 0.0.0.0:2101, SOURCE osw/RTCM3",
             ),
             joy_node,
             ground_station_heartbeat,
