@@ -3,7 +3,9 @@ alert_lamp_manager_node:
     evaluation_rate_hz: 10.0
     heartbeat:
       driver_timeout_sec: 1.0
-      high_level_timeout_sec: 1.0
+      # command_arbiter publishes this heartbeat at 1 Hz.  Keep margin for
+      # scheduling jitter so one late tick does not cause a critical fault.
+      high_level_timeout_sec: 2.0
       autonomy_timeout_sec: 1.0
       localization_timeout_sec: 1.0
       manual_control_timeout_sec: 1.0

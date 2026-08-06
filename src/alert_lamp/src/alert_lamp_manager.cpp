@@ -49,7 +49,7 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
 {
   const auto rate = declare_parameter<double>("evaluation_rate_hz", 10.0);
   driver_timeout_sec_ = declare_parameter<double>("heartbeat.driver_timeout_sec", 1.0);
-  high_level_timeout_sec_ = declare_parameter<double>("heartbeat.high_level_timeout_sec", 1.0);
+  high_level_timeout_sec_ = declare_parameter<double>("heartbeat.high_level_timeout_sec", 2.0);
   autonomy_timeout_sec_ = declare_parameter<double>("heartbeat.autonomy_timeout_sec", 1.0);
   localization_timeout_sec_ = declare_parameter<double>("heartbeat.localization_timeout_sec", 1.0);
   manual_timeout_sec_ = declare_parameter<double>("heartbeat.manual_control_timeout_sec", 1.0);

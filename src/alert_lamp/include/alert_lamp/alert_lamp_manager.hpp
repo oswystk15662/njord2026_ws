@@ -68,7 +68,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   diagnostic_updater::Updater updater_;
   double driver_timeout_sec_{1.0};
-  double high_level_timeout_sec_{1.0};
+  double high_level_timeout_sec_{2.0};
   double autonomy_timeout_sec_{1.0};
   double localization_timeout_sec_{1.0};
   double manual_timeout_sec_{1.0};
