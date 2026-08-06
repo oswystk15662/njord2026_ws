@@ -1,5 +1,7 @@
 # Task 2 統合最終レポート (task2-experiment)
 
+> **履歴資料**: ここで扱う `task2_real.launch.py` は削除済みです。現在の起動構成は [`task2_launch_guide.md`](task2_launch_guide.md) を参照してください。
+
 - 作業日: 2026-07-19
 - 作業環境: Mac(ROS 2 環境なし。**全項目静的確認のみ、実行時未検証**)
 - 関連文書: `task2_experiment_architecture.md`(構成)、`task2_parameter_reference.md`(パラメータ)、`task2_file_map.md`(ファイル)、`task2_jetson_validation.md`(検証手順)、`task2_mppi_integration_report.md`(前段 MPPI 統合)

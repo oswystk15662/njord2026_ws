@@ -1,5 +1,7 @@
 # Task 2 Jetson/実機 段階検証手順 (task2-experiment)
 
+> **履歴資料**: この手順内の `task2_real.launch.py` は削除済みです。実機の現在の入口は [`task2_launch_guide.md`](task2_launch_guide.md) の `task2_autonomy.launch.py` です。
+
 - 作業日: 2026-07-19
 - 前提: 本ブランチのコードは **Mac 上で静的確認のみ**。以下の 18 段階を順に実施し、各段階の合格条件を満たしてから次へ進む。
 - 記法: `<ws>` = ワークスペースルート。ROS 2 環境は毎シェルで `source /opt/ros/<distro>/setup.bash && source install/setup.bash`。

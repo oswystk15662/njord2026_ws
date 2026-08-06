@@ -5,7 +5,7 @@
 #   - py_compile of all Task2-related Python files
 #   - YAML / XML parse of Task2 configs
 #   - pytest of task2_perception tests (if the package exists) and the robot
-#     static launch test (if present)
+#     static autonomy-launch test (if present)
 #
 # Each probe is best-effort (|| true) so the full report always prints;
 # the exit code is non-zero if anything failed.
@@ -50,9 +50,9 @@ done < <(
         find src/detection/task2_perception -name '*.py' 2>/dev/null
         find src -maxdepth 4 -type d -name 'task2_perception' 2>/dev/null \
             | while IFS= read -r d; do find "$d" -name '*.py' 2>/dev/null; done
-        ls src/robot/launch/task2_real.launch.py 2>/dev/null
+        ls src/robot/launch/task2_autonomy.launch.py 2>/dev/null
         ls src/robot/launch/navigation_launch_task2.py 2>/dev/null
-        ls src/robot/test/test_task2_real_launch_static.py 2>/dev/null
+        ls src/robot/test/test_task2_autonomy_launch_static.py 2>/dev/null
         ls scripts/task2/benchmark_mppi.py 2>/dev/null
     } | sort -u
 )
@@ -118,12 +118,12 @@ else
     echo "(task2_perception tests not present in this checkout - skipping)"
 fi
 
-if [ -f src/robot/test/test_task2_real_launch_static.py ]; then
-    OUT="$(python3 -m pytest src/robot/test/test_task2_real_launch_static.py -q 2>&1)" && \
-        report PASS "pytest test_task2_real_launch_static" "$(echo "${OUT}" | tail -n1)" || \
-        report FAIL "pytest test_task2_real_launch_static" "$(echo "${OUT}" | tail -n1)" || true
+if [ -f src/robot/test/test_task2_autonomy_launch_static.py ]; then
+    OUT="$(python3 -m pytest src/robot/test/test_task2_autonomy_launch_static.py -q 2>&1)" && \
+        report PASS "pytest test_task2_autonomy_launch_static" "$(echo "${OUT}" | tail -n1)" || \
+        report FAIL "pytest test_task2_autonomy_launch_static" "$(echo "${OUT}" | tail -n1)" || true
 else
-    report FAIL "pytest test_task2_real_launch_static" "test file missing"
+    report FAIL "pytest test_task2_autonomy_launch_static" "test file missing"
 fi
 
 # ------------------------------------------------------------------

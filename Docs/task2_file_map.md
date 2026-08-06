@@ -1,5 +1,7 @@
 # Task 2 変更ファイルマップ (task2-experiment)
 
+> **履歴資料**: ファイル作成時点の記録です。記載される `task2_real.launch.py` は削除済みです。現在の起動構成は [`task2_launch_guide.md`](task2_launch_guide.md) を参照してください。
+
 - 基準: `origin/test07089` tip `834f433` → `task2-experiment` tip `1647689`
 - 取得コマンド: `git diff --name-status 834f433 HEAD`(計 74 ファイル、+10576 / −44 行)
 - 区分: A=新規、M=変更。「対象」: 実機 / シミュ / 両方 / 開発(Mac 等の開発環境用)。

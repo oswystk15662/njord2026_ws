@@ -26,7 +26,6 @@ _MINIPC_ONLY_PACKAGES = ["robot_localization", "thruster_driver", "micon_driver_
 _GENERATE_LAUNCH_DESCRIPTION_FILES = [
     "minipc_bringup.launch.py",
     "task1.launch.py",
-    "task2.launch.py",
     "task3.launch.py",
 ]
 
@@ -116,7 +115,7 @@ def test_jetson_bringup_source_has_no_minipc_only_packages():
         )
 
 
-@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task3.launch.py"])
 def test_task_launch_files_declare_role_argument(filename):
     source = _read_launch_source(filename)
     assert "'role'" in source or '"role"' in source

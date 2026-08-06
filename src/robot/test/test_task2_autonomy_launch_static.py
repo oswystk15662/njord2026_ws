@@ -30,10 +30,3 @@ def test_task2_nav2_launch_is_follow_path_only():
         "waypoint_follower",
     ):
         assert f"name='{unused_node}'" not in text
-
-
-def test_task2_real_uses_jazzy_nav2_configuration():
-    text = (Path(__file__).parents[1] / "launch" / "task2_real.launch.py").read_text()
-
-    assert "nav2_params_task2_jazzy.yaml" in text
-    assert "nav2_params_task2_humble.yaml" not in text

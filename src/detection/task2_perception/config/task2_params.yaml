@@ -1,7 +1,7 @@
 # Task 2 parameter file
 # =====================
 # This is the single source of Task 2-specific tuning.  It is supplied to
-# every node launched by task2_autonomy.launch.py and task2_bag_perception.
+# every Task 2 perception node launched by task2_autonomy.launch.py.
 # Generic package defaults remain in their own packages; do not put general
 # platform settings here.
 #

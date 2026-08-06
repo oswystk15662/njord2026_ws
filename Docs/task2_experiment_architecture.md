@@ -1,5 +1,7 @@
 # Task 2 実験システム アーキテクチャ (task2-experiment)
 
+> **履歴資料**: この文書の `task2_real.launch.py` に関する記述は旧構成です。現在の起動構成は [`task2_launch_guide.md`](task2_launch_guide.md) を参照してください。
+
 - 作業日: 2026-07-19
 - 対象ブランチ: `task2-experiment`(起点 `origin/test07089` tip `834f433`、tip `1647689`)
 - 作業環境: Mac(ROS 2 環境なし。**すべて静的確認のみ。Jetson/実機では未確認**)
