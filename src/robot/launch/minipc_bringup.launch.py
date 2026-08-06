@@ -444,9 +444,9 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
             ),
-            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="4.0"),
-            DeclareLaunchArgument("back_cam_ground_video_width", default_value="480"),
-            DeclareLaunchArgument("back_cam_ground_video_height", default_value="360"),
+            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("back_cam_ground_video_width", default_value="360"),
+            DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
                 default_value="false",

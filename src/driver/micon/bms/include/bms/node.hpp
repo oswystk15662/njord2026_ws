@@ -40,6 +40,8 @@ private:
   double warning_voltage_{3.5};
   double error_voltage_{3.3};
   double full_voltage_{4.2};
+  double diagnostic_publish_period_sec_{0.2};
+  rclcpp::Time last_diagnostic_publish_time_{0, 0, RCL_ROS_TIME};
   std::optional<float> temperature_c_;
 };
 

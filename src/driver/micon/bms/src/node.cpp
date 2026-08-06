@@ -28,6 +28,12 @@ BmsNode::BmsNode(const rclcpp::NodeOptions & options)
   warning_voltage_ = this->declare_parameter<double>("low_voltage.warning", 3.5);
   error_voltage_ = this->declare_parameter<double>("low_voltage.error", 3.3);
   full_voltage_ = this->declare_parameter<double>("battery.full_cell_voltage", 4.2);
+  const double diagnostic_publish_rate_hz =
+    this->declare_parameter<double>("diagnostic_publish_rate_hz", 5.0);
+  if (diagnostic_publish_rate_hz <= 0.0) {
+    throw std::invalid_argument("diagnostic_publish_rate_hz must be positive");
+  }
+  diagnostic_publish_period_sec_ = 1.0 / diagnostic_publish_rate_hz;
 
   pub_cells_ = this->create_publisher<std_msgs::msg::Float32MultiArray>(output_topic, 10);
   pub_pack_voltage_ = this->create_publisher<std_msgs::msg::Float32>("/gui/battery_voltage_v", 10);
@@ -72,7 +78,11 @@ void BmsNode::cellsCallback(const std_msgs::msg::Float32MultiArray::SharedPtr ms
     msg->data[2],
     msg->data[3]};
   publishCells(cells);
-  publishDiagnostics(cells);
+  const auto now = this->now();
+  if ((now - last_diagnostic_publish_time_).seconds() >= diagnostic_publish_period_sec_) {
+    publishDiagnostics(cells);
+    last_diagnostic_publish_time_ = now;
+  }
 }
 
 void BmsNode::publishCells(const std::array<float, 4> & cells)
