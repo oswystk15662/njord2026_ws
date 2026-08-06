@@ -40,14 +40,22 @@ def _bag_player(context):
     loop = LaunchConfiguration("loop").perform(context).lower() == "true"
     qos_profile = LaunchConfiguration("qos_profile").perform(context)
 
+    # Leave storage selection to rosbag2 by default.  This supports both the
+    # older MCAP test bags and SQLite bags recorded on Jazzy; forcing `mcap`
+    # made an otherwise valid SQLite bag fail before playback began.
     command = [
-        "ros2", "bag", "play", "-s", storage_id, bag_path,
+        "ros2", "bag", "play",
+    ]
+    if storage_id:
+        command.extend(["-s", storage_id])
+    command.extend([
+        bag_path,
         "--clock", "--rate", playback_rate,
         # ExecuteProcess has no interactive terminal.  rosbag otherwise tries
         # to install keyboard callbacks and exits with code 1 (tcgetattr
         # fails), leaving the perception chain without any LiDAR input.
         "--disable-keyboard-controls",
-    ]
+    ])
     if loop:
         command.append("--loop")
     if qos_profile:
@@ -101,7 +109,10 @@ def generate_launch_description():
             default_value="/home/namikawa_arata/0_Njord/experiment/collision_avoidance_test_omu1",
             description="rosbag2 directory or MCAP file to replay",
         ),
-        DeclareLaunchArgument("storage_id", default_value="mcap"),
+        DeclareLaunchArgument(
+            "storage_id", default_value="",
+            description="Optional rosbag storage plugin. Empty = auto-detect "
+                        "from metadata (recommended for MCAP and SQLite bags)."),
         DeclareLaunchArgument("playback_rate", default_value="1.0"),
         DeclareLaunchArgument(
             "loop", default_value="true",

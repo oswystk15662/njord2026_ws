@@ -52,6 +52,13 @@ def test_bag_path_and_loop_are_configurable():
     assert '"--loop"' in source
 
 
+def test_bag_storage_is_auto_detected_by_default():
+    source = _source()
+    assert '"storage_id", default_value=""' in source
+    assert 'if storage_id:' in source
+    assert 'command.extend(["-s", storage_id])' in source
+
+
 def test_bag_player_is_non_interactive():
     source = _source()
     assert '"--disable-keyboard-controls"' in source
