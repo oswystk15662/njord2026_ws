@@ -1,11 +1,12 @@
 # Task 2 launch 構成
 
-Task 2で利用する入口は、用途ごとに次の3つだけです。
+Task 2で利用する入口は、用途ごとに次の4つです。
 
 | 用途 | 起動コマンド | センサー・スラスタの扱い |
 |---|---|---|
 | 実機自動運転 | `ros2 launch robot task2_autonomy.launch.py` | 起動しない。すでに動作している `simple_manual/manual_control.launch.py` のLiDAR、自己位置、TF、command_arbiterを利用する。 |
 | 認識単体デバッグ | `ros2 launch task2_perception task2_perception.launch.py` | センサーは起動しない。入力済みの `/livox/lidar` を利用する。追跡には別途 `classical_pipeline.launch.py` を起動する。 |
+| rosbag認識デバッグ | `ros2 launch robot task2_bag_perception.launch.py bag_path:=/path/to/bag` | 実機センサー・スラスタは起動しない。bagを再生してLiDAR認識・追跡を検証する。 |
 | シミュレーション | `ros2 launch task2_sim task2_sim.launch.py` | シミュレータ内のセンサー・船体・相手船を起動する。 |
 
 実機では、先に `simple_manual/manual_control.launch.py` を起動し、手動確認後に

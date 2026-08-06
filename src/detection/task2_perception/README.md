@@ -75,6 +75,9 @@ ros2 launch ship_perception_bringup classical_pipeline.launch.py \
 前者はTask 2用の点群フィルタと他船選択、後者はクラスタリングと追跡を担当します。
 実機の自動運転では両方とも `robot/task2_autonomy.launch.py` に含まれるため、別途起動しません。
 
+rosbagでこの一連の認識を確認する場合は、`robot/task2_bag_perception.launch.py` を使います。
+これはbag再生と必要なTFを補い、認識・追跡だけを起動するオフライン検証用です。
+
 ## Design notes
 
 - **Inverted LiDAR**: the Mid-360 is mounted upside-down. The nominal
