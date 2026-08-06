@@ -87,8 +87,13 @@ public:
     stereo_->setP2(32 * block_size * block_size);
     stereo_->setMode(cv::StereoSGBM::MODE_SGBM);
 
-    open_capture(left_capture_, left_device_, "left");
-    open_capture(right_capture_, right_device_, "right");
+    combined_stereo_device_ = left_device_ == right_device_;
+    open_capture(
+      left_capture_, left_device_, "left",
+      combined_stereo_device_ ? 2 * image_width_ : image_width_);
+    if (!combined_stereo_device_) {
+      open_capture(right_capture_, right_device_, "right", image_width_);
+    }
 
     const auto period_ms = std::max(1, 1000 / std::max(1, framerate_));
     timer_ = create_wall_timer(
@@ -97,7 +102,8 @@ public:
   }
 
 private:
-  void open_capture(cv::VideoCapture & capture, const std::string & device, const char * name)
+  void open_capture(
+    cv::VideoCapture & capture, const std::string & device, const char * name, int capture_width)
   {
     capture.open(device, cv::CAP_ANY);
     if (!capture.isOpened()) {
@@ -105,7 +111,7 @@ private:
       return;
     }
 
-    capture.set(cv::CAP_PROP_FRAME_WIDTH, image_width_);
+    capture.set(cv::CAP_PROP_FRAME_WIDTH, capture_width);
     capture.set(cv::CAP_PROP_FRAME_HEIGHT, image_height_);
     capture.set(cv::CAP_PROP_FPS, framerate_);
     RCLCPP_INFO(get_logger(), "Opened %s camera device '%s'", name, device.c_str());
@@ -128,7 +134,8 @@ private:
     }
 
     if ((needs_left_frame && !left_capture_.isOpened()) ||
-      (needs_right_frame && !right_capture_.isOpened()))
+      (needs_right_frame &&
+      !(combined_stereo_device_ ? left_capture_.isOpened() : right_capture_.isOpened())))
     {
       RCLCPP_ERROR_THROTTLE(
         get_logger(), *get_clock(), 5000,
@@ -138,10 +145,27 @@ private:
 
     cv::Mat left_bgr;
     cv::Mat right_bgr;
-    const bool left_ok = !needs_left_frame ||
-      (left_capture_.read(left_bgr) && !left_bgr.empty());
-    const bool right_ok = !needs_right_frame ||
-      (right_capture_.read(right_bgr) && !right_bgr.empty());
+    bool left_ok = true;
+    bool right_ok = true;
+    if (combined_stereo_device_) {
+      if (needs_left_frame || needs_right_frame) {
+        cv::Mat stereo_bgr;
+        const bool stereo_ok = left_capture_.read(stereo_bgr) &&
+          !stereo_bgr.empty() && stereo_bgr.cols >= 2 && stereo_bgr.cols % 2 == 0;
+        left_ok = stereo_ok;
+        right_ok = stereo_ok;
+        if (stereo_ok) {
+          const int eye_width = stereo_bgr.cols / 2;
+          left_bgr = stereo_bgr(cv::Rect(0, 0, eye_width, stereo_bgr.rows)).clone();
+          right_bgr = stereo_bgr(cv::Rect(eye_width, 0, eye_width, stereo_bgr.rows)).clone();
+        }
+      }
+    } else {
+      left_ok = !needs_left_frame ||
+        (left_capture_.read(left_bgr) && !left_bgr.empty());
+      right_ok = !needs_right_frame ||
+        (right_capture_.read(right_bgr) && !right_bgr.empty());
+    }
     if (!left_ok || !right_ok) {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "Failed to read a stereo frame");
       return;
@@ -227,6 +251,7 @@ private:
   double depth_min_m_;
   double depth_max_m_;
   bool publish_pointcloud_;
+  bool combined_stereo_device_{false};
   int pointcloud_stride_;
 
   cv::VideoCapture left_capture_;

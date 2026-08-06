@@ -206,8 +206,11 @@ ros2 launch zed2i_driver ground_h26x_receiver.launch.py port:=5601 codec:=h264
 
 安定運用のため、`/dev/videoN` の番号ずれを避けて by-id パスを使用する。
 
-- 左: `/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0`
-- 右: `/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index1`
+- 左右とも: `/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_OV0001-video-index0`
+
+この ZED 2i は左右画像を横並びにした単一の UVC 映像として公開する。`index1` は
+V4L2 メタデータノードであり、映像デバイスとして指定してはならない。CPU ノードは
+左右に分割して各トピックへ発行する。
 
 ## 前提条件(重要)
 
@@ -217,6 +220,5 @@ SDKモードは**動作する GPU/CUDA が必須**。現在このホストは iG
 
 ## CPUモードの既知の制約
 
-ZED 2i はステレオ対を単一の UVC デバイスとして公開するため、現状の左右別デバイス前提の `cpu_stereo_node` では right デバイスの open に失敗する(要 node 改修、別タスク)。
-
-そのため、**SDKモードが本線**であり、CPUモードは GPU 復旧までの暫定フォールバックとして位置づける。
+CPU モードは左右画像を分割して `StereoSGBM` で深度を計算する暫定フォールバックである。
+精密なキャリブレーションや SDK の機能が必要な運用では SDK モードを使用する。
