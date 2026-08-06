@@ -12,7 +12,13 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument,
+    ExecuteProcess,
+    GroupAction,
+    IncludeLaunchDescription,
+    TimerAction,
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -51,6 +57,7 @@ def generate_launch_description():
     um982_port = LaunchConfiguration("um982_port")
     um982_protocol = LaunchConfiguration("um982_protocol")
     enable_um982_rtk = LaunchConfiguration("enable_um982_rtk")
+    enable_spatial = LaunchConfiguration("enable_spatial")
     um982_feedback_mode = LaunchConfiguration("um982_feedback_mode")
     enable_um982 = LaunchConfiguration("enable_um982")
     enable_localization = LaunchConfiguration("enable_localization")
@@ -109,7 +116,46 @@ def generate_launch_description():
             "uart_or_tcp": um982_protocol,
             "gnss_port": um982_port,
             "rtk_enable": enable_um982_rtk,
+            "ntrip_server": "192.168.1.72",
+            "ntrip_port": "2101",
+            "ntrip_mountpoint": "RTCM3",
+            "ntrip_username": "test",
+            "ntrip_password": "test",
         },
+    )
+
+    spatial_driver = Node(
+        package="adnav_driver",
+        executable="adnav_driver",
+        name="adnav_driver",
+        output="screen",
+        emulate_tty=True,
+        parameters=[
+            PathJoinSubstitution([FindPackageShare("robot"), "config", "adnav_spatial.yaml"])
+        ],
+        condition=IfCondition(enable_spatial),
+    )
+
+    # The Spatial driver accepts RTCM through its NTRIP service and relays it
+    # to the device as ANPP Packet 55.  The delay lets the serial driver finish
+    # discovery and advertise the service before the one-shot configuration.
+    spatial_ntrip = TimerAction(
+        period=10.0,
+        actions=[
+            ExecuteProcess(
+                cmd=[
+                    "ros2",
+                    "service",
+                    "call",
+                    "/adnav_driver/ntrip",
+                    "adnav_interfaces/srv/Ntrip",
+                    "{enable: true, host: '192.168.1.72:2101', username: 'test', "
+                    "password: 'test', mountpoint: 'RTCM3'}",
+                ],
+                output="screen",
+            )
+        ],
+        condition=IfCondition(enable_spatial),
     )
 
     # Both filters publish /odometry/filtered/local.  The local Livox-IMU EKF
@@ -269,7 +315,16 @@ def generate_launch_description():
                 default_value="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0",
             ),
             DeclareLaunchArgument("um982_protocol", default_value="uart"),
-            DeclareLaunchArgument("enable_um982_rtk", default_value="false"),
+            DeclareLaunchArgument(
+                "enable_um982_rtk",
+                default_value="true",
+                description="Stream RTCM3 corrections from 192.168.1.72:2101 to UM982.",
+            ),
+            DeclareLaunchArgument(
+                "enable_spatial",
+                default_value="true",
+                description="Start the miniPC-connected Advanced Navigation Spatial and enable NTRIP RTCM3.",
+            ),
             DeclareLaunchArgument(
                 "um982_feedback_mode", default_value="ekf", choices=["window", "ekf"]
             ),
@@ -357,6 +412,8 @@ def generate_launch_description():
             ),
             localization_launch,
             um982_launch,
+            spatial_driver,
+            spatial_ntrip,
             um982_feedback_launch,
             # drogger_launch,
             # imu_node,

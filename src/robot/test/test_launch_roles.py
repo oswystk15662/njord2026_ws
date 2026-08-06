@@ -142,6 +142,19 @@ def test_disabled_minipc_serial_drivers_default_to_false():
     assert '"enable_imu", default_value="false"' in source
 
 
+def test_minipc_starts_um982_and_spatial_ntrip_clients_from_the_ground_caster():
+    source = _read_launch_source("minipc_bringup.launch.py")
+
+    assert '"ntrip_server": "192.168.1.72"' in source
+    assert '"ntrip_mountpoint": "RTCM3"' in source
+    assert '"ntrip_username": "test"' in source
+    assert 'package="adnav_driver"' in source
+    assert '"/adnav_driver/ntrip"' in source
+    assert "adnav_interfaces/srv/Ntrip" in source
+    assert "host: '192.168.1.72:2101'" in source
+    assert "mountpoint: 'RTCM3'" in source
+
+
 def test_minipc_video_and_glim_feedback_defaults_are_safe():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'default_value="osw-Stealth-14-AI-Studio-A1VGG.local"' in source

@@ -21,6 +21,12 @@ ros2 launch robot task1.launch.py           # role:=minipc が既定
 
 `task1/2/3.launch.py` は `role` 引数(`minipc` / `standalone`、既定 `minipc`)でどちらの bringup を使うか選ぶ。
 
+miniPCは既定で、UM982とAdvanced Navigation Spatialの両方をGround PCの
+NTRIP caster（`192.168.1.72:2101`、mountpoint `RTCM3`）へ接続する。
+casterの既定クライアント資格情報は `test:test` である。UM982 RTKは
+`enable_um982_rtk:=false`、Spatialは `enable_spatial:=false` を指定すれば
+個別に無効化できる。
+
 miniPCのlocal odometryは既定でUM982 feedback EKFを使う。
 `use_ekf_local:=true` のときだけ、これを停止してLivox IMU入力のlocal EKFへ
 排他的に切り替える。両方のEKFが同時に
