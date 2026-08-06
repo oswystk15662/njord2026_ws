@@ -266,8 +266,8 @@ public:
     }
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
     if (detector_) {
-      left_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
-      depth_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::F32_C1, sl::MEM::GPU);
+      left_gpu_.alloc(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
+      depth_gpu_.alloc(width_, height_, sl::MAT_TYPE::F32_C1, sl::MEM::GPU);
     }
 #endif
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
@@ -291,7 +291,7 @@ public:
       try {
         ground_video_streamer_ = std::make_unique<GroundVideoStreamer>(config);
         if (!left_gpu_.isInit()) {
-          left_gpu_ = sl::Mat(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
+          left_gpu_.alloc(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
         }
       } catch (const std::exception & error) {
         RCLCPP_ERROR(get_logger(), "Ground-video streaming disabled: %s", error.what());
@@ -316,6 +316,20 @@ public:
 
   ~SdkNode() override
   {
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+    // Stop the worker before releasing any camera-backed CUDA storage.
+    ground_video_streamer_.reset();
+#endif
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    detector_.reset();
+#endif
+#if defined(ZED2I_DRIVER_HAS_GPU_PERCEPTION) || defined(ZED2I_DRIVER_HAS_GROUND_VIDEO)
+    // GPU sl::Mat storage must be released while the camera's CUDA context is alive.
+    left_gpu_.free();
+#endif
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    depth_gpu_.free();
+#endif
     camera_.close();
   }
 
