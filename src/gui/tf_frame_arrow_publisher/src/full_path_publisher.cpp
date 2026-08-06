@@ -18,6 +18,7 @@ public:
     marker_topic_ = declare_parameter<std::string>("marker_topic", "actual_path_marker");
     parent_frame_ = declare_parameter<std::string>("parent_frame", "odom");
     child_frame_ = declare_parameter<std::string>("child_frame", "base_link");
+    line_width_ = declare_parameter<double>("line_width", 0.025);
     publisher_ = this->create_publisher<visualization_msgs::msg::Marker>(marker_topic_, 10);
 
     // TFリスナーのセットアップ (odom座標を取得するため)
@@ -67,7 +68,7 @@ private:
 
     marker.pose.orientation.w = 1.0;
 
-    marker.scale.x = 0.025; // 2.5 cm: planned route remains visually dominant.
+    marker.scale.x = line_width_;
 
     // Actual route: thin purple line.
     marker.color.r = 0.72;
@@ -90,6 +91,7 @@ private:
   std::string marker_topic_;
   std::string parent_frame_;
   std::string child_frame_;
+  double line_width_;
 };
 
 int main(int argc, char * argv[])

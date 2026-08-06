@@ -273,6 +273,7 @@ def generate_launch_description():
             "marker_topic": "/actual_path_marker",
             "parent_frame": "odom",
             "child_frame": "base_link",
+            "line_width": 0.08,
         }],
     )
     ground_speed = Node(
