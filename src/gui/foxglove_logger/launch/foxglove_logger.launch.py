@@ -14,7 +14,6 @@ def generate_launch_description():
         'plan_topic': '/plan',
         'ground_speed_topic': '/gui/ground_speed_mps',
         'control_status_topic': '/system/control_status',
-        'diagnostics_topic': '/diagnostics',
         'publish_rate_hz': '1.0',
     }
     actions = [

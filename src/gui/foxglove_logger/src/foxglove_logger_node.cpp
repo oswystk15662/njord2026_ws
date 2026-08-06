@@ -1,11 +1,9 @@
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <iomanip>
 #include <limits>
-#include <map>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -13,8 +11,6 @@
 #include <utility>
 #include <vector>
 
-#include "diagnostic_msgs/msg/diagnostic_array.hpp"
-#include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
@@ -41,24 +37,6 @@ double pointToSegmentDistance(double px, double py, double ax, double ay, double
   return std::hypot(px - (ax + t * dx), py - (ay + t * dy));
 }
 
-std::string shorten(std::string value, std::size_t max_length)
-{
-  if (value.size() <= max_length) {
-    return value;
-  }
-  return value.substr(0, max_length - 3U) + "...";
-}
-
-const char * diagnosticLevelName(uint8_t level)
-{
-  switch (level) {
-    case diagnostic_msgs::msg::DiagnosticStatus::OK: return "OK";
-    case diagnostic_msgs::msg::DiagnosticStatus::WARN: return "WARN";
-    case diagnostic_msgs::msg::DiagnosticStatus::ERROR: return "ERROR";
-    case diagnostic_msgs::msg::DiagnosticStatus::STALE: return "STALE";
-    default: return "UNKNOWN";
-  }
-}
 }  // namespace
 
 class FoxgloveLogger : public rclcpp::Node
@@ -79,7 +57,6 @@ public:
     const auto plan_topic = declare_parameter<std::string>("plan_topic", "/plan");
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
     const auto control_topic = declare_parameter<std::string>("control_status_topic", "/system/control_status");
-    const auto diagnostics_topic = declare_parameter<std::string>("diagnostics_topic", "/diagnostics");
     const auto log_topic = declare_parameter<std::string>("log_topic", "/foxglove_log");
 
     log_pub_ = create_publisher<rcl_interfaces::msg::Log>(log_topic, 10);
@@ -100,8 +77,6 @@ public:
       [this](std_msgs::msg::Float32::SharedPtr msg) {ground_speed_mps_ = msg->data;});
     control_sub_ = create_subscription<std_msgs::msg::String>(control_topic, rclcpp::QoS(1).transient_local(),
       [this](std_msgs::msg::String::SharedPtr msg) {control_status_ = msg->data;});
-    diagnostics_sub_ = create_subscription<diagnostic_msgs::msg::DiagnosticArray>(diagnostics_topic, 10,
-      [this](diagnostic_msgs::msg::DiagnosticArray::SharedPtr msg) {onDiagnostics(*msg);});
 
     const auto period = std::chrono::duration<double>(1.0 / publish_rate_hz);
     timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(period),
@@ -130,13 +105,13 @@ private:
 
     switch (level) {
       case LogLevel::kInfo:
-        RCLCPP_INFO(get_logger(), "%s", text.c_str());
+        // RCLCPP_INFO(get_logger(), "%s", text.c_str());
         break;
       case LogLevel::kWarn:
-        RCLCPP_WARN(get_logger(), "%s", text.c_str());
+        // RCLCPP_WARN(get_logger(), "%s", text.c_str());
         break;
       case LogLevel::kError:
-        RCLCPP_ERROR(get_logger(), "%s", text.c_str());
+        // RCLCPP_ERROR(get_logger(), "%s", text.c_str());
         break;
     }
   }
@@ -159,13 +134,6 @@ private:
     const auto now = std::chrono::steady_clock::now();
     buoy_detection_times_.push_back(now);
     last_buoy_count_ = msg.detections.size();
-  }
-
-  void onDiagnostics(const diagnostic_msgs::msg::DiagnosticArray & msg)
-  {
-    for (const auto & status : msg.status) {
-      diagnostics_[status.name] = status;
-    }
   }
 
   std::string buoyText()
@@ -233,8 +201,7 @@ private:
   void publishReport()
   {
     std::ostringstream out;
-    out << std::fixed << std::setprecision(2) << "TEL ";
-    out << "CELLS=";
+    out << std::fixed << std::setprecision(2) << "BATTERY CELLS=";
     if (cells_) {
       out << '[';
       for (std::size_t i = 0; i < cells_->size(); ++i) {
@@ -243,61 +210,13 @@ private:
       }
       out << ']';
     } else {out << "N/A";}
-    out << " LIPO=" << (temperature_c_ ? std::to_string(*temperature_c_) + "C" : "N/A");
-    out << " BUOY=" << buoyText();
-    if (fix_) {
-      out << std::setprecision(6) << " LAT=" << fix_->latitude << " LON=" << fix_->longitude;
-      out << std::setprecision(2);
-    } else {out << " LAT=N/A LON=N/A";}
-    const auto heading = headingDegrees();
-    out << " HDG=" << (heading ? std::to_string(*heading) + "deg" : "N/A");
-    const auto speed = speedMps();
-    out << " SOG=" << (speed ? std::to_string(*speed) + "m/s" : "N/A");
-    const auto xte = planDeviation();
-    out << " PLAN_XTE=" << (xte ? std::to_string(*xte) + "m" : "N/A");
+    out << '\n' << "BATTERY TEMP=";
+    if (temperature_c_) {
+      out << *temperature_c_ << "C";
+    } else {
+      out << "N/A";
+    }
     publishLog(LogLevel::kInfo, out.str());
-    publishControlStatus();
-    publishDiagnosticSummary();
-  }
-
-  void publishControlStatus() const
-  {
-    const std::string status = control_status_.value_or("N/A");
-    if (status == "auto") {
-      publishLog(LogLevel::kInfo, "CTRL_MODE=AUTO");
-    } else if (status == "emergency_stop") {
-      publishLog(LogLevel::kError, "CTRL_MODE=EMERGENCY_STOP");
-    } else {
-      publishLog(LogLevel::kWarn, "CTRL_MODE=" + status);
-    }
-  }
-
-  void publishDiagnosticSummary() const
-  {
-    std::array<int, 4> counts{};
-    std::vector<std::string> issues;
-    uint8_t highest_level = diagnostic_msgs::msg::DiagnosticStatus::OK;
-    for (const auto & [name, status] : diagnostics_) {
-      if (status.level < counts.size()) {++counts[status.level];}
-      highest_level = std::max(highest_level, status.level);
-      if (status.level != diagnostic_msgs::msg::DiagnosticStatus::OK) {
-        issues.push_back(std::string(diagnosticLevelName(status.level)) + ":" +
-          shorten(name, 24U) + "=" + shorten(status.message, 64U));
-      }
-    }
-    std::ostringstream out;
-    out << "DIAG OK=" << counts[0] << " WARN=" << counts[1] << " ERROR=" << counts[2]
-        << " STALE=" << counts[3];
-    for (const auto & issue : issues) {out << " | " << issue;}
-    if (highest_level >= diagnostic_msgs::msg::DiagnosticStatus::ERROR) {
-      publishLog(LogLevel::kError, out.str());
-    } else if (highest_level == diagnostic_msgs::msg::DiagnosticStatus::WARN ||
-      highest_level == diagnostic_msgs::msg::DiagnosticStatus::STALE)
-    {
-      publishLog(LogLevel::kWarn, out.str());
-    } else {
-      publishLog(LogLevel::kInfo, out.str());
-    }
   }
 
   std::optional<std::vector<float>> cells_;
@@ -309,7 +228,6 @@ private:
   std::optional<std::string> control_status_;
   std::deque<std::chrono::steady_clock::time_point> buoy_detection_times_;
   std::size_t last_buoy_count_{0};
-  std::map<std::string, diagnostic_msgs::msg::DiagnosticStatus> diagnostics_;
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cells_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr temperature_sub_;
   rclcpp::Subscription<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr buoy_sub_;
@@ -318,7 +236,6 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
-  rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_sub_;
   rclcpp::Publisher<rcl_interfaces::msg::Log>::SharedPtr log_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };

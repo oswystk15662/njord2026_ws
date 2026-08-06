@@ -7,7 +7,6 @@
   <license>Apache-2.0</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <depend>diagnostic_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>njord_interfaces</depend>
   <depend>rclcpp</depend>
