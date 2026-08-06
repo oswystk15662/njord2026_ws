@@ -90,6 +90,7 @@ class OpponentSelectorNode(Node):
             ("motion_filter_mode", "standard"),
             ("straight_min_hit_count", 15),
             ("straight_max_velocity_stddev_mps", 0.30),
+            ("straight_coast_timeout_sec", 2.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -108,6 +109,9 @@ class OpponentSelectorNode(Node):
             raise ValueError(
                 "straight_min_hit_count must be >= 1 and "
                 "straight_max_velocity_stddev_mps must be > 0")
+        self.straight_coast_timeout_sec = float(gp("straight_coast_timeout_sec"))
+        if self.straight_coast_timeout_sec < 0.0:
+            raise ValueError("straight_coast_timeout_sec must be >= 0")
         self.selection_params = SelectionParams(
             confirmed_only=bool(gp("confirmed_only")),
             max_distance_m=float(gp("max_distance_m")),
@@ -150,6 +154,10 @@ class OpponentSelectorNode(Node):
         self.ego_vel_base = np.zeros(3)  # ego twist linear, base_link (odom child frame)
         self.ego_yaw_rate = 0.0          # ego twist angular z, base_link [rad/s]
         self.selected_id = None
+        # Last *measured* and fully gated target state.  It is used only by
+        # the bounded straight-line coast path below, never as a replacement
+        # for an unconfirmed detection.
+        self.last_observation = None
 
         period = 1.0 / max(float(gp("publish_rate_hz")), 1e-6)
         self.timer = self.create_timer(period, self.timer_callback)
@@ -160,7 +168,8 @@ class OpponentSelectorNode(Node):
             f"ego_odom={gp('ego_odom_topic')} -> {gp('twist_topic')} "
             f"+ TF {self.map_frame} -> {self.opponent_frame}, "
             f"absolute_speed_range={self.min_absolute_speed_knots:.2f}"
-            f"-{self.max_absolute_speed_knots:.2f} kn")
+            f"-{self.max_absolute_speed_knots:.2f} kn, "
+            f"straight_coast={self.straight_coast_timeout_sec:.1f}s")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -194,6 +203,61 @@ class OpponentSelectorNode(Node):
         self.ego_vel_base = np.array([lin.x, lin.y, lin.z])
         self.ego_yaw_rate = float(msg.twist.twist.angular.z)
 
+    def _publish_output(self, now, pos_map, vel_map, opponent_yaw, yaw_rate):
+        """Publish one absolute target estimate and its map-frame TF."""
+        smoothed = self.smoother.update(vel_map[0], vel_map[1], yaw_rate)
+        if smoothed is None:
+            self.get_logger().warning(
+                "Opponent velocity spike rejected; skipping this cycle.",
+                throttle_duration_sec=2.0)
+            return
+        vx, vy, wz = smoothed
+
+        msg = TwistStamped()
+        msg.header.stamp = now.to_msg()
+        msg.header.frame_id = self.map_frame
+        msg.twist.linear.x = float(vx)
+        msg.twist.linear.y = float(vy)
+        msg.twist.angular.z = float(wz)
+        self.pub.publish(msg)
+
+        tf_out = TransformStamped()
+        tf_out.header.stamp = now.to_msg()
+        tf_out.header.frame_id = self.map_frame
+        tf_out.child_frame_id = self.opponent_frame
+        tf_out.transform.translation.x = float(pos_map[0])
+        tf_out.transform.translation.y = float(pos_map[1])
+        tf_out.transform.translation.z = 0.0
+        tf_out.transform.rotation.z = math.sin(opponent_yaw / 2.0)
+        tf_out.transform.rotation.w = math.cos(opponent_yaw / 2.0)
+        self.tf_broadcaster.sendTransform(tf_out)
+
+    def _coast_or_silence(self, now, now_sec: float):
+        """Bridge brief occlusions with constant-velocity prediction only."""
+        coast = self.last_observation
+        if self.motion_filter_mode == "straight_line" and coast is not None:
+            elapsed = now_sec - coast["stamp_sec"]
+            if 0.0 <= elapsed <= self.straight_coast_timeout_sec:
+                pos_map = tracking_glue.predict_straight_motion(
+                    coast["position_map"], coast["velocity_map"], elapsed)
+                self._publish_output(
+                    now, pos_map, coast["velocity_map"], coast["yaw_map"],
+                    coast["yaw_rate"])
+                self.get_logger().info(
+                    f"Coasting confirmed opponent id={coast['object_id']} "
+                    f"for {elapsed:.1f}s without a LiDAR observation.",
+                    throttle_duration_sec=1.0)
+                return
+
+        # Safe silence: MPPI plans a straight path without the opponent.
+        self.get_logger().warning(
+            "No valid opponent track or bounded straight-line coast. "
+            "Publishing nothing on /other_ship/twist and no opponent TF.",
+            throttle_duration_sec=2.0)
+        self.selected_id = None
+        self.last_observation = None
+        self.smoother.reset()
+
     # ------------------------------------------------------------------
     def timer_callback(self):
         now = self.get_clock().now()
@@ -203,13 +267,7 @@ class OpponentSelectorNode(Node):
             self.tracks, now_sec, policy=self.policy,
             params=self.selection_params)
         if not ranked:
-            # Safe silence: MPPI plans a straight path without the opponent.
-            self.get_logger().warning(
-                "No valid opponent track (confirmed/fresh/gated). "
-                "Publishing nothing on /other_ship/twist and no opponent TF.",
-                throttle_duration_sec=2.0)
-            self.selected_id = None
-            self.smoother.reset()
+            self._coast_or_silence(now, now_sec)
             return
         selected = None
         tf_msg = None
@@ -259,12 +317,7 @@ class OpponentSelectorNode(Node):
             break
 
         if selected is None:
-            self.get_logger().info(
-                "No valid track is within the absolute-speed range; "
-                "publishing no opponent output.",
-                throttle_duration_sec=2.0)
-            self.selected_id = None
-            self.smoother.reset()
+            self._coast_or_silence(now, now_sec)
             return
 
         if self.selected_id != selected.object_id:
@@ -275,36 +328,18 @@ class OpponentSelectorNode(Node):
                 f"(dist={selected.distance:.1f} m)")
 
         q = tf_msg.transform.rotation
-
-        smoothed = self.smoother.update(vel_map[0], vel_map[1], selected.yaw_rate)
-        if smoothed is None:
-            self.get_logger().warning(
-                "Opponent velocity spike rejected; skipping this cycle.",
-                throttle_duration_sec=2.0)
-            return
-        vx, vy, wz = smoothed
-
-        msg = TwistStamped()
-        msg.header.stamp = now.to_msg()
-        msg.header.frame_id = self.map_frame
-        msg.twist.linear.x = float(vx)
-        msg.twist.linear.y = float(vy)
-        msg.twist.angular.z = float(wz)
-        self.pub.publish(msg)
-
         base_yaw = _yaw_from_quaternion(q)
         opponent_yaw = base_yaw + selected.yaw
-
-        tf_out = TransformStamped()
-        tf_out.header.stamp = now.to_msg()
-        tf_out.header.frame_id = self.map_frame
-        tf_out.child_frame_id = self.opponent_frame
-        tf_out.transform.translation.x = float(pos_map[0])
-        tf_out.transform.translation.y = float(pos_map[1])
-        tf_out.transform.translation.z = 0.0
-        tf_out.transform.rotation.z = math.sin(opponent_yaw / 2.0)
-        tf_out.transform.rotation.w = math.cos(opponent_yaw / 2.0)
-        self.tf_broadcaster.sendTransform(tf_out)
+        self.last_observation = {
+            "object_id": selected.object_id,
+            "stamp_sec": now_sec,
+            "position_map": pos_map.copy(),
+            "velocity_map": vel_map.copy(),
+            "yaw_map": opponent_yaw,
+            "yaw_rate": selected.yaw_rate,
+        }
+        self._publish_output(
+            now, pos_map, vel_map, opponent_yaw, selected.yaw_rate)
 
 
 def main(args=None):

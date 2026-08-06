@@ -97,6 +97,18 @@ def to_map_frame(pos_base: np.ndarray, vel_base: np.ndarray, t_map_base: np.ndar
     return pos_map, vel_map
 
 
+def predict_straight_motion(position: np.ndarray, velocity: np.ndarray,
+                            elapsed_sec: float) -> np.ndarray:
+    """Propagate a map-frame position with a constant ground velocity.
+
+    Task 2 uses this only for a short, bounded coast after a confirmed target
+    is temporarily occluded.  The caller owns the timeout; this helper does
+    not turn an unbounded prediction into a valid observation.
+    """
+    return (np.asarray(position, dtype=float) +
+            np.asarray(velocity, dtype=float) * max(float(elapsed_sec), 0.0))
+
+
 def compute_cpa_tcpa(own_pos, own_vel, tgt_pos, tgt_vel):
     """Closest Point of Approach between two constant-velocity objects.
 

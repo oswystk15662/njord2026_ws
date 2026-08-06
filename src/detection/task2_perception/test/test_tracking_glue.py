@@ -85,6 +85,12 @@ class TestEgoCompensation:
         _, vel_map = tracking_glue.to_map_frame(track.position, vel_abs, t_map_base)
         np.testing.assert_allclose(vel_map, np.zeros(3), atol=1e-12)
 
+    def test_short_coast_uses_constant_ground_velocity(self):
+        position = np.array([10.0, -2.0, 0.0])
+        velocity = np.array([1.0, 0.5, 0.0])
+        predicted = tracking_glue.predict_straight_motion(position, velocity, 1.5)
+        np.testing.assert_allclose(predicted, [11.5, -1.25, 0.0], atol=1e-12)
+
 
 class TestStaleAndGates:
     """Test 7: stale tracks are invalidated after stale_timeout_sec."""
