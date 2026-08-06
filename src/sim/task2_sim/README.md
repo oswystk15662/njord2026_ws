@@ -1,5 +1,8 @@
-このpkgはnjord2026のtask2のシミュレーションをするpkgです。
-task2の詳細はこのpkg内のDocs内を見てください。
+このpkgはnjord2026のTask 2衝突回避シミュレーションをするpkgです。
+
+`ros2 launch task2_sim task2_sim.launch.py` は、他船を**認識済みと仮定**して
+相手船TFから `/other_ship/twist` を生成し、MPPI → Nav2 FollowPath →
+スラスタ・運動モデルまでを検証します。実LiDAR認識器は起動しません。
 
 このpkgは、
 * task2_simのための以下のlaunchを含みます

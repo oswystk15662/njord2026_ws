@@ -14,8 +14,8 @@ def generate_launch_description():
     pkg_robot = get_package_share_directory("robot")
     pkg_dutyed = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
-    pkg_waypoint = get_package_share_directory("waypoint_publisher")
     pkg_thruster = get_package_share_directory("thruster_driver")
+    pkg_mppi = get_package_share_directory("asv_trajectory_planner")
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
     opponent_config = os.path.join(pkg_task2, "config", "task2_opponent_sim.yaml")
@@ -24,7 +24,10 @@ def generate_launch_description():
 
     use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
-    use_waypoints = DeclareLaunchArgument("use_waypoints", default_value="true")
+    use_mppi = DeclareLaunchArgument(
+        "use_mppi", default_value="true",
+        description="Run the recognition-assumed MPPI -> FollowPath chain",
+    )
     params_arg = DeclareLaunchArgument("params", default_value=config)
     opponent_params_arg = DeclareLaunchArgument("opponent_params", default_value=opponent_config)
     driver_delay_arg = DeclareLaunchArgument(
@@ -40,7 +43,7 @@ def generate_launch_description():
     goal_delay_arg = DeclareLaunchArgument(
         "goal_delay",
         default_value="8.0",
-        description="Delay before launching waypoint_publisher",
+        description="Delay before launching the MPPI / FollowPath chain",
     )
 
     driver_delay = LaunchConfiguration("driver_delay")
@@ -104,14 +107,6 @@ def generate_launch_description():
         output="screen",
     )
 
-    ideal_lidar = Node(
-        package="task2_sim",
-        executable="ideal_lidar_pointcloud_node",
-        name="ideal_lidar_pointcloud_node",
-        parameters=[LaunchConfiguration("opponent_params")],
-        output="screen",
-    )
-
     thruster_driver_node = Node(
         package="thruster_driver",
         executable="thruster_driver_node",
@@ -125,6 +120,18 @@ def generate_launch_description():
                 "thrusters.reverse": [False, False, False, False],
             },
         ],
+        output="screen",
+    )
+
+    # The simulation has no manual-control arbiter.  Feed the minimal Task 2
+    # Nav2 output through the same navigation -> /cmd_vel contract used by
+    # the dynamics-side thruster driver.
+    twist_mux = Node(
+        package="twist_mux",
+        executable="twist_mux",
+        name="twist_mux",
+        parameters=[os.path.join(pkg_robot, "config", "twist_mux.yaml")],
+        remappings=[("cmd_vel_out", "/cmd_vel")],
         output="screen",
     )
 
@@ -192,8 +199,8 @@ def generate_launch_description():
             sensor_noise_launch,
             task2_orchestrator,
             opponent_vessel,
-            ideal_lidar,
             thruster_driver_node,
+            twist_mux,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
@@ -201,30 +208,34 @@ def generate_launch_description():
         ],
     )
 
+    # Same minimal FollowPath Nav2 stack as task2_autonomy.launch.py.  MPPI
+    # sends /planned_path_pruned directly to ControllerServer's FollowPath
+    # action; full Nav2 planning/BT servers are intentionally not launched.
     nav2_launch = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(pkg_robot, "launch", "nav2.launch.py")),
+        PythonLaunchDescriptionSource(
+            os.path.join(pkg_robot, "launch", "navigation_launch_task2.py")
+        ),
         launch_arguments={
             "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2_jazzy.yaml"),
-            "enable_diagnostics": "false",
+            "use_sim_time": "false",
+            "autostart": "true",
+            "auto_cmd_vel_topic": "/cmd_vel_nav",
         }.items(),
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )
 
     nav2_layer_timer = TimerAction(period=nav2_delay, actions=[nav2_launch])
 
-    waypoint_publisher = IncludeLaunchDescription(
+    # Recognition-assumed bridge: the simulated opponent TF is converted to
+    # the same /other_ship/twist interface that the real LiDAR tracker emits.
+    mppi_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
-            os.path.join(pkg_waypoint, "launch", "waypoint_publisher.launch.py")
+            os.path.join(pkg_mppi, "launch", "planner_with_follow_path.launch.py")
         ),
-        launch_arguments={
-            "task_type": "task2",
-            "frame_id": "map",
-            "publish_rate_hz": "2.0",
-        }.items(),
-        condition=IfCondition(LaunchConfiguration("use_waypoints")),
+        condition=IfCondition(LaunchConfiguration("use_mppi")),
     )
 
-    goal_layer_timer = TimerAction(period=goal_delay, actions=[waypoint_publisher])
+    goal_layer_timer = TimerAction(period=goal_delay, actions=[mppi_launch])
 
     return LaunchDescription([
         LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
@@ -232,7 +243,7 @@ def generate_launch_description():
         actual_route,
         use_dynamics,
         use_nav2,
-        use_waypoints,
+        use_mppi,
         params_arg,
         opponent_params_arg,
         driver_delay_arg,
