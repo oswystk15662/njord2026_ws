@@ -60,6 +60,8 @@ def generate_launch_description():
     ground_video_width = LaunchConfiguration("ground_video_width")
     ground_video_height = LaunchConfiguration("ground_video_height")
     ground_video_fps = LaunchConfiguration("ground_video_fps")
+    heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
+    heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
 
     mid360_launch = include_launch(
         "robot",
@@ -96,7 +98,11 @@ def generate_launch_description():
         "robot",
         ["launch", "heartbeat.launch.py"],
         IfCondition(LaunchConfiguration("enable_heartbeats")),
-        {"role": "jetson"},
+        {
+            "role": "jetson",
+            "heartbeat_monitor_zed2i": heartbeat_monitor_zed2i,
+            "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
+        },
     )
 
     return LaunchDescription(
@@ -142,6 +148,8 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_height", default_value="360"),
             DeclareLaunchArgument("ground_video_fps", default_value="4.0"),
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
+            DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
+            DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old
             # single-machine setup, but starting the ZED/TensorRT stack after

@@ -92,6 +92,10 @@ def generate_launch_description():
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
     thruster_use_velocity_feedback = LaunchConfiguration("thruster_use_velocity_feedback")
+    heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
+    heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
+    heartbeat_monitor_ekf_local = LaunchConfiguration("heartbeat_monitor_ekf_local")
+    heartbeat_monitor_ekf_global = LaunchConfiguration("heartbeat_monitor_ekf_global")
 
     # robot_state_publisher and base_link->um982_link static TF are started by
     # localization.launch.py. Do not start them again here.
@@ -324,7 +328,13 @@ def generate_launch_description():
         "robot",
         ["launch", "heartbeat.launch.py"],
         IfCondition(LaunchConfiguration("enable_heartbeats")),
-        {"role": "minipc"},
+        {
+            "role": "minipc",
+            "heartbeat_monitor_zed2i": heartbeat_monitor_zed2i,
+            "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
+            "heartbeat_monitor_ekf_local": heartbeat_monitor_ekf_local,
+            "heartbeat_monitor_ekf_global": heartbeat_monitor_ekf_global,
+        },
     )
 
     return LaunchDescription(
@@ -437,6 +447,26 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
+            DeclareLaunchArgument(
+                "heartbeat_monitor_zed2i",
+                default_value="true",
+                description="Include the Jetson ZED2i heartbeat in the driver health tree.",
+            ),
+            DeclareLaunchArgument(
+                "heartbeat_monitor_lidar",
+                default_value="true",
+                description="Include the Jetson LiDAR heartbeat in the driver health tree.",
+            ),
+            DeclareLaunchArgument(
+                "heartbeat_monitor_ekf_local",
+                default_value="true",
+                description="Monitor /odometry/filtered/local in the localization heartbeat.",
+            ),
+            DeclareLaunchArgument(
+                "heartbeat_monitor_ekf_global",
+                default_value="true",
+                description="Monitor /odometry/filtered/global in the localization heartbeat.",
+            ),
             DeclareLaunchArgument(
                 "use_ekf_local",
                 default_value="false",

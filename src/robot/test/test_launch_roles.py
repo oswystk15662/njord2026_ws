@@ -300,8 +300,8 @@ def test_bringups_start_hierarchical_health_heartbeats():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     heartbeat_source = _read_launch_source("heartbeat.launch.py")
 
-    assert '{"role": "jetson"}' in jetson_source
-    assert '{"role": "minipc"}' in minipc_source
+    assert '"role": "jetson"' in jetson_source
+    assert '"role": "minipc"' in minipc_source
     assert '"/heartbeat/driver/camera/front"' in heartbeat_source
     assert '"/heartbeat/driver/camera/back"' in heartbeat_source
     assert '"/heartbeat/driver/lidar"' in heartbeat_source
@@ -309,6 +309,14 @@ def test_bringups_start_hierarchical_health_heartbeats():
     assert '"/heartbeat/driver/micon"' in heartbeat_source
     assert '"/heartbeat/driver"' in heartbeat_source
     assert '"/heartbeat/localization"' in heartbeat_source
+    for argument in [
+        "heartbeat_monitor_zed2i",
+        "heartbeat_monitor_lidar",
+        "heartbeat_monitor_ekf_local",
+        "heartbeat_monitor_ekf_global",
+    ]:
+        assert f'"{argument}"' in heartbeat_source
+        assert f'"{argument}"' in minipc_source
 
 
 def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():
