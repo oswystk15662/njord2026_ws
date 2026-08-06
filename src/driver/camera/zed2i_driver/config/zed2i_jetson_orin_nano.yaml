@@ -37,9 +37,9 @@
     # accidental UDP transmission during normal development.
     enable_ground_video: false
     ground_video_codec: jpeg
-    ground_video_width: 480
-    ground_video_height: 360
-    ground_video_fps: 4.0
+    ground_video_width: 360
+    ground_video_height: 240
+    ground_video_fps: 3.0
     ground_video_jpeg_quality: 70
     ground_video_host: ""
     ground_video_port: 5600

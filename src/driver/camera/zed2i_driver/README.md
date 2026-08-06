@@ -94,13 +94,13 @@ ros2 launch zed2i_driver zed2i.launch.py \
   enable_ground_video:=true \
   ground_video_host:=192.168.1.2 \
   ground_video_port:=5600 \
-  ground_video_fps:=4.0
+  ground_video_fps:=3.0
 ```
 
 bringup 経由の場合は `ros2 launch robot jetson_bringup.launch.py enable_ground_video:=true
-ground_video_host:=<陸上 PC の IP> ground_video_port:=5600`。ただし bringup が転送するのは
-`enable_ground_video` / `ground_video_host` / `ground_video_port` の 3 つだけなので、
-fps・解像度・JPEG 品質は `config/zed2i_jetson_orin_nano.yaml` を編集する。
+ground_video_host:=<陸上 PC の IP> ground_video_port:=5600`。fps と解像度も
+`ground_video_width` / `ground_video_height` / `ground_video_fps` で上書きできる。
+JPEG 品質は `config/zed2i_jetson_orin_nano.yaml` を編集する。
 
 ### ground video 関連の launch 引数
 
@@ -109,8 +109,8 @@ fps・解像度・JPEG 品質は `config/zed2i_jetson_orin_nano.yaml` を編集�
 | `enable_ground_video` | `false` | |
 | `ground_video_host` | `""` | 空だと無効。受信 PC の実 IP を渡す |
 | `ground_video_port` | `5600` | back cam は 5601 |
-| `ground_video_width` / `ground_video_height` | `480` / `360` | |
-| `ground_video_fps` | `4.0` | |
+| `ground_video_width` / `ground_video_height` | `360` / `240` | |
+| `ground_video_fps` | `3.0` | |
 | `ground_video_jpeg_quality` | `70` | |
 | `ground_video_max_pending_frames` | `1` | latest-wins |
 | `ground_video_mtu` | `1200` | |
@@ -136,7 +136,7 @@ libnvjpeg にはリンクしていない(`CMakeLists.txt` と `ground_video_stre
 I420(4:2:0)固定なのは `rtpjpegpay`(RFC 2435)の制約で、4:4:4 JPEG を payload すると
 `Invalid component` で全フレームが落ちるため。
 
-正常時の RTP は `payload=26 / type=1(4:2:0) / Q=255(量子化表インライン) / 480x360`、
+正常時の RTP は `payload=26 / type=1(4:2:0) / Q=255(量子化表インライン) / 360x240`、
 1 フレーム約 27.7 KB = 24 パケット(mtu 1200)、最終パケットに marker bit。
 
 ### ZED はプロセス排他。二重起動しない
