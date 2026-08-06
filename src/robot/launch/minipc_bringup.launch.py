@@ -107,8 +107,8 @@ def generate_launch_description():
         {
             "enable_glim": "false",
             "enable_local_ekf": use_ekf_local,
-            "enable_global_ekf": "true",
-            "enable_navsat_transform": "true",
+            "enable_global_ekf": "false",
+            "enable_navsat_transform": "false",
             "enable_diagnostics": enable_diagnostics,
             "use_glim_fb": use_glim_fb,
         },
@@ -269,7 +269,7 @@ def generate_launch_description():
         package="foxglove_logger",
         executable="foxglove_logger_node",
         name="foxglove_logger",
-        output="screen",
+        # output="log",
     )
 
     alert_lamp_launch = include_launch(
@@ -383,7 +383,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "enable_spatial",
-                default_value="true",
+                default_value="false",
                 description="Start the miniPC-connected Advanced Navigation Spatial and enable NTRIP RTCM3.",
             ),
             DeclareLaunchArgument(
@@ -468,22 +468,22 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
             DeclareLaunchArgument(
                 "heartbeat_monitor_zed2i",
-                default_value="true",
+                default_value="false",
                 description="Include the Jetson ZED2i heartbeat in the driver health tree.",
             ),
             DeclareLaunchArgument(
                 "heartbeat_monitor_lidar",
-                default_value="true",
+                default_value="false",
                 description="Include the Jetson LiDAR heartbeat in the driver health tree.",
             ),
             DeclareLaunchArgument(
                 "heartbeat_monitor_ekf_local",
-                default_value="true",
+                default_value="false",
                 description="Monitor /odometry/filtered/local in the localization heartbeat.",
             ),
             DeclareLaunchArgument(
                 "heartbeat_monitor_ekf_global",
-                default_value="true",
+                default_value="false",
                 description="Monitor /odometry/filtered/global in the localization heartbeat.",
             ),
             DeclareLaunchArgument(
@@ -514,7 +514,7 @@ def generate_launch_description():
             micon_driver,
             bms_serial_reader,
             bms_launch,
-            foxglove_logger,
+            # foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
             back_cam_launch,
