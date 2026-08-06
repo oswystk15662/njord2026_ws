@@ -412,9 +412,10 @@ class PlannerNode(Node):
     ) -> None:
         """Publish the complete instantaneous CRM field used by MPPI.
 
-        The grid is evaluated at t=0 using the same ``timedomaincrm`` function
-        and own/other CRM states as the current MPPI optimization.  It is a
-        field over every map cell, not a plot of sampled candidate paths.
+        Each forward map cell is evaluated at the time the vessel would reach
+        it by continuing straight ahead at its current speed.  The opponent is
+        propagated to that same time by ``timedomaincrm``, matching MPPI's
+        ``predtimes`` semantics without plotting only sampled trajectories.
         """
         try:
             own_tf = self.tf_buffer.lookup_transform(
@@ -455,11 +456,33 @@ class PlannerNode(Node):
         others_crm = self._other_ship_crm_state_in_map()
 
         crm_x, crm_y = -map_y, map_x
+        # Arrival time for a straight, constant-speed continuation of the
+        # current course.  A cross-track cell is evaluated at the same arrival
+        # time as the forward point beside it; cells behind the vessel are
+        # excluded.
+        dx, dy = map_x - own_map_x, map_y - own_map_y
+        forward_distance = (
+            math.cos(own_map_yaw) * dx + math.sin(own_map_yaw) * dy
+        )
+        own_speed = own_crm[2]
+        horizon = (
+            self.trajectory_generator.planner.mppi_controller.horizon
+            * self.trajectory_generator.planner.mppi_controller.pred_dt
+        )
+        valid_straight = (
+            (forward_distance >= 0.0)
+            & (forward_distance <= own_speed * horizon)
+        )
+        if own_speed <= 1.0e-3:
+            arrival_time = np.zeros((rows, cols), dtype=np.float32)
+            valid_straight[:, :] = False
+        else:
+            arrival_time = (forward_distance / own_speed).astype(np.float32)
         with torch.no_grad():
             risk = crm_torch.timedomaincrm(
                 torch.as_tensor(crm_x, dtype=torch.float32),
                 torch.as_tensor(crm_y, dtype=torch.float32),
-                torch.zeros((rows, cols), dtype=torch.float32),
+                torch.as_tensor(arrival_time, dtype=torch.float32),
                 own_crm,
                 others_crm,
                 turn=torch.full(
@@ -468,6 +491,7 @@ class PlannerNode(Node):
                 ),
                 ax_gains=self.trajectory_generator.planner.ax_gains,
             ).cpu().numpy()
+        risk[~valid_straight] = 0.0
 
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg()
