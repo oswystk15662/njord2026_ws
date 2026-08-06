@@ -431,18 +431,44 @@ class PlannerNode(Node):
         ys = origin_y + (np.arange(rows) + 0.5) * resolution
         map_x, map_y = np.meshgrid(xs, ys)
         c, s = math.cos(own_map_yaw), math.sin(own_map_yaw)
-        dx, dy = map_x - own_map_x, map_y - own_map_y
-        # map -> base_link, then ROS base_link -> CRM coordinates.
-        base_x = c * dx + s * dy
-        base_y = -s * dx + c * dy
+        own_base = debug["own"]
+        own_heading_crm = (-math.degrees(own_map_yaw)) % 360.0
+        # CRM's global axes are X=-ROS-y, Y=ROS-x.  Convert both vessels to
+        # those absolute map coordinates before evaluating every grid cell.
+        own_crm = [
+            -own_map_y,
+            own_map_x,
+            own_base[2],
+            own_heading_crm,
+            own_base[4],
+        ]
+        others_crm = []
+        for other_base in debug["others"]:
+            # Invert the base-frame CRM conversion used by MPPI:
+            # crm_x=-base_y, crm_y=base_x.
+            other_base_x, other_base_y = other_base[1], -other_base[0]
+            other_map_x = own_map_x + c * other_base_x - s * other_base_y
+            other_map_y = own_map_y + s * other_base_x + c * other_base_y
+            others_crm.append([
+                -other_map_y,
+                other_map_x,
+                other_base[2],
+                (own_heading_crm + other_base[3]) % 360.0,
+                other_base[4],
+            ])
+
+        crm_x, crm_y = -map_y, map_x
         with torch.no_grad():
             risk = crm_torch.timedomaincrm(
-                torch.as_tensor(-base_y, dtype=torch.float32),
-                torch.as_tensor(base_x, dtype=torch.float32),
+                torch.as_tensor(crm_x, dtype=torch.float32),
+                torch.as_tensor(crm_y, dtype=torch.float32),
                 torch.zeros((rows, cols), dtype=torch.float32),
-                debug["own"],
-                debug["others"],
-                turn=torch.zeros((rows, cols), dtype=torch.float32),
+                own_crm,
+                others_crm,
+                turn=torch.full(
+                    (rows, cols), math.radians(own_heading_crm),
+                    dtype=torch.float32,
+                ),
                 ax_gains=debug["ax_gains"],
             ).cpu().numpy()
 
