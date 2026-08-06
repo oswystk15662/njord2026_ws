@@ -224,7 +224,7 @@ private:
       out << "N/A LON=N/A";
     }
     const auto speed = speedMps();
-    out << " SOG=";
+    out << '\n' << "SOG=";
     if (speed) {
       out << *speed << "m/s";
     } else {
@@ -236,6 +236,15 @@ private:
       out << *heading << "deg";
     } else {
       out << "N/A";
+    }
+    const std::string control_status = control_status_.value_or("N/A");
+    out << '\n' << "CTRL_MODE=";
+    if (control_status == "auto") {
+      out << "AUTO";
+    } else if (control_status == "emergency_stop") {
+      out << "EMERGENCY_STOP";
+    } else {
+      out << control_status;
     }
     publishLog(LogLevel::kInfo, out.str());
   }
