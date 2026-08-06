@@ -14,6 +14,7 @@ setup(
             "config/task2_perception_params.yaml",
             "config/task2_preprocessing_lite.yaml",
             "config/task2_segmentation_lite.yaml",
+            "config/task2_tracker_lite.yaml",
         ]),
     ],
     install_requires=["setuptools"],

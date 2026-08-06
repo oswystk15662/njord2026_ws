@@ -25,9 +25,11 @@ def test_cloud_filter_profile_reduces_work_without_debug_changes():
 def test_task2_lite_pipeline_uses_latest_compact_clouds():
     preprocessing = _params("task2_preprocessing_lite.yaml")
     segmentation = _params("task2_segmentation_lite.yaml")
+    tracker = _params("task2_tracker_lite.yaml")
     assert preprocessing["voxel_leaf_x"] == 0.15
     assert preprocessing["accumulate_frames"] is False
     assert preprocessing["input_queue_depth"] == 1
     assert segmentation["input_queue_depth"] == 1
     assert segmentation["ransac_max_iterations"] == 80
     assert segmentation["min_cluster_size"] == 30
+    assert tracker["straight_hits_to_confirm"] == 10

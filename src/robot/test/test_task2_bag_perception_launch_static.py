@@ -31,6 +31,7 @@ def test_launches_bag_and_perception_chain():
         '"ego_odom_topic": "/odom"',
         '"task2_preprocessing_lite.yaml"',
         '"task2_segmentation_lite.yaml"',
+        '"task2_tracker_lite.yaml"',
         '"map_frame": "odom"',
     ):
         assert required in source

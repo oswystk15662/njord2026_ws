@@ -75,6 +75,9 @@ def generate_launch_description():
             "segmentation_config_file": PathJoinSubstitution(
                 [FindPackageShare("task2_perception"), "config",
                  "task2_segmentation_lite.yaml"]),
+            "tracker_config_file": PathJoinSubstitution(
+                [FindPackageShare("task2_perception"), "config",
+                 "task2_tracker_lite.yaml"]),
         },
     )
     mppi = _include(
