@@ -66,6 +66,18 @@ def generate_launch_description():
     back_cam_ground_video_fps = LaunchConfiguration("back_cam_ground_video_fps")
     back_cam_ground_video_width = LaunchConfiguration("back_cam_ground_video_width")
     back_cam_ground_video_height = LaunchConfiguration("back_cam_ground_video_height")
+    enable_back_cam_jpeg_ground_video = LaunchConfiguration(
+        "enable_back_cam_jpeg_ground_video"
+    )
+    back_cam_jpeg_ground_video_host = LaunchConfiguration(
+        "back_cam_jpeg_ground_video_host"
+    )
+    back_cam_jpeg_ground_video_port = LaunchConfiguration(
+        "back_cam_jpeg_ground_video_port"
+    )
+    back_cam_jpeg_ground_video_fps = LaunchConfiguration(
+        "back_cam_jpeg_ground_video_fps"
+    )
     enable_nav2 = LaunchConfiguration("enable_nav2")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     use_ekf_local = LaunchConfiguration("use_ekf_local")
@@ -214,6 +226,20 @@ def generate_launch_description():
         },
     )
 
+    # Retain the CPU JPEG route as an explicit compatibility fallback. It is
+    # disabled by default so the normal H.264 stream does not consume double
+    # the radio bandwidth.
+    back_cam_jpeg_ground_video_launch = include_launch(
+        "zed2i_driver",
+        ["launch", "back_cam_jpeg_ground_video.launch.py"],
+        IfCondition(enable_back_cam_jpeg_ground_video),
+        {
+            "host": back_cam_jpeg_ground_video_host,
+            "port": back_cam_jpeg_ground_video_port,
+            "fps": back_cam_jpeg_ground_video_fps,
+        },
+    )
+
     nav2_launch = include_launch(
         "robot",
         ["launch", "nav2.launch.py"],
@@ -291,6 +317,21 @@ def generate_launch_description():
             DeclareLaunchArgument("back_cam_ground_video_width", default_value="480"),
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="360"),
             DeclareLaunchArgument(
+                "enable_back_cam_jpeg_ground_video",
+                default_value="false",
+                description="Optional CPU JPEG compatibility stream on UDP 5602.",
+            ),
+            DeclareLaunchArgument(
+                "back_cam_jpeg_ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
+            DeclareLaunchArgument(
+                "back_cam_jpeg_ground_video_port", default_value="5602"
+            ),
+            DeclareLaunchArgument(
+                "back_cam_jpeg_ground_video_fps", default_value="4.0"
+            ),
+            DeclareLaunchArgument(
                 "use_glim_fb",
                 default_value="false",
                 description="Fuse Jetson GLIM /odom into the global EKF. "
@@ -329,6 +370,7 @@ def generate_launch_description():
             buoy_obstacle_launch,
             back_cam_launch,
             back_cam_ground_video_launch,
+            back_cam_jpeg_ground_video_launch,
             nav2_launch,
             heartbeat_launch,
         ]

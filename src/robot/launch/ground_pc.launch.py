@@ -36,6 +36,16 @@ def generate_launch_description():
         }.items(),
     )
 
+    back_cam_jpeg_receiver_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
+        ),
+        launch_arguments={
+            "port": "5602",
+            "topic": "/ground_video/back_cam_jpeg/compressed",
+        }.items(),
+    )
+
     back_cam_h26x_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(zed2i_share_path, "launch", "ground_h26x_receiver.launch.py")
@@ -116,6 +126,7 @@ def generate_launch_description():
             ground_station_heartbeat,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
+            back_cam_jpeg_receiver_launch,
             foxglove_bridge_launch,
             ntrip_caster,
         ]
