@@ -416,6 +416,21 @@ class PlannerNode(Node):
         and own/other CRM states as the current MPPI optimization.  It is a
         field over every map cell, not a plot of sampled candidate paths.
         """
+        try:
+            own_tf = self.tf_buffer.lookup_transform(
+                self.frame_id, self.own_frame, Time()
+            )
+            own_map_x = own_tf.transform.translation.x
+            own_map_y = own_tf.transform.translation.y
+            own_map_yaw = self._yaw_from_quaternion(own_tf.transform.rotation)
+        except TransformException as exc:
+            # The odometry pose passed by timer_callback is a safe fallback
+            # while map->base_link is still being initialized.
+            self.get_logger().warning(
+                f"Cannot obtain absolute own-ship TF for CRM: {exc}",
+                throttle_duration_sec=2.0,
+            )
+
         resolution = float(self.get_parameter("mppi.crm_costmap_resolution_m").value)
         width_m = float(self.get_parameter("mppi.crm_costmap_width_m").value)
         height_m = float(self.get_parameter("mppi.crm_costmap_height_m").value)
