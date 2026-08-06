@@ -909,7 +909,7 @@ class MPPIPlanner():
             w,
             self.opt_rudder,
             self.opt_acc,
-            _
+            cost_collision,
 
         ) = self.mppi_controller.get_opt(
             own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc,
@@ -928,6 +928,14 @@ class MPPIPlanner():
             ax_gains=self.ax_gains,
             debug=True
         )
+
+        # Exact candidate states/collision costs used in this optimization
+        # cycle.  This is read only by the visualization publisher.
+        self.last_mppi_debug = {
+            "predx": predx,
+            "predy": predy,
+            "cost_collision": cost_collision,
+        }
 
         opttraj = get_traj(
             own.x, own.y, own.yaw, own.u, own.r, self.opt_rudder, self.opt_acc, self.loa, self.mppi_controller.pred_dt,

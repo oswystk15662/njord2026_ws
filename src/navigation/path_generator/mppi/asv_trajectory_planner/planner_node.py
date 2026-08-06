@@ -2,12 +2,13 @@
 
 import math
 
+import numpy as np
 import rclpy
 from rclpy.node import Node
 from rclpy.time import Time
 
 from geometry_msgs.msg import PointStamped, PoseStamped, TwistStamped
-from nav_msgs.msg import Odometry, Path
+from nav_msgs.msg import OccupancyGrid, Odometry, Path
 
 from tf2_ros import Buffer, TransformListener
 
@@ -105,6 +106,14 @@ class PlannerNode(Node):
         self.declare_parameter("mppi.gate_half_width_m", 4.0)
         self.declare_parameter("mppi.buoy_margin_m", 1.0)
         self.declare_parameter("mppi.buoy_longitudinal_sigma_m", 8.0)
+        # Visualization of the CRM values actually evaluated by MPPI.  This
+        # is deliberately separate from Nav2's obstacle costmap.
+        self.declare_parameter("mppi.crm_costmap_topic", "/mppi/crm_costmap")
+        self.declare_parameter("mppi.crm_costmap_resolution_m", 0.2)
+        self.declare_parameter("mppi.crm_costmap_width_m", 120.0)
+        self.declare_parameter("mppi.crm_costmap_height_m", 60.0)
+        self.declare_parameter("mppi.crm_costmap_origin_x_m", -20.0)
+        self.declare_parameter("mppi.crm_costmap_origin_y_m", -30.0)
 
         self.own_odom_topic = self.get_parameter("own_odom_topic").value
         self.other_ship_twist_topic = self.get_parameter("other_ship_twist_topic").value
@@ -240,6 +249,11 @@ class PlannerNode(Node):
             self.path_topic,
             10,
         )
+        self.crm_costmap_pub = self.create_publisher(
+            OccupancyGrid,
+            str(self.get_parameter("mppi.crm_costmap_topic").value),
+            1,
+        )
 
         timer_period = 1.0 / max(planning_frequency, 1e-6)
         self.timer = self.create_timer(timer_period, self.timer_callback)
@@ -370,12 +384,85 @@ class PlannerNode(Node):
             pose.header.frame_id = self.frame_id
 
         self.path_pub.publish(path)
+        own_position = self.latest_own_odom.pose.pose.position
+        self.publish_mppi_crm_costmap(
+            own_map_x=own_position.x,
+            own_map_y=own_position.y,
+            own_map_yaw=self._yaw_from_odom(self.latest_own_odom),
+        )
 
         self.get_logger().info(
             f"Published path: {len(path.poses)} poses, "
             f"detected_buoys={len(buoy_positions)}",
             throttle_duration_sec=2.0,
         )
+
+    @staticmethod
+    def _yaw_from_odom(odom: Odometry) -> float:
+        q = odom.pose.pose.orientation
+        return math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z),
+        )
+
+    def publish_mppi_crm_costmap(
+        self, own_map_x: float, own_map_y: float, own_map_yaw: float
+    ) -> None:
+        """Publish the current MPPI candidates' evaluated CRM costs.
+
+        Each occupied cell is a candidate predicted state.  Its value is the
+        collision cost returned by the very same ``get_opt`` invocation that
+        selected the path, normalized only for OccupancyGrid display.
+        """
+        debug = getattr(self.trajectory_generator.planner, "last_mppi_debug", None)
+        if not debug:
+            return
+
+        resolution = float(self.get_parameter("mppi.crm_costmap_resolution_m").value)
+        width_m = float(self.get_parameter("mppi.crm_costmap_width_m").value)
+        height_m = float(self.get_parameter("mppi.crm_costmap_height_m").value)
+        origin_x = float(self.get_parameter("mppi.crm_costmap_origin_x_m").value)
+        origin_y = float(self.get_parameter("mppi.crm_costmap_origin_y_m").value)
+        cols, rows = round(width_m / resolution), round(height_m / resolution)
+
+        predx = np.asarray(debug["predx"], dtype=float).ravel()
+        predy = np.asarray(debug["predy"], dtype=float).ravel()
+        costs = np.asarray(debug["cost_collision"], dtype=float).reshape(-1)
+        if costs.size == 0 or predx.size == 0:
+            return
+        # One aggregate collision cost is returned for every candidate, while
+        # predx/predy contain all horizon points for that candidate.
+        horizon_points = predx.size // costs.size
+        if horizon_points <= 0:
+            return
+        costs = np.repeat(costs, horizon_points)[:predx.size]
+        c, s = math.cos(own_map_yaw), math.sin(own_map_yaw)
+        map_x = own_map_x + c * predx - s * predy
+        map_y = own_map_y + s * predx + c * predy
+        col = ((map_x - origin_x) / resolution).astype(int)
+        row = ((map_y - origin_y) / resolution).astype(int)
+        valid = (
+            np.isfinite(costs) & (col >= 0) & (col < cols) &
+            (row >= 0) & (row < rows)
+        )
+        grid = np.zeros(rows * cols, dtype=np.float64)
+        if np.any(valid):
+            max_cost = float(np.max(costs[valid]))
+            if max_cost > 0.0:
+                values = np.clip(costs[valid] / max_cost * 100.0, 0.0, 100.0)
+                np.maximum.at(grid, row[valid] * cols + col[valid], values)
+
+        msg = OccupancyGrid()
+        msg.header.stamp = self.get_clock().now().to_msg()
+        msg.header.frame_id = self.frame_id
+        msg.info.resolution = resolution
+        msg.info.width = cols
+        msg.info.height = rows
+        msg.info.origin.position.x = origin_x
+        msg.info.origin.position.y = origin_y
+        msg.info.origin.orientation.w = 1.0
+        msg.data = np.rint(grid).astype(np.int8).tolist()
+        self.crm_costmap_pub.publish(msg)
 
 
 def main(args=None):
