@@ -6,6 +6,7 @@
 
 #include <array>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <thread>
@@ -97,7 +98,8 @@ void expect_thruster_command_frame(
   EXPECT_EQ(raw[4], micon_driver_fd::kPayloadSize);
 
   for (size_t i = 0; i < thrust.size(); ++i) {
-    EXPECT_FLOAT_EQ(read_float32_le(raw.data() + micon_driver_fd::kHeaderSize + i * sizeof(float)),
+    EXPECT_FLOAT_EQ(
+      read_float32_le(raw.data() + micon_driver_fd::kHeaderSize + i * sizeof(float)),
       thrust[i]);
   }
   EXPECT_EQ(raw[micon_driver_fd::kHeaderSize + 4U * sizeof(float)], expected_flags);
@@ -125,7 +127,8 @@ TEST(SerialPacket, EncodesFloatsAndFlags)
 TEST(BmsCsv, ParsesCellVoltagesAndTemperature)
 {
   micon_driver_fd::BmsTelemetry telemetry;
-  ASSERT_TRUE(micon_driver_fd::parse_bms_csv_line(
+  ASSERT_TRUE(
+    micon_driver_fd::parse_bms_csv_line(
       "1234,4.1010,4.0870,4.0930,4.0990,16.3800,25.5,41,38,44,40,OK", &telemetry));
   EXPECT_FLOAT_EQ(telemetry.cells[0], 4.1010F);
   EXPECT_FLOAT_EQ(telemetry.cells[1], 4.0870F);
@@ -134,14 +137,21 @@ TEST(BmsCsv, ParsesCellVoltagesAndTemperature)
   EXPECT_FLOAT_EQ(telemetry.temperature_c, 25.5F);
 }
 
-TEST(BmsCsv, RejectsHeaderAndInvalidCellVoltage)
+TEST(BmsCsv, RejectsHeaderAndPreservesUnavailableCellVoltage)
 {
   micon_driver_fd::BmsTelemetry telemetry;
-  EXPECT_FALSE(micon_driver_fd::parse_bms_csv_line(
+  EXPECT_FALSE(
+    micon_driver_fd::parse_bms_csv_line(
       "ms,cell1_V,cell2_V,cell3_V,cell4_V,total_V,temperature_C,age1_ms,age2_ms,age3_ms,age4_ms,status",
-    &telemetry));
-  EXPECT_FALSE(micon_driver_fd::parse_bms_csv_line(
+      &telemetry));
+  ASSERT_TRUE(
+    micon_driver_fd::parse_bms_csv_line(
       "1234,4.1010,nan,4.0930,4.0990,nan,nan,41,38,44,40,STALE", &telemetry));
+  EXPECT_FLOAT_EQ(telemetry.cells[0], 4.1010F);
+  EXPECT_TRUE(std::isnan(telemetry.cells[1]));
+  EXPECT_FLOAT_EQ(telemetry.cells[2], 4.0930F);
+  EXPECT_FLOAT_EQ(telemetry.cells[3], 4.0990F);
+  EXPECT_TRUE(std::isnan(telemetry.temperature_c));
 }
 
 TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)

@@ -40,5 +40,7 @@ heartbeat watchdog has timed out; otherwise an active relay is reported as
 
 `Docs/njord_BMS_v0/master` sends one CSV row per second over the same serial
 port. `serial_writer` extracts `cell1_V` through `cell4_V` and publishes them
-as a four-element `std_msgs/msg/Float32MultiArray` on `bms_topic`. CSV headers,
-stale rows containing `nan`, and malformed rows are ignored.
+as a four-element `std_msgs/msg/Float32MultiArray` on `bms_topic`. CSV headers
+and malformed rows are ignored. A valid `STALE` row is still published with
+`nan` values intact, so heartbeat monitoring reflects serial-message arrival
+while consumers can detect unavailable cell measurements.

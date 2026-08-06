@@ -90,7 +90,11 @@ bool parse_float(const std::string & field, float * value)
   char * end = nullptr;
   errno = 0;
   const float parsed = std::strtof(field.c_str(), &end);
-  if (end == field.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
+  // The BMS master deliberately emits `nan` for an unavailable/stale cell.
+  // Preserve that value in the ROS telemetry so consumers can distinguish a
+  // live-but-invalid BMS link from a missing serial stream.  Infinity still
+  // indicates malformed input and is rejected.
+  if (end == field.c_str() || errno == ERANGE || std::isinf(parsed)) {
     return false;
   }
   while (*end == ' ' || *end == '\t' || *end == '\r') {
@@ -305,7 +309,8 @@ void SerialWriter::publish_safety_state()
   // A commanded soft stop has priority, because it can itself change relay state.
   const auto state = soft_emg ? EmergencyStopState::SOFT_EMG :
     relay_active ? EmergencyStopState::HARD_EMG : EmergencyStopState::RUNNING;
-  pub_safety_emergency_->publish(std_msgs::msg::UInt8().set__data(
+  pub_safety_emergency_->publish(
+    std_msgs::msg::UInt8().set__data(
       static_cast<uint8_t>(state)));
 }
 
