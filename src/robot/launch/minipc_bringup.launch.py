@@ -91,6 +91,7 @@ def generate_launch_description():
     use_glim_fb = LaunchConfiguration("use_glim_fb")
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
+    thruster_use_velocity_feedback = LaunchConfiguration("thruster_use_velocity_feedback")
 
     # robot_state_publisher and base_link->um982_link static TF are started by
     # localization.launch.py. Do not start them again here.
@@ -204,6 +205,7 @@ def generate_launch_description():
         {
             "config_file": thruster_config_file,
             "robot_description_file": thruster_robot_description_file,
+            "use_velocity_feedback": thruster_use_velocity_feedback,
         },
     )
 
@@ -409,6 +411,11 @@ def generate_launch_description():
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
                 "thruster_robot_description_file", default_value=default_thruster_urdf
+            ),
+            DeclareLaunchArgument(
+                "thruster_use_velocity_feedback",
+                default_value="true",
+                description="Use measured local odometry velocity in thruster control.",
             ),
             localization_launch,
             um982_launch,
