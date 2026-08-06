@@ -217,7 +217,7 @@ private:
   void publishReport()
   {
     std::ostringstream out;
-    out << std::fixed << std::setprecision(2) << "BATTERY CELLS=";
+    out << std::fixed << std::setprecision(1) << "\nBATTERY CELLS=";
     if (cells_) {
       out << '[';
       for (std::size_t i = 0; i < cells_->size(); ++i) {

@@ -108,8 +108,8 @@ def generate_launch_description():
         {
             "enable_glim": "false",
             "enable_local_ekf": use_ekf_local,
-            "enable_global_ekf": "false",
-            "enable_navsat_transform": "false",
+            "enable_global_ekf": "true",
+            "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
             "use_glim_fb": use_glim_fb,
         },
@@ -123,7 +123,7 @@ def generate_launch_description():
             "uart_or_tcp": um982_protocol,
             "gnss_port": um982_port,
             "rtk_enable": enable_um982_rtk,
-            "ntrip_server": "192.168.1.72",
+            "ntrip_server": "osw-Stealth-14-AI-Studio-A1VGG.local",
             "ntrip_port": "2101",
             "ntrip_mountpoint": "RTCM3",
             "ntrip_username": "test",
@@ -157,7 +157,7 @@ def generate_launch_description():
                     "call",
                     "/adnav_driver/ntrip",
                     "adnav_interfaces/srv/Ntrip",
-                    "{enable: true, host: '192.168.1.72:2101', username: 'test', "
+                    "{enable: true, host: 'osw-Stealth-14-AI-Studio-A1VGG.local:2101', username: 'test', "
                     "password: 'test', mountpoint: 'RTCM3'}",
                 ],
                 output="screen",
@@ -271,7 +271,7 @@ def generate_launch_description():
         package="foxglove_logger",
         executable="foxglove_logger_node",
         name="foxglove_logger",
-        # output="log",
+        # output="screen",
     )
 
     alert_lamp_launch = include_launch(
@@ -350,7 +350,7 @@ def generate_launch_description():
             "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
             "heartbeat_monitor_ekf_local": heartbeat_monitor_ekf_local,
             "heartbeat_monitor_ekf_global": heartbeat_monitor_ekf_global,
-            "enable_global_ekf": "false",
+            "enable_global_ekf": "true",
         },
     )
 
@@ -522,7 +522,7 @@ def generate_launch_description():
             thruster_serial,
             bms_serial,
             bms_launch,
-            # foxglove_logger,
+            foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
             back_cam_launch,
