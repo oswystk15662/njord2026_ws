@@ -154,6 +154,17 @@ def test_operator_nodes_have_single_machine_owners():
     assert 'foxglove_bridge_launch.xml' in ground_source
 
 
+def test_ground_pc_publishes_the_actual_route_marker_from_shared_tf():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'package="tf_frame_arrow_publisher"' in source
+    assert 'executable="full_path_publisher"' in source
+    assert 'name="actual_route_publisher"' in source
+    assert '"marker_topic": "/actual_path_marker"' in source
+    assert '"parent_frame": "odom"' in source
+    assert '"child_frame": "base_link"' in source
+
+
 def test_disabled_minipc_serial_drivers_default_to_false():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert '"enable_drogger_rzs", default_value="false"' in source

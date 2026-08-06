@@ -82,6 +82,20 @@ def generate_launch_description():
         parameters=[{"topic": "/heartbeat/ground_station", "period_sec": 1.0}],
     )
 
+    actual_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="full_path_publisher",
+        name="actual_route_publisher",
+        output="screen",
+        parameters=[
+            {
+                "marker_topic": "/actual_path_marker",
+                "parent_frame": "odom",
+                "child_frame": "base_link",
+            }
+        ],
+    )
+
     ntrip_caster = ExecuteProcess(
         cmd=[
             PathJoinSubstitution(
@@ -124,6 +138,7 @@ def generate_launch_description():
             ),
             joy_node,
             ground_station_heartbeat,
+            actual_route,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,

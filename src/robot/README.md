@@ -6,7 +6,7 @@ this pkg is for launch and visualization
 
 | launch | 動かす端末 | 内容 |
 |---|---|---|
-| `ground_pc.launch.py` | Ground PC | joy、前後映像受信、Foxglove bridge、ground-station heartbeat |
+| `ground_pc.launch.py` | Ground PC | joy、前後映像受信、Foxglove bridge、ground-station heartbeat、実軌跡マーカー |
 | `jetson_bringup.launch.py` | Jetson | MID360S + ZED 2i + GPU camera/LiDAR buoy detection。GLIMと単体PCL検出は既定OFF |
 | `minipc_bringup.launch.py` | miniPC | micon、UM982、localization、スラスタ、back camera、Foxglove logger。Drogger/WIT IMUノードは起動対象外 |
 | `standalone_bringup.launch.py` | Jetson 1台 | Jetson用とminiPC用bringupを両方includeする回帰用 |

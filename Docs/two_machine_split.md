@@ -31,9 +31,10 @@ Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が param
 
 ### Ground PC（`ground_pc.launch.py`）
 
-`joy_node` / ground-station heartbeat / 前方JPEG-RTP受信 / 後方H.264/H.265-RTP受信 / `foxglove_bridge`
+`joy_node` / ground-station heartbeat / 前方JPEG-RTP受信 / 後方H.264/H.265-RTP受信 / `foxglove_bridge` / `full_path_publisher`
 
 `foxglove_logger`は船体側のBMS・GNSS・EKF・制御状態をローカルに集約するためminiPCに置き、FoxgloveクライアントへのWebSocket bridgeだけをGround PCで起動する。
+`full_path_publisher`は共有された`odom -> base_link` TFから`/actual_path_marker`を発行する。
 
 ## トピックの流れ
 
