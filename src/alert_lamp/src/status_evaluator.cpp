@@ -10,9 +10,7 @@ bool StatusEvaluator::hasCriticalFault(const SystemStatus & s) const
   {
     return true;
   }
-  if (s.mode == OperatingMode::AUTO &&
-    (!s.high_level_alive || !s.autonomy_alive || !s.localization_alive || !s.localization_stable))
-  {
+  if (s.mode == OperatingMode::AUTO && (!s.high_level_alive || !s.autonomy_alive)) {
     return true;
   }
   return !s.ground_station_connected && !s.localization_stable;
@@ -27,13 +25,12 @@ AlertState StatusEvaluator::evaluate(const SystemStatus & s) const
     return AlertState::GROUND_COMMUNICATION_LOST;
   }
   if (s.mode == OperatingMode::AUTO && (!s.high_level_alive || !s.autonomy_alive ||
-    !s.autonomy_ready || !s.localization_stable || !s.rtk_fix || s.required_sensor_not_ready))
+    !s.autonomy_ready || !s.rtk_fix || s.required_sensor_not_ready))
   {
     return AlertState::AUTONOMY_NOT_READY;
   }
   if (s.mode == OperatingMode::AUTO && s.driver_alive && s.high_level_alive &&
-    s.localization_alive &&
-    s.autonomy_alive && s.localization_stable && s.autonomy_ready && !s.critical_diagnostics)
+    s.autonomy_alive && s.autonomy_ready && !s.critical_diagnostics)
   {
     return AlertState::AUTO_NORMAL;
   }

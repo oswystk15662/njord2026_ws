@@ -25,6 +25,13 @@ TEST(StatusEvaluator, AutoNormal)
   EXPECT_EQ(alert_lamp::StatusEvaluator().evaluate(normal(alert_lamp::OperatingMode::AUTO)),
     alert_lamp::AlertState::AUTO_NORMAL);
 }
+TEST(StatusEvaluator, AutoNormalDoesNotRequireLocalization)
+{
+  auto s = normal(alert_lamp::OperatingMode::AUTO);
+  s.localization_alive = false;
+  s.localization_stable = false;
+  EXPECT_EQ(alert_lamp::StatusEvaluator().evaluate(s), alert_lamp::AlertState::AUTO_NORMAL);
+}
 TEST(StatusEvaluator, RtkMissingIsNotReady)
 {
   auto s = normal(alert_lamp::OperatingMode::AUTO); s.rtk_fix = false;
