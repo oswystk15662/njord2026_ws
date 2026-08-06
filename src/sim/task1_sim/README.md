@@ -79,6 +79,8 @@ For the Task1 simulation, the full numbered goal sequence and the 1.0 m Nav2
 reach circles are published as `visualization_msgs/MarkerArray` on
 `/sim/task1_waypoint_markers`. The repository's `foxglove_setting.json`
 layout enables this topic by default.
+The connecting waypoint line is off by default; enable it with
+`show_waypoint_route_line:=true` when launching `waypoint_publisher` directly.
 
 ## Usage
 

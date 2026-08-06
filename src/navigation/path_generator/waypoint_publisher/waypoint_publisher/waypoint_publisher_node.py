@@ -62,6 +62,8 @@ class WaypointPublisher(Node):
         self.declare_parameter('max_goal_retries', 1)
         self.declare_parameter('waypoint_marker_topic', '/waypoint_markers')
         self.declare_parameter('nav2_goal_tolerance_m', 1.0)
+        self.declare_parameter('show_waypoint_route_line', False)
+        self.declare_parameter('waypoint_route_z', -0.05)
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -74,6 +76,10 @@ class WaypointPublisher(Node):
         self.nav2_goal_tolerance_m = float(
             self.get_parameter('nav2_goal_tolerance_m').value
         )
+        self.show_waypoint_route_line = self.get_parameter(
+            'show_waypoint_route_line'
+        ).value
+        self.waypoint_route_z = float(self.get_parameter('waypoint_route_z').value)
         
         # Validate task type
         try:
@@ -262,7 +268,7 @@ class WaypointPublisher(Node):
             x = float(waypoint.get('x', 0.0))
             y = float(waypoint.get('y', 0.0))
 
-            point = Point(x=x, y=y, z=0.08)
+            point = Point(x=x, y=y, z=self.waypoint_route_z)
             route.points.append(point)
 
             reach_disc = Marker()
@@ -327,7 +333,8 @@ class WaypointPublisher(Node):
             )
             marker_array.markers.append(label)
 
-        marker_array.markers.insert(0, route)
+        if self.show_waypoint_route_line:
+            marker_array.markers.insert(0, route)
         self.waypoint_marker_pub.publish(marker_array)
 
     def _build_poses_for_ids(self, waypoint_ids: list) -> list:

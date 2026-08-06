@@ -57,6 +57,12 @@ def generate_launch_description():
         default_value='1.0',
         description='Nav2 XY reach tolerance rendered around each waypoint in metres'
     )
+
+    waypoint_route_line_arg = DeclareLaunchArgument(
+        'show_waypoint_route_line',
+        default_value='false',
+        description='Draw a line connecting waypoint markers'
+    )
     
     # Create node
     waypoint_publisher_node = Node(
@@ -81,6 +87,10 @@ def generate_launch_description():
                     LaunchConfiguration('nav2_goal_tolerance_m'),
                     value_type=float,
                 ),
+                'show_waypoint_route_line': ParameterValue(
+                    LaunchConfiguration('show_waypoint_route_line'),
+                    value_type=bool,
+                ),
             }
         ],
         output='screen',
@@ -96,6 +106,7 @@ def generate_launch_description():
         full_sequence_arg,
         waypoint_marker_topic_arg,
         nav2_goal_tolerance_arg,
+        waypoint_route_line_arg,
         waypoint_publisher_node,
     ])
     
