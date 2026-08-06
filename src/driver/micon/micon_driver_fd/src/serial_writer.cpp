@@ -152,7 +152,38 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 
 SerialWriter::~SerialWriter()
 {
-  if (fd_ >= 0) {close(fd_);}
+  if (fd_ < 0) {
+    return;
+  }
+
+  // Send an explicit final stop command before closing the port.  This makes
+  // shutdown safe even if the ESP32 has not reached its communication timeout
+  // yet, and leaves the warning LEDs in the commanded emergency/red state.
+  const std::array<float, 4> zero_thrust{{0.0F, 0.0F, 0.0F, 0.0F}};
+  Flags shutdown_flags;
+  shutdown_flags.emergency = true;
+  shutdown_flags.red = true;
+  const Packet packet = encode_packet(zero_thrust, shutdown_flags, sequence_++);
+
+  size_t written = 0;
+  for (int attempt = 0; written < packet.size() && attempt < 100; ++attempt) {
+    const ssize_t result = write(
+      fd_, packet.data() + written, packet.size() - written);
+    if (result > 0) {
+      written += static_cast<size_t>(result);
+    } else if (result < 0 && (errno == EINTR)) {
+      continue;
+    } else if (result < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      usleep(1000);
+    } else {
+      break;
+    }
+  }
+  if (written == packet.size()) {
+    tcdrain(fd_);
+  }
+  close(fd_);
+  fd_ = -1;
 }
 
 void SerialWriter::thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg)

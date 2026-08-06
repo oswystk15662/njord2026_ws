@@ -46,7 +46,7 @@ CRC は version から payload 末尾までの 22 byte を対象にする。
 | bit3 | 緊急停止（1 = 停止指令） |
 | bit2 | LED 緑（1 = 点灯） |
 | bit1 | LED 黄（1 = 点灯） |
-| bit0 | LED 赤（1 = 点滅） |
+| bit0 | LED 赤（1 = 点灯） |
 
 ---
 
@@ -55,8 +55,7 @@ CRC は version から payload 末尾までの 22 byte を対象にする。
 不正 frame、CRC 不一致、非有限 float は出力へ反映しない。
 
 software emergency stop が 1、または有効な指令が 1000 ms 途絶した場合、全スラスターを
-中立にして FET を LOW にし、赤LEDを点灯する。通常指令で bit0 が1の場合は赤LEDを点滅させる。
-GPIO15 は物理 E-stop の独立した入力ではなく、リレーの
+中立にして FET を LOW にする。GPIO15 は物理 E-stop の独立した入力ではなく、リレーの
 状態を読む信号である。soft emergency stop によってリレーを切った場合もこの信号は変化
 し得るため、GPIO15だけから物理 E-stop の作動を判定してはならない。
 
