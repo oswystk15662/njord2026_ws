@@ -31,6 +31,7 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
+          "/heartbeat/ground_station",
           "/joy", "/joy/set_feedback",
         ],
         subscribers: [
@@ -38,6 +39,7 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
+          "/heartbeat/ground_station",
           "/joy", "/joy/set_feedback",
         ],
         service_servers: [], service_clients: [],

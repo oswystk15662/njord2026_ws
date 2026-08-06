@@ -342,3 +342,4 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
 
     assert '"/livox/imu"' in source
     assert '"/livox/lidar"' not in source
+    assert '"/heartbeat/ground_station"' in source
