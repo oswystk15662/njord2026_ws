@@ -19,6 +19,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rcl_interfaces/msg/log.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
 #include "std_msgs/msg/float32.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
@@ -81,7 +82,7 @@ public:
     const auto diagnostics_topic = declare_parameter<std::string>("diagnostics_topic", "/diagnostics");
     const auto log_topic = declare_parameter<std::string>("log_topic", "/foxglove_log");
 
-    log_pub_ = create_publisher<std_msgs::msg::String>(log_topic, 10);
+    log_pub_ = create_publisher<rcl_interfaces::msg::Log>(log_topic, 10);
 
     cells_sub_ = create_subscription<std_msgs::msg::Float32MultiArray>(cells_topic, 10,
       [this](std_msgs::msg::Float32MultiArray::SharedPtr msg) {cells_ = msg->data;});
@@ -117,8 +118,14 @@ private:
 
   void publishLog(LogLevel level, const std::string & text) const
   {
-    std_msgs::msg::String message;
-    message.data = text;
+    rcl_interfaces::msg::Log message;
+    message.stamp = now();
+    message.level = logLevelValue(level);
+    message.name = get_name();
+    message.msg = text;
+    message.file = __FILE__;
+    message.function = __func__;
+    message.line = __LINE__;
     log_pub_->publish(message);
 
     switch (level) {
@@ -132,6 +139,16 @@ private:
         RCLCPP_ERROR(get_logger(), "%s", text.c_str());
         break;
     }
+  }
+
+  static uint8_t logLevelValue(LogLevel level)
+  {
+    switch (level) {
+      case LogLevel::kInfo: return rcl_interfaces::msg::Log::INFO;
+      case LogLevel::kWarn: return rcl_interfaces::msg::Log::WARN;
+      case LogLevel::kError: return rcl_interfaces::msg::Log::ERROR;
+    }
+    return rcl_interfaces::msg::Log::INFO;
   }
 
   void onBuoys(const njord_interfaces::msg::BuoyDetectionArray & msg)
@@ -302,7 +319,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
   rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_sub_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr log_pub_;
+  rclcpp::Publisher<rcl_interfaces::msg::Log>::SharedPtr log_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
 

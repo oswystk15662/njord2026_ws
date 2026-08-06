@@ -11,6 +11,7 @@
   <depend>nav_msgs</depend>
   <depend>njord_interfaces</depend>
   <depend>rclcpp</depend>
+  <depend>rcl_interfaces</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
 
