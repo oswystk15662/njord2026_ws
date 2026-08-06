@@ -26,7 +26,12 @@ from collections import deque
 import numpy as np
 import rclpy
 from rclpy.node import Node
-from rclpy.qos import qos_profile_sensor_data
+from rclpy.qos import (
+    DurabilityPolicy,
+    HistoryPolicy,
+    QoSProfile,
+    ReliabilityPolicy,
+)
 from rclpy.time import Time
 
 from geometry_msgs.msg import Point
@@ -106,6 +111,9 @@ class CloudFilterNode(Node):
             ("max_range_m", 60.0),
             ("voxel_leaf_size_m", 0.0),
             ("accumulation_frames", 1),
+            # 0 = process every frame.  A positive value processes at most
+            # that rate and deliberately drops stale LiDAR frames.
+            ("process_rate_hz", 0.0),
             ("lidar_inverted", False),
             ("lidar_roll_deg", 0.0),
             ("lidar_pitch_deg", 0.0),
@@ -141,6 +149,11 @@ class CloudFilterNode(Node):
         self.min_range = float(gp("min_range_m"))
         self.max_range = float(gp("max_range_m"))
         self.voxel_leaf = float(gp("voxel_leaf_size_m"))
+        self.process_period_ns = 0
+        process_rate_hz = float(gp("process_rate_hz"))
+        if process_rate_hz > 0.0:
+            self.process_period_ns = int(1e9 / process_rate_hz)
+        self.last_processed_stamp_ns = None
         self.lidar_inverted = bool(gp("lidar_inverted"))
         roll_deg = float(gp("lidar_roll_deg"))
         pitch_deg = float(gp("lidar_pitch_deg"))
@@ -207,13 +220,23 @@ class CloudFilterNode(Node):
             self.pub_rejected = self.create_publisher(
                 PointCloud2, "/task2/debug/rejected_water", 1)
 
+        # Depth one prevents CPU-bound filtering from building an old-cloud
+        # backlog.  For avoidance, a fresh observation is safer than a
+        # complete sequence with growing latency.
+        latest_sensor_qos = QoSProfile(
+            history=HistoryPolicy.KEEP_LAST,
+            depth=1,
+            reliability=ReliabilityPolicy.BEST_EFFORT,
+            durability=DurabilityPolicy.VOLATILE,
+        )
         self.sub = self.create_subscription(
             PointCloud2, str(gp("input_topic")), self.cloud_callback,
-            qos_profile_sensor_data)
+            latest_sensor_qos)
 
         self.get_logger().info(
             f"task2_cloud_filter: {gp('input_topic')} -> {gp('output_topic')} "
             f"(frame={self.output_frame}, waterline_z={self.waterline_z} m, "
+            f"process_rate={'unlimited' if self.process_period_ns == 0 else process_rate_hz} Hz, "
             f"self marker={'on' if self.publish_self_marker_enabled else 'off'}, "
             f"visual_z_mirror={self.publish_visual_z_mirror})")
 
@@ -273,6 +296,11 @@ class CloudFilterNode(Node):
         return transform_msg_to_matrix(tf_msg)
 
     def cloud_callback(self, msg: PointCloud2):
+        stamp_ns = msg.header.stamp.sec * 1_000_000_000 + msg.header.stamp.nanosec
+        if self.process_period_ns and self.last_processed_stamp_ns is not None and \
+                stamp_ns - self.last_processed_stamp_ns < self.process_period_ns:
+            return
+        self.last_processed_stamp_ns = stamp_ns
         transform = self._lookup(
             self.output_frame, msg.header.frame_id, msg.header.stamp)
         if transform is None:

@@ -100,6 +100,12 @@ def generate_launch_description():
         {
             "lidar_topic": "/task2/points_filtered",
             "ego_odom_topic": "/odom",
+            "preprocessing_config_file": PathJoinSubstitution(
+                [FindPackageShare("task2_perception"), "config",
+                 "task2_preprocessing_lite.yaml"]),
+            "segmentation_config_file": PathJoinSubstitution(
+                [FindPackageShare("task2_perception"), "config",
+                 "task2_segmentation_lite.yaml"]),
         },
     )
 

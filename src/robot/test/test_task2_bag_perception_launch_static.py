@@ -29,6 +29,8 @@ def test_launches_bag_and_perception_chain():
         '"classical_pipeline.launch.py"',
         '"use_sim_time": "true"',
         '"ego_odom_topic": "/odom"',
+        '"task2_preprocessing_lite.yaml"',
+        '"task2_segmentation_lite.yaml"',
         '"map_frame": "odom"',
     ):
         assert required in source

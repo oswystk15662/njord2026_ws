@@ -20,11 +20,14 @@ task2_cloud_filter:
     # LiDAR is mounted upside-down and sees the own hull.  Discard every
     # point within this 3D radius of base_link before segmentation.
     min_range_m: 1.5        # [m] self-hull / near-field exclusion radius
-    max_range_m: 60.0       # [m] drop returns farther than this
+    max_range_m: 40.0       # [m] Task 2 forward encounter range
     voxel_leaf_size_m: 0.0  # [m] 0 = off; the downstream pcl_preprocessing
                             # node voxelizes at 0.1 m — do not double-voxelize
     accumulation_frames: 1  # [frames] 1 = off; the submodule accumulates 3
                             # frames downstream — do not double-accumulate
+    # Process the latest cloud at 5 Hz.  The subscriber depth is one, so
+    # unprocessed clouds are dropped instead of building latency.
+    process_rate_hz: 5.0    # [Hz] 0 = process every LiDAR frame
     # Emergency manual pre-rotation applied BEFORE TF. Default no-op.
     # If any of these is active the node warns at startup: the URDF TF is the
     # authoritative inversion correction — do not double-apply.
@@ -42,7 +45,8 @@ task2_cloud_filter:
                                     # candidates (vertical quay walls survive)
     water_plane_max_height_error_m: 0.3  # [m] plane height tolerance around
                                          # waterline (a deck 2 m above survives)
-    use_water_plane_ransac: true
+    # Fixed waterline band is enough for Task 2 and avoids per-cloud RANSAC.
+    use_water_plane_ransac: false
     # Self crop-box (base_link AABB, points INSIDE are removed).
     # HUMAN: measure hull + mast extents on vessel.
     self_crop_min_x: -1.2   # [m]
