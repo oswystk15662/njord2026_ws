@@ -216,6 +216,27 @@ private:
     } else {
       out << "N/A";
     }
+    out << '\n' << "NAV LAT=";
+    if (fix_) {
+      out << std::setprecision(6) << fix_->latitude << " LON=" << fix_->longitude;
+      out << std::setprecision(2);
+    } else {
+      out << "N/A LON=N/A";
+    }
+    const auto speed = speedMps();
+    out << " SOG=";
+    if (speed) {
+      out << *speed << "m/s";
+    } else {
+      out << "N/A";
+    }
+    const auto heading = headingDegrees();
+    out << " HDG=";
+    if (heading) {
+      out << *heading << "deg";
+    } else {
+      out << "N/A";
+    }
     publishLog(LogLevel::kInfo, out.str());
   }
 
