@@ -33,6 +33,35 @@ rclcpp_components_register_nodes(
   "njord::diagnostic_monitors::TopicHeartbeatMonitor"
 )
 
+add_library(heartbeat_aggregator_component SHARED
+  src/heartbeat_aggregator.cpp
+)
+target_include_directories(heartbeat_aggregator_component PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+  "$<INSTALL_INTERFACE:include>"
+)
+ament_target_dependencies(heartbeat_aggregator_component
+  diagnostic_msgs
+  diagnostic_updater
+  rclcpp
+  rclcpp_components
+  std_msgs
+)
+rclcpp_components_register_nodes(
+  heartbeat_aggregator_component
+  "njord::diagnostic_monitors::HeartbeatAggregator"
+)
+
+add_executable(heartbeat_aggregator_node
+  src/heartbeat_aggregator_node.cpp
+)
+target_link_libraries(heartbeat_aggregator_node
+  heartbeat_aggregator_component
+)
+ament_target_dependencies(heartbeat_aggregator_node
+  rclcpp
+)
+
 add_executable(topic_heartbeat_monitor_node
   src/topic_heartbeat_monitor_node.cpp
 )
@@ -63,6 +92,7 @@ install(
 )
 install(
   TARGETS topic_heartbeat_monitor_component topic_heartbeat_monitor_node
+          heartbeat_aggregator_component heartbeat_aggregator_node
           autonomy_supervisor_node
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

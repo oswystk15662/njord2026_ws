@@ -13,3 +13,6 @@
 [submodule "src/driver/ins/ros2-driver"]
 	path = src/driver/ins/ros2-driver
 	url = https://github.com/advanced-navigation/ros2-driver.git
+[submodule "src/driver/gnss/ntripcaster"]
+	path = src/driver/gnss/ntripcaster
+	url = https://github.com/IBO-ASV/ntripcaster.git

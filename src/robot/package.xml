@@ -28,6 +28,7 @@
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_common</exec_depend>
   <exec_depend>micon_driver_fd</exec_depend>
+  <exec_depend>ntripcaster</exec_depend>
   <exec_depend>pcl_det</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>robot_localization</exec_depend>

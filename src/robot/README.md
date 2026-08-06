@@ -26,6 +26,17 @@ miniPCのlocal odometryは既定でUM982 feedback EKFを使う。
 排他的に切り替える。両方のEKFが同時に
 `/odometry/filtered/local` と `odom -> base_link` を出すことはない。
 
+driver heartbeatは実データの鮮度から階層的に生成する。Jetsonが前カメラと
+LiDARのleaf heartbeatを生成し、miniPCがback camera、GNSS、Miconと合わせて
+`/heartbeat/driver` へ集約する。local/global odometryも
+`/heartbeat/localization` へ集約される。
+
+Ground PCではNTRIP casterも既定起動する。Drogger RWS/ETHMの接続設定は
+`192.168.1.72:2101`、mountpoint `RTCM3`、NTRIP v1 SOURCE方式とする。
+Casterは `src/driver/gnss/ntripcaster` のsubmoduleをcolconでビルドし、
+workspaceのinstall spaceから起動する。既定のSOURCE/client資格情報は公開済みの
+試験値なので、閉じた実験LAN以外ではconfigを差し替えること。
+
 `glim_backend`(`gpu` / `cpu`、既定 `gpu`)で GLIM の設定ディレクトリを切り替えられる。`cpu` は `config/glim_config_cpu/` を使い、OpenGL ビューアを外したヘッドレス構成になる。
 
 ## back_cam(背面USBカメラ)

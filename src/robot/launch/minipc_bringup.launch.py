@@ -52,13 +52,7 @@ def generate_launch_description():
     um982_protocol = LaunchConfiguration("um982_protocol")
     enable_um982_rtk = LaunchConfiguration("enable_um982_rtk")
     um982_feedback_mode = LaunchConfiguration("um982_feedback_mode")
-    drogger_rzs_port = LaunchConfiguration("drogger_rzs_port")
-    drogger_rzs_baud = LaunchConfiguration("drogger_rzs_baud")
-    imu_port = LaunchConfiguration("imu_port")
-    imu_baud = LaunchConfiguration("imu_baud")
     enable_um982 = LaunchConfiguration("enable_um982")
-    enable_drogger_rzs = LaunchConfiguration("enable_drogger_rzs")
-    enable_imu = LaunchConfiguration("enable_imu")
     enable_localization = LaunchConfiguration("enable_localization")
     enable_thruster = LaunchConfiguration("enable_thruster")
     enable_alert_lamp = LaunchConfiguration("enable_alert_lamp")
@@ -123,33 +117,6 @@ def generate_launch_description():
                 },
             )
         ],
-    )
-
-    drogger_launch = include_launch(
-        "drogger_wired_flex",
-        ["launch", "driver.launch.py"],
-        IfCondition(enable_drogger_rzs),
-        {
-            "serial_port": drogger_rzs_port,
-            "serial_baudrate": drogger_rzs_baud,
-        },
-    )
-
-    imu_node = Node(
-        package="witmotion_imu_driver",
-        executable="witmotion_standard_protocol_driver_node",
-        name="witmotion_standard_protocol_driver",
-        output="screen",
-        parameters=[
-            {
-                "device_port_name": imu_port,
-                "serial_baud_rate": imu_baud,
-                "frame_id": "imu_link",
-                "publish_frequency": 10.0,
-            }
-        ],
-        remappings=[("~/imu/raw", "/wit/imu")],
-        condition=IfCondition(enable_imu),
     )
 
     joy_converter = Node(
@@ -253,6 +220,13 @@ def generate_launch_description():
         IfCondition(enable_nav2),
     )
 
+    heartbeat_launch = include_launch(
+        "robot",
+        ["launch", "heartbeat.launch.py"],
+        IfCondition(LaunchConfiguration("enable_heartbeats")),
+        {"role": "minipc"},
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -329,6 +303,7 @@ def generate_launch_description():
                 "task-specific params file; leave this false in that case.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
+            DeclareLaunchArgument("enable_heartbeats", default_value="true"),
             DeclareLaunchArgument(
                 "use_ekf_local",
                 default_value="false",
@@ -355,5 +330,6 @@ def generate_launch_description():
             back_cam_launch,
             back_cam_ground_video_launch,
             nav2_launch,
+            heartbeat_launch,
         ]
     )

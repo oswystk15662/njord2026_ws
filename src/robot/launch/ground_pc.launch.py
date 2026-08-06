@@ -2,18 +2,18 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.launch_description_sources import (
     AnyLaunchDescriptionSource,
     PythonLaunchDescriptionSource,
 )
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.actions import Node
-from launch_ros.substitutions import FindPackageShare
+from launch_ros.substitutions import FindPackagePrefix, FindPackageShare
 
 
 def generate_launch_description():
-    zed2i_share = FindPackageShare("zed2i_driver")
     zed2i_share_path = get_package_share_directory("zed2i_driver")
     front_video_port = LaunchConfiguration("front_video_port")
     front_video_topic = LaunchConfiguration("front_video_topic")
@@ -23,6 +23,8 @@ def generate_launch_description():
     back_video_jitter_latency_ms = LaunchConfiguration(
         "back_video_jitter_latency_ms"
     )
+    enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
+    ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -70,6 +72,17 @@ def generate_launch_description():
         parameters=[{"topic": "/heartbeat/ground_station", "period_sec": 1.0}],
     )
 
+    ntrip_caster = ExecuteProcess(
+        cmd=[
+            PathJoinSubstitution(
+                [FindPackagePrefix("ntripcaster"), "lib", "ntripcaster", "ntripcaster"]
+            ),
+            ntrip_caster_config,
+        ],
+        output="screen",
+        condition=IfCondition(enable_ntrip_caster),
+    )
+
     return LaunchDescription(
         [
             # The two receivers ingest different RTP streams and must keep
@@ -91,10 +104,19 @@ def generate_launch_description():
                 description="RTP jitter buffer for the back-camera stream. "
                 "Use 0 only for controlled low-latency tests.",
             ),
+            DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
+            DeclareLaunchArgument(
+                "ntrip_caster_config",
+                default_value=PathJoinSubstitution(
+                    [FindPackageShare("ntripcaster"), "config", "ntripcaster.json"]
+                ),
+                description="Caster config: 0.0.0.0:2101, SOURCE erb/RTCM3",
+            ),
             joy_node,
             ground_station_heartbeat,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             foxglove_bridge_launch,
+            ntrip_caster,
         ]
     )

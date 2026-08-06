@@ -92,6 +92,13 @@ def generate_launch_description():
         },
     )
 
+    heartbeat_launch = include_launch(
+        "robot",
+        ["launch", "heartbeat.launch.py"],
+        IfCondition(LaunchConfiguration("enable_heartbeats")),
+        {"role": "jetson"},
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -108,7 +115,8 @@ def generate_launch_description():
                 "glim_backend",
                 default_value="gpu",
                 choices=["gpu", "cpu"],
-                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
+                description="Select the GLIM config directory "
+                "(glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument(
                 "enable_pcl_buoy_detection",
@@ -133,6 +141,7 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_width", default_value="480"),
             DeclareLaunchArgument("ground_video_height", default_value="360"),
             DeclareLaunchArgument("ground_video_fps", default_value="4.0"),
+            DeclareLaunchArgument("enable_heartbeats", default_value="true"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old
             # single-machine setup, but starting the ZED/TensorRT stack after
@@ -157,5 +166,6 @@ def generate_launch_description():
                 period=LaunchConfiguration("camera_start_delay"),
                 actions=[zed2i_launch],
             ),
+            heartbeat_launch,
         ]
     )

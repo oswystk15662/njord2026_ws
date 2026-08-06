@@ -69,3 +69,28 @@ def test_mid360s_platform_lidar_configs_present():
         for entry in lidar_configs:
             assert "ip" in entry
         assert "host_net_info" in config["Mid360s"]
+def test_lidar_launch_routes_raw_imu_through_si_scaler():
+    share_dir = get_package_share_directory("robot")
+    launch_path = os.path.join(share_dir, "launch", "lidar.launch.py")
+    with open(launch_path, "r") as stream:
+        source = stream.read()
+
+    assert source.count('remappings=[("/livox/imu", "/livox/imu_raw")]') == 2
+    assert 'plugin="livox_ros::LivoxImuScaler"' in source
+    assert '"input_topic": "/livox/imu_raw"' in source
+    assert '"output_topic": "/livox/imu"' in source
+    assert '"acceleration_scale": 9.80665' in source
+
+
+def test_glim_does_not_scale_si_livox_acceleration_twice():
+    share_dir = get_package_share_directory("robot")
+    paths = [
+        os.path.join(share_dir, "config", "glim_config", "config_ros.json"),
+        os.path.join(share_dir, "config", "glim_config", "config_ros_cpu.json"),
+        os.path.join(share_dir, "config", "glim_config_headless", "config_ros.json"),
+    ]
+
+    for path in paths:
+        with open(path, "r") as stream:
+            source = stream.read()
+        assert '"acc_scale": 1.0' in source

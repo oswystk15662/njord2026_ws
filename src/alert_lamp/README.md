@@ -13,8 +13,9 @@ the command into on/off outputs and enters red blink when manager commands time 
   `/red`, `/yellow`, and `/green`. Those are the existing inputs of
   `micon_driver_fd/serial_writer`, which owns the USB Serial device.
 
-The present repository has no common heartbeat, operating-mode, E-stop, autonomy-ready,
-or RTK-status interfaces. The initial integration contract is therefore:
+The repository uses hierarchical health-derived heartbeats for driver and
+localization status. Other control-layer heartbeats are emitted by their owning
+nodes. The integration contract is:
 
 | Input | Type | Default topic |
 | --- | --- | --- |
@@ -25,9 +26,9 @@ or RTK-status interfaces. The initial integration contract is therefore:
 | GNSS / RTK quality | `sensor_msgs/msg/NavSatFix` | `/sensor/vehicle_gnss/fix/raw` |
 | Heartbeats | configurable serialized type | `/heartbeat/*` |
 
-Heartbeat subscriptions use ROS 2 generic subscriptions because the repository does
-not yet define a heartbeat message. Configure `heartbeat.*_type` to match the eventual
-publisher; only receipt time is evaluated. An absent required input is intentionally a
+Heartbeat subscriptions use ROS 2 generic subscriptions. Driver and localization
+heartbeats are `std_msgs/msg/Empty` outputs from `diagnostic_monitors` aggregators;
+only receipt time is evaluated here. An absent required input is intentionally a
 critical (red blink) state.
 
 GNSS RTK quality is initially inferred from a valid `NavSatFix` with covariance below

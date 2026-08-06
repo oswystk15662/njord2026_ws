@@ -10,7 +10,7 @@
   //
   // --- IMU config ---
   // imu_time_offset        : Time offset for IMU data (in seconds)
-  // acc_scale              : Accelerometer scale factor (Set to 9.80665 for Livox sensors)
+  // acc_scale              : /livox/imu is already converted from g to m/s^2
   //
   // --- TF config ---
   // GLIM publishes TF subtrees "map -> odom -> base_frame" and "imu -> lidar".
@@ -52,7 +52,7 @@
     // IMU config
     "imu_time_offset": 0.0,
     "points_time_offset": 0.0,
-    "acc_scale": 9.81,
+    "acc_scale": 1.0,
     // TF config
     "imu_frame_id": "livox_frame",
     "lidar_frame_id": "livox_frame",

@@ -252,7 +252,10 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
 def test_task_launch_files_declare_role_argument(filename):
     source = _read_launch_source(filename)
     assert "'role'" in source or '"role"' in source
-    assert "choices=['minipc', 'standalone']" in source or 'choices=["minipc", "standalone"]' in source
+    assert (
+        "choices=['minipc', 'standalone']" in source
+        or 'choices=["minipc", "standalone"]' in source
+    )
     assert "default_value='minipc'" in source or 'default_value="minipc"' in source
 
 
@@ -269,6 +272,30 @@ def test_ground_pc_keeps_front_and_back_video_receivers_separate():
     assert '"topic": back_video_topic' in source
     assert '"back_video_jitter_latency_ms"' in source
     assert 'default_value="50"' in source
+
+
+def test_ground_pc_starts_workspace_ntrip_caster_by_default():
+    source = _read_launch_source("ground_pc.launch.py")
+    assert '"enable_ntrip_caster", default_value="true"' in source
+    assert 'FindPackagePrefix("ntripcaster")' in source
+    assert 'FindPackageShare("ntripcaster")' in source
+    assert '"ntripcaster.json"' in source
+
+
+def test_bringups_start_hierarchical_health_heartbeats():
+    jetson_source = _read_launch_source("jetson_bringup.launch.py")
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    heartbeat_source = _read_launch_source("heartbeat.launch.py")
+
+    assert '{"role": "jetson"}' in jetson_source
+    assert '{"role": "minipc"}' in minipc_source
+    assert '"/heartbeat/driver/camera/front"' in heartbeat_source
+    assert '"/heartbeat/driver/camera/back"' in heartbeat_source
+    assert '"/heartbeat/driver/lidar"' in heartbeat_source
+    assert '"/heartbeat/driver/gnss"' in heartbeat_source
+    assert '"/heartbeat/driver/micon"' in heartbeat_source
+    assert '"/heartbeat/driver"' in heartbeat_source
+    assert '"/heartbeat/localization"' in heartbeat_source
 
 
 def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():

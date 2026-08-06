@@ -93,6 +93,7 @@ def launch_setup(context, *args, **kwargs):
                     "frame_id": FRAME_ID,
                 }
             ],
+            remappings=[("/livox/imu", "/livox/imu_raw")],
             extra_arguments=[{"use_intra_process_comms": True}],
         )
     else:
@@ -113,10 +114,28 @@ def launch_setup(context, *args, **kwargs):
                     "cmdline_input_bd_code": CMDLINE_INPUT_BD_CODE,
                 }
             ],
+            remappings=[("/livox/imu", "/livox/imu_raw")],
             extra_arguments=[{"use_intra_process_comms": True}],
         )
 
-    components = [source_component]
+    # Livox packets express acceleration in g. Keep the raw stream private to
+    # this Jetson container and expose a sensor_msgs-compliant m/s^2 stream on
+    # the historical /livox/imu topic for GLIM, the miniPC EKF, and logging.
+    imu_scaler_component = ComposableNode(
+        package="livox_ros_driver2",
+        plugin="livox_ros::LivoxImuScaler",
+        name="livox_imu_scaler",
+        parameters=[
+            {
+                "input_topic": "/livox/imu_raw",
+                "output_topic": "/livox/imu",
+                "acceleration_scale": 9.80665,
+            }
+        ],
+        extra_arguments=[{"use_intra_process_comms": True}],
+    )
+
+    components = [source_component, imu_scaler_component]
 
     if enable_buoy_detection:
         components.append(
@@ -139,8 +158,8 @@ def launch_setup(context, *args, **kwargs):
     # GLIM is a registered rclcpp component (glim::GlimROS).  Keeping it in
     # the Livox container lets its PointCloud2 subscription use ROS 2
     # intra-process transport instead of serializing the cloud through DDS.
-    # It still receives IMU over the normal topic path because that publisher
-    # is not part of this container.
+    # The SI-unit IMU scaler is in this same container, so GLIM can also receive
+    # /livox/imu through the intra-process path.
     if enable_glim:
         components.append(
             ComposableNode(
@@ -190,7 +209,8 @@ def generate_launch_description():
                 "lidar_source",
                 default_value="driver",
                 choices=["driver", "bag"],
-                description="driver=real Livox MID360, bag=in-container mcap replayer (intra-process bench)",
+                description="driver=real Livox MID360, bag=in-container mcap "
+                "replayer (intra-process bench)",
             ),
             DeclareLaunchArgument(
                 "bag_path",
@@ -231,7 +251,8 @@ def generate_launch_description():
                 "glim_backend",
                 default_value="gpu",
                 choices=["gpu", "cpu"],
-                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
+                description="Select the GLIM config directory "
+                "(glim_config for gpu, glim_config_cpu for cpu)",
             ),
             DeclareLaunchArgument("roi_topic", default_value="/buoy_roi"),
             DeclareLaunchArgument("output_topic", default_value="/buoy_detections"),
