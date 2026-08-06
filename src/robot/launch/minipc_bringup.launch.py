@@ -126,6 +126,7 @@ def generate_launch_description():
             "ntrip_mountpoint": "RTCM3",
             "ntrip_username": "test",
             "ntrip_password": "test",
+            "publish_feedback_odometry": "true",
         },
     )
 
