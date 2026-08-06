@@ -49,10 +49,10 @@ Critical faults have priority. In AUTO, loss of high-level, autonomy, or localiz
 heartbeat is critical; loss of ground station is shown only while localization remains
 stable. The driver also red-blinks at a 0.05 s period if no manager command arrives within one
 second.
-`AlertLampCommand.color` is a bit flag for backwards-compatible state encoding.
-The driver resolves multiple bits with a safety priority: `RED > YELLOW > GREEN`.
-Thus a combined red/yellow or red/green command produces red only, and a
-combined yellow/green command produces yellow only.
+`AlertLampCommand.color` is a bit flag, so compound states may intentionally
+turn on multiple lamps. State selection itself has priority in the evaluator:
+critical faults first, then ground-station loss, then autonomy-not-ready, then
+normal operating states.
 
 ## Configuration and diagnostics
 
