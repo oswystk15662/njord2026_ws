@@ -63,6 +63,7 @@ def generate_launch_description():
     enable_localization = LaunchConfiguration("enable_localization")
     enable_thruster = LaunchConfiguration("enable_thruster")
     enable_alert_lamp = LaunchConfiguration("enable_alert_lamp")
+    alert_lamp_require_rtk_fix = LaunchConfiguration("alert_lamp_require_rtk_fix")
     enable_bms = LaunchConfiguration("enable_bms")
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
@@ -276,6 +277,7 @@ def generate_launch_description():
         "alert_lamp",
         ["launch", "alert_lamp.launch.py"],
         IfCondition(enable_alert_lamp),
+        {"require_rtk_fix": alert_lamp_require_rtk_fix},
     )
 
     buoy_obstacle_launch = include_launch(
@@ -406,6 +408,11 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_localization", default_value="true"),
             DeclareLaunchArgument("enable_thruster", default_value="true"),
             DeclareLaunchArgument("enable_alert_lamp", default_value="true"),
+            DeclareLaunchArgument(
+                "alert_lamp_require_rtk_fix",
+                default_value="false",
+                description="Require RTK Fix for alert-lamp AUTO readiness.",
+            ),
             DeclareLaunchArgument("enable_bms", default_value="true"),
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
             DeclareLaunchArgument(

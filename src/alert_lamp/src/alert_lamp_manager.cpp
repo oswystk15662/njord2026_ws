@@ -61,6 +61,7 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
   rtk_grace_period_sec_ = declare_parameter<double>("localization.rtk_grace_period_sec", 10.0);
   rtk_covariance_threshold_ = declare_parameter<double>("localization.rtk_covariance_threshold",
       0.01);
+  require_rtk_fix_ = declare_parameter<bool>("localization.require_rtk_fix", false);
   green_period_ = static_cast<float>(declare_parameter<double>("lamp.green_blink_period_sec", 0.1));
   yellow_period_ = static_cast<float>(declare_parameter<double>("lamp.yellow_blink_period_sec",
       0.1));
@@ -156,7 +157,8 @@ SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
     (current - last_localization_).seconds() <= localization_message_timeout_sec_;
   status.localization_stable = status.localization_alive && localization_fresh &&
     localization_covariance_ok_;
-  status.rtk_fix = rtk_received_ && (current - last_rtk_fix_).seconds() <= rtk_grace_period_sec_;
+  status.rtk_fix = !require_rtk_fix_ ||
+    (rtk_received_ && (current - last_rtk_fix_).seconds() <= rtk_grace_period_sec_);
   status.required_sensor_not_ready = required_sensor_not_ready_;
   status.critical_driver_failure = critical_driver_failure_;
   status.critical_diagnostics = critical_diagnostics_;

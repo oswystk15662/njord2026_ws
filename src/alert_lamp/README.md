@@ -31,8 +31,9 @@ heartbeats are `std_msgs/msg/Empty` outputs from `diagnostic_monitors` aggregato
 only receipt time is evaluated here. An absent required input is intentionally a
 critical (red blink) state.
 
-GNSS RTK quality is initially inferred from a valid `NavSatFix` with covariance below
-`localization.rtk_covariance_threshold`, then retained for `rtk_grace_period_sec`.
+When `localization.require_rtk_fix` is enabled, GNSS RTK quality is inferred from a valid
+`NavSatFix` with covariance below `localization.rtk_covariance_threshold`, then retained for
+`rtk_grace_period_sec`. It is disabled by default.
 
 ## Lamp patterns
 

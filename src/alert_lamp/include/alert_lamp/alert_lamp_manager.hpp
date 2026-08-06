@@ -77,6 +77,7 @@ private:
   double position_covariance_threshold_{1.0};
   double rtk_grace_period_sec_{10.0};
   double rtk_covariance_threshold_{0.01};
+  bool require_rtk_fix_{false};
   float green_period_{1.0F};
   float yellow_period_{1.0F};
   float red_period_{0.5F};

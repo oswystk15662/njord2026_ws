@@ -19,6 +19,9 @@ alert_lamp_manager_node:
       position_covariance_threshold: 1.0
       rtk_covariance_threshold: 0.01
       rtk_grace_period_sec: 10.0
+      # Disabled while RTK quality is not part of the alert-lamp readiness criteria.
+      # Set true to require a recent RTK-quality NavSatFix in AUTO mode.
+      require_rtk_fix: false
     lamp:
       green_blink_period_sec: 1.0
       yellow_blink_period_sec: 1.0
