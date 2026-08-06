@@ -32,12 +32,14 @@ class CrmCostmapNode(Node):
             ("base_frame", "base_link"), ("opponent_frame", "opponent_vessel"),
             # Match Task2 Nav2 local_costmap geometry.
             ("width_m", 30.0), ("height_m", 30.0), ("resolution_m", 0.1),
+            ("rolling_window", True), ("origin_x_m", -20.0), ("origin_y_m", -30.0),
             ("publish_rate_hz", 2.0), ("prediction_horizon_sec", 22.5),
             ("prediction_step_sec", 0.5), ("loa_m", 2.0),
         ])
         p = lambda n: self.get_parameter(n).value
         self.frame, self.base, self.opponent = map(str, (p("costmap_frame"), p("base_frame"), p("opponent_frame")))
         self.width, self.height, self.resolution = float(p("width_m")), float(p("height_m")), float(p("resolution_m"))
+        self.rolling_window = bool(p("rolling_window")); self.origin_x, self.origin_y = float(p("origin_x_m")), float(p("origin_y_m"))
         self.cols, self.rows = round(self.width / self.resolution), round(self.height / self.resolution)
         self.horizon, self.step, self.loa = float(p("prediction_horizon_sec")), float(p("prediction_step_sec")), float(p("loa_m"))
         self.odom = self.twist = None
@@ -68,8 +70,10 @@ class CrmCostmapNode(Node):
         own_heading = (-math.degrees(_yaw(own_tf.transform.rotation))) % 360.0
         target_heading = (-math.degrees(math.atan2(vy, vx))) % 360.0 if math.hypot(vx, vy) > 1e-4 else (-math.degrees(_yaw(oth_tf.transform.rotation))) % 360.0
 
-        xs = ox - self.width / 2 + (np.arange(self.cols) + 0.5) * self.resolution
-        ys = oy - self.height / 2 + (np.arange(self.rows) + 0.5) * self.resolution
+        origin_x = ox - self.width / 2 if self.rolling_window else self.origin_x
+        origin_y = oy - self.height / 2 if self.rolling_window else self.origin_y
+        xs = origin_x + (np.arange(self.cols) + 0.5) * self.resolution
+        ys = origin_y + (np.arange(self.rows) + 0.5) * self.resolution
         grid_x, grid_y = np.meshgrid(xs, ys)
         own = [-oy, ox, own_speed, own_heading, self.loa]
         other = [[-ty, tx, math.hypot(vx, vy), target_heading, self.loa]]
@@ -81,7 +85,7 @@ class CrmCostmapNode(Node):
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg(); msg.header.frame_id = self.frame
         msg.info.resolution = self.resolution; msg.info.width = self.cols; msg.info.height = self.rows
-        msg.info.origin.position.x = ox - self.width / 2; msg.info.origin.position.y = oy - self.height / 2
+        msg.info.origin.position.x = origin_x; msg.info.origin.position.y = origin_y
         msg.info.origin.orientation.w = 1.0
         msg.data = np.rint(np.clip(risk, 0.0, 1.0) * 100.0).astype(np.int8).ravel().tolist()
         self.pub.publish(msg)

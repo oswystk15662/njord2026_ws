@@ -112,6 +112,13 @@ def generate_launch_description():
     crm_costmap = Node(
         package="asv_trajectory_planner", executable="crm_costmap_node",
         name="crm_costmap", output="screen",
+        # Fixed, course-wide CRM for simulation.  It includes the own-vessel
+        # start/goal (-20 m .. 80 m) and the opponent's 90 m start position.
+        parameters=[{
+            "costmap_frame": "map", "rolling_window": False,
+            "width_m": 120.0, "height_m": 60.0, "resolution_m": 0.2,
+            "origin_x_m": -20.0, "origin_y_m": -30.0,
+        }],
     )
 
     return LaunchDescription(

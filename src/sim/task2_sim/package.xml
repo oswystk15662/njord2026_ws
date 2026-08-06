@@ -20,8 +20,6 @@
   <depend>launch_ros</depend>
 
   <exec_depend>asv_trajectory_planner</exec_depend>
-  <exec_depend>dutyed_tf_pub_with_disturbance</exec_depend>
-  <exec_depend>thruster_driver</exec_depend>
   <exec_depend>tf_frame_arrow_publisher</exec_depend>
   <exec_depend>robot</exec_depend>
   <exec_depend>robot_localization</exec_depend>

@@ -12,9 +12,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     pkg_task2 = get_package_share_directory("task2_sim")
     pkg_robot = get_package_share_directory("robot")
-    pkg_dutyed = get_package_share_directory("dutyed_tf_pub_with_disturbance")
     pkg_sensor_noise = get_package_share_directory("sensor_sim_with_noise")
-    pkg_thruster = get_package_share_directory("thruster_driver")
     pkg_mppi = get_package_share_directory("asv_trajectory_planner")
 
     config = os.path.join(pkg_task2, "config", "task2_params.yaml")
@@ -22,7 +20,7 @@ def generate_launch_description():
     robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
     robot_description = open(robot_description_file, "r").read()
 
-    use_dynamics = DeclareLaunchArgument("use_dynamics", default_value="true")
+    use_cmd_vel_kinematics = DeclareLaunchArgument("use_cmd_vel_kinematics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
     use_mppi = DeclareLaunchArgument(
         "use_mppi", default_value="true",
@@ -50,21 +48,10 @@ def generate_launch_description():
     nav2_delay = LaunchConfiguration("nav2_delay")
     goal_delay = LaunchConfiguration("goal_delay")
 
-    dynamics = Node(
-        package="dutyed_tf_pub_with_disturbance",
-        executable="dutyed_tf_pub_with_disturbance_node",
-        name="dutyed_tf_pub_with_disturbance_node",
-        parameters=[
-            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {
-                "publish_tf": True,
-                # Simulation uses geometric body-frame forces directly; do
-                # not apply the real vessel's port-side wiring correction.
-                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
-            },
-        ],
-        output="screen",
-        condition=IfCondition(LaunchConfiguration("use_dynamics")),
+    kinematic_plant = Node(
+        package="task2_sim", executable="cmd_vel_kinematic_sim",
+        name="cmd_vel_kinematic_sim", output="screen",
+        condition=IfCondition(LaunchConfiguration("use_cmd_vel_kinematics")),
     )
 
     sensor_noise_launch = IncludeLaunchDescription(
@@ -104,22 +91,6 @@ def generate_launch_description():
         executable="opponent_vessel_node",
         name="opponent_vessel_node",
         parameters=[LaunchConfiguration("opponent_params")],
-        output="screen",
-    )
-
-    thruster_driver_node = Node(
-        package="thruster_driver",
-        executable="thruster_driver_node",
-        name="thruster_driver_node",
-        parameters=[
-            os.path.join(pkg_thruster, "config", "config.yaml"),
-            {
-                "robot_description": robot_description,
-                "control.dob.enable": False,
-                "allocation.wrench_sign": [1.0, 1.0, 1.0],
-                "thrusters.reverse": [False, False, False, False],
-            },
-        ],
         output="screen",
     )
 
@@ -183,11 +154,10 @@ def generate_launch_description():
     sensor_layer_timer = TimerAction(
         period=driver_delay,
         actions=[
-            dynamics,
+            kinematic_plant,
             sensor_noise_launch,
             task2_orchestrator,
             opponent_vessel,
-            thruster_driver_node,
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
@@ -230,7 +200,7 @@ def generate_launch_description():
         LogInfo(msg="========== Task2 Collision Avoidance Sim Bringup Started =========="),
         heading_arrow,
         actual_route,
-        use_dynamics,
+        use_cmd_vel_kinematics,
         use_nav2,
         use_mppi,
         params_arg,
