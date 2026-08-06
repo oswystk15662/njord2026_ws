@@ -84,5 +84,8 @@ opponent_selector:
     stale_timeout_sec: 2.0    # [s] tracks older than this are ignored
     publish_rate_hz: 10.0     # [Hz] output rate
     twist_lowpass_alpha: 0.3  # first-order IIR low-pass factor (0..1)
-    min_absolute_speed_mps: 0.3  # [m/s] ignore stationary objects after ego compensation
-    max_speed_mps: 5.0        # [m/s] spike-rejection gate on opponent speed
+    # Only recognize moving opponents within this absolute ground-speed band.
+    # Values are knots for operator-facing configuration; /other_ship/twist
+    # remains in SI units (m/s), as required by geometry_msgs/Twist.
+    min_absolute_speed_knots: 2.0  # [kn] lower recognition-speed gate
+    max_absolute_speed_knots: 3.0  # [kn] upper recognition-speed gate

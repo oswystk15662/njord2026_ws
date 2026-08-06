@@ -4,7 +4,7 @@ import numpy as np
 
 from task2_perception import tracking_glue
 from task2_perception.cloud_ops import make_transform, rpy_to_rotation_matrix
-from task2_perception.smoothing import TwistSmoother
+from task2_perception.smoothing import TwistSmoother, knots_to_mps, mps_to_knots
 from task2_perception.tracking_glue import SelectionParams, Track
 
 
@@ -149,6 +149,10 @@ class TestStaleAndGates:
 
 
 class TestTwistSmoother:
+
+    def test_knot_conversion_round_trip(self):
+        assert knots_to_mps(2.0) == 1852.0 * 2.0 / 3600.0
+        assert mps_to_knots(knots_to_mps(3.0)) == 3.0
 
     def test_lowpass_and_spike_rejection(self):
         sm = TwistSmoother(alpha=0.5, max_speed_mps=5.0)

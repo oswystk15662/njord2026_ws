@@ -12,6 +12,19 @@ from __future__ import annotations
 import math
 
 
+KNOT_TO_MPS = 1852.0 / 3600.0
+
+
+def knots_to_mps(speed_knots: float) -> float:
+    """Convert knots to the SI velocity unit used by geometry_msgs/Twist."""
+    return float(speed_knots) * KNOT_TO_MPS
+
+
+def mps_to_knots(speed_mps: float) -> float:
+    """Convert an SI velocity to knots for operator-facing values."""
+    return float(speed_mps) / KNOT_TO_MPS
+
+
 class TwistSmoother:
     """First-order IIR low-pass with spike rejection for planar twists.
 

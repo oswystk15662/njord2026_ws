@@ -47,7 +47,7 @@ except ImportError:
     TrackedObjectArray = None
 
 from task2_perception import cloud_ops, tracking_glue
-from task2_perception.smoothing import TwistSmoother
+from task2_perception.smoothing import TwistSmoother, knots_to_mps, mps_to_knots
 from task2_perception.tracking_glue import SelectionParams, Track
 
 
@@ -79,8 +79,10 @@ class OpponentSelectorNode(Node):
             ("stale_timeout_sec", 2.0),
             ("publish_rate_hz", 10.0),
             ("twist_lowpass_alpha", 0.3),
-            ("min_absolute_speed_mps", 0.3),
-            ("max_speed_mps", 5.0),
+            # Operator-facing speed gates use knots.  The published Twist
+            # remains m/s, as required by geometry_msgs/Twist.
+            ("min_absolute_speed_knots", 2.0),
+            ("max_absolute_speed_knots", 3.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -99,8 +101,14 @@ class OpponentSelectorNode(Node):
         )
         self.smoother = TwistSmoother(
             alpha=float(gp("twist_lowpass_alpha")),
-            max_speed_mps=float(gp("max_speed_mps")))
-        self.min_absolute_speed_mps = float(gp("min_absolute_speed_mps"))
+            max_speed_mps=knots_to_mps(gp("max_absolute_speed_knots")))
+        self.min_absolute_speed_knots = float(gp("min_absolute_speed_knots"))
+        self.max_absolute_speed_knots = float(gp("max_absolute_speed_knots"))
+        if self.min_absolute_speed_knots < 0.0 or \
+                self.max_absolute_speed_knots < self.min_absolute_speed_knots:
+            raise ValueError(
+                "Require 0 <= min_absolute_speed_knots <= "
+                "max_absolute_speed_knots")
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -125,7 +133,8 @@ class OpponentSelectorNode(Node):
             f"tracks={gp('tracked_objects_topic')}, "
             f"ego_odom={gp('ego_odom_topic')} -> {gp('twist_topic')} "
             f"+ TF {self.map_frame} -> {self.opponent_frame}, "
-            f"min_abs_speed={self.min_absolute_speed_mps:.2f} m/s")
+            f"absolute_speed_range={self.min_absolute_speed_knots:.2f}"
+            f"-{self.max_absolute_speed_knots:.2f} kn")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -208,8 +217,10 @@ class OpponentSelectorNode(Node):
                 ego_yaw_rate=self.ego_yaw_rate, pos_base=candidate.position)
             candidate_pos_map, candidate_vel_map = tracking_glue.to_map_frame(
                 candidate.position, vel_abs_base, t_map_base)
-            if np.hypot(candidate_vel_map[0], candidate_vel_map[1]) < \
-                    self.min_absolute_speed_mps:
+            speed_knots = mps_to_knots(
+                np.hypot(candidate_vel_map[0], candidate_vel_map[1]))
+            if not self.min_absolute_speed_knots <= speed_knots <= \
+                    self.max_absolute_speed_knots:
                 continue
 
             selected = candidate
@@ -220,7 +231,7 @@ class OpponentSelectorNode(Node):
 
         if selected is None:
             self.get_logger().info(
-                "No valid track exceeds the absolute-speed threshold; "
+                "No valid track is within the absolute-speed range; "
                 "publishing no opponent output.",
                 throttle_duration_sec=2.0)
             self.selected_id = None
