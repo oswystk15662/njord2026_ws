@@ -74,12 +74,15 @@ opponent_selector:
     max_distance_m: 60.0      # [m] horizontal distance gate
     selection_policy: "nearest"   # "nearest" | "min_tcpa" | "track_id"
     target_track_id: -1       # used only with selection_policy: "track_id"
-    min_length_m: 0.5         # [m] reject tracks with a smaller length (dimensions.x)
-    max_length_m: 30.0        # [m] reject tracks with a larger length
-    # ship_tracker_node receives PoseArray centroids, which do not carry the
-    # cluster point count; it therefore publishes point_count=0.  Keep this
-    # gate disabled until the tracker input/message is extended to preserve
-    # the count.
+    # Measured horizontal size gate for the Task 2 catamaran. The clusterer
+    # uses an oriented 2D bounding box, so length/width stay valid by heading.
+    # Height is deliberately not used: the hull extends below the waterline.
+    min_length_m: 1.2         # [m] expected length is about 1.8 m
+    max_length_m: 2.5         # [m] includes LiDAR/cluster uncertainty
+    min_width_m: 0.5          # [m] expected width is about 0.9 m
+    max_width_m: 1.5          # [m] includes LiDAR/cluster uncertainty
+    # Cluster observations preserve the point count. Keep this gate disabled
+    # until a field test establishes a stable minimum for the target vessel.
     min_point_count: 0        # [pts] cluster size gate (0 = disabled)
     stale_timeout_sec: 2.0    # [s] tracks older than this are ignored
     publish_rate_hz: 10.0     # [Hz] output rate

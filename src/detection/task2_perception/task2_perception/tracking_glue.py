@@ -123,6 +123,8 @@ class SelectionParams:
     max_distance_m: float = 60.0
     min_length_m: float = 0.5
     max_length_m: float = 30.0
+    min_width_m: float = 0.0
+    max_width_m: float = float("inf")
     min_point_count: int = 5
     stale_timeout_sec: float = 2.0
     target_track_id: int = -1
@@ -142,6 +144,11 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
         return "too small"
     if length > params.max_length_m:
         return "too large"
+    width = float(np.asarray(track.dimensions, dtype=float)[1])
+    if width < params.min_width_m:
+        return "too narrow"
+    if width > params.max_width_m:
+        return "too wide"
     if track.point_count < params.min_point_count:
         return "too few points"
     return None

@@ -114,6 +114,18 @@ class TestStaleAndGates:
         assert [t.object_id for t in ranked] == [1]
         assert len(params.rejected) == 4
 
+    def test_width_gate(self):
+        narrow = make_track(dimensions=np.array([1.8, 0.3, 1.2]))
+        wide = make_track(dimensions=np.array([1.8, 1.6, 1.2]))
+        valid = make_track(object_id=3, dimensions=np.array([1.8, 0.9, 1.2]))
+        params = SelectionParams(
+            min_length_m=1.2, max_length_m=2.5,
+            min_width_m=0.5, max_width_m=1.5)
+        ranked = tracking_glue.select_opponent(
+            [narrow, wide, valid], now_sec=100.5, params=params)
+        assert [track.object_id for track in ranked] == [3]
+        assert [reason for _, reason in params.rejected] == ["too narrow", "too wide"]
+
     def test_policies(self):
         near_diverging = make_track(object_id=1,
                                     position=np.array([10.0, 0.0, 0.0]),
