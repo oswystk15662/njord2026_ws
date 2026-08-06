@@ -46,7 +46,7 @@ raw frameは常に24 byteです。
 
 | Bit | Mask | Meaning |
 |---:|---:|---|
-| 0 | `0x01` | Red LED |
+| 0 | `0x01` | Red LED (blink) |
 | 1 | `0x02` | Yellow LED |
 | 2 | `0x04` | Green LED |
 | 3 | `0x08` | Software emergency stop |

@@ -12,6 +12,7 @@ constexpr uint32_t kPwmFrequencyHz = 50;
 constexpr uint32_t kPwmPeriodUs = 20000;
 constexpr uint16_t kEscCenterUs = 1500;
 constexpr uint32_t kCommandTimeoutMs = 1000;
+constexpr uint32_t kRedLedBlinkPeriodMs = 1000;
 constexpr unsigned long kSerialBaudRate = 115200;
 constexpr size_t kSerialBytesPerLoop = 128;
 
@@ -49,6 +50,8 @@ size_t encodedFrameLength = 0;
 bool discardingOversizedFrame = false;
 unsigned long lastValidCommandTimeMs = 0;
 bool hasValidCommand = false;
+bool redLedRequested = false;
+bool emergencyStopActive = false;
 
 void writeServoPulse(uint8_t pin, uint32_t pulseWidthUs) {
   const uint32_t duty =
@@ -91,10 +94,21 @@ void reportRelayState() {
   Serial.write(physicalEStopActive() ? 0x01 : 0x00);
 }
 
+void updateRedLed() {
+  if (emergencyStopActive) {
+    digitalWrite(kRedLedPin, HIGH);
+    return;
+  }
+  const bool blinkOn =
+      (millis() % kRedLedBlinkPeriodMs) < (kRedLedBlinkPeriodMs / 2U);
+  digitalWrite(kRedLedPin, redLedRequested && blinkOn ? HIGH : LOW);
+}
+
 void updateLeds(uint8_t controlFlags) {
   digitalWrite(kGreenLedPin, (controlFlags & kGreenLedMask) != 0);
   digitalWrite(kYellowLedPin, (controlFlags & kYellowLedMask) != 0);
-  digitalWrite(kRedLedPin, (controlFlags & kRedLedMask) != 0);
+  redLedRequested = (controlFlags & kRedLedMask) != 0;
+  updateRedLed();
 }
 
 void updateThrusters(const float (&thrusts)[kThrusterCount]) {
@@ -136,9 +150,10 @@ bool processThrusterCommand(const uint8_t* raw, size_t rawLength) {
 
   lastValidCommandTimeMs = millis();
   hasValidCommand = true;
+  emergencyStopActive = (controlFlags & kEmergencyStopMask) != 0U;
   updateLeds(controlFlags);
 
-  if ((controlFlags & kEmergencyStopMask) != 0U) {
+  if (emergencyStopActive) {
     enterSafeState();
   } else {
     updateThrusters(thrusts);
@@ -191,8 +206,10 @@ void processSerialInput() {
 void enforceSafety() {
   if (hasValidCommand &&
       millis() - lastValidCommandTimeMs > kCommandTimeoutMs) {
+    emergencyStopActive = true;
     enterSafeState();
   }
+  updateRedLed();
 }
 
 }  // namespace
