@@ -228,6 +228,32 @@ def generate_launch_description():
         condition=IfCondition(enable_thruster),
     )
 
+    # The BMS master is a separate XIAO ESP32-C3 serial device.  Reuse the
+    # serial reader while isolating its safety/relay topics from the thruster
+    # controller on the other USB port.
+    bms_serial_reader = Node(
+        package="micon_driver_fd",
+        executable="serial_writer",
+        name="bms_serial_reader",
+        output="screen",
+        parameters=[
+            {
+                "serial_port": LaunchConfiguration("bms_serial_port"),
+                "baud": LaunchConfiguration("bms_serial_baud"),
+                "command_topic": "/bms_serial_reader/unused_thruster_command",
+                "bms_topic": "/micon/bms_cells",
+                "bms_temperature_topic": "/micon/bms_temperature_c",
+                "ground_station_heartbeat_timeout_sec": 0.0,
+                "use_sim_time": False,
+            }
+        ],
+        remappings=[
+            ("/safety/emergency_stop", "/bms_serial_reader/safety_emergency_stop"),
+            ("/micon/relay_active", "/bms_serial_reader/relay_active"),
+        ],
+        condition=IfCondition(enable_bms),
+    )
+
     bms_launch = include_launch(
         "bms",
         ["launch", "bms.launch.py"],
@@ -312,6 +338,15 @@ def generate_launch_description():
                 ),
             ),
             DeclareLaunchArgument("baud", default_value="115200"),
+            DeclareLaunchArgument(
+                "bms_serial_port",
+                default_value=(
+                    "/dev/serial/by-id/"
+                    "usb-Espressif_USB_JTAG_serial_debug_unit_E0:72:A1:1D:4B:14-if00"
+                ),
+                description="Stable /dev/serial/by-id path for the BMS ESP32-C3",
+            ),
+            DeclareLaunchArgument("bms_serial_baud", default_value="115200"),
             DeclareLaunchArgument(
                 "um982_port",
                 default_value="/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0",
@@ -428,6 +463,7 @@ def generate_launch_description():
             command_arbiter,
             thruster_launch,
             micon_driver,
+            bms_serial_reader,
             bms_launch,
             foxglove_logger,
             alert_lamp_launch,
