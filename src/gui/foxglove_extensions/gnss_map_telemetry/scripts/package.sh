@@ -16,4 +16,14 @@ generated_file="$(mktemp)"
 
 mv "${generated_file}" "${package_dir}/dist/extension.js"
 cd "${package_dir}"
-zip -r -FS gnss-map-telemetry-0.2.2.foxe package.json dist
+version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' package.json)"
+archive="gnss-map-telemetry-${version}.foxe"
+if command -v zip >/dev/null 2>&1; then
+  zip -r -FS "${archive}" package.json dist
+elif command -v jar >/dev/null 2>&1; then
+  rm -f "${archive}"
+  jar --create --no-manifest --file "${archive}" package.json dist
+else
+  printf 'Packaging requires either zip or jar.\n' >&2
+  exit 1
+fi

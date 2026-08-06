@@ -15,6 +15,8 @@ const L = (() => {
 const FIX_TOPIC = "/sensor/vehicle_gnss/fix/raw";
 const SPEED_TOPIC = "/gui/ground_speed_mps";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
+const CELL_VOLTAGES_TOPIC = "/bms/cell_voltages";
+const BMS_TEMPERATURE_TOPIC = "/bms/tempereture_c";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
 const WORLD_FRAME = "map";
@@ -55,15 +57,49 @@ const PANEL_CSS = `
 	`;
 
 const BATTERY_PANEL_CSS = `
-.battery-root{height:100%;min-height:150px;display:flex;align-items:center;justify-content:center;background:#111827;color:#f9fafb;font-family:system-ui,sans-serif;overflow:hidden}
-.battery-card{width:min(92%,360px);display:flex;flex-direction:column;align-items:center;gap:12px}
-.battery-title{font-size:13px;font-weight:700;letter-spacing:.08em;color:#cbd5e1}
-.battery-shell{position:relative;width:min(82%,250px);height:82px;border:5px solid #e5edf5;border-radius:8px;background:#1f2937;box-sizing:border-box;box-shadow:0 8px 20px rgba(0,0,0,.35)}
+.battery-root{height:100%;min-height:1px;position:relative;background:#111827;color:#f9fafb;font-family:system-ui,sans-serif;overflow:hidden}
+.battery-stage{position:absolute;left:50%;top:50%;width:520px;height:500px;margin-left:-260px;margin-top:-250px;transform-origin:center center}
+.battery-card{width:520px;height:500px;box-sizing:border-box;padding:7px 9px;display:flex;flex-direction:column;align-items:center;gap:6px;border:2px solid #475569;border-radius:10px;background:#162031;box-shadow:0 12px 28px rgba(0,0,0,.34)}
+.battery-section-title{font-size:18px;font-weight:900;letter-spacing:.09em;color:#dbe7f5}
+.battery-shell{position:relative;align-self:flex-start;width:calc(100% - 17px);height:76px;margin-right:17px;border:5px solid #e5edf5;border-radius:8px;background:#1f2937;box-sizing:border-box;box-shadow:0 8px 20px rgba(0,0,0,.35)}
 .battery-shell::after{content:"";position:absolute;right:-17px;top:24px;width:12px;height:26px;border-radius:0 5px 5px 0;background:#e5edf5}
 .battery-fill{position:absolute;left:6px;top:6px;bottom:6px;width:0%;border-radius:4px;background:#22c55e;transition:width .2s ease,background-color .2s ease}
-.battery-percent{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:30px;font-weight:800;color:#ffffff;text-shadow:0 1px 3px rgba(0,0,0,.65)}
-.battery-meta{font-size:13px;color:#cbd5e1}
+.battery-percent{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:44px;font-weight:900;color:#ffffff;text-shadow:0 2px 4px rgba(0,0,0,.75)}
+.monitor-body{width:100%;display:grid;grid-template-columns:minmax(0,1fr) 110px;gap:22px;flex:1;min-height:0}
+.cell-section,.temperature-section{display:flex;flex-direction:column;align-items:center;gap:6px;min-height:0}
+.cell-gauges{width:100%;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;flex:1;min-height:0}
+.cell-gauge{display:flex;flex-direction:column;align-items:center;gap:5px}
+.cell-name{font-size:18px;font-weight:900;color:#e4edf7}
+.cell-track{position:relative;width:48px;height:205px;border:3px solid #cbd5e1;border-radius:8px;background:#263244;overflow:hidden;box-sizing:border-box}
+.cell-fill{position:absolute;left:4px;right:4px;bottom:4px;height:0%;border-radius:4px;background:#22c55e;transition:height .2s ease,background-color .2s ease}
+.cell-value{font-size:27px;font-weight:900;font-variant-numeric:tabular-nums;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.cell-unit{font-size:17px;font-weight:800;color:#c6d3e1}
+.temperature-meter{position:relative;width:70px;height:255px;margin-top:1px}
+.temperature-tube{position:absolute;left:21px;top:0;width:28px;height:215px;border:4px solid #dbe4ee;border-bottom:0;border-radius:16px 16px 0 0;background:#263244;box-sizing:border-box;overflow:hidden;z-index:2}
+.temperature-fill-clip{position:absolute;left:4px;right:4px;bottom:0;height:0%;overflow:hidden;transition:height .25s ease}
+.temperature-gradient{position:absolute;left:0;right:0;bottom:0;height:207px;background:linear-gradient(to top,#2563eb 0%,#22d3ee 30%,#facc15 62%,#ef4444 100%)}
+.temperature-bulb{position:absolute;left:8px;bottom:0;width:54px;height:54px;border:4px solid #dbe4ee;border-radius:50%;box-sizing:border-box;background:#2563eb;box-shadow:0 4px 10px rgba(0,0,0,.35);transition:background-color .25s ease;z-index:3}
+.temperature-bulb::after{content:"";position:absolute;left:12px;top:10px;width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.42)}
+.temperature-value{font-size:29px;font-weight:900;font-variant-numeric:tabular-nums;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.temperature-unit{font-size:18px;font-weight:800;color:#c6d3e1}
 `;
+
+const BATTERY_TABLE_PANEL_CSS = `
+.battery-table-root{height:100%;min-height:1px;position:relative;overflow:hidden;background:#162031;color:#f8fafc;font-family:system-ui,sans-serif;--table-font-size:20px;--table-value-size:24px;--table-unit-size:15px}
+.battery-table-stage{position:absolute;inset:0}
+.battery-table-card{width:100%;height:100%;box-sizing:border-box;padding:2px 8px;border:2px solid #475569;border-radius:6px;background:#162031}
+.battery-table{width:100%;height:100%;border-collapse:collapse;table-layout:fixed;font-variant-numeric:tabular-nums}
+.battery-table td{border-bottom:2px solid #3d4b60;font-size:var(--table-font-size);font-weight:800;white-space:nowrap}
+.battery-table td:first-child{width:55%}
+.battery-table tr:last-child td{border-bottom:0}
+.battery-table td:last-child{text-align:right;font-size:var(--table-value-size);font-weight:900;color:#ffffff;text-shadow:0 1px 2px rgba(0,0,0,.7)}
+.battery-table-unit{font-size:var(--table-unit-size);font-weight:800;color:#c6d3e1}
+`;
+
+const CELL_MIN_VOLTAGE = 3.7;
+const CELL_MAX_VOLTAGE = 4.2;
+const TEMPERATURE_MIN_C = 10;
+const TEMPERATURE_MAX_C = 60;
 
 function format(value, digits, suffix) {
   return typeof value === "number" && Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : "--";
@@ -78,6 +114,42 @@ function batteryColor(percent) {
   if (percent <= 20) return "#ef4444";
   if (percent <= 50) return "#eab308";
   return "#22c55e";
+}
+
+function cellFillPercent(voltage) {
+  if (!Number.isFinite(voltage)) return 0;
+  return clamp((voltage - CELL_MIN_VOLTAGE) / (CELL_MAX_VOLTAGE - CELL_MIN_VOLTAGE) * 100, 0, 100);
+}
+
+function cellColor(voltage) {
+  if (!Number.isFinite(voltage)) return "#64748b";
+  if (voltage < CELL_MIN_VOLTAGE || voltage >= CELL_MAX_VOLTAGE) return "#ef4444";
+  if (voltage < 3.8) return "#eab308";
+  return "#22c55e";
+}
+
+function readCellVoltages(data) {
+  if (data == undefined || typeof data.length !== "number") return undefined;
+  const values = Array.from(data).slice(0, 4).map(Number);
+  return values.length === 4 ? values : undefined;
+}
+
+function temperatureFillPercent(temperature) {
+  if (!Number.isFinite(temperature)) return 0;
+  return clamp(
+    (temperature - TEMPERATURE_MIN_C) / (TEMPERATURE_MAX_C - TEMPERATURE_MIN_C) * 100,
+    0,
+    100,
+  );
+}
+
+function temperatureColor(temperature) {
+  if (!Number.isFinite(temperature)) return "#64748b";
+  const percent = temperatureFillPercent(temperature);
+  if (percent < 30) return "#2563eb";
+  if (percent < 60) return "#22d3ee";
+  if (percent < 82) return "#facc15";
+  return "#ef4444";
 }
 
 function normalizeFrame(frame) {
@@ -272,17 +344,47 @@ function initBatteryStatus(context) {
   root.appendChild(style);
 
   const card = document.createElement("div");
-  card.className = "battery-card";
+  card.className = "battery-stage";
   card.innerHTML = [
-    '<div class="battery-title">BATTERY REMAINING</div>',
+    '<div class="battery-card">',
+    '<div class="battery-section-title">REMAINING CHARGE</div>',
     '<div class="battery-shell"><div class="battery-fill"></div><div class="battery-percent">--%</div></div>',
-    '<div class="battery-meta">/gui/battery_percent</div>',
+    '<div class="monitor-body">',
+    '<div class="cell-section">',
+    '<div class="battery-section-title">CELL VOLTAGES</div>',
+    '<div class="cell-gauges">',
+    ...[1, 2, 3, 4].map((cell) => [
+      '<div class="cell-gauge">',
+      `<div class="cell-name">CELL ${cell}</div>`,
+      '<div class="cell-track"><div class="cell-fill"></div></div>',
+      '<div class="cell-value">--<span class="cell-unit"> V</span></div>',
+      '</div>',
+    ].join("")),
+    '</div>',
+    '</div>',
+    '<div class="temperature-section">',
+    '<div class="battery-section-title">TEMPERATURE</div>',
+    '<div class="temperature-meter">',
+    '<div class="temperature-tube"><div class="temperature-fill-clip"><div class="temperature-gradient"></div></div></div>',
+    '<div class="temperature-bulb"></div>',
+    '</div>',
+    '<div class="temperature-value">--<span class="temperature-unit"> °C</span></div>',
+    '</div>',
+    '</div>',
+    '</div>',
   ].join("");
   root.appendChild(card);
 
   const fill = card.querySelector(".battery-fill");
   const percentText = card.querySelector(".battery-percent");
+  const cellFills = [...card.querySelectorAll(".cell-fill")];
+  const cellValues = [...card.querySelectorAll(".cell-value")];
+  const temperatureFill = card.querySelector(".temperature-fill-clip");
+  const temperatureBulb = card.querySelector(".temperature-bulb");
+  const temperatureValue = card.querySelector(".temperature-value");
   let batteryPercent;
+  let cellVoltages = [];
+  let temperatureC;
 
   function renderBattery() {
     if (!Number.isFinite(batteryPercent)) {
@@ -297,7 +399,35 @@ function initBatteryStatus(context) {
     percentText.textContent = `${Math.round(percent)}%`;
   }
 
-  context.subscribe([{topic: BATTERY_PERCENT_TOPIC}]);
+  function renderCells() {
+    for (let index = 0; index < 4; index += 1) {
+      const voltage = cellVoltages[index];
+      cellFills[index].style.height = `${cellFillPercent(voltage)}%`;
+      cellFills[index].style.backgroundColor = cellColor(voltage);
+      cellValues[index].innerHTML = Number.isFinite(voltage)
+        ? `${voltage.toFixed(2)}<span class="cell-unit"> V</span>`
+        : '--<span class="cell-unit"> V</span>';
+    }
+  }
+
+  function renderTemperature() {
+    temperatureFill.style.height = `${temperatureFillPercent(temperatureC)}%`;
+    temperatureBulb.style.backgroundColor = temperatureColor(temperatureC);
+    temperatureValue.innerHTML = Number.isFinite(temperatureC)
+      ? `${temperatureC.toFixed(2)}<span class="temperature-unit"> °C</span>`
+      : '--<span class="temperature-unit"> °C</span>';
+  }
+
+  function resizeCard() {
+    const scale = Math.max(0.03, Math.min((root.clientWidth - 4) / 520, (root.clientHeight - 4) / 500));
+    card.style.transform = `scale(${scale})`;
+  }
+
+  context.subscribe([
+    {topic: BATTERY_PERCENT_TOPIC},
+    {topic: CELL_VOLTAGES_TOPIC},
+    {topic: BMS_TEMPERATURE_TOPIC},
+  ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
     try {
@@ -305,21 +435,128 @@ function initBatteryStatus(context) {
         const message = event.message || {};
         if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
           batteryPercent = message.data;
+        } else if (event.topic === CELL_VOLTAGES_TOPIC) {
+          const values = readCellVoltages(message.data);
+          if (values) cellVoltages = values;
+        } else if (event.topic === BMS_TEMPERATURE_TOPIC && typeof message.data === "number") {
+          temperatureC = message.data;
         }
       }
       renderBattery();
+      renderCells();
+      renderTemperature();
     } finally {
       done();
     }
   };
 
   renderBattery();
-  return () => root.replaceChildren();
+  renderCells();
+  renderTemperature();
+  const resizeObserver = new ResizeObserver(resizeCard);
+  resizeObserver.observe(root);
+  resizeCard();
+  return () => {
+    resizeObserver.disconnect();
+    root.replaceChildren();
+  };
+}
+
+function initBatteryStatusTable(context) {
+  const root = context.panelElement;
+  root.replaceChildren();
+  root.className = "battery-table-root";
+
+  const style = document.createElement("style");
+  style.textContent = BATTERY_TABLE_PANEL_CSS;
+  root.appendChild(style);
+
+  const stage = document.createElement("div");
+  stage.className = "battery-table-stage";
+  stage.innerHTML = [
+    '<div class="battery-table-card">',
+    '<table class="battery-table">',
+    '<tbody>',
+    '<tr><td>Remaining charge</td><td data-field="remaining">--<span class="battery-table-unit"> %</span></td></tr>',
+    ...[1, 2, 3, 4].map((cell) =>
+      `<tr><td>Cell ${cell}</td><td data-field="cell-${cell}">--<span class="battery-table-unit"> V</span></td></tr>`),
+    '<tr><td>Temperature</td><td data-field="temperature">--<span class="battery-table-unit"> °C</span></td></tr>',
+    '</tbody></table></div>',
+  ].join("");
+  root.appendChild(stage);
+
+  const remainingElement = stage.querySelector('[data-field="remaining"]');
+  const cellElements = [1, 2, 3, 4].map((cell) => stage.querySelector(`[data-field="cell-${cell}"]`));
+  const temperatureElement = stage.querySelector('[data-field="temperature"]');
+  let batteryPercent;
+  let cellVoltages = [];
+  let temperatureC;
+
+  function renderTable() {
+    remainingElement.innerHTML = Number.isFinite(batteryPercent)
+      ? `${Math.round(clamp(batteryPercent, 0, 100))}<span class="battery-table-unit"> %</span>`
+      : '--<span class="battery-table-unit"> %</span>';
+    for (let index = 0; index < 4; index += 1) {
+      const voltage = cellVoltages[index];
+      cellElements[index].innerHTML = Number.isFinite(voltage)
+        ? `${voltage.toFixed(2)}<span class="battery-table-unit"> V</span>`
+        : '--<span class="battery-table-unit"> V</span>';
+      cellElements[index].style.color = cellColor(voltage);
+    }
+    temperatureElement.innerHTML = Number.isFinite(temperatureC)
+      ? `${temperatureC.toFixed(2)}<span class="battery-table-unit"> °C</span>`
+      : '--<span class="battery-table-unit"> °C</span>';
+    remainingElement.style.color = batteryColor(batteryPercent);
+    temperatureElement.style.color = temperatureColor(temperatureC);
+  }
+
+  function resizeTable() {
+    const rowHeight = Math.max(1, (root.clientHeight - 4) / 6);
+    const fontSize = Math.max(9, Math.min(rowHeight * 0.52, root.clientWidth * 0.055));
+    root.style.setProperty("--table-font-size", `${fontSize}px`);
+    root.style.setProperty("--table-value-size", `${fontSize * 1.18}px`);
+    root.style.setProperty("--table-unit-size", `${fontSize * 0.7}px`);
+  }
+
+  context.subscribe([
+    {topic: BATTERY_PERCENT_TOPIC},
+    {topic: CELL_VOLTAGES_TOPIC},
+    {topic: BMS_TEMPERATURE_TOPIC},
+  ]);
+  context.watch("currentFrame");
+  context.onRender = (renderState, done) => {
+    try {
+      for (const event of renderState.currentFrame || []) {
+        const message = event.message || {};
+        if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
+          batteryPercent = message.data;
+        } else if (event.topic === CELL_VOLTAGES_TOPIC) {
+          const values = readCellVoltages(message.data);
+          if (values) cellVoltages = values;
+        } else if (event.topic === BMS_TEMPERATURE_TOPIC && typeof message.data === "number") {
+          temperatureC = message.data;
+        }
+      }
+      renderTable();
+    } finally {
+      done();
+    }
+  };
+
+  renderTable();
+  const resizeObserver = new ResizeObserver(resizeTable);
+  resizeObserver.observe(root);
+  resizeTable();
+  return () => {
+    resizeObserver.disconnect();
+    root.replaceChildren();
+  };
 }
 
 function activate(extensionContext) {
   extensionContext.registerPanel({name: "gnss-map-telemetry", initPanel: initGnssMapTelemetry});
   extensionContext.registerPanel({name: "battery-status", initPanel: initBatteryStatus});
+  extensionContext.registerPanel({name: "battery-status-table", initPanel: initBatteryStatusTable});
 }
 
 module.exports = {
@@ -328,4 +565,7 @@ module.exports = {
   normalizeQuaternion,
   quaternionToBearingDegrees,
   resolveOrientation,
+  cellFillPercent,
+  readCellVoltages,
+  temperatureFillPercent,
 };

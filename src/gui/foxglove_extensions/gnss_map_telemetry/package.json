@@ -1,9 +1,9 @@
 {
   "name": "gnss-map-telemetry",
   "displayName": "GNSS Map Telemetry",
-  "description": "Interactive GNSS map with a base_link heading marker and vessel telemetry legend.",
+  "description": "Interactive GNSS map and responsive BMS monitor for remaining charge and four cell voltages.",
   "publisher": "KeioRoboticsAssociation",
-  "version": "0.2.2",
+  "version": "0.2.11",
   "license": "Apache-2.0",
   "main": "./dist/extension.js",
   "scripts": {
