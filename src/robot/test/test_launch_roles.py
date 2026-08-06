@@ -123,6 +123,13 @@ def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     assert 'package="twist_mux"' not in source
 
 
+def test_minipc_joy_converter_does_not_publish_physical_lamp_topics():
+    source = _read_launch_source("minipc_bringup.launch.py")
+
+    for color in ("green", "yellow", "red"):
+        assert f'("/{color}", "/manual_lamp/{color}")' in source
+
+
 def test_minipc_bringup_starts_the_autonomy_supervisor_once():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
 

@@ -195,6 +195,14 @@ def generate_launch_description():
                 [FindPackageShare("simple_manual"), "config", "joy_converter.yaml"]
             )
         ],
+        # alert_lamp_driver is the sole publisher of the physical lamp topics.
+        # Keep the joystick's button-status outputs available for debugging
+        # without allowing them to contend with the alert-lamp state machine.
+        remappings=[
+            ("/green", "/manual_lamp/green"),
+            ("/yellow", "/manual_lamp/yellow"),
+            ("/red", "/manual_lamp/red"),
+        ],
     )
 
     command_arbiter = Node(
