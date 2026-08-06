@@ -69,9 +69,16 @@ void AlertLampDriver::apply(const msg::AlertLampCommand & command, bool fallback
     const double phase = std::fmod(now().seconds(), period) / period;
     on = phase < command.duty_ratio;
   }
-  red_output_ = on && (command.color & msg::AlertLampCommand::COLOR_RED) != 0;
-  yellow_output_ = on && (command.color & msg::AlertLampCommand::COLOR_YELLOW) != 0;
-  green_output_ = on && (command.color & msg::AlertLampCommand::COLOR_GREEN) != 0;
+  // A command may contain several color bits, but the physical output must
+  // represent one state.  Keep the safety ordering explicit: a red fault
+  // masks yellow and green, and yellow masks green.
+  const bool red_requested = (command.color & msg::AlertLampCommand::COLOR_RED) != 0;
+  const bool yellow_requested =
+    (command.color & msg::AlertLampCommand::COLOR_YELLOW) != 0;
+  const bool green_requested = (command.color & msg::AlertLampCommand::COLOR_GREEN) != 0;
+  red_output_ = on && red_requested;
+  yellow_output_ = on && !red_requested && yellow_requested;
+  green_output_ = on && !red_requested && !yellow_requested && green_requested;
   std_msgs::msg::Bool red; red.data = red_output_; red_pub_->publish(red);
   std_msgs::msg::Bool yellow; yellow.data = yellow_output_; yellow_pub_->publish(yellow);
   std_msgs::msg::Bool green; green.data = green_output_; green_pub_->publish(green);

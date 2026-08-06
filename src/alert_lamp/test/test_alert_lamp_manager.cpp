@@ -21,7 +21,7 @@ TEST(AlertLampCommandMapping, ManualNormalIsYellowSolid)
   EXPECT_EQ(display.pattern, alert_lamp::LampPattern::SOLID);
 }
 
-TEST(AlertLampCommandMapping, AutonomyNotReadyBlinksGreenAndYellow)
+TEST(AlertLampCommandMapping, AutonomyNotReadyUsesYellowPriority)
 {
   const auto display = alert_lamp::StatusEvaluator().displayFor(
     alert_lamp::AlertState::AUTONOMY_NOT_READY, 0.1F, 0.1F, 0.05F, 0.5F, {});
@@ -30,7 +30,7 @@ TEST(AlertLampCommandMapping, AutonomyNotReadyBlinksGreenAndYellow)
   EXPECT_FLOAT_EQ(display.period, 0.1F);
 }
 
-TEST(AlertLampCommandMapping, GroundCommunicationLossUsesModeSpecificDualLamp)
+TEST(AlertLampCommandMapping, GroundCommunicationLossUsesRedPriority)
 {
   alert_lamp::SystemStatus automatic;
   automatic.mode = alert_lamp::OperatingMode::AUTO;
