@@ -111,7 +111,10 @@ class PlannerNode(Node):
         # Visualization of the CRM values actually evaluated by MPPI.  This
         # is deliberately separate from Nav2's obstacle costmap.
         self.declare_parameter("mppi.crm_costmap_topic", "/mppi/crm_costmap")
-        self.declare_parameter("mppi.crm_costmap_resolution_m", 0.2)
+        # CRM is a high-level collision-risk field, not an obstacle map.
+        # A 0.5 m grid is sufficient and keeps the per-cycle full-map
+        # time-domain evaluation lightweight.
+        self.declare_parameter("mppi.crm_costmap_resolution_m", 0.5)
         self.declare_parameter("mppi.crm_costmap_width_m", 120.0)
         self.declare_parameter("mppi.crm_costmap_height_m", 60.0)
         self.declare_parameter("mppi.crm_costmap_origin_x_m", -20.0)
