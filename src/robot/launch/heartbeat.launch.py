@@ -34,7 +34,11 @@ def _launch_setup(context, *args, **kwargs):
     monitor_zed2i = enabled("heartbeat_monitor_zed2i")
     monitor_lidar = enabled("heartbeat_monitor_lidar")
     monitor_ekf_local = enabled("heartbeat_monitor_ekf_local")
-    monitor_ekf_global = enabled("heartbeat_monitor_ekf_global")
+    # An intentionally disabled EKF has no odometry publisher.  Do not make
+    # that absence unhealthy merely because its heartbeat monitor was enabled.
+    monitor_ekf_global = (
+        enabled("heartbeat_monitor_ekf_global") and enabled("enable_global_ekf")
+    )
 
     if role == "jetson":
         gates = []
@@ -153,6 +157,7 @@ def generate_launch_description():
             DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_ekf_local", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_ekf_global", default_value="true"),
+            DeclareLaunchArgument("enable_global_ekf", default_value="true"),
             OpaqueFunction(function=_launch_setup),
         ]
     )

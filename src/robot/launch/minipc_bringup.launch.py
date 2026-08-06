@@ -334,6 +334,7 @@ def generate_launch_description():
             "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
             "heartbeat_monitor_ekf_local": heartbeat_monitor_ekf_local,
             "heartbeat_monitor_ekf_global": heartbeat_monitor_ekf_global,
+            "enable_global_ekf": "false",
         },
     )
 
