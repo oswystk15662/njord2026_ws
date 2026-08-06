@@ -167,9 +167,11 @@ class OpponentVesselNode(Node):
         marker.action = Marker.ADD
         marker.pose.orientation.w = 1.0
         marker.scale.x = self.marker_line_width_m
+        # The opponent outline represents the collision-risk vessel in the
+        # Task 2 visualization, so keep its warning color unambiguously red.
         marker.color.r = 1.0
-        marker.color.g = 0.35
-        marker.color.b = 0.05
+        marker.color.g = 0.0
+        marker.color.b = 0.0
         marker.color.a = 1.0
         marker.lifetime = Duration(seconds=0.3).to_msg()
 
