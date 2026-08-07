@@ -47,7 +47,7 @@ def generate_launch_description():
     )
 
     map_frame_relay = Node(
-        package="robot",
+        package="test_bringup",
         executable="odometry_frame_relay.py",
         name="um982_odometry_map_relay",
         output="screen",

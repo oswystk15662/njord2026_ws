@@ -1,8 +1,9 @@
 {
   // zenoh-bridge-ros2dds : Jetson (Jazzy) 側
   //   ROS_DOMAIN_ID=6 のローカル DDS と zenoh を橋渡しする。
-  //   allow リストは bridge_minipc.json5 と一致させること。地上側で
-  //   RTP/JPEG を受けて生成する /ground_video/image/compressed は含めない。
+  //   Ground PC用のbridgeとは分離し、Jetsonで生成・消費するtopicだけを
+  //   通す。地上側でRTP/JPEGを受けて生成する
+  //   /ground_video/image/compressed は含めない。
   //   Livoxのrawデータは/livox/imuだけを通し、/livox/lidarはJetson内に
   //   閉じ込める。
   mode: "peer",
@@ -26,8 +27,6 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
-          "/heartbeat/ground_station",
-          "/joy", "/joy/set_feedback",
           "/foxglove_log",
         ],
         subscribers: [
@@ -35,8 +34,6 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
-          "/heartbeat/ground_station",
-          "/joy", "/joy/set_feedback",
           "/foxglove_log",
         ],
         service_servers: [], service_clients: [],

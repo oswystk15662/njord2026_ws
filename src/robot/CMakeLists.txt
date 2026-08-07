@@ -14,11 +14,6 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
-install(PROGRAMS
-  scripts/odometry_frame_relay.py
-  DESTINATION lib/${PROJECT_NAME}
-)
-
 # GLIM only accepts a single config directory containing a "config.json"
 # that it reads at startup, so the CPU-backend variant needs its own
 # directory (glim_config_cpu) rather than a config-file switch. Install a

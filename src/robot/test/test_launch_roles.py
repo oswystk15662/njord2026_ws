@@ -174,13 +174,13 @@ def test_disabled_minipc_serial_drivers_default_to_false():
 def test_minipc_starts_um982_and_spatial_ntrip_clients_from_the_ground_caster():
     source = _read_launch_source("minipc_bringup.launch.py")
 
-    assert '"ntrip_server": "192.168.1.72"' in source
+    assert '"ntrip_server": "osw-Stealth-14-AI-Studio-A1VGG.local"' in source
     assert '"ntrip_mountpoint": "RTCM3"' in source
     assert '"ntrip_username": "test"' in source
     assert 'package="adnav_driver"' in source
     assert '"/adnav_driver/ntrip"' in source
     assert "adnav_interfaces/srv/Ntrip" in source
-    assert "host: '192.168.1.72:2101'" in source
+    assert "host: 'osw-Stealth-14-AI-Studio-A1VGG.local:2101'" in source
     assert "mountpoint: 'RTCM3'" in source
 
 
@@ -385,7 +385,7 @@ def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():
     assert "DeclareLaunchArgument('height', default_value='360')" in source
 
 
-@pytest.mark.parametrize("filename", ["bridge_minipc.json5", "bridge_24.json5"])
+@pytest.mark.parametrize("filename", ["bridge_minipc.json5", "bridge_jetson.json5"])
 def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     path = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", filename)
@@ -395,4 +395,22 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
 
     assert '"/livox/imu"' in source
     assert '"/livox/lidar"' not in source
-    assert '"/heartbeat/ground_station"' in source
+
+
+def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
+    zenoh_dir = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
+    )
+    sources = {}
+    for filename in (
+        "bridge_groundpc.json5",
+        "bridge_jetson.json5",
+        "bridge_minipc.json5",
+    ):
+        with open(os.path.join(zenoh_dir, filename), "r") as stream:
+            sources[filename] = stream.read()
+
+    for topic in ('"/joy"', '"/heartbeat/ground_station"'):
+        assert topic in sources["bridge_groundpc.json5"]
+        assert topic in sources["bridge_minipc.json5"]
+        assert topic not in sources["bridge_jetson.json5"]
