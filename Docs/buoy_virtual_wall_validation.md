@@ -42,6 +42,22 @@ Task 3 simulator の既知のブイ配置を入力に使い、`/virtual_obstacle
 購読する costmap に接続した構成で確認する。ゴールを航路内に置いた場合に、計画経路が
 赤・緑列の間に残ること、航路外側へ抜ける候補が lethal cost で除外されることを確認する。
 
+```bash
+colcon build --packages-select foxglove_logger task3_sim
+source install/setup.bash
+ros2 launch task3_sim task3_sim.launch.py enable_diagnostics:=false
+```
+
+`task3_orchestrator` は `b31_*` を東向き、`b32_*` を西向きのコースとして扱い、
+各コースの色列から `/virtual_obstacles` を map frame で 10 Hz に publish する。Task 3
+の local/global costmap はこのトピックを `virtual_wall` obstacle source として購読する。
+起動後は次で確認できる。
+
+```bash
+ros2 topic hz /virtual_obstacles
+ros2 topic echo /virtual_obstacles --once
+```
+
 `enable_virtual_wall=true` だけでは不十分で、`channel_heading_rad` が有限値であり、
 対象 costmap の obstacle layer が `/virtual_obstacles` を購読していることを必ず確認する。
 
