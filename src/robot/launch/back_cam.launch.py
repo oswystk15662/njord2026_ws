@@ -1,5 +1,6 @@
 import os
 
+from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -24,14 +25,9 @@ def launch_setup(context, *args, **kwargs):
             namespace="back_cam",
             output="screen",
             parameters=[
+                LaunchConfiguration("params_file"),
                 {
                     "video_device": video_device,
-                    "image_width": LaunchConfiguration("image_width"),
-                    "image_height": LaunchConfiguration("image_height"),
-                    "framerate": LaunchConfiguration("framerate"),
-                    "pixel_format": LaunchConfiguration("pixel_format"),
-                    "camera_name": "back_cam",
-                    "frame_id": "back_cam_link",
                 }
             ],
         )
@@ -39,18 +35,23 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
+    default_params_file = os.path.join(
+        get_package_share_directory("robot"), "config", "back_cam.yaml"
+    )
+
     return LaunchDescription(
         [
+            DeclareLaunchArgument(
+                "params_file",
+                default_value=default_params_file,
+                description="Path to the usb_cam ROS parameter YAML file.",
+            ),
             # /dev/videoN indices shift on reconnect/reboot; use the stable
             # by-id path for the Adesso CyberTrack H7 (back_cam).
             DeclareLaunchArgument(
                 "video_device",
                 default_value="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0",
             ),
-            DeclareLaunchArgument("image_width", default_value="640"),
-            DeclareLaunchArgument("image_height", default_value="480"),
-            DeclareLaunchArgument("framerate", default_value="30.0"),
-            DeclareLaunchArgument("pixel_format", default_value="mjpeg2rgb"),
             OpaqueFunction(function=launch_setup),
         ]
     )

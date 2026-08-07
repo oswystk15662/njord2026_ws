@@ -638,6 +638,17 @@ ros2 run micon_driver_fd serial_writer --ros-args \
 ros2 launch robot localization.launch.py
 ```
 
+背面カメラの解像度・フレームレート・`pixel_format`・コントラストは
+`src/robot/config/back_cam.yaml` で設定する。`contrast` はカメラが受け付ける
+範囲内の整数に変更してから、launch を再起動する。範囲は
+`v4l2-ctl --device=/dev/videoN --list-ctrls` で確認できる。
+
+別の設定ファイルを使う場合は、次のように指定できる。
+
+```bash
+ros2 launch robot back_cam.launch.py params_file:=/path/to/back_cam.yaml
+```
+
 `enable_buoy_detection:=true`ではLivox driverと点群ブイ検出を同じ
 `component_container_mt`へロードし、`/livox/lidar`区間でintra-process通信を使う。
 個別起動が必要な場合は従来どおり`pcl_bouy_det.launch.py`も使用できる。
