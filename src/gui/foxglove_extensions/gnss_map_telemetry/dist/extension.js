@@ -19,6 +19,24 @@ const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
 const WORLD_FRAME = "map";
 const VESSEL_FRAME = "base_link";
+const WAYPOINT_TOPICS = Object.freeze({
+  "/visualization/norway_waypoints/start": {label: "Start", color: "#ffffff"},
+  "/visualization/norway_waypoints/task1/entry": {label: "T1 entry", color: "#ffd54f"},
+  "/visualization/norway_waypoints/task1/marker_observe": {label: "T1 observe", color: "#ffd54f"},
+  "/visualization/norway_waypoints/task1/decision": {label: "T1 decision", color: "#ffd54f"},
+  "/visualization/norway_waypoints/task1/exit": {label: "T1 exit", color: "#ffd54f"},
+  "/visualization/norway_waypoints/task1/goal": {label: "T1 goal", color: "#ffd54f"},
+  "/visualization/norway_waypoints/task2/risk_check_1": {label: "T2 risk 1", color: "#ff5252"},
+  "/visualization/norway_waypoints/task2/risk_check_2": {label: "T2 risk 2", color: "#ff5252"},
+  "/visualization/norway_waypoints/task2/risk_check_3": {label: "T2 risk 3", color: "#ff5252"},
+  "/visualization/norway_waypoints/task2/goal": {label: "T2 goal", color: "#ff5252"},
+  "/visualization/norway_waypoints/task3/gate": {label: "T3 gate", color: "#4fc3f7"},
+  "/visualization/norway_waypoints/task3/left_approach": {label: "T3 left approach", color: "#4fc3f7"},
+  "/visualization/norway_waypoints/task3/left_berth": {label: "T3 left berth", color: "#4fc3f7"},
+  "/visualization/norway_waypoints/task3/right_approach": {label: "T3 right approach", color: "#4fc3f7"},
+  "/visualization/norway_waypoints/task3/right_berth": {label: "T3 right berth", color: "#4fc3f7"},
+  "/visualization/norway_waypoints/task3/finish": {label: "T3 finish", color: "#4fc3f7"},
+});
 
 const PANEL_CSS = `
 .gnss-map-root{height:100%;position:relative;overflow:hidden;background:#15202b}
@@ -178,8 +196,39 @@ function initGnssMapTelemetry(context) {
 
   const state = {};
   const transforms = new Map();
+  const waypointMarkers = new Map();
   let marker;
   let centered = false;
+  let waypointsCentered = false;
+  let waypointFitTimer;
+
+  function updateWaypoint(topic, message) {
+    if (!Number.isFinite(message.latitude) || !Number.isFinite(message.longitude)) return;
+    const waypoint = WAYPOINT_TOPICS[topic];
+    const position = [message.latitude, message.longitude];
+    let waypointMarker = waypointMarkers.get(topic);
+    if (!waypointMarker) {
+      waypointMarker = L.circleMarker(position, {
+        radius: 7, color: waypoint.color, fillColor: waypoint.color, fillOpacity: 0.9, weight: 2,
+      }).bindTooltip(waypoint.label, {direction: "top", offset: [0, -7]});
+      waypointMarker.addTo(map);
+      waypointMarkers.set(topic, waypointMarker);
+      scheduleWaypointFit();
+    } else {
+      waypointMarker.setLatLng(position);
+    }
+  }
+
+  function scheduleWaypointFit() {
+    if (waypointsCentered || waypointFitTimer) return;
+    waypointFitTimer = setTimeout(() => {
+      waypointFitTimer = undefined;
+      const positions = [...waypointMarkers.values()].map((item) => item.getLatLng());
+      if (positions.length > 1) map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
+      else if (positions.length === 1) map.setView(positions[0], 16, {animate: false});
+      waypointsCentered = positions.length > 0;
+    }, 200);
+  }
 
   function updateTransforms(message) {
     for (const stamped of message?.transforms || []) {
@@ -221,12 +270,15 @@ function initGnssMapTelemetry(context) {
       '<div class="gnss-telemetry-separator">',
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
       `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
+      '<div class="gnss-telemetry-separator">',
+      `WP&nbsp;&nbsp;&nbsp; ${waypointMarkers.size} / ${Object.keys(WAYPOINT_TOPICS).length}</div>`,
     ].join("");
   }
 
   context.subscribe([
     {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
     {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
+    ...Object.keys(WAYPOINT_TOPICS).map((topic) => ({topic})),
   ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
@@ -242,6 +294,8 @@ function initGnssMapTelemetry(context) {
           state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
           updateTransforms(message);
+        } else if (WAYPOINT_TOPICS[event.topic]) {
+          updateWaypoint(event.topic, message);
         }
       }
       updateMarker();
@@ -256,6 +310,7 @@ function initGnssMapTelemetry(context) {
   renderLegend();
 
   return () => {
+    if (waypointFitTimer) clearTimeout(waypointFitTimer);
     resizeObserver.disconnect();
     map.remove();
     root.replaceChildren();
