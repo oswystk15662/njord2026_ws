@@ -66,6 +66,11 @@
     channel_heading_rad: .nan
     wall_radius_m: 2.0
     wall_points_per_full_circle: 40
+    # Connect adjacent red or green lateral marks only within this distance.
+    # This creates a continuous outer channel boundary without bridging gaps.
+    connect_same_color_buoys: true
+    same_color_wall_max_gap_m: 12.0
+    same_color_wall_point_spacing_m: 0.2
     publish_pointcloud: false
     pointcloud_stride: 2
     num_disparities: 128

@@ -74,6 +74,20 @@ TEST(PerceptionLogic, GeneratesSpecifiedWallGeometries)
   EXPECT_EQ(virtual_wall_points(1, 0.0F, 0.0F, 0.0F).size(), 21U);
 }
 
+TEST(PerceptionLogic, ConnectsSameColourBuoysAlongTheChannelOnly)
+{
+  const std::vector<WallPoint> buoys{{4.0F, 1.0F, 0.0F}, {0.0F, 1.0F, 0.0F}, {8.0F, 1.0F, 0.0F}};
+  const auto wall = same_color_wall_points(buoys, 0.0F, 10.0F, 1.0F);
+  ASSERT_EQ(wall.size(), 10U);
+  EXPECT_FLOAT_EQ(wall.front().x, 0.0F);
+  EXPECT_FLOAT_EQ(wall.back().x, 8.0F);
+  for (const auto & point : wall) EXPECT_FLOAT_EQ(point.y, 1.0F);
+
+  const std::vector<WallPoint> separated{{0.0F, 1.0F, 0.0F}, {15.0F, 1.0F, 0.0F}};
+  EXPECT_TRUE(same_color_wall_points(separated, 0.0F, 10.0F, 1.0F).empty());
+  EXPECT_TRUE(same_color_wall_points(buoys, NAN, 10.0F, 1.0F).empty());
+}
+
 TEST(PerceptionLogic, SelectsLidarByRangeThenFallsBackToRay)
 {
   const std::vector<LidarCluster> clusters{

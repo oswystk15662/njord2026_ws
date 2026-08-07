@@ -190,6 +190,10 @@ public:
       channel_heading_rad_ = declare_parameter<double>("channel_heading_rad", NAN);
       wall_radius_m_ = declare_parameter<double>("wall_radius_m", 2.0);
       wall_points_per_full_circle_ = declare_parameter<int>("wall_points_per_full_circle", 40);
+      connect_same_color_buoys_ = declare_parameter<bool>("connect_same_color_buoys", true);
+      same_color_wall_max_gap_m_ = declare_parameter<double>("same_color_wall_max_gap_m", 12.0);
+      same_color_wall_point_spacing_m_ = declare_parameter<double>(
+        "same_color_wall_point_spacing_m", 0.2);
       lidar_topic_ = declare_parameter<std::string>("lidar_topic", "/livox/lidar");
       lidar_max_age_sec_ = declare_parameter<double>("lidar_max_age_sec", 0.15);
       lidar_cluster_tolerance_m_ = declare_parameter<double>("lidar_cluster_tolerance_m", 0.15);
@@ -649,7 +653,9 @@ private:
               virtual_wall_pub_->publish(to_virtual_wall_cloud(
                 wall_detections, wall_header, wall_frame_,
                 static_cast<float>(channel_heading_rad_), static_cast<float>(wall_radius_m_),
-                wall_points_per_full_circle_));
+                wall_points_per_full_circle_, connect_same_color_buoys_,
+                static_cast<float>(same_color_wall_max_gap_m_),
+                static_cast<float>(same_color_wall_point_spacing_m_)));
             }
           } catch (const std::exception & error) {
             RCLCPP_ERROR_THROTTLE(
@@ -782,6 +788,9 @@ private:
   double channel_heading_rad_{};
   double wall_radius_m_{};
   int wall_points_per_full_circle_{};
+  bool connect_same_color_buoys_{};
+  double same_color_wall_max_gap_m_{};
+  double same_color_wall_point_spacing_m_{};
   rclcpp::Publisher<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr detection_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr virtual_wall_pub_;
   std::string lidar_topic_;

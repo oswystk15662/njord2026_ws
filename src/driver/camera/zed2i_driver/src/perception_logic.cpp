@@ -170,4 +170,40 @@ std::vector<WallPoint> virtual_wall_points(
   return result;
 }
 
+std::vector<WallPoint> same_color_wall_points(
+  const std::vector<WallPoint> & buoy_positions, float heading, float max_gap, float spacing)
+{
+  if (!std::isfinite(heading) || max_gap <= 0.0F || spacing <= 0.0F) { return {}; }
+
+  std::vector<WallPoint> ordered;
+  ordered.reserve(buoy_positions.size());
+  for (const auto & buoy : buoy_positions) {
+    if (std::isfinite(buoy.x) && std::isfinite(buoy.y)) { ordered.push_back(buoy); }
+  }
+  if (ordered.size() < 2U) { return {}; }
+
+  const float along_x = std::cos(heading);
+  const float along_y = std::sin(heading);
+  std::sort(ordered.begin(), ordered.end(), [along_x, along_y](const auto & lhs, const auto & rhs) {
+    return lhs.x * along_x + lhs.y * along_y < rhs.x * along_x + rhs.y * along_y;
+  });
+
+  std::vector<WallPoint> result;
+  for (size_t index = 1; index < ordered.size(); ++index) {
+    const auto & first = ordered[index - 1];
+    const auto & second = ordered[index];
+    const float dx = second.x - first.x;
+    const float dy = second.y - first.y;
+    const float distance = std::hypot(dx, dy);
+    if (distance <= 0.0F || distance > max_gap) { continue; }
+
+    const int intervals = std::max(1, static_cast<int>(std::ceil(distance / spacing)));
+    for (int step = 0; step <= intervals; ++step) {
+      const float fraction = static_cast<float>(step) / static_cast<float>(intervals);
+      result.push_back({first.x + fraction * dx, first.y + fraction * dy, 0.0F});
+    }
+  }
+  return result;
+}
+
 }  // namespace zed2i_driver
