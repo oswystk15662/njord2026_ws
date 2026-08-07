@@ -1,7 +1,6 @@
 import os
 import yaml
 
-from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
@@ -43,8 +42,10 @@ def launch_setup(context, *args, **kwargs):
 
 
 def generate_launch_description():
-    default_params_file = os.path.join(
-        get_package_share_directory("robot"), "config", "back_cam.yaml"
+    # This relative path works both from the source tree and after ament
+    # installs launch/ and config/ as siblings under share/robot/.
+    default_params_file = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "..", "config", "back_cam.yaml")
     )
 
     return LaunchDescription(
