@@ -17,6 +17,13 @@ constexpr double kEarthRadiusMeters = 6371000.0;
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kStartLatitudeDegrees = 63.4420936;
 constexpr double kStartLongitudeDegrees = 10.4242793;
+// Unit vectors of the supplied GPS 1 -> GPS 2 baseline in local ENU.
+constexpr double kCourseEast = -0.341615;
+constexpr double kCourseNorth = -0.939856;
+constexpr double kLeftEast = 0.939856;
+constexpr double kLeftNorth = -0.341615;
+// The rulebook-shaped Task 1 template spans 50 m from GPS 1 to GPS 2.
+constexpr double kTask1Scale = 57.878 / 50.0;
 
 double radiansToDegrees(double radians)
 {
@@ -42,6 +49,14 @@ Waypoint localWaypoint(const std::string & topic_suffix, double east_meters, dou
     east_meters / (kEarthRadiusMeters * std::cos(degreesToRadians(kStartLatitudeDegrees))));
   return {topic_suffix, latitude, longitude};
 }
+
+Waypoint courseWaypoint(const std::string & topic_suffix, double along_meters, double left_meters)
+{
+  return localWaypoint(
+    topic_suffix,
+    along_meters * kCourseEast + left_meters * kLeftEast,
+    along_meters * kCourseNorth + left_meters * kLeftNorth);
+}
 }  // namespace
 
 class NorwayWaypointPublisher : public rclcpp::Node
@@ -55,26 +70,53 @@ public:
       throw std::invalid_argument("publish_rate_hz must be positive");
     }
 
-    // These points are the visualization-only proposal in
-    // Docs/norway_task_waypoint_proposal.md.  Values are local ENU offsets from
-    // (63.4420936, 10.4242793), except the supplied geographic start and goal.
+    // Rulebook-shaped, visualization-only course proposals.  They are expressed
+    // in the supplied GPS 1 -> GPS 2 local ENU baseline; see
+    // Docs/norway_task_waypoint_geometry.md.
     const std::vector<Waypoint> waypoints{
       {"start", kStartLatitudeDegrees, kStartLongitudeDegrees},
-      localWaypoint("task1/entry", -2.73, -7.52),
-      localWaypoint("task1/marker_observe", -7.17, -19.74),
-      localWaypoint("task1/decision", -10.93, -30.08),
-      localWaypoint("task1/exit", -16.06, -44.17),
-      {"task1/goal", 63.4416044, 10.4238816},
-      localWaypoint("task2/risk_check_1", -5.12, -14.10),
-      localWaypoint("task2/risk_check_2", -11.96, -32.89),
-      localWaypoint("task2/risk_check_3", -17.08, -46.99),
-      {"task2/goal", 63.4416044, 10.4238816},
-      localWaypoint("task3/gate", -8.20, -22.56),
-      localWaypoint("task3/left_approach", -7.34, -37.76),
-      localWaypoint("task3/left_berth", -9.73, -44.34),
-      localWaypoint("task3/right_approach", -18.62, -33.66),
-      localWaypoint("task3/right_berth", -21.01, -40.24),
-      {"task3/finish", 63.4416044, 10.4238816},
+      // Task 1.1: GPS 1 -> 1.1...1.10 -> GPS 2 (rulebook zig-zag).
+      courseWaypoint("task1/gps1", 0.0, 0.0),
+      courseWaypoint("task1/wp_1_1", 10.0 * kTask1Scale, 5.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_2", 13.0 * kTask1Scale, 0.0),
+      courseWaypoint("task1/wp_1_3", 16.0 * kTask1Scale, -5.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_4", 19.0 * kTask1Scale, -0.5 * kTask1Scale),
+      courseWaypoint("task1/wp_1_5", 22.0 * kTask1Scale, 6.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_6", 25.0 * kTask1Scale, 0.0),
+      courseWaypoint("task1/wp_1_7", 28.0 * kTask1Scale, -5.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_8", 31.0 * kTask1Scale, -1.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_9", 34.0 * kTask1Scale, 2.0 * kTask1Scale),
+      courseWaypoint("task1/wp_1_10", 40.0 * kTask1Scale, 0.0),
+      {"task1/gps2", 63.4416044, 10.4238816},
+      // Task 1.2: return lane, passing S/N/S cardinal marks alternately.
+      courseWaypoint("task1/gps3", 50.0 * kTask1Scale, -25.0 * kTask1Scale),
+      courseWaypoint("task1/wp_3_1_pass_south", 24.0 * kTask1Scale, -35.0 * kTask1Scale),
+      courseWaypoint("task1/wp_3_2_pass_north", 15.0 * kTask1Scale, -15.0 * kTask1Scale),
+      courseWaypoint("task1/wp_3_3_pass_south", 8.0 * kTask1Scale, -35.0 * kTask1Scale),
+      courseWaypoint("task1/gps4", 0.0, -25.0 * kTask1Scale),
+      // Task 2: two 5 m-wide red/green gates with 20 m gate spacing.
+      courseWaypoint("task2/gps5", 0.0, 0.0),
+      courseWaypoint("task2/gate1_red", 18.939, 2.5),
+      courseWaypoint("task2/gate1_center", 18.939, 0.0),
+      courseWaypoint("task2/gate1_green", 18.939, -2.5),
+      courseWaypoint("task2/gate2_red", 38.939, 2.5),
+      courseWaypoint("task2/gate2_center", 38.939, 0.0),
+      courseWaypoint("task2/gate2_green", 38.939, -2.5),
+      {"task2/gps6", 63.4416044, 10.4238816},
+      // Task 3.1: buoy corridor -> GPS 8 gate -> normal-dock mouth/berth.
+      courseWaypoint("task3_1/gps7", 0.0, 0.0),
+      courseWaypoint("task3_1/corridor_gate", 12.0, 0.0),
+      courseWaypoint("task3_1/gps8_gate", 18.0, 10.0),
+      courseWaypoint("task3_1/berth_approach", 18.25, 1.065),
+      courseWaypoint("task3_1/berth", 20.0, 1.065),
+      courseWaypoint("task3_1/undock_exit", 18.25, 1.065),
+      // Task 3.2 is its own point-symmetric, parallel-dock course.
+      courseWaypoint("task3_2/gps9", 0.0, 0.0),
+      courseWaypoint("task3_2/corridor_gate", -12.0, 0.0),
+      courseWaypoint("task3_2/gps9_gate", -18.0, -10.0),
+      courseWaypoint("task3_2/berth_approach", -18.25, 0.0),
+      courseWaypoint("task3_2/berth", -20.0, 0.0),
+      courseWaypoint("task3_2/gps10_finish", -18.0, -11.0),
     };
 
     rclcpp::QoS qos(1);

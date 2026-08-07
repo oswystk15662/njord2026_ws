@@ -9,7 +9,7 @@ control while the vessel arrow moves and rotates. When `/visualization/norway_wa
 topics are available, it also shows the waypoint proposal: Task 1 is yellow, Task 2
 is red, Task 3 is blue, and the start point is white.
 
-Install [gnss-map-telemetry-0.2.3.foxe](gnss-map-telemetry-0.2.3.foxe) by dragging it
+Install [gnss-map-telemetry-0.2.4.foxe](gnss-map-telemetry-0.2.4.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The vessel arrow points along the `base_link` +X axis. Its orientation is resolved
