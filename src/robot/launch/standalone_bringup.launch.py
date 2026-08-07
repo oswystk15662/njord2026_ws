@@ -61,6 +61,8 @@ def generate_launch_description():
             "enable_ground_video": LaunchConfiguration("enable_ground_video"),
             "ground_video_host": LaunchConfiguration("ground_video_host"),
             "ground_video_port": LaunchConfiguration("ground_video_port"),
+            "heartbeat_monitor_zed2i": LaunchConfiguration("heartbeat_monitor_zed2i"),
+            "heartbeat_monitor_lidar": LaunchConfiguration("heartbeat_monitor_lidar"),
             "lidar_start_delay": LaunchConfiguration("lidar_start_delay"),
             "camera_start_delay": LaunchConfiguration("camera_start_delay"),
         },
@@ -84,20 +86,17 @@ def generate_launch_description():
             "enable_drogger_rzs": LaunchConfiguration("enable_drogger_rzs"),
             "enable_imu": LaunchConfiguration("enable_imu"),
             "enable_localization": LaunchConfiguration("enable_localization"),
+            "use_ekf_local": LaunchConfiguration("use_ekf_local"),
             "enable_thruster": LaunchConfiguration("enable_thruster"),
-            "enable_joy": LaunchConfiguration("enable_joy"),
             "enable_alert_lamp": LaunchConfiguration("enable_alert_lamp"),
             "enable_bms": LaunchConfiguration("enable_bms"),
             "enable_buoy_costmap": LaunchConfiguration("enable_buoy_costmap"),
-            "enable_foxglove": LaunchConfiguration("enable_foxglove"),
             "enable_nav2": LaunchConfiguration("enable_nav2"),
             "enable_diagnostics": LaunchConfiguration("enable_diagnostics"),
             "thruster_config_file": LaunchConfiguration("thruster_config_file"),
             "thruster_robot_description_file": LaunchConfiguration(
                 "thruster_robot_description_file"
             ),
-            # GLIM runs inside jetson_bringup's Livox container; keep it off here.
-            "enable_glim": "false",
         },
     )
 
@@ -111,20 +110,25 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
                 "enable_glim",
-                default_value="true",
+                default_value="false",
                 description="Load GLIM into the Livox component container on the Jetson side",
             ),
             DeclareLaunchArgument(
                 "glim_backend", default_value="gpu", choices=["gpu", "cpu"]
             ),
-            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="true"),
+            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="false"),
             DeclareLaunchArgument("enable_gpu_perception", default_value="true"),
             DeclareLaunchArgument("engine_path", default_value=default_engine),
             DeclareLaunchArgument("camera_resolution", default_value="HD720"),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
-            DeclareLaunchArgument("enable_ground_video", default_value="false"),
-            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument("enable_ground_video", default_value="true"),
+            DeclareLaunchArgument(
+                "ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
+            DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             # Reproduce the staged sensor startup the pre-split
             # manual_control.launch.py used on the single Jetson.
             DeclareLaunchArgument("lidar_start_delay", default_value="18.0"),
@@ -160,15 +164,19 @@ def generate_launch_description():
             DeclareLaunchArgument("imu_port", default_value="/dev/ttyUSB0"),
             DeclareLaunchArgument("imu_baud", default_value="9600"),
             DeclareLaunchArgument("enable_um982", default_value="true"),
-            DeclareLaunchArgument("enable_drogger_rzs", default_value="true"),
+            DeclareLaunchArgument("enable_drogger_rzs", default_value="false"),
             DeclareLaunchArgument("enable_imu", default_value="false"),
             DeclareLaunchArgument("enable_localization", default_value="true"),
+            DeclareLaunchArgument(
+                "use_ekf_local",
+                default_value="false",
+                description="Replace the default UM982 feedback EKF with the "
+                "Livox-IMU local EKF.",
+            ),
             DeclareLaunchArgument("enable_thruster", default_value="true"),
-            DeclareLaunchArgument("enable_joy", default_value="true"),
             DeclareLaunchArgument("enable_alert_lamp", default_value="true"),
             DeclareLaunchArgument("enable_bms", default_value="true"),
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
-            DeclareLaunchArgument("enable_foxglove", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="false"),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),

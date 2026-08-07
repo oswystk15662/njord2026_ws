@@ -119,6 +119,17 @@ def generate_launch_description():
         parameters=[config],
         output="screen",
     )
+    foxglove_logger = Node(
+        package="foxglove_logger",
+        executable="foxglove_logger_node",
+        name="foxglove_logger",
+        parameters=[{
+            'odometry_topic': '/odometry/filtered/global',
+            'plan_topic': '/plan',
+            'fix_topic': '/sensor/vehicle_gnss/fix/raw',
+        }],
+        output='screen',
+    )
 
     heading_arrow = Node(
         package="tf_frame_arrow_publisher",
@@ -243,6 +254,7 @@ def generate_launch_description():
             sensor_noise_launch,
             task3_orchestrator,
             gui_status_dummy,
+            foxglove_logger,
             ground_speed,
             thruster_driver_node,
             twist_mux,

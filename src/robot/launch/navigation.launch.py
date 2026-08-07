@@ -1,7 +1,7 @@
 """Shared Nav2 stack with a single, explicit velocity path.
 
     controller / behavior -> /cmd_vel_nav_raw -> velocity_smoother
-    -> /cmd_vel_smoothed -> collision_monitor -> /cmd_vel_nav -> twist_mux
+    -> /cmd_vel_smoothed -> collision_monitor -> /cmd_vel_nav -> command_arbiter
     -> /cmd_vel
 """
 

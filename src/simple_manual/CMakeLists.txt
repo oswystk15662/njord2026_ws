@@ -28,6 +28,10 @@ add_executable(command_arbiter_node src/command_arbiter.cpp)
 target_compile_features(command_arbiter_node PUBLIC cxx_std_17)
 ament_target_dependencies(command_arbiter_node rclcpp geometry_msgs std_msgs)
 
+add_executable(ground_station_heartbeat_node src/ground_station_heartbeat.cpp)
+target_compile_features(ground_station_heartbeat_node PUBLIC cxx_std_17)
+ament_target_dependencies(ground_station_heartbeat_node rclcpp std_msgs)
+
 add_executable(thruster_id_test src/thruster_id_test.cpp)
 target_compile_features(thruster_id_test PUBLIC cxx_std_17)
 ament_target_dependencies(thruster_id_test rclcpp std_msgs)
@@ -53,6 +57,7 @@ install(TARGETS
   joy_converter_lib
   joy_converter_node
   command_arbiter_node
+  ground_station_heartbeat_node
   thruster_id_test
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib

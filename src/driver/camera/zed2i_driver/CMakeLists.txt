@@ -194,18 +194,24 @@ else()
   ament_target_dependencies(zed2i_sdk_component ${DEPENDENCIES} rclcpp_components)
 endif()
 
-# This CPU JPEG/RTP sender is used for USB cameras.  It is intentionally
-# independent of the ZED SDK/CUDA-only ground-video sender above.
+# The USB-camera senders are intentionally independent of the ZED SDK/CUDA-only
+# ground-video sender above. JPEG uses CPU encoding; H.26x uses VA-API on the miniPC.
 if(PkgConfig_FOUND)
   pkg_check_modules(GSTREAMER_APP QUIET IMPORTED_TARGET gstreamer-1.0 gstreamer-app-1.0)
 endif()
 if(GSTREAMER_APP_FOUND)
   add_executable(back_cam_ground_video_streamer src/back_cam_ground_video_streamer.cpp)
+  add_executable(back_cam_h26x_ground_video_streamer src/back_cam_h26x_ground_video_streamer.cpp)
   target_include_directories(back_cam_ground_video_streamer PRIVATE
     ${CMAKE_CURRENT_BINARY_DIR}/include
   )
+  target_include_directories(back_cam_h26x_ground_video_streamer PRIVATE
+    ${CMAKE_CURRENT_BINARY_DIR}/include
+  )
   ament_target_dependencies(back_cam_ground_video_streamer rclcpp sensor_msgs cv_bridge)
+  ament_target_dependencies(back_cam_h26x_ground_video_streamer rclcpp sensor_msgs cv_bridge)
   target_link_libraries(back_cam_ground_video_streamer ${OpenCV_LIBRARIES} PkgConfig::GSTREAMER_APP)
+  target_link_libraries(back_cam_h26x_ground_video_streamer ${OpenCV_LIBRARIES} PkgConfig::GSTREAMER_APP)
 else()
   message(STATUS "${PROJECT_NAME}: back-camera ground-video sender unavailable; requires GStreamer appsrc")
 endif()
@@ -225,10 +231,23 @@ install(TARGETS
 )
 
 if(TARGET back_cam_ground_video_streamer)
-  install(TARGETS back_cam_ground_video_streamer
+  install(TARGETS back_cam_ground_video_streamer back_cam_h26x_ground_video_streamer
     RUNTIME DESTINATION lib/${PROJECT_NAME}
   )
 endif()
+
+install(PROGRAMS
+  scripts/ground_receiver.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME ground_receiver
+)
+
+# ground_h26x_receiver keeps its filename when installed; the JPEG receiver
+# above retains the historical ground_receiver executable name.
+install(PROGRAMS scripts/ground_h26x_receiver.py
+  DESTINATION lib/${PROJECT_NAME}
+  RENAME ground_h26x_receiver
+)
 
 install(DIRECTORY
   include/

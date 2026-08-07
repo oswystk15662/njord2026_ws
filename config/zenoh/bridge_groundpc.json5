@@ -1,0 +1,39 @@
+{
+  // zenoh-bridge-ros2dds : Ground PC (Jazzy / ROS_DOMAIN_ID=6) 側
+  //   Ground PCが生成する操縦入力とheartbeatをminiPCへ送り、表示に必要な
+  //   軽量telemetryだけを受け取る。映像は従来どおりRTP/UDP専用経路を使う。
+  mode: "peer",
+
+  // miniPCへの到達経路は運用時の名前解決または固定IPで与える。
+  // スマートフォンInternet経路を使う場合も7447をInternetへ直接公開せず、
+  // WireGuard等のVPN内アドレスをendpointにする。
+  connect: {
+    endpoints: ["tcp/gembu-EliteMini-Series.local:7447"],
+  },
+
+  scouting: {
+    multicast: { enabled: false },
+  },
+
+  plugins: {
+    ros2dds: {
+      domain: 6,
+
+      allow: {
+        publishers: [
+          "/heartbeat/ground_station",
+          "/joy",
+        ],
+        subscribers: [
+          "/odom", "/tf", "/tf_static",
+          "/buoy_detections", "/buoy_detections_3d",
+          "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
+          "/joy/set_feedback", "/foxglove_log", "/gui/battery_percent",
+        ],
+        service_servers: [], service_clients: [],
+        action_servers: [], action_clients: [],
+      },
+    },
+  },
+}

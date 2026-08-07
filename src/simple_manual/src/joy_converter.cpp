@@ -66,8 +66,6 @@ JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
   pub_soft_emg_ = create_publisher<std_msgs::msg::Bool>("/soft_emg", 10);
   pub_operating_mode_ = create_publisher<std_msgs::msg::String>(
     "/system/operating_mode", rclcpp::QoS(1).transient_local());
-  pub_control_status_ = create_publisher<std_msgs::msg::String>(
-    "/system/control_status", rclcpp::QoS(1).transient_local());
   pub_heartbeat_ = create_publisher<std_msgs::msg::Empty>(
     "/heartbeat/manual_control", 10);
   pub_green_ = create_publisher<std_msgs::msg::Bool>("/green", 10);
@@ -100,8 +98,6 @@ void JoyConverter::joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
   pub_soft_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
   pub_operating_mode_->publish(
     std_msgs::msg::String().set__data(manual_mode_ ? "manual" : "auto"));
-  pub_control_status_->publish(std_msgs::msg::String().set__data(
-      output.emergency ? "emergency_stop" : (manual_mode_ ? "manual" : "auto")));
   pub_green_->publish(std_msgs::msg::Bool().set__data(output.green));
   pub_yellow_->publish(std_msgs::msg::Bool().set__data(output.yellow));
   pub_red_->publish(std_msgs::msg::Bool().set__data(output.red));

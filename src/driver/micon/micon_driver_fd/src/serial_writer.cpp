@@ -2,12 +2,9 @@
 
 #include <cstring>
 #include <cerrno>
-#include <cmath>
-#include <cstdlib>
 #include <fcntl.h>
 #include <functional>
 #include <limits>
-#include <sstream>
 #include <termios.h>
 #include <unistd.h>
 
@@ -85,24 +82,6 @@ Packet cobs_encode(const Packet & raw)
   return encoded;
 }
 
-bool parse_float(const std::string & field, float * value)
-{
-  char * end = nullptr;
-  errno = 0;
-  const float parsed = std::strtof(field.c_str(), &end);
-  if (end == field.c_str() || errno == ERANGE || !std::isfinite(parsed)) {
-    return false;
-  }
-  while (*end == ' ' || *end == '\t' || *end == '\r') {
-    ++end;
-  }
-  if (*end != '\0') {
-    return false;
-  }
-  *value = parsed;
-  return true;
-}
-
 }  // namespace
 
 Packet encode_packet(
@@ -135,34 +114,16 @@ Packet encode_packet(
   return packet;
 }
 
-bool parse_bms_csv_line(const std::string & line, std::array<float, 4> * cells)
-{
-  if (cells == nullptr) {
-    return false;
-  }
-
-  std::stringstream stream(line);
-  std::string field;
-  // The master output starts with milliseconds, which is not part of the
-  // voltage message.
-  if (!std::getline(stream, field, ',')) {
-    return false;
-  }
-  for (float & cell : *cells) {
-    if (!std::getline(stream, field, ',') || !parse_float(field, &cell)) {
-      return false;
-    }
-  }
-  return true;
-}
-
 SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 : Node("serial_writer", options)
 {
   serial_port_ = declare_parameter<std::string>("serial_port", "/dev/ttyUSB0");
   baud_ = declare_parameter<int>("baud", 115200);
   command_topic_ = declare_parameter<std::string>("command_topic", "/thruster_command");
-  bms_topic_ = declare_parameter<std::string>("bms_topic", "/bms");
+  ground_station_heartbeat_topic_ = declare_parameter<std::string>(
+    "ground_station_heartbeat_topic", "/heartbeat/ground_station");
+  ground_station_heartbeat_timeout_sec_ = declare_parameter<double>(
+    "ground_station_heartbeat_timeout_sec", 0.0);
 
   sub_thrust_ = create_subscription<std_msgs::msg::Float32MultiArray>(
     command_topic_, 10, std::bind(&SerialWriter::thrust_cb, this, std::placeholders::_1));
@@ -174,7 +135,11 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
     "/yellow", 10, std::bind(&SerialWriter::yellow_cb, this, std::placeholders::_1));
   sub_green_ = create_subscription<std_msgs::msg::Bool>(
     "/green", 10, std::bind(&SerialWriter::green_cb, this, std::placeholders::_1));
-  pub_bms_ = create_publisher<std_msgs::msg::Float32MultiArray>(bms_topic_, 10);
+  if (ground_station_heartbeat_timeout_sec_ > 0.0) {
+    sub_ground_station_heartbeat_ = create_subscription<std_msgs::msg::Empty>(
+      ground_station_heartbeat_topic_, 10,
+      std::bind(&SerialWriter::ground_station_heartbeat_cb, this, std::placeholders::_1));
+  }
   pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
   pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
     "/safety/emergency_stop", rclcpp::QoS(1).transient_local());
@@ -187,7 +152,38 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
 
 SerialWriter::~SerialWriter()
 {
-  if (fd_ >= 0) {close(fd_);}
+  if (fd_ < 0) {
+    return;
+  }
+
+  // Send an explicit final stop command before closing the port.  This makes
+  // shutdown safe even if the ESP32 has not reached its communication timeout
+  // yet, and leaves the warning LEDs in the commanded emergency/red state.
+  const std::array<float, 4> zero_thrust{{0.0F, 0.0F, 0.0F, 0.0F}};
+  Flags shutdown_flags;
+  shutdown_flags.emergency = true;
+  shutdown_flags.red = true;
+  const Packet packet = encode_packet(zero_thrust, shutdown_flags, sequence_++);
+
+  size_t written = 0;
+  for (int attempt = 0; written < packet.size() && attempt < 100; ++attempt) {
+    const ssize_t result = write(
+      fd_, packet.data() + written, packet.size() - written);
+    if (result > 0) {
+      written += static_cast<size_t>(result);
+    } else if (result < 0 && (errno == EINTR)) {
+      continue;
+    } else if (result < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+      usleep(1000);
+    } else {
+      break;
+    }
+  }
+  if (written == packet.size()) {
+    tcdrain(fd_);
+  }
+  close(fd_);
+  fd_ = -1;
 }
 
 void SerialWriter::thrust_cb(const std_msgs::msg::Float32MultiArray::SharedPtr msg)
@@ -203,7 +199,7 @@ void SerialWriter::soft_emg_cb(const std_msgs::msg::Bool::SharedPtr msg)
   {
     std::lock_guard<std::mutex> lock(mutex_);
     soft_emg_ = msg->data;
-    flags_.emergency = soft_emg_;
+    flags_.emergency = soft_emg_ || ground_station_timeout_emg_;
   }
   publish_safety_state();
 }
@@ -226,10 +222,20 @@ void SerialWriter::green_cb(const std_msgs::msg::Bool::SharedPtr msg)
   flags_.green = msg->data;
 }
 
+void SerialWriter::ground_station_heartbeat_cb(const std_msgs::msg::Empty::SharedPtr)
+{
+  std::lock_guard<std::mutex> lock(mutex_);
+  ground_station_heartbeat_received_ = true;
+  last_ground_station_heartbeat_ = std::chrono::steady_clock::now();
+  ground_station_timeout_emg_ = false;
+  flags_.emergency = soft_emg_;
+}
+
 void SerialWriter::timer_cb()
 {
+  update_ground_station_watchdog();
   if (fd_ < 0) {return;}
-  read_bms();
+  read_relay_state();
   Packet packet;
   {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -242,25 +248,7 @@ void SerialWriter::timer_cb()
   publish_safety_state();
 }
 
-void SerialWriter::publish_safety_state()
-{
-  bool soft_emg = false;
-  bool relay_active = false;
-  {
-    std::lock_guard<std::mutex> lock(mutex_);
-    soft_emg = soft_emg_;
-    relay_active = relay_active_;
-  }
-  pub_relay_active_->publish(std_msgs::msg::Bool().set__data(relay_active));
-  // GPIO15 follows relay state; it is not an independent physical E-stop input.
-  // A commanded soft stop has priority, because it can itself change relay state.
-  const auto state = soft_emg ? EmergencyStopState::SOFT_EMG :
-    relay_active ? EmergencyStopState::HARD_EMG : EmergencyStopState::RUNNING;
-  pub_safety_emergency_->publish(std_msgs::msg::UInt8().set__data(
-      static_cast<uint8_t>(state)));
-}
-
-void SerialWriter::read_bms()
+void SerialWriter::read_relay_state()
 {
   char buffer[256];
   const ssize_t count = read(fd_, buffer, sizeof(buffer));
@@ -270,37 +258,55 @@ void SerialWriter::read_bms()
     }
     return;
   }
-  if (count == 0) {
-    return;
-  }
-
   for (ssize_t index = 0; index < count; ++index) {
     const auto byte = static_cast<uint8_t>(buffer[index]);
     if (byte == 0x00U || byte == 0x01U) {
       std::lock_guard<std::mutex> lock(mutex_);
       relay_active_ = byte == 0x01U;
-    } else {
-      serial_rx_buffer_.push_back(static_cast<char>(byte));
     }
   }
-  size_t newline = 0;
-  while ((newline = serial_rx_buffer_.find('\n')) != std::string::npos) {
-    const std::string line = serial_rx_buffer_.substr(0, newline);
-    serial_rx_buffer_.erase(0, newline + 1);
-    std::array<float, 4> cells;
-    if (!parse_bms_csv_line(line, &cells)) {
-      continue;  // Header, diagnostics, stale data, and malformed records.
-    }
-    std_msgs::msg::Float32MultiArray message;
-    message.data.assign(cells.begin(), cells.end());
-    pub_bms_->publish(message);
+}
+
+void SerialWriter::update_ground_station_watchdog()
+{
+  if (ground_station_heartbeat_timeout_sec_ <= 0.0) {
+    return;
   }
 
-  constexpr size_t kMaxPendingLineLength = 4096;
-  if (serial_rx_buffer_.size() > kMaxPendingLineLength) {
-    RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000, "discarding oversized serial line");
-    serial_rx_buffer_.clear();
+  bool timeout = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    const auto elapsed = std::chrono::duration<double>(
+      std::chrono::steady_clock::now() - last_ground_station_heartbeat_).count();
+    timeout = !ground_station_heartbeat_received_ ||
+      elapsed > ground_station_heartbeat_timeout_sec_;
+    ground_station_timeout_emg_ = timeout;
+    flags_.emergency = soft_emg_ || ground_station_timeout_emg_;
   }
+  if (timeout) {
+    RCLCPP_WARN_THROTTLE(
+      get_logger(), *get_clock(), 5000,
+      "ground-station heartbeat timed out; forcing software emergency stop");
+  }
+}
+
+void SerialWriter::publish_safety_state()
+{
+  bool soft_emg = false;
+  bool relay_active = false;
+  {
+    std::lock_guard<std::mutex> lock(mutex_);
+    soft_emg = soft_emg_ || ground_station_timeout_emg_;
+    relay_active = relay_active_;
+  }
+  pub_relay_active_->publish(std_msgs::msg::Bool().set__data(relay_active));
+  // GPIO15 follows relay state; it is not an independent physical E-stop input.
+  // A commanded soft stop has priority, because it can itself change relay state.
+  const auto state = soft_emg ? EmergencyStopState::SOFT_EMG :
+    relay_active ? EmergencyStopState::HARD_EMG : EmergencyStopState::RUNNING;
+  pub_safety_emergency_->publish(
+    std_msgs::msg::UInt8().set__data(
+      static_cast<uint8_t>(state)));
 }
 
 int SerialWriter::open_serial(const std::string & device, int baud)

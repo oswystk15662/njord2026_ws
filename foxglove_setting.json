@@ -243,15 +243,7 @@
         "calibrationTopic": "/zed2i/left/camera_info"
       }
     },
-    "Gauge!battery": {
-      "path": "/gui/battery_percent.data",
-      "minValue": 0,
-      "maxValue": 100,
-      "colorMap": "red-yellow-green",
-      "colorMode": "colormap",
-      "reverse": false,
-      "reverseDirection": false,
-      "style": "dial",
+    "KeioRoboticsAssociation.gnss-map-telemetry.battery-status!battery": {
       "foxglovePanelTitle": "Battery Remaining (%)"
     },
     "Indicator!35h1ahn": {
@@ -296,7 +288,7 @@
             "second": {
               "first": {
                 "first": "Image!3umscrg",
-                "second": "Gauge!battery",
+                "second": "KeioRoboticsAssociation.gnss-map-telemetry.battery-status!battery",
                 "direction": "row"
               },
               "second": {

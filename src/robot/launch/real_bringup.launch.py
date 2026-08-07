@@ -160,6 +160,7 @@ def generate_launch_description():
                 "serial_port": serial_port,
                 "baud": baud,
                 "command_topic": "/thruster_command",
+                "bms_topic": "micon/bms_cells",
                 "use_sim_time": False,
             }
         ],
@@ -170,6 +171,12 @@ def generate_launch_description():
         "bms",
         ["launch", "bms.launch.py"],
         IfCondition(enable_thruster),
+    )
+    foxglove_logger = Node(
+        package="foxglove_logger",
+        executable="foxglove_logger_node",
+        name="foxglove_logger",
+        output="screen",
     )
 
     nav2_launch = include_launch(
@@ -221,7 +228,10 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
             DeclareLaunchArgument("gpu_perception_engine_path", default_value=""),
             DeclareLaunchArgument("enable_ground_video", default_value="false"),
-            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument(
+                "ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
             DeclareLaunchArgument("ground_video_fps", default_value="5.0"),
             DeclareLaunchArgument(
@@ -271,6 +281,7 @@ def generate_launch_description():
             thruster_launch,
             serial_writer,
             bms_launch,
+            foxglove_logger,
             # nav2_launch,
         ]
     )

@@ -3,7 +3,9 @@ alert_lamp_manager_node:
     evaluation_rate_hz: 10.0
     heartbeat:
       driver_timeout_sec: 1.0
-      high_level_timeout_sec: 1.0
+      # command_arbiter publishes this heartbeat at 1 Hz.  Keep margin for
+      # scheduling jitter so one late tick does not cause a critical fault.
+      high_level_timeout_sec: 2.0
       autonomy_timeout_sec: 1.0
       localization_timeout_sec: 1.0
       manual_control_timeout_sec: 1.0
@@ -19,10 +21,13 @@ alert_lamp_manager_node:
       position_covariance_threshold: 1.0
       rtk_covariance_threshold: 0.01
       rtk_grace_period_sec: 10.0
+      # Disabled while RTK quality is not part of the alert-lamp readiness criteria.
+      # Set true to require a recent RTK-quality NavSatFix in AUTO mode.
+      require_rtk_fix: false
     lamp:
-      green_blink_period_sec: 0.1
-      yellow_blink_period_sec: 0.1
-      red_blink_period_sec: 0.05
+      green_blink_period_sec: 1.0
+      yellow_blink_period_sec: 1.0
+      red_blink_period_sec: 0.5
       duty_ratio: 0.5
     topics:
       operating_mode: /system/operating_mode

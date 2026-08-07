@@ -68,7 +68,7 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   diagnostic_updater::Updater updater_;
   double driver_timeout_sec_{1.0};
-  double high_level_timeout_sec_{1.0};
+  double high_level_timeout_sec_{2.0};
   double autonomy_timeout_sec_{1.0};
   double localization_timeout_sec_{1.0};
   double manual_timeout_sec_{1.0};
@@ -77,6 +77,7 @@ private:
   double position_covariance_threshold_{1.0};
   double rtk_grace_period_sec_{10.0};
   double rtk_covariance_threshold_{0.01};
+  bool require_rtk_fix_{false};
   float green_period_{1.0F};
   float yellow_period_{1.0F};
   float red_period_{0.5F};

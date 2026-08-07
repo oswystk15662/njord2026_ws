@@ -42,26 +42,10 @@ def _monitor(
 
 PROFILES = {
     "localization": [
-        _monitor(
-            "glim_odom",
-            "/odom",
-            "nav_msgs/msg/Odometry",
-            "required_frequency",
-            10.0,
-            2.0,
-            1.0,
-            5.0,
-        ),
-        _monitor(
-            "imu",
-            "/adnav_driver/imu",
-            "sensor_msgs/msg/Imu",
-            "required_frequency",
-            20.0,
-            10.0,
-            0.5,
-            2.0,
-        ),
+        # This profile is used by the miniPC role.  GLIM runs on the Jetson
+        # and the Spatial IMU is optional, so neither topic is a required
+        # miniPC heartbeat.  The local EKF subscribes to /livox/imu received
+        # from the Jetson; its resulting local odometry is monitored below.
         _monitor(
             "gps_fix",
             "/sensor/vehicle_gnss/fix/raw",
@@ -212,6 +196,21 @@ def _launch_setup(context, *args, **kwargs):
             f"Available profiles: {', '.join(sorted(PROFILES))}"
         )
 
+    # A disabled global EKF intentionally has no /odometry/filtered/global
+    # publisher.  Omit that monitor so disabling the EKF cannot itself create
+    # an ERROR diagnostic or break the localization heartbeat tree.
+    if profile == "localization":
+        global_ekf_enabled = (
+            LaunchConfiguration("enable_global_ekf").perform(context).strip().lower()
+            in {"1", "true", "yes", "on"}
+        )
+        if not global_ekf_enabled:
+            monitors = [
+                monitor
+                for monitor in monitors
+                if monitor["monitor_name"] != "global_filtered_odom"
+            ]
+
     components = []
     for monitor in monitors:
         components.append(
@@ -242,6 +241,11 @@ def generate_launch_description():
                 "profile",
                 default_value="localization",
                 description="Diagnostic monitor profile: localization, nav2, or task3",
+            ),
+            DeclareLaunchArgument(
+                "enable_global_ekf",
+                default_value="true",
+                description="Monitor global filtered odometry only when its EKF is enabled.",
             ),
             OpaqueFunction(function=_launch_setup),
         ]

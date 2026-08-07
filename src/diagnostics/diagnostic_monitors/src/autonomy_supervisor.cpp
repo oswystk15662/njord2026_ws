@@ -74,10 +74,10 @@ private:
   void update()
   {
     action_server_ready_ = action_client_->wait_for_action_server(std::chrono::seconds(0));
-    const auto age = (now() - last_waypoint_).seconds();
-    const bool waypoint_fresh = last_waypoint_.nanoseconds() != 0 && age <= waypoint_timeout_sec_;
-    const bool ready = action_server_ready_ && waypoint_fresh && waypoint_count_ > 0;
-    ready_pub_->publish(std_msgs::msg::Bool().set__data(ready));
+    // Readiness means that Nav2 can accept autonomy commands.  A route may be
+    // supplied later, so waypoint freshness is reported diagnostically but is
+    // not an interlock for /autonomy/ready.
+    ready_pub_->publish(std_msgs::msg::Bool().set__data(action_server_ready_));
     heartbeat_pub_->publish(std_msgs::msg::Empty{});
     updater_.force_update();
   }

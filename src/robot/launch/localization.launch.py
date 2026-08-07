@@ -5,7 +5,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import Command, FindExecutable, PathJoinSubstitution
+from launch.substitutions import Command, FindExecutable, PathJoinSubstitution, PythonExpression
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 from launch_ros.parameter_descriptions import ParameterValue
@@ -29,7 +29,8 @@ def generate_launch_description():
     )
     enable_local_ekf_arg = DeclareLaunchArgument(
         "enable_local_ekf",
-        default_value="true",
+        default_value="false",
+        description="Launch the Livox-IMU local EKF (off by default)",
     )
     enable_global_ekf_arg = DeclareLaunchArgument(
         "enable_global_ekf",
@@ -43,6 +44,25 @@ def generate_launch_description():
         "enable_spatial_navsat",
         default_value="false",
         description="Advanced Navigation Spatial navsat transform (adnav_driver submodule is not checked out)",
+    )
+    use_glim_fb_arg = DeclareLaunchArgument(
+        "use_glim_fb",
+        default_value="false",
+        description="Fuse the Jetson GLIM /odom topic into the global EKF",
+    )
+    use_sim_time_arg = DeclareLaunchArgument(
+        "use_sim_time",
+        default_value="false",
+        description="Use the /clock topic (set true when replaying a rosbag).",
+    )
+    use_sim_time = LaunchConfiguration("use_sim_time")
+
+    global_ekf_config = PythonExpression(
+        [
+            "'ekf_global_glim.yaml' if '",
+            LaunchConfiguration("use_glim_fb"),
+            "'.lower() in ('true', '1', 'yes', 'on') else 'ekf_global.yaml'",
+        ]
     )
 
     robot_description = Command(
@@ -60,6 +80,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
+                "use_sim_time": use_sim_time,
                 "robot_description": ParameterValue(
                     robot_description,
                     value_type=str,
@@ -80,7 +101,7 @@ def generate_launch_description():
                 "config_path": PathJoinSubstitution(
                     [FindPackageShare("robot"), "config", "glim_config"]
                 ),
-                "use_sim_time": False,
+                "use_sim_time": use_sim_time,
             }
         ],
         remappings=[("/glim_ros_node/odom", "/odom")],
@@ -94,6 +115,8 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
+                "world_frame": "map",
+                "use_sim_time": use_sim_time,
                 "frequency": 10.0,
                 "magnetic_declination_radians": 0.0,
                 "yaw_offset": 0.0,
@@ -133,7 +156,8 @@ def generate_launch_description():
         name="ekf_filter_node_local",
         output="screen",
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "ekf_local.yaml"])
+            PathJoinSubstitution([robot_share, "config", "ekf_local.yaml"]),
+            {"use_sim_time": use_sim_time},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/local")],
         condition=IfCondition(LaunchConfiguration("enable_local_ekf")),
@@ -145,7 +169,8 @@ def generate_launch_description():
         name="ekf_filter_node_global",
         output="screen",
         parameters=[
-            PathJoinSubstitution([robot_share, "config", "ekf_global.yaml"])
+            PathJoinSubstitution([robot_share, "config", global_ekf_config]),
+            {"use_sim_time": use_sim_time},
         ],
         remappings=[("odometry/filtered", "odometry/filtered/global")],
         condition=IfCondition(LaunchConfiguration("enable_global_ekf")),
@@ -161,6 +186,8 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "ERROR"],
         parameters=[
             {
+                "world_frame": "map",
+                "use_sim_time": use_sim_time,
                 "frequency": 10.0,
                 "magnetic_declination_radians": 0.0,
                 "yaw_offset": 0.0,
@@ -183,7 +210,10 @@ def generate_launch_description():
         PythonLaunchDescriptionSource(
             os.path.join(robot_share_path, "launch", "diagnostics.launch.py")
         ),
-        launch_arguments={"profile": "localization"}.items(),
+        launch_arguments={
+            "profile": "localization",
+            "enable_global_ekf": LaunchConfiguration("enable_global_ekf"),
+        }.items(),
         condition=IfCondition(LaunchConfiguration("enable_diagnostics")),
     )
 
@@ -195,6 +225,8 @@ def generate_launch_description():
             enable_global_ekf_arg,
             enable_navsat_transform_arg,
             enable_spatial_navsat_arg,
+            use_glim_fb_arg,
+            use_sim_time_arg,
             robot_state_publisher,
             glim_node,
             spatial_navsat_transform_node,

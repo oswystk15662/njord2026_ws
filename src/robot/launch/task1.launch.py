@@ -65,7 +65,11 @@ def generate_launch_description():
     waypoints = _include(
         'waypoint_publisher',
         'waypoint_publisher.launch.py',
-        {'task_type': 'task1', 'frame_id': 'odom', 'publish_rate_hz': '2.0'},
+        {
+            'task_type': LaunchConfiguration('task_type'),
+            'frame_id': 'odom',
+            'publish_rate_hz': '2.0',
+        },
     )
     cardinal_walls = Node(
         package='buoy_obstacle_publisher',
@@ -77,12 +81,6 @@ def generate_launch_description():
             'output_topic': '/virtual_obstacles',
             'map_frame': 'map',
         }],
-    )
-    autonomy_supervisor = Node(
-        package='diagnostic_monitors',
-        executable='autonomy_supervisor_node',
-        name='autonomy_supervisor',
-        output='screen',
     )
 
     return LaunchDescription([
@@ -108,6 +106,15 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument('enable_nav2_diagnostics', default_value='true'),
         DeclareLaunchArgument(
+            'task_type',
+            default_value='task1',
+            choices=['task1', 'task1_skip_1_1'],
+            description=(
+                'task1: full course; task1_skip_1_1: omit the Task1-1 '
+                'maneuvering section and run the GPS point 1-to-2 smoke test.'
+            ),
+        ),
+        DeclareLaunchArgument(
             'lidar_start_delay',
             default_value='18.0',
             description='Seconds to wait before starting the Livox LiDAR.',
@@ -123,7 +130,6 @@ def generate_launch_description():
         minipc_role,
         standalone_role,
         cardinal_walls,
-        autonomy_supervisor,
         TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
         TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
     ])

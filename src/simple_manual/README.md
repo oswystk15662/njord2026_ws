@@ -18,9 +18,12 @@ with `enable_detection:=false`.
 ## Interfaces
 
 - `joy` (`sensor_msgs/msg/Joy`) is read by both manual nodes.
-- `joy_converter_node` publishes `/cmd_vel_manual`, `/soft_emg`, `/red`, `/yellow`, and `/green`.
-  Hold controller button 12 to publish manual velocity; releasing it sends one zero command and
-  returns control to Nav2 through `twist_mux` after its 0.5 s timeout.
+- `joy_converter_node` publishes `/cmd_vel_manual`, `/soft_emg`, `/red`, `/yellow`, and `/green`,
+  and requests `manual` / `auto` on `/system/operating_mode`.
+- `command_arbiter_node` is the sole publisher of `/cmd_vel` and `/system/control_status`.
+  It selects manual commands only in `manual` mode, selects `/cmd_vel_nav` only in `auto` mode
+  when `/autonomy/ready` is true, and publishes zero velocity during an emergency stop or when
+  the selected command is stale (0.5 s).
 - `/soft_emg` uses positive logic: button 0 sends `true` (emergency stop), while its
   normal released state sends `false` (emergency stop released).
 - `manual_control.launch.py` uses UM982-only feedback by default, without the

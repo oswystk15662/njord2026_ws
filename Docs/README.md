@@ -15,9 +15,9 @@ ESP32で4基のスラスター、非常停止用FET、状態表示LEDを制御�
 
 | ファイル | 内容 |
 |---|---|
-| `esp_firmware.ino` | GPIO、PWM、安全状態、UART受信およびコマンド処理 |
-| `serial_protocol.hpp` | COBS、CRC、プロトコル定数およびバイト変換 |
-| `thrust_duty_profile.hpp` | 推力からPWMパルス幅への変換 |
+| `firm1/firm1.ino` | GPIO、PWM、安全状態、UART受信およびコマンド処理 |
+| `firm1/serial_protocol.hpp` | COBS、CRC、プロトコル定数およびバイト変換 |
+| `firm1/thrust_duty_profile.hpp` | 推力からPWMパルス幅への変換 |
 | `PROTOCOL.md` | UART通信プロトコルの正式仕様 |
 
 ## ピン配置

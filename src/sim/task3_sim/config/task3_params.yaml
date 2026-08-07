@@ -35,4 +35,5 @@ task3_gui_status_dummy:
     publish_rate_hz: 1.0
     battery_percent: 86.0
     cell_voltages: [4.05, 4.04, 4.06, 4.05]
+    temperature_c: 25.0
     control_status: "auto"

@@ -19,7 +19,10 @@ def generate_launch_description():
     task_type_arg = DeclareLaunchArgument(
         'task_type',
         default_value='task1',
-        description='Task type: task1, task1_follow, task2, task3_1, or task3_2'
+        description=(
+            'Task type: task1, task1_skip_1_1, task1_follow, task2, '
+            'task3_1, or task3_2'
+        )
     )
     
     frame_id_arg = DeclareLaunchArgument(

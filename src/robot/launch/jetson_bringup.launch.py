@@ -57,6 +57,11 @@ def generate_launch_description():
     enable_ground_video = LaunchConfiguration("enable_ground_video")
     ground_video_host = LaunchConfiguration("ground_video_host")
     ground_video_port = LaunchConfiguration("ground_video_port")
+    ground_video_width = LaunchConfiguration("ground_video_width")
+    ground_video_height = LaunchConfiguration("ground_video_height")
+    ground_video_fps = LaunchConfiguration("ground_video_fps")
+    heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
+    heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
 
     mid360_launch = include_launch(
         "robot",
@@ -83,6 +88,20 @@ def generate_launch_description():
             "enable_ground_video": enable_ground_video,
             "ground_video_host": ground_video_host,
             "ground_video_port": ground_video_port,
+            "ground_video_width": ground_video_width,
+            "ground_video_height": ground_video_height,
+            "ground_video_fps": ground_video_fps,
+        },
+    )
+
+    heartbeat_launch = include_launch(
+        "robot",
+        ["launch", "heartbeat.launch.py"],
+        IfCondition(LaunchConfiguration("enable_heartbeats")),
+        {
+            "role": "jetson",
+            "heartbeat_monitor_zed2i": heartbeat_monitor_zed2i,
+            "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
         },
     )
 
@@ -95,16 +114,22 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
                 "enable_glim",
-                default_value="true",
+                default_value="false",
                 description="Load GLIM into the Livox component container",
             ),
             DeclareLaunchArgument(
                 "glim_backend",
                 default_value="gpu",
                 choices=["gpu", "cpu"],
-                description="Select the GLIM config directory (glim_config for gpu, glim_config_cpu for cpu)",
+                description="Select the GLIM config directory "
+                "(glim_config for gpu, glim_config_cpu for cpu)",
             ),
-            DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_pcl_buoy_detection",
+                default_value="false",
+                description="Standalone LiDAR-only detector for explicit fallback testing. "
+                "Normal operation uses ZED detection with its in-node LiDAR depth fallback.",
+            ),
             DeclareLaunchArgument("enable_gpu_perception", default_value="true"),
             DeclareLaunchArgument("engine_path", default_value=default_engine),
             DeclareLaunchArgument(
@@ -113,12 +138,22 @@ def generate_launch_description():
                 description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
             ),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
-            DeclareLaunchArgument("enable_ground_video", default_value="false"),
-            DeclareLaunchArgument("ground_video_host", default_value=""),
+            DeclareLaunchArgument("enable_ground_video", default_value="true"),
+            DeclareLaunchArgument(
+                "ground_video_host",
+                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+            ),
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("ground_video_width", default_value="360"),
+            DeclareLaunchArgument("ground_video_height", default_value="240"),
+            DeclareLaunchArgument("ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("enable_heartbeats", default_value="true"),
+            DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
+            DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             # Staged startup, carried over from manual_control.launch.py. On a
             # dedicated Jetson there is far less contention than in the old
-            # single-machine setup, so both default to 0.0 (start immediately);
+            # single-machine setup, but starting the ZED/TensorRT stack after
+            # the Livox container avoids simultaneous device/model startup;
             # standalone_bringup.launch.py passes the original 18.0/20.0 values
             # to reproduce the pre-split behaviour.
             DeclareLaunchArgument(
@@ -128,7 +163,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "camera_start_delay",
-                default_value="0.0",
+                default_value="5.0",
                 description="Seconds to wait before starting the ZED 2i driver",
             ),
             TimerAction(
@@ -139,5 +174,6 @@ def generate_launch_description():
                 period=LaunchConfiguration("camera_start_delay"),
                 actions=[zed2i_launch],
             ),
+            heartbeat_launch,
         ]
     )

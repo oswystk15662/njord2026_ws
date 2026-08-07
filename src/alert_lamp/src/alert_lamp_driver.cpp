@@ -69,6 +69,8 @@ void AlertLampDriver::apply(const msg::AlertLampCommand & command, bool fallback
     const double phase = std::fmod(now().seconds(), period) / period;
     on = phase < command.duty_ratio;
   }
+  // Combined colors are intentional: they encode compound states such as
+  // autonomy-not-ready and ground-station communication loss.
   red_output_ = on && (command.color & msg::AlertLampCommand::COLOR_RED) != 0;
   yellow_output_ = on && (command.color & msg::AlertLampCommand::COLOR_YELLOW) != 0;
   green_output_ = on && (command.color & msg::AlertLampCommand::COLOR_GREEN) != 0;

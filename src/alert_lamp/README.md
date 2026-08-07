@@ -13,8 +13,9 @@ the command into on/off outputs and enters red blink when manager commands time 
   `/red`, `/yellow`, and `/green`. Those are the existing inputs of
   `micon_driver_fd/serial_writer`, which owns the USB Serial device.
 
-The present repository has no common heartbeat, operating-mode, E-stop, autonomy-ready,
-or RTK-status interfaces. The initial integration contract is therefore:
+The repository uses hierarchical health-derived heartbeats for driver and
+localization status. Other control-layer heartbeats are emitted by their owning
+nodes. The integration contract is:
 
 | Input | Type | Default topic |
 | --- | --- | --- |
@@ -25,13 +26,14 @@ or RTK-status interfaces. The initial integration contract is therefore:
 | GNSS / RTK quality | `sensor_msgs/msg/NavSatFix` | `/sensor/vehicle_gnss/fix/raw` |
 | Heartbeats | configurable serialized type | `/heartbeat/*` |
 
-Heartbeat subscriptions use ROS 2 generic subscriptions because the repository does
-not yet define a heartbeat message. Configure `heartbeat.*_type` to match the eventual
-publisher; only receipt time is evaluated. An absent required input is intentionally a
+Heartbeat subscriptions use ROS 2 generic subscriptions. Driver and localization
+heartbeats are `std_msgs/msg/Empty` outputs from `diagnostic_monitors` aggregators;
+only receipt time is evaluated here. An absent required input is intentionally a
 critical (red blink) state.
 
-GNSS RTK quality is initially inferred from a valid `NavSatFix` with covariance below
-`localization.rtk_covariance_threshold`, then retained for `rtk_grace_period_sec`.
+When `localization.require_rtk_fix` is enabled, GNSS RTK quality is inferred from a valid
+`NavSatFix` with covariance below `localization.rtk_covariance_threshold`, then retained for
+`rtk_grace_period_sec`. It is disabled by default.
 
 ## Lamp patterns
 
@@ -48,7 +50,10 @@ Critical faults have priority. In AUTO, loss of high-level, autonomy, or localiz
 heartbeat is critical; loss of ground station is shown only while localization remains
 stable. The driver also red-blinks at a 0.05 s period if no manager command arrives within one
 second.
-`AlertLampCommand.color` is a bit flag, so a command can turn on multiple lamps.
+`AlertLampCommand.color` is a bit flag, so compound states may intentionally
+turn on multiple lamps. State selection itself has priority in the evaluator:
+critical faults first, then ground-station loss, then autonomy-not-ready, then
+normal operating states.
 
 ## Configuration and diagnostics
 

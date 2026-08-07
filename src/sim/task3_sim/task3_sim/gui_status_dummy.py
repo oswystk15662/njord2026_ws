@@ -13,6 +13,7 @@ class GuiStatusDummy(Node):
         self.declare_parameter('publish_rate_hz', 1.0)
         self.declare_parameter('battery_percent', 86.0)
         self.declare_parameter('cell_voltages', [4.05, 4.04, 4.06, 4.05])
+        self.declare_parameter('temperature_c', 25.0)
         self.declare_parameter('control_status', 'auto')
 
         transient_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -22,6 +23,8 @@ class GuiStatusDummy(Node):
             Float32, '/gui/battery_voltage_v', transient_qos)
         self.cell_voltages_pub = self.create_publisher(
             Float32MultiArray, '/bms/cell_voltages', transient_qos)
+        self.temperature_pub = self.create_publisher(
+            Float32, '/bms/temperature_c', transient_qos)
         self.control_status_pub = self.create_publisher(
             String, '/system/control_status', transient_qos)
         self.operating_mode_pub = self.create_publisher(
@@ -35,10 +38,12 @@ class GuiStatusDummy(Node):
         cells = [float(value) for value in self.get_parameter('cell_voltages').value]
         battery_percent = float(self.get_parameter('battery_percent').value)
         control_status = str(self.get_parameter('control_status').value)
+        temperature_c = float(self.get_parameter('temperature_c').value)
 
         self.battery_percent_pub.publish(Float32(data=battery_percent))
         self.battery_voltage_pub.publish(Float32(data=sum(cells)))
         self.cell_voltages_pub.publish(Float32MultiArray(data=cells))
+        self.temperature_pub.publish(Float32(data=temperature_c))
         self.control_status_pub.publish(String(data=control_status))
         self.operating_mode_pub.publish(String(data=control_status))
 
