@@ -1,0 +1,69 @@
+# Task 2: collision avoidance / other-vessel detection topics
+#
+# Copy this file to the Workspace and use the `name` fields when configuring
+# recording or visualization.  The entries follow the real-vessel perception
+# chain; `required_for_other_vessel_detection = true` identifies the minimum
+# data set needed to inspect and reproduce a detection.
+
+[[topics]]
+name = "/livox/lidar"
+type = "sensor_msgs/msg/PointCloud2"
+role = "Raw LiDAR input"
+required_for_other_vessel_detection = true
+notes = "Input to task2_cloud_filter. Record this to retune filtering or rerun tracking."
+
+[[topics]]
+name = "/task2/points_filtered"
+type = "sensor_msgs/msg/PointCloud2"
+role = "Task 2 filtered LiDAR"
+required_for_other_vessel_detection = true
+notes = "Output of task2_cloud_filter; input to the classical ship tracker. Frame is base_link."
+
+[[topics]]
+name = "/tracked_objects"
+type = "ship_perception_msgs/msg/TrackedObjectArray"
+role = "Tracked vessel candidates"
+required_for_other_vessel_detection = true
+notes = "Output of the classical ship-tracking pipeline. Inspect this first when a vessel is missed or misidentified."
+
+[[topics]]
+name = "/other_ship/twist"
+type = "geometry_msgs/msg/TwistStamped"
+role = "Selected other-vessel velocity"
+required_for_other_vessel_detection = true
+notes = "Output of opponent_selector and input to MPPI. The velocity is absolute ground velocity in the map frame."
+
+[[topics]]
+name = "/odometry/filtered/local"
+type = "nav_msgs/msg/Odometry"
+role = "Ego-vessel local odometry"
+required_for_other_vessel_detection = true
+notes = "Used by opponent_selector to compensate ego motion and select the relevant tracked vessel."
+
+[[topics]]
+name = "/tf"
+type = "tf2_msgs/msg/TFMessage"
+role = "Dynamic transforms"
+required_for_other_vessel_detection = true
+notes = "Must include map -> base_link and the selected map -> opponent_vessel transform."
+
+[[topics]]
+name = "/tf_static"
+type = "tf2_msgs/msg/TFMessage"
+role = "Static sensor transforms"
+required_for_other_vessel_detection = true
+notes = "Required to place LiDAR data correctly relative to base_link."
+
+[[topics]]
+name = "/task2/debug/filtered_cloud"
+type = "sensor_msgs/msg/PointCloud2"
+role = "Optional cloud-filter debug output"
+required_for_other_vessel_detection = false
+notes = "Enable only when debugging; topic availability depends on task2_cloud_filter parameters."
+
+[[topics]]
+name = "/task2/debug/candidates"
+type = "visualization_msgs/msg/MarkerArray"
+role = "Optional opponent-selection debug output"
+required_for_other_vessel_detection = false
+notes = "Enable only when debugging; topic availability depends on opponent_selector parameters."
