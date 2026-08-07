@@ -7,6 +7,9 @@
 # (The default 32 is the camera's current/default-style value.)
 /back_cam/back_cam:
   ros__parameters:
+    # Keep the stable by-id path here. The launch file resolves it to the
+    # current /dev/videoN path before passing it to usb_cam.
+    video_device: /dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0
     image_width: 640
     image_height: 480
     framerate: 30.0

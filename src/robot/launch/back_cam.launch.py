@@ -1,4 +1,5 @@
 import os
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -15,7 +16,14 @@ def launch_setup(context, *args, **kwargs):
     # while the by-id path stays the stable source of truth for which
     # physical camera to use (survives /dev/videoN renumbering on
     # reconnect/reboot without needing udev/sudo).
-    video_device = os.path.realpath(LaunchConfiguration("video_device").perform(context))
+    params_file = LaunchConfiguration("params_file").perform(context)
+    with open(params_file, encoding="utf-8") as file:
+        params = yaml.safe_load(file)["/back_cam/back_cam"]["ros__parameters"]
+
+    # A video_device launch argument is useful for one-off tests. Otherwise,
+    # take the device path from the selected parameter file.
+    video_device_arg = LaunchConfiguration("video_device").perform(context)
+    video_device = os.path.realpath(video_device_arg or params["video_device"])
 
     return [
         Node(
@@ -25,7 +33,7 @@ def launch_setup(context, *args, **kwargs):
             namespace="back_cam",
             output="screen",
             parameters=[
-                LaunchConfiguration("params_file"),
+                params_file,
                 {
                     "video_device": video_device,
                 }
@@ -50,7 +58,8 @@ def generate_launch_description():
             # by-id path for the Adesso CyberTrack H7 (back_cam).
             DeclareLaunchArgument(
                 "video_device",
-                default_value="/dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0",
+                default_value="",
+                description="Optional device-path override for the selected parameter file.",
             ),
             OpaqueFunction(function=launch_setup),
         ]

@@ -649,6 +649,13 @@ ros2 launch robot localization.launch.py
 ros2 launch robot back_cam.launch.py params_file:=/path/to/back_cam.yaml
 ```
 
+この PC の内蔵カメラで試すには、`back_cam_pc.yaml` を用いる。
+
+```bash
+ros2 launch robot back_cam.launch.py \
+  params_file:=$(ros2 pkg prefix robot)/share/robot/config/back_cam_pc.yaml
+```
+
 `enable_buoy_detection:=true`ではLivox driverと点群ブイ検出を同じ
 `component_container_mt`へロードし、`/livox/lidar`区間でintra-process通信を使う。
 個別起動が必要な場合は従来どおり`pcl_bouy_det.launch.py`も使用できる。
