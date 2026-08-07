@@ -23,3 +23,9 @@ def test_playback_launch_uses_test_bringup_relay():
     source = (PACKAGE_ROOT / "launch" / "um982_ekf_bag_playback.launch.py").read_text()
     assert 'package="test_bringup"' in source
     assert 'FindPackageShare("robot")' in source
+
+
+def test_network_test_guide_is_linked_from_readme():
+    guide = PACKAGE_ROOT / "about_networktest.md"
+    assert guide.is_file()
+    assert "about_networktest.md" in (PACKAGE_ROOT / "README.md").read_text()

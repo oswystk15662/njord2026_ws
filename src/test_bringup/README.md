@@ -4,6 +4,9 @@ Njordの実機試験とオフライン再生にだけ使用するbringupを、�
 `robot`パッケージから分離したパッケージです。通常の実機bringupから
 これらのlaunchをincludeしないでください。
 
+critical-linkのloopback、4経路単独、冗長化、断線、ESP-NOW、スマートフォンVPN、
+heartbeat試験の手順は[about_networktest.md](about_networktest.md)を参照してください。
+
 ## Launch files
 
 | Launch | Purpose |
