@@ -31,9 +31,10 @@ ros2 run gnss_map_telemetry_test_publisher gnss_map_telemetry_test_publisher --r
 ## ノルウェー Task ウェイポイントの地図表示
 
 `norway_waypoint_publisher` は、
-[`Docs/norway_task_waypoint_proposal.md`](../../../../Docs/norway_task_waypoint_proposal.md)
-の検討用ウェイポイントを、実機GNSSとは別の `NavSatFix` トピックとして継続配信します。
-Task 1 の観測点、Task 2 の監視点、Task 3 の左右接岸案を同時に地図へ重ねられます。
+[`Docs/norway_waypoint_visualization.md`](../../../Docs/norway_waypoint_visualization.md)
+で説明する競技図ベースの検討用ウェイポイントを、実機GNSSとは別の `NavSatFix`
+トピックとして継続配信します。Task 1 のジグザグと方位標識通過、Task 2 の二つの
+ゲート、Task 3.1/3.2 の接岸案を同時に地図へ重ねられます。
 
 ```bash
 colcon build --packages-select gnss_map_telemetry_test_publisher
@@ -41,13 +42,15 @@ source install/setup.bash
 ros2 launch gnss_map_telemetry_test_publisher norway_waypoints.launch.py
 ```
 
-既定のトピックは次の通りです（すべて `sensor_msgs/msg/NavSatFix`、1 Hz）。
+既定のトピックはすべて `sensor_msgs/msg/NavSatFix`、1 Hz です。
 
 - `/visualization/norway_waypoints/start`
-- `/visualization/norway_waypoints/task1/{entry,marker_observe,decision,exit,goal}`
-- `/visualization/norway_waypoints/task2/{risk_check_1,risk_check_2,risk_check_3,goal}`
-- `/visualization/norway_waypoints/task3/{gate,left_approach,left_berth,right_approach,right_berth,finish}`
+- `/visualization/norway_waypoints/task1/{gps1,wp_1_1...wp_1_10,gps2,gps3,wp_3_1_pass_south,wp_3_2_pass_north,wp_3_3_pass_south,gps4}`
+- `/visualization/norway_waypoints/task2/{gps5,gate1_red,gate1_center,gate1_green,gate2_red,gate2_center,gate2_green,gps6}`
+- `/visualization/norway_waypoints/task3_1/{gps7,corridor_gate,gps8_gate,berth_approach,berth,undock_exit}`
+- `/visualization/norway_waypoints/task3_2/{gps9,corridor_gate,gps9_gate,berth_approach,berth,gps10_finish}`
 
 Foxglove の **Map** パネルで上記のトピックを追加すると、各点を緯度・経度の位置として
 表示できる。点は transient-local QoS かつ周期再送のため、Foxglove を後から接続しても
-表示される。これは検討用の可視化であり、Nav2 の目標や実機のGNSS入力は変更しない。
+表示される。座標系、配置の意図、実機へ移す前の確認事項は上記ガイドを参照する。
+これは検討用の可視化であり、Nav2 の目標や実機のGNSS入力は変更しない。
