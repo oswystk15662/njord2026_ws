@@ -59,6 +59,12 @@ name|Ground側bind IPv4|miniPC側宛先IPv4|UDP port
 name|miniPC側bind IPv4|UDP port
 ```
 
+経路別の空テンプレートは`config/critical_link_test_config/`にある。
+`u1_*`がUSB Wi-Fi、`u2_*`が内蔵Wi-Fi、`e1_*`がESP-NOW serial、`v1_*`がスマートフォン
+VPNである。IPやserial deviceは空欄のままcommitしてあり、実機試験時だけ各端末の設定を
+埋めて`params_file`へ渡す。テンプレートの`udp_paths`は空なので、未設定のまま起動しても
+意図しない宛先へ送信しない。
+
 ESP-NOWには両側で同じchannel、PMK、LMKを設定し、相手のSTA MACを指定する。example keyは
 実機で使用しない。USB deviceは`/dev/ttyUSB*`ではなく`/dev/serial/by-id/...`を使う。
 
