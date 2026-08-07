@@ -77,7 +77,9 @@ private:
     // RTK Client
     std::unique_ptr<boost::asio::ip::tcp::socket> rtk_socket_;
     std::unique_ptr<boost::asio::ip::tcp::resolver> rtk_resolver_;
-    boost::asio::streambuf rtk_read_buf_;
+    std::array<uint8_t, 4096> rtk_read_chunk_;
+    std::vector<uint8_t> rtk_response_buffer_;
+    bool rtk_response_header_received_{false};
     bool is_rtk_connected_;
 
     // ROS Publishers

@@ -587,6 +587,9 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
 
 void UM982Driver::init_rtk_connection()
 {
+    rtk_response_buffer_.clear();
+    rtk_response_header_received_ = false;
+    is_rtk_connected_ = false;
     rtk_socket_ = std::make_unique<boost::asio::ip::tcp::socket>(io_context_);
     rtk_resolver_ = std::make_unique<boost::asio::ip::tcp::resolver>(io_context_);
 
@@ -613,7 +616,10 @@ void UM982Driver::connect_rtk_client()
         std::string auth_str = params_.username + ":" + params_.password;
         request << "Authorization: Basic " << utils::base64_encode(auth_str) << "\r\n";
     }
-    request << "Connection: close\r\n";
+    // NTRIP correction streams are long-lived.  Asking the caster to close the
+    // connection causes compliant casters to terminate it immediately after
+    // their response header.
+    request << "Connection: keep-alive\r\n";
     request << "\r\n";
 
     std::string req_str = request.str();
@@ -629,21 +635,66 @@ void UM982Driver::start_rtk_read()
 {
     // RTKデータはバイナリかもしれないので、read_some で受信する
     auto handler = std::bind(&UM982Driver::on_rtk_read, this, std::placeholders::_1, std::placeholders::_2);
-    rtk_socket_->async_read_some(rtk_read_buf_.prepare(1024), handler); 
+    rtk_socket_->async_read_some(boost::asio::buffer(rtk_read_chunk_), handler);
 }
 
 void UM982Driver::on_rtk_read(const boost::system::error_code& error, std::size_t bytes_transferred)
 {
     if (!error) {
-        rtk_read_buf_.commit(bytes_transferred);
-        
-        // バッファからデータを取り出してGNSSへ転送
-        std::vector<uint8_t> data(bytes_transferred);
-        std::istream is(&rtk_read_buf_);
-        is.read(reinterpret_cast<char*>(data.data()), bytes_transferred);
-        
-        // GNSSへ書き込み
-        write_to_gnss(data);
+        const uint8_t * data_begin = rtk_read_chunk_.data();
+        std::size_t data_size = bytes_transferred;
+        std::vector<uint8_t> response_payload;
+
+        // The first bytes from an NTRIP caster are an HTTP/NTRIP response
+        // header.  Do not forward that ASCII header to UM982 as RTCM.
+        if (!rtk_response_header_received_) {
+            rtk_response_buffer_.insert(
+                rtk_response_buffer_.end(), data_begin, data_begin + data_size);
+
+            static constexpr char kHeaderEnd[] = "\r\n\r\n";
+            const auto header_end = std::search(
+                rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
+                kHeaderEnd, kHeaderEnd + 4);
+            if (header_end == rtk_response_buffer_.end()) {
+                if (rtk_response_buffer_.size() > 16 * 1024) {
+                    RCLCPP_ERROR(this->get_logger(), "RTK response header exceeds 16 KiB");
+                    is_rtk_connected_ = false;
+                    boost::system::error_code close_error;
+                    rtk_socket_->close(close_error);
+                    return;
+                }
+                start_rtk_read();
+                return;
+            }
+
+            const auto header_size = static_cast<std::size_t>(
+                std::distance(rtk_response_buffer_.begin(), header_end)) + 4;
+            const std::string header(
+                rtk_response_buffer_.begin(), rtk_response_buffer_.begin() + header_size);
+            const bool accepted =
+                header.rfind("ICY 200", 0) == 0 ||
+                header.rfind("HTTP/1.0 200", 0) == 0 ||
+                header.rfind("HTTP/1.1 200", 0) == 0;
+            if (!accepted) {
+                RCLCPP_ERROR(this->get_logger(), "RTK caster rejected request: %s",
+                    header.substr(0, header.find("\r\n")).c_str());
+                is_rtk_connected_ = false;
+                boost::system::error_code close_error;
+                rtk_socket_->close(close_error);
+                return;
+            }
+
+            rtk_response_header_received_ = true;
+            response_payload.assign(
+                rtk_response_buffer_.begin() + header_size, rtk_response_buffer_.end());
+            rtk_response_buffer_.clear();
+            data_begin = response_payload.data();
+            data_size = response_payload.size();
+        }
+
+        if (data_size > 0) {
+            write_to_gnss(std::vector<uint8_t>(data_begin, data_begin + data_size));
+        }
 
         // 次の読み込み
         start_rtk_read();
