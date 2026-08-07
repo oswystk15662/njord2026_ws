@@ -74,6 +74,18 @@ TEST(PerceptionLogic, GeneratesSpecifiedWallGeometries)
   EXPECT_EQ(virtual_wall_points(1, 0.0F, 0.0F, 0.0F).size(), 21U);
 }
 
+TEST(PerceptionLogic, LateralWallsLeaveTheChannelInteriorOpen)
+{
+  // Heading east: Region-A red is the north (left) boundary and green is the
+  // south (right) boundary.  Each half-circle must occupy only its outer side.
+  const auto red_wall = virtual_wall_points(1, 0.0F, 4.0F, 0.0F, 2.0F, 40);
+  const auto green_wall = virtual_wall_points(0, 0.0F, -4.0F, 0.0F, 2.0F, 40);
+  ASSERT_EQ(red_wall.size(), 21U);
+  ASSERT_EQ(green_wall.size(), 21U);
+  for (const auto & point : red_wall) EXPECT_GE(point.y, 4.0F - 1.0e-5F);
+  for (const auto & point : green_wall) EXPECT_LE(point.y, -4.0F + 1.0e-5F);
+}
+
 TEST(PerceptionLogic, ConnectsSameColourBuoysAlongTheChannelOnly)
 {
   const std::vector<WallPoint> buoys{{4.0F, 1.0F, 0.0F}, {0.0F, 1.0F, 0.0F}, {8.0F, 1.0F, 0.0F}};
@@ -86,6 +98,30 @@ TEST(PerceptionLogic, ConnectsSameColourBuoysAlongTheChannelOnly)
   const std::vector<WallPoint> separated{{0.0F, 1.0F, 0.0F}, {15.0F, 1.0F, 0.0F}};
   EXPECT_TRUE(same_color_wall_points(separated, 0.0F, 10.0F, 1.0F).empty());
   EXPECT_TRUE(same_color_wall_points(buoys, NAN, 10.0F, 1.0F).empty());
+}
+
+TEST(PerceptionLogic, AddsSameColourConnectionsToTheVirtualObstacleCloud)
+{
+  const auto positioned = [](int class_id, float x, float y) {
+      PositionedDetection detection;
+      detection.detection.class_id = class_id;
+      detection.detection.confidence = 0.9F;
+      detection.position_base = {x, y, 0.0F};
+      detection.source = PositionSource::kZedDepth;
+      return detection;
+    };
+  std_msgs::msg::Header header;
+  header.frame_id = "map";
+  const std::vector<PositionedDetection> detections{
+    positioned(0, 0.0F, -4.0F), positioned(0, 4.0F, -4.0F),
+    positioned(1, 0.0F, 4.0F), positioned(1, 4.0F, 4.0F)};
+
+  const auto disconnected = to_virtual_wall_cloud(
+    detections, header, "map", 0.0F, 2.0F, 40, false, 10.0F, 1.0F);
+  const auto connected = to_virtual_wall_cloud(
+    detections, header, "map", 0.0F, 2.0F, 40, true, 10.0F, 1.0F);
+  EXPECT_EQ(disconnected.width, 84U);  // Four half-circles of 21 points.
+  EXPECT_EQ(connected.width, 94U);     // Plus two same-colour 4 m segments.
 }
 
 TEST(PerceptionLogic, SelectsLidarByRangeThenFallsBackToRay)
