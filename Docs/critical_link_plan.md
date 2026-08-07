@@ -71,6 +71,10 @@ publishする。これにより経路優先待ちによる操縦遅延を作ら�
 
 ## Rollout
 
+ROS 2 sender/receiver、共通frame、UDP/serial transport、ESP-NOW firmware、loopback
+bringupまでは`critical_link`パッケージとして実装済みである。以下は実機IP、USB device、
+ESP MAC/keyを設定して投入する順序を示す。
+
 1. 共通frame、sequence比較、重複排除をloopback unit testで実装する。
 2. USB Wi-Fiと内蔵Wi-Fiの2経路を、送信元IPへ明示的にbindして試験する。
 3. ESP-NOW gatewayを追加し、ACK、再送、CRC、古いJoyの破棄を試験する。

@@ -1,0 +1,14 @@
+critical_link_sender:
+  ros__parameters:
+    joy_input_topic: /critical_link/input/joy
+    heartbeat_input_topic: /critical_link/input/heartbeat
+    # Format: name|Ground-PC bind IPv4|miniPC destination IPv4|UDP port
+    # Example paths after assigning static/VPN addresses:
+    # udp_paths:
+    #   - "usb_wifi|192.168.10.1|192.168.10.2|45100"
+    #   - "builtin_wifi|192.168.20.1|192.168.20.2|45101"
+    #   - "internet_vpn|10.20.0.1|10.20.0.2|45103"
+    udp_paths: []
+    # Use a stable /dev/serial/by-id path for the Ground ESP32.
+    serial_device: ""
+    serial_baud: 921600

@@ -7,6 +7,7 @@ PACKAGE_ROOT = Path(__file__).resolve().parents[1]
 def test_expected_test_launches_are_present():
     launch_names = {path.name for path in (PACKAGE_ROOT / "launch").glob("*.launch.py")}
     assert launch_names == {
+        "critical_link_loopback.launch.py",
         "nav2_mintest.launch.py",
         "soft_emg_alert_lamp_test.launch.py",
         "um982_ekf_bag_playback.launch.py",
