@@ -651,10 +651,18 @@ void UM982Driver::on_rtk_read(const boost::system::error_code& error, std::size_
             rtk_response_buffer_.insert(
                 rtk_response_buffer_.end(), data_begin, data_begin + data_size);
 
+            static constexpr char kLineEnd[] = "\r\n";
             static constexpr char kHeaderEnd[] = "\r\n\r\n";
-            const auto header_end = std::search(
-                rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
-                kHeaderEnd, kHeaderEnd + 4);
+            const bool is_icy_response =
+                rtk_response_buffer_.size() >= 4 &&
+                std::equal(rtk_response_buffer_.begin(), rtk_response_buffer_.begin() + 4, "ICY ");
+            const auto header_end = is_icy_response
+                ? std::search(
+                    rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
+                    kLineEnd, kLineEnd + 2)
+                : std::search(
+                    rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
+                    kHeaderEnd, kHeaderEnd + 4);
             if (header_end == rtk_response_buffer_.end()) {
                 if (rtk_response_buffer_.size() > 16 * 1024) {
                     RCLCPP_ERROR(this->get_logger(), "RTK response header exceeds 16 KiB");
@@ -667,8 +675,12 @@ void UM982Driver::on_rtk_read(const boost::system::error_code& error, std::size_
                 return;
             }
 
+            // NTRIP v1 casters, including the project's ntripcaster, send
+            // only "ICY 200 OK\\r\\n" before the binary stream.  HTTP/NTRIP
+            // v2 responses have a complete \r\n\r\n-terminated header block.
             const auto header_size = static_cast<std::size_t>(
-                std::distance(rtk_response_buffer_.begin(), header_end)) + 4;
+                std::distance(rtk_response_buffer_.begin(), header_end)) +
+                (is_icy_response ? 2 : 4);
             const std::string header(
                 rtk_response_buffer_.begin(), rtk_response_buffer_.begin() + header_size);
             const bool accepted =
