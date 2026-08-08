@@ -175,6 +175,9 @@ class Task1Orchestrator(Node):
         self.pub_sim_obstacles = self.create_publisher(PointCloud2, "/sim_obstacles", 10)
         self.pub_status = self.create_publisher(String, "/sim/task1_status", 10)
         self.pub_boundary_markers = self.create_publisher(MarkerArray, "/sim/boundary_markers", transient_qos)
+        # Keep buoy visualization separate from the course boundary, matching
+        # Task3's /sim/buoy_markers display contract.
+        self.pub_buoy_markers = self.create_publisher(MarkerArray, "/sim/buoy_markers", transient_qos)
         self.pub_cardinal_markers = self.create_publisher(
             MarkerArray,
             "/sim/cardinal_mark_markers",
@@ -187,6 +190,7 @@ class Task1Orchestrator(Node):
         self.publish_start()
         self.publish_sim_obstacles()
         self.publish_boundary_markers()
+        self.publish_buoy_markers()
         self.publish_cardinal_markers()
 
         period = 1.0 / max(0.2, self.publish_rate_hz)
@@ -379,10 +383,41 @@ class Task1Orchestrator(Node):
             add_pole(max_x, y, color(1.0, 0.85, 0.0))
             y += self.boundary_marker_step
 
-        for bx, by in self.buoy_positions:
-            add_pole(bx, by, color(0.0, 0.0, 0.0))
-
         self.pub_boundary_markers.publish(marker_array)
+
+    def publish_buoy_markers(self):
+        """Publish Task1 red/green buoy spheres on the Task3 marker topic."""
+        marker_array = MarkerArray()
+        stamp = self.get_clock().now().to_msg()
+
+        for idx, (bx, by) in enumerate(self.buoy_positions):
+            mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "RED"
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = "task1_buoys"
+            marker.id = idx
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(bx)
+            marker.pose.position.y = float(by)
+            marker.pose.position.z = 0.45
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = 0.9
+            marker.scale.y = 0.9
+            marker.scale.z = 0.9
+            marker.color.a = 0.9
+            if mark == "GREEN":
+                marker.color.g = 1.0
+            elif mark == "RED":
+                marker.color.r = 1.0
+            else:
+                # Retain a readable fallback for legacy cardinal-mark input.
+                marker.color.r = 1.0
+                marker.color.g = 0.85
+            marker_array.markers.append(marker)
+
+        self.pub_buoy_markers.publish(marker_array)
 
     def publish_cardinal_markers(self):
         marker_array = MarkerArray()
@@ -503,6 +538,7 @@ class Task1Orchestrator(Node):
         self.pub_cardinal.publish(cardinal)
         self.publish_sim_obstacles()
         self.publish_boundary_markers()
+        self.publish_buoy_markers()
         self.publish_cardinal_markers()
 
 
