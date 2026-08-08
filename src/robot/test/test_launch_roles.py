@@ -14,6 +14,7 @@ anything, and so it works the same way in CI.
 
 import importlib.util
 import os
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -397,7 +398,7 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     assert '"/livox/lidar"' not in source
 
 
-def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
+def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
     zenoh_dir = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
     )
@@ -411,6 +412,14 @@ def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
             sources[filename] = stream.read()
 
     for topic in ('"/joy"', '"/heartbeat/ground_station"'):
-        assert topic in sources["bridge_groundpc.json5"]
-        assert topic in sources["bridge_minipc.json5"]
-        assert topic not in sources["bridge_jetson.json5"]
+        for source in sources.values():
+            allow_lists = re.sub(r"//.*$", "", source, flags=re.MULTILINE)
+            assert topic not in allow_lists
+
+
+def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '("/joy", "/critical_link/input/joy")' in source
+    assert '"topic": "/critical_link/input/heartbeat"' in source
+    assert '"topic": "/heartbeat/ground_station"' not in source

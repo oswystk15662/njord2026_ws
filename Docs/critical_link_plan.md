@@ -16,9 +16,12 @@ Jetson Jazzy、Ground PC Jazzy、miniPC HumbleのDDS domainは直接混在させ
 - `config/zenoh/bridge_minipc.json5`: miniPCのDDS domainとZenohの境界
 
 `zenoh-bridge-ros2dds` 1.9.0では、process環境に`ROS_DOMAIN_ID`が設定されていると
-JSON5中の`plugins/ros2dds/domain`より環境変数が優先される。bridge起動serviceでは
-miniPCを5、Ground PCとJetsonを6へ明示設定するか、`ROS_DOMAIN_ID`をunsetして
-設定ファイルの値を使用する。起動logの`ROS2 plugin Config`で実効domainを確認する。
+JSON5中の`plugins/ros2dds/domain`より環境変数が優先される。bridge起動時は必ず
+`ROS_DOMAIN_ID`をunsetし、JSON5のdomainを唯一の設定源にする。これによりminiPC
+bridgeは5、Ground PCとJetson bridgeは6になる。起動logの`ROS2 plugin Config`で
+実効domainを確認する。bridgeをsystemdから起動する場合も、unitに
+`Environment=ROS_DOMAIN_ID=...`を入れず、`ExecStart=/usr/bin/env -u ROS_DOMAIN_ID ...`
+とする。
 
 映像は従来どおりRTP/UDPを使用し、critical linkには流さない。
 
@@ -43,6 +46,7 @@ critical-link入力topicへpublishする。senderは共通frameへ変換し、�
 同報する。
 
 miniPCのreceiverだけがcanonical `/joy`と`/heartbeat/ground_station`をpublishする。
+Ground/miniPC/JetsonのZenoh bridgeのallow listには、この2 topicを入れない。
 これによりDDS、Zenoh、複数無線から同じtopicが直接流入する構成を避ける。
 
 frameには少なくともprotocol version、sender session ID、stream ID、sequence、

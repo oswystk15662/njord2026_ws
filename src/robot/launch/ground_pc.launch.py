@@ -72,6 +72,9 @@ def generate_launch_description():
         name="joy_node",
         output="screen",
         emulate_tty=True,
+        # The canonical /joy is vessel-owned.  Feeding it here would let the
+        # Zenoh bridge bypass critical_link and contend with the receiver.
+        remappings=[("/joy", "/critical_link/input/joy")],
     )
 
     ground_station_heartbeat = Node(
@@ -79,7 +82,11 @@ def generate_launch_description():
         executable="ground_station_heartbeat_node",
         name="ground_station_heartbeat",
         output="screen",
-        parameters=[{"topic": "/heartbeat/ground_station", "period_sec": 1.0}],
+        # As with joystick input, only critical_link_receiver may publish the
+        # canonical vessel heartbeat.
+        parameters=[
+            {"topic": "/critical_link/input/heartbeat", "period_sec": 1.0}
+        ],
     )
 
     actual_route = Node(
