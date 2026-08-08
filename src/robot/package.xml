@@ -49,6 +49,8 @@
   <exec_depend>xacro</exec_depend>
   <exec_depend>zed2i_driver</exec_depend>
   <exec_depend>critical_link</exec_depend>
+  <exec_depend>control_manager</exec_depend>
+  <exec_depend>mission_manager</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

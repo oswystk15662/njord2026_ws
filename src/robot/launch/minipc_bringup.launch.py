@@ -87,6 +87,8 @@ def generate_launch_description():
         "back_cam_jpeg_ground_video_fps"
     )
     enable_nav2 = LaunchConfiguration("enable_nav2")
+    enable_control_manager = LaunchConfiguration("enable_control_manager")
+    enable_mission_manager = LaunchConfiguration("enable_mission_manager")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     enable_autonomy_supervisor = LaunchConfiguration("enable_autonomy_supervisor")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -210,6 +212,23 @@ def generate_launch_description():
         name="command_arbiter",
         output="screen",
         parameters=[{"initial_mode": "manual"}],
+        # The legacy arbiter remains available only for comparison launches.
+        # Normal role bringup has exactly one canonical /cmd_vel owner in
+        # control_manager.
+        condition=UnlessCondition(enable_control_manager),
+    )
+
+    control_manager_launch = include_launch(
+        "control_manager",
+        ["launch", "control.launch.py"],
+        IfCondition(enable_control_manager),
+    )
+
+    mission_manager_launch = include_launch(
+        "mission_manager",
+        ["launch", "mission.launch.py"],
+        IfCondition(enable_mission_manager),
+        {"active_nav2_profile": LaunchConfiguration("active_nav2_profile")},
     )
 
     thruster_launch = include_launch(
@@ -466,9 +485,24 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "enable_nav2",
-                default_value="false",
-                description="task1/2/3 launch files start Nav2 themselves with a "
-                "task-specific params file; leave this false in that case.",
+                default_value="true",
+                description="Start the resident Nav2 graph owned by miniPC role bringup.",
+            ),
+            DeclareLaunchArgument(
+                "enable_control_manager",
+                default_value="true",
+                description="Use the typed canonical control/safety stack instead of the legacy arbiter.",
+            ),
+            DeclareLaunchArgument(
+                "enable_mission_manager",
+                default_value="true",
+                description="Start the persistent Mission Manager; it remains IDLE at startup.",
+            ),
+            DeclareLaunchArgument(
+                "active_nav2_profile",
+                default_value="task1",
+                choices=["task1", "task2", "task3"],
+                description="Resident Nav2 profile; incompatible Mission tasks are safely rejected.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument(
@@ -520,6 +554,8 @@ def generate_launch_description():
             # imu_node,
             joy_converter,
             command_arbiter,
+            control_manager_launch,
+            mission_manager_launch,
             thruster_launch,
             thruster_serial,
             bms_serial,

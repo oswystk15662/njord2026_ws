@@ -93,6 +93,9 @@ def generate_launch_description():
             "enable_bms": LaunchConfiguration("enable_bms"),
             "enable_buoy_costmap": LaunchConfiguration("enable_buoy_costmap"),
             "enable_nav2": LaunchConfiguration("enable_nav2"),
+            "enable_control_manager": LaunchConfiguration("enable_control_manager"),
+            "enable_mission_manager": LaunchConfiguration("enable_mission_manager"),
+            "active_nav2_profile": LaunchConfiguration("active_nav2_profile"),
             "enable_diagnostics": LaunchConfiguration("enable_diagnostics"),
             "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
             "enable_critical_link": LaunchConfiguration("enable_critical_link"),
@@ -185,6 +188,11 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_bms", default_value="true"),
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="false"),
+            DeclareLaunchArgument("enable_control_manager", default_value="true"),
+            DeclareLaunchArgument("enable_mission_manager", default_value="true"),
+            DeclareLaunchArgument(
+                "active_nav2_profile", default_value="task1", choices=["task1", "task2", "task3"]
+            ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
