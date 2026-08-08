@@ -69,6 +69,7 @@ class WaypointPublisher(Node):
         self.declare_parameter('waypoint_route_z', -0.05)
         self.declare_parameter('cardinal_wall_enable_topic', '/task1/cardinal_wall_enable')
         self.declare_parameter('cardinal_wall_enable_waypoint', '3')
+        self.declare_parameter('start_competition_waypoint', '')
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -84,6 +85,8 @@ class WaypointPublisher(Node):
         self.cardinal_wall_enable_topic = self.get_parameter('cardinal_wall_enable_topic').value
         self.cardinal_wall_enable_waypoint = str(
             self.get_parameter('cardinal_wall_enable_waypoint').value)
+        self.start_competition_waypoint = str(
+            self.get_parameter('start_competition_waypoint').value).strip()
         
         # Validate task type
         try:
@@ -179,7 +182,7 @@ class WaypointPublisher(Node):
         """Return the Task1 NavigateThroughPoses index for competition WP3."""
         if self.task_type != TaskType.TASK1:
             return None
-        for index, waypoint in enumerate(self.config.get('waypoints', [])):
+        for index, waypoint in enumerate(self._active_waypoints()):
             if str(waypoint.get('competition_id', waypoint.get('id'))) == self.cardinal_wall_enable_waypoint:
                 return index
         self.get_logger().warn(
@@ -197,7 +200,9 @@ class WaypointPublisher(Node):
         if self.cardinal_wall_enabled or self.cardinal_wall_enable_goal_index is None:
             return
         current_waypoint = int(feedback_msg.feedback.current_waypoint)
-        if current_waypoint >= self.cardinal_wall_enable_goal_index:
+        # Feedback identifies the currently active goal. The competition WP
+        # itself is considered passed only after Nav2 advances to the next one.
+        if current_waypoint > self.cardinal_wall_enable_goal_index:
             self.cardinal_wall_enabled = True
             self._publish_cardinal_wall_enable()
             self.get_logger().info('GPS3 reached: enabled cardinal virtual walls')
@@ -230,6 +235,18 @@ class WaypointPublisher(Node):
         
         task_name = self.task_type.value
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
+
+    def _active_waypoints(self) -> list:
+        """Return the configured route, optionally sliced at a competition WP."""
+        waypoints = self.config.get('waypoints', [])
+        if not self.start_competition_waypoint:
+            return waypoints
+        for index, waypoint in enumerate(waypoints):
+            if str(waypoint.get('competition_id', '')) == self.start_competition_waypoint:
+                return waypoints[index:]
+        self.get_logger().warn(
+            f'competition waypoint {self.start_competition_waypoint} is absent; using full route')
+        return waypoints
     
     def _publish_task3_first_stage(self):
         """Publish the gate approach stage for the selected Task3 mode."""
@@ -276,7 +293,7 @@ class WaypointPublisher(Node):
         Returns: list of geometry_msgs.msg.PoseStamped
         """
         poses = []
-        waypoints = self.config.get('waypoints', [])
+        waypoints = self._active_waypoints()
         
         for wp in waypoints:
             poses.append(self._pose_from_waypoint(wp))
@@ -285,7 +302,7 @@ class WaypointPublisher(Node):
 
     def _publish_waypoint_markers(self):
         """Publish numbered waypoint discs and their Nav2 reach radius."""
-        waypoints = self.config.get('waypoints', [])
+        waypoints = self._active_waypoints()
         if not waypoints:
             return
         stamp = self.get_clock().now().to_msg()

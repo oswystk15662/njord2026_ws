@@ -58,6 +58,9 @@ def generate_launch_description():
     waypoint_route_line_arg = DeclareLaunchArgument(
         'show_waypoint_route_line', default_value='false',
         description='Draw a line connecting waypoint markers')
+    start_competition_waypoint_arg = DeclareLaunchArgument(
+        'start_competition_waypoint', default_value='',
+        description='Competition waypoint label from which to start the route (Task1 sim)')
     
     # Create node
     waypoint_publisher_node = Node(
@@ -82,6 +85,7 @@ def generate_launch_description():
                     LaunchConfiguration('nav2_goal_tolerance_m'), value_type=float),
                 'show_waypoint_route_line': ParameterValue(
                     LaunchConfiguration('show_waypoint_route_line'), value_type=bool),
+                'start_competition_waypoint': LaunchConfiguration('start_competition_waypoint'),
             }
         ],
         output='screen',
@@ -98,6 +102,7 @@ def generate_launch_description():
         waypoint_marker_topic_arg,
         nav2_goal_tolerance_arg,
         waypoint_route_line_arg,
+        start_competition_waypoint_arg,
         waypoint_publisher_node,
     ])
     

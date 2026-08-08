@@ -7,7 +7,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -80,10 +80,33 @@ def launch_cardinal_perception_sim(context):
             "output_frame": "base_link",
             "buoy_position_xy": buoy_position_xy,
             "buoy_marks": buoy_marks,
-            "recognition_range_m": 8.0,
+            "recognition_range_m": 100.0,
         }],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_cardinal_perception_sim")),
+    )]
+
+
+def launch_dynamics(context, pkg_dutyed):
+    """Create the dynamics node, optionally staged just before competition WP3."""
+    start_at_wp3 = LaunchConfiguration("start_at_wp3").perform(context).lower() == "true"
+    initial_pose = [50.0, -20.0, -1.5707963267948966] if start_at_wp3 else [0.0, 0.0, 0.0]
+    return [Node(
+        package="dutyed_tf_pub_with_disturbance",
+        executable="dutyed_tf_pub_with_disturbance_node",
+        name="dutyed_tf_pub_with_disturbance_node",
+        parameters=[
+            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
+            {
+                "publish_tf": True,
+                "initial_pose_xyyaw": initial_pose,
+                # Simulation uses geometric body-frame forces directly; do
+                # not apply the real vessel's port-side wiring correction.
+                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
+            },
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_dynamics")),
     )]
 
 
@@ -148,6 +171,11 @@ def generate_launch_description():
         default_value="task1",
         description="Waypoint set: 'task1' (competition scenario) or 'task1_follow' (lawnmower survey)",
     )
+    start_at_wp3_arg = DeclareLaunchArgument(
+        "start_at_wp3",
+        default_value="false",
+        description="Start Task1 sim 5 m before competition WP3 and navigate from WP3 onward",
+    )
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
         default_value="0.0",
@@ -169,22 +197,7 @@ def generate_launch_description():
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
     # SimNode is the sole simulation TF authority (publish_tf=True). Both EKFs
     # run with publish_tf=False so they only produce filtered odometry topics.
-    dynamics = Node(
-        package="dutyed_tf_pub_with_disturbance",
-        executable="dutyed_tf_pub_with_disturbance_node",
-        name="dutyed_tf_pub_with_disturbance_node",
-        parameters=[
-            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {
-                "publish_tf": True,
-                # Simulation uses geometric body-frame forces directly; do
-                # not apply the real vessel's port-side wiring correction.
-                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
-            },
-        ],
-        output="screen",
-        condition=IfCondition(LaunchConfiguration("use_dynamics")),
-    )
+    dynamics = OpaqueFunction(function=lambda context: launch_dynamics(context, pkg_dutyed))
 
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -397,6 +410,9 @@ def generate_launch_description():
             "publish_rate_hz": "2.0",
             "waypoint_marker_topic": "/sim/task1_waypoint_markers",
             "nav2_goal_tolerance_m": "2.0",
+            "start_competition_waypoint": PythonExpression([
+                "'3' if '", LaunchConfiguration("start_at_wp3"), "' == 'true' else ''"
+            ]),
             "show_waypoint_route_line": "false",
         },
     )
@@ -421,6 +437,7 @@ def generate_launch_description():
         use_local_ekf_arg,
         use_global_ekf_arg,
         task_type_arg,
+        start_at_wp3_arg,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,

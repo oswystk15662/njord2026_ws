@@ -38,6 +38,13 @@ SimNode::SimNode(const rclcpp::NodeOptions & options)
     throw std::runtime_error("thruster_force_sign must contain four values, each -1 or 1");
   }
   topic_odom_ = this->declare_parameter<std::string>("topic_odom", "/odom");
+  const auto initial_pose = this->declare_parameter<std::vector<double>>(
+    "initial_pose_xyyaw", {0.0, 0.0, 0.0});
+  if (initial_pose.size() >= 3U) {
+    x_ = initial_pose[0];
+    y_ = initial_pose[1];
+    yaw_ = initial_pose[2];
+  }
 
   frame_world_ = this->declare_parameter<std::string>("frame_world", "world");
   frame_map_ = this->declare_parameter<std::string>("frame_map", "map");
