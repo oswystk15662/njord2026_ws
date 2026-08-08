@@ -176,6 +176,11 @@ def generate_launch_description():
         default_value="false",
         description="Start Task1 sim 5 m before competition WP3 and navigate from WP3 onward",
     )
+    sim_true_north_yaw_arg = DeclareLaunchArgument(
+        "sim_true_north_yaw_rad",
+        default_value="1.5707963267948966",
+        description="Geographical true-north direction in Task1 sim map coordinates (rad)",
+    )
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
         default_value="0.0",
@@ -207,6 +212,7 @@ def generate_launch_description():
         launch_arguments={
             # Match the GNSS topic consumed by the bundled Foxglove extension.
             "fix_topic": "/sensor/vehicle_gnss/fix/raw",
+            "true_north_yaw_rad": LaunchConfiguration("sim_true_north_yaw_rad"),
         }.items(),
     )
 
@@ -438,6 +444,7 @@ def generate_launch_description():
         use_global_ekf_arg,
         task_type_arg,
         start_at_wp3_arg,
+        sim_true_north_yaw_arg,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,
