@@ -134,6 +134,12 @@ ros2 launch robot jetson_bringup.launch.py \
   enable_ground_video:=true \
   ground_video_host:=192.168.1.2 \
   ground_video_port:=5600
+
+
+  ros2 launch robot jetson_bringup.launch.py \
+  enable_ground_video:=true \
+  ground_video_host:=100.82.157.125 \
+  ground_video_port:=5600
 ```
 
 `jetson_bringup.launch.py` は `enable_ground_video` / `ground_video_host` /
