@@ -67,7 +67,26 @@ def _minipc_gates_from_config():
 def _launch_setup(context, *args, **kwargs):
     role = LaunchConfiguration("role").perform(context)
     if role == "minipc":
-        return _minipc_gates_from_config()
+        # The miniPC owns the canonical vessel health summary.  Jetson signals
+        # reach this graph through the existing ROS/Zenoh transport; a Jetson
+        # local aggregator must use a remapped topic until a role-aware merger
+        # is introduced.
+        return _minipc_gates_from_config() + [
+            Node(
+                package="diagnostic_monitors",
+                executable="health_state_aggregator_node",
+                name="health_state_aggregator",
+                output="screen",
+                parameters=[
+                    {
+                        "input_topic": "/health/signals",
+                        "output_topic": "/health/state",
+                        "signal_timeout_sec": 10.0,
+                        "publish_period_sec": 1.0,
+                    }
+                ],
+            )
+        ]
 
     def enabled(argument):
         value = LaunchConfiguration(argument).perform(context).strip().lower()
