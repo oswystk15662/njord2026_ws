@@ -61,6 +61,18 @@ def test_auto_permission_lists_all_failed_interlocks():
     assert [code for code, _ in decision.reasons] == [1, 2, 3, 4, 10]
 
 
+def test_no_task_policy_does_not_evaluate_task_specific_requirements():
+    requirements = load_policy(POLICY).requirements_for("")
+    decision = evaluate_auto_permission(
+        requirements,
+        SafetyInputs(emergency_stop=False, nav2_ready=True, task_ready=True, nav_command_fresh=True),
+        health_ok_state=1,
+        health_disabled_state=5,
+        inhibit_codes=INHIBITS,
+    )
+    assert decision.auto_permitted
+
+
 def test_auto_permission_requires_ok_enabled_health_signal():
     policy_path = Path(__file__).parents[1] / "config" / "control_policy.yaml"
     policy = load_policy(policy_path)
