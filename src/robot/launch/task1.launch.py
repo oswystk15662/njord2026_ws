@@ -34,6 +34,10 @@ def generate_launch_description():
         'serial_port': LaunchConfiguration('serial_port'),
         'baud': LaunchConfiguration('baud'),
         'um982_port': LaunchConfiguration('um982_port'),
+        'enable_nav2': 'false',
+        'enable_mission_manager': 'false',
+        'enable_control_manager': 'false',
+        'active_nav2_profile': 'task1',
     }
 
     minipc_role = _include(
