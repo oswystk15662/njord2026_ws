@@ -10,7 +10,7 @@ usage() {
     'Options:' \
     '  --user USER          Account that owns the ROS processes (default: invoking user)' \
     '  --ros-distro DISTRO  ROS distribution installed under /opt/ros (auto-detected)' \
-    '  --domain-id ID       ROS_DOMAIN_ID (default: 0, or current environment value)' \
+    '  --domain-id ID       ROS_DOMAIN_ID (must be 5 for miniPC, 6 for Jetson)' \
     '  --rmw NAME           fastrtps (default) or zenoh' \
     '  --no-start           Install and enable, but do not start the service now' \
     '  -h, --help           Show this help' >&2
@@ -20,7 +20,7 @@ usage() {
 ROLE=""
 RUN_AS_USER="${SUDO_USER:-${USER:-}}"
 ROS_DISTRO_NAME="${ROS_DISTRO:-}"
-ROS_DOMAIN="${ROS_DOMAIN_ID:-0}"
+ROS_DOMAIN=""
 NJORD_RMW_NAME="${NJORD_RMW:-fastrtps}"
 START_NOW=1
 
@@ -38,6 +38,16 @@ while [[ $# -gt 0 ]]; do
 done
 
 case "${ROLE}" in jetson|minipc) ;; *) echo "--role is required" >&2; usage ;; esac
+case "${ROLE}" in
+  minipc) EXPECTED_ROS_DOMAIN=5 ;;
+  jetson) EXPECTED_ROS_DOMAIN=6 ;;
+esac
+if [[ -z "${ROS_DOMAIN}" ]]; then
+  ROS_DOMAIN="${EXPECTED_ROS_DOMAIN}"
+elif [[ "${ROS_DOMAIN}" != "${EXPECTED_ROS_DOMAIN}" ]]; then
+  echo "--domain-id must be ${EXPECTED_ROS_DOMAIN} for role ${ROLE}" >&2
+  exit 64
+fi
 case "${NJORD_RMW_NAME}" in fastrtps|zenoh) ;; *) echo "--rmw must be fastrtps or zenoh" >&2; exit 64 ;; esac
 [[ "${ROS_DOMAIN}" =~ ^[0-9]+$ ]] || { echo "--domain-id must be a non-negative integer" >&2; exit 64; }
 [[ -n "${RUN_AS_USER}" && "${RUN_AS_USER}" != "root" ]] || { echo "Specify a non-root --user" >&2; exit 64; }
