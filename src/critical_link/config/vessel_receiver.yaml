@@ -4,13 +4,9 @@ critical_link_receiver:
     heartbeat_output_topic: /heartbeat/ground_station
     diagnostic_stale_after_sec: 3.0
     # Format: name|miniPC bind IPv4|UDP port
-    # Example paths matching ground_sender.yaml:
-    # udp_paths:
-    #   - "usb_wifi|192.168.10.2|45100"
-    #   - "builtin_wifi|192.168.20.2|45101"
-    #   - "internet_vpn|10.20.0.2|45103"
-    udp_paths: 
-      - "v1_internet_vpn|100.82.157.125|45103"
+    udp_paths:
+      - "usb_wifi|192.168.122.210|45100"
+      - "builtin_wifi|192.168.122.22|45101"
     # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""
     serial_baud: 921600
