@@ -262,10 +262,7 @@ class CardinalWallPublisher(Node):
         for track in self.tracks:
             if (self.walls_enabled and track['class_id'] is not None
                     and track.get('wall_active', True)):
-                wall_heading = (
-                    track.get('true_north_yaw_rad', self.true_north_yaw_rad)
-                    if track['class_id'] in CARDINAL_DIRECTIONS
-                    else self.retirement_course_heading_rad)
+                wall_heading = self._wall_heading(track['class_id'], track)
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
                     track['x'], track['y'], track['class_id'],
@@ -287,6 +284,13 @@ class CardinalWallPublisher(Node):
         msg.data = b''.join(struct.pack('fff', *point) for point in points)
         self.pub.publish(msg)
         self._publish_detection_markers(msg.header.stamp)
+
+    def _wall_heading(self, class_id, track=None):
+        """Return the reference direction used by planning and visualization."""
+        if class_id in CARDINAL_DIRECTIONS:
+            return (track or {}).get('true_north_yaw_rad', self.true_north_yaw_rad)
+        # Lateral buoy sides are port/starboard relative to GPS3 -> GPS4.
+        return self.retirement_course_heading_rad
 
     def _retire_passed_cardinal_walls_from_base_pose(self):
         """Retire each cardinal wall once the hull crosses its parallel plane.
@@ -357,7 +361,7 @@ class CardinalWallPublisher(Node):
                 preview_wall.color.a = 0.22
                 for px, py, pz in wall_points(
                         self.bounds, self.wall_width, self.spacing, x, y,
-                        class_id, self.true_north_yaw_rad):
+                        class_id, self._wall_heading(class_id)):
                     preview_wall.points.append(Point(x=px, y=py, z=pz + 0.04))
                 markers.markers.append(preview_wall)
 
@@ -416,7 +420,7 @@ class CardinalWallPublisher(Node):
                 for x, y, z in wall_points(
                         self.bounds, self.wall_width, self.spacing,
                         track['x'], track['y'], class_id,
-                        track.get('true_north_yaw_rad', self.true_north_yaw_rad)):
+                        self._wall_heading(class_id, track)):
                     wall.points.append(Point(x=x, y=y, z=z + 0.08))
                 markers.markers.append(wall)
 
