@@ -646,6 +646,8 @@ ros2 launch robot localization.launch.py
 白飛びを抑えるには、同ファイルの `autoexposure: false` を維持し、
 `exposure` を小さくする（Adesso CyberTrack H7 は `1`--`5000`）。まず `50` を
 基準にし、白飛びする場合は `20`、暗すぎる場合は `80` のように調整する。
+`back_cam.launch.py` はこの値を V4L2 の `exposure_time_absolute` へ適用してから
+`usb_cam` を起動する。
 
 別の設定ファイルを使う場合は、次のように指定できる。
 

@@ -1,10 +1,44 @@
 import os
+import subprocess
 import yaml
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, OpaqueFunction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def configure_v4l2_controls(video_device, params):
+    """Apply controls whose names differ between usb_cam and V4L2."""
+    if "autoexposure" not in params:
+        return
+
+    auto_exposure = 3 if params["autoexposure"] else 1
+    commands = [
+        [
+            "v4l2-ctl",
+            f"--device={video_device}",
+            f"--set-ctrl=auto_exposure={auto_exposure}",
+        ]
+    ]
+    if not params["autoexposure"] and "exposure" in params:
+        commands.extend(
+            [
+                [
+                    "v4l2-ctl",
+                    f"--device={video_device}",
+                    "--set-ctrl=exposure_dynamic_framerate=0",
+                ],
+                [
+                    "v4l2-ctl",
+                    f"--device={video_device}",
+                    f"--set-ctrl=exposure_time_absolute={params['exposure']}",
+                ],
+            ]
+        )
+
+    for command in commands:
+        subprocess.run(command, check=True)
 
 
 def launch_setup(context, *args, **kwargs):
@@ -23,6 +57,7 @@ def launch_setup(context, *args, **kwargs):
     # take the device path from the selected parameter file.
     video_device_arg = LaunchConfiguration("video_device").perform(context)
     video_device = os.path.realpath(video_device_arg or params["video_device"])
+    configure_v4l2_controls(video_device, params)
 
     return [
         Node(
