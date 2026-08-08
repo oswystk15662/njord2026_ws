@@ -16,6 +16,7 @@ from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalRespons
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from std_msgs.msg import Bool, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
@@ -135,6 +136,9 @@ class MissionManager(Node):
         self._inhibit_reasons: list[str] = ["control state unavailable"]
         self._last_transition = self.get_clock().now().to_msg()
         self._last_snapshot = self._machine.snapshot
+        self._task_ready = False
+        self._task_requirements_ready = False
+        self._active_control_policy = ""
 
         registry_path = self._registry_path()
         shares = {"waypoint_publisher": self._waypoint_share_path()}
@@ -142,6 +146,13 @@ class MissionManager(Node):
 
         self._status_pub = self.create_publisher(MissionStatus, "/mission/status", _STATUS_QOS)
         self._plan_pub = self.create_publisher(NavPath, "/task/plan", _STATUS_QOS)
+        self._task_ready_pub = self.create_publisher(Bool, "/mission/task_ready", _STATUS_QOS)
+        self._task_requirements_ready_pub = self.create_publisher(
+            Bool, "/mission/task_requirements_ready", _STATUS_QOS
+        )
+        self._active_policy_pub = self.create_publisher(
+            String, "/mission/active_control_policy", _STATUS_QOS
+        )
         self._navigation = _RosNavigationClient(self, self._plan_pub)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
@@ -157,6 +168,7 @@ class MissionManager(Node):
         self._list_srv = self.create_service(ListTasks, "/mission/list_tasks", self._on_list)
         self._status_srv = self.create_service(GetMissionStatus, "/mission/get_status", self._on_status)
         self._timer = self.create_timer(0.1, self._tick, callback_group=self._cb_group)
+        self._publish_task_readiness(False, False, "")
         self._publish_status()
         self.get_logger().info(f"Mission Manager ready with registry {registry_path}")
 
@@ -273,6 +285,9 @@ class MissionManager(Node):
             )
         self._active_route = route
         self._navigation.set_frame_id(route.frame_id)
+        # A validated route/profile is a task-ready input, but task-specific
+        # runtime requirements must remain false until an executor is running.
+        self._publish_task_readiness(True, False, task.control_policy)
         self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                  stage="configure", message="task route validated")
         if request.dry_run:
@@ -306,6 +321,7 @@ class MissionManager(Node):
         self._pending_start = None
         self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
                                  stage="starting", message="starting task executor")
+        self._publish_task_readiness(True, True, task.control_policy)
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
@@ -349,6 +365,7 @@ class MissionManager(Node):
         if not self._machine.is_current(execution_id) or not self._machine.active:
             return False, "execution is not active"
         self._machine.begin_cancel(execution_id)
+        self._publish_task_readiness(False, False, "")
         self._pending_start = None
         if self._active_executor:
             self._active_executor.cancel(execution_id)
@@ -364,6 +381,7 @@ class MissionManager(Node):
         self._pending_start = None
         self._active_executor = None
         self._publish_status()
+        self._publish_task_readiness(False, False, "")
         self._machine.reset_to_idle(execution_id)
         self._publish_status()
 
@@ -386,6 +404,23 @@ class MissionManager(Node):
             self._last_transition = self.get_clock().now().to_msg()
             self._last_snapshot = self._machine.snapshot
         self._status_pub.publish(self._status_message())
+
+    def _publish_task_readiness(
+        self, task_ready: bool, requirements_ready: bool, control_policy: str
+    ) -> None:
+        """Publish the mission-owned safety inputs with latched safe defaults."""
+        self._task_ready = task_ready
+        self._task_requirements_ready = requirements_ready
+        self._active_control_policy = control_policy
+        task_message = Bool()
+        task_message.data = task_ready
+        requirements_message = Bool()
+        requirements_message.data = requirements_ready
+        policy_message = String()
+        policy_message.data = control_policy
+        self._task_ready_pub.publish(task_message)
+        self._task_requirements_ready_pub.publish(requirements_message)
+        self._active_policy_pub.publish(policy_message)
 
     def _status_message(self) -> MissionStatus:
         snapshot = self._machine.snapshot
