@@ -65,3 +65,8 @@ TEST(StatusEvaluator, UnknownStateIsCritical)
   auto s = normal(alert_lamp::OperatingMode::AUTO); s.state_unknown = true;
   EXPECT_EQ(alert_lamp::StatusEvaluator().evaluate(s), alert_lamp::AlertState::CRITICAL_FAULT);
 }
+TEST(StatusEvaluator, MissionFailureIsCritical)
+{
+  auto s = normal(alert_lamp::OperatingMode::AUTO); s.mission_failed = true;
+  EXPECT_EQ(alert_lamp::StatusEvaluator().evaluate(s), alert_lamp::AlertState::CRITICAL_FAULT);
+}

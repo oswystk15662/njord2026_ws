@@ -24,6 +24,13 @@ alert_lamp_manager_node:
       # Disabled while RTK quality is not part of the alert-lamp readiness criteria.
       # Set true to require a recent RTK-quality NavSatFix in AUTO mode.
       require_rtk_fix: false
+    canonical:
+      # /control/state is authoritative when present. Legacy mode/E-stop/ready
+      # inputs remain only as a pre-migration fallback.
+      control_state_timeout_sec: 1.0
+      health_state_timeout_sec: 3.0
+      mission_status_timeout_sec: 1.0
+      require_mission_status: false
     lamp:
       green_blink_period_sec: 1.0
       yellow_blink_period_sec: 1.0
@@ -35,7 +42,9 @@ alert_lamp_manager_node:
       autonomy_ready: /autonomy/ready
       rtk_status: /sensor/vehicle_gnss/fix/raw
       localization: /odometry/filtered/global
-      diagnostics: /diagnostics
+      control_state: /control/state
+      health_state: /health/state
+      mission_status: /mission/status
       driver_heartbeat: /heartbeat/driver
       high_level_heartbeat: /heartbeat/high_level
       autonomy_heartbeat: /heartbeat/autonomy

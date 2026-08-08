@@ -44,7 +44,7 @@ struct SystemStatus
   bool rtk_fix{false};
   bool required_sensor_not_ready{false};
   bool critical_driver_failure{false};
-  bool critical_diagnostics{false};
+  bool mission_failed{false};
   bool state_unknown{true};
 };
 

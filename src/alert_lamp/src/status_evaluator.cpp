@@ -5,7 +5,7 @@ namespace alert_lamp
 
 bool StatusEvaluator::hasCriticalFault(const SystemStatus & s) const
 {
-  if (s.emergency_stop || s.critical_driver_failure || s.critical_diagnostics || s.state_unknown ||
+  if (s.emergency_stop || s.critical_driver_failure || s.mission_failed || s.state_unknown ||
     !s.driver_alive || s.mode == OperatingMode::UNKNOWN)
   {
     return true;
@@ -20,7 +20,7 @@ AlertState StatusEvaluator::evaluate(const SystemStatus & s) const
 {
   if (hasCriticalFault(s)) {return AlertState::CRITICAL_FAULT;}
   if (!s.ground_station_connected && s.driver_alive && s.high_level_alive && s.autonomy_alive &&
-    s.localization_alive && s.localization_stable && !s.emergency_stop && !s.critical_diagnostics)
+    s.localization_alive && s.localization_stable && !s.emergency_stop)
   {
     return AlertState::GROUND_COMMUNICATION_LOST;
   }
@@ -30,12 +30,12 @@ AlertState StatusEvaluator::evaluate(const SystemStatus & s) const
     return AlertState::AUTONOMY_NOT_READY;
   }
   if (s.mode == OperatingMode::AUTO && s.driver_alive && s.high_level_alive &&
-    s.autonomy_alive && s.autonomy_ready && !s.critical_diagnostics)
+    s.autonomy_alive && s.autonomy_ready)
   {
     return AlertState::AUTO_NORMAL;
   }
   if (s.mode == OperatingMode::MANUAL && s.driver_alive && s.manual_control_alive &&
-    !s.emergency_stop && !s.critical_diagnostics)
+    !s.emergency_stop)
   {
     return AlertState::MANUAL_NORMAL;
   }

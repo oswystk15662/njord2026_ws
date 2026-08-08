@@ -62,6 +62,12 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
   rtk_covariance_threshold_ = declare_parameter<double>("localization.rtk_covariance_threshold",
       0.01);
   require_rtk_fix_ = declare_parameter<bool>("localization.require_rtk_fix", false);
+  control_state_timeout_sec_ = declare_parameter<double>("canonical.control_state_timeout_sec",
+      1.0);
+  health_state_timeout_sec_ = declare_parameter<double>("canonical.health_state_timeout_sec", 3.0);
+  mission_status_timeout_sec_ = declare_parameter<double>("canonical.mission_status_timeout_sec",
+      1.0);
+  require_mission_status_ = declare_parameter<bool>("canonical.require_mission_status", false);
   green_period_ = static_cast<float>(declare_parameter<double>("lamp.green_blink_period_sec", 0.1));
   yellow_period_ = static_cast<float>(declare_parameter<double>("lamp.yellow_blink_period_sec",
       0.1));
@@ -118,13 +124,35 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
       message->position_covariance[0] <= rtk_covariance_threshold_;
       if (rtk_like) {last_rtk_fix_ = now();}
     });
-  diagnostics_sub_ = create_subscription<diagnostic_msgs::msg::DiagnosticArray>(
-    declare_parameter<std::string>("topics.diagnostics", "/diagnostics"), 10,
-    [this](const diagnostic_msgs::msg::DiagnosticArray::SharedPtr message) {
-      critical_diagnostics_ = std::any_of(message->status.begin(), message->status.end(),
-      [](const auto & status) {
-        return status.level >= diagnostic_msgs::msg::DiagnosticStatus::ERROR;
-                                                                                                    });
+  const auto canonical_qos = rclcpp::QoS(1).transient_local();
+  control_state_sub_ = create_subscription<njord_interfaces::msg::ControlState>(
+    declare_parameter<std::string>("topics.control_state", "/control/state"), canonical_qos,
+    [this](const njord_interfaces::msg::ControlState::SharedPtr message) {
+      control_mode_ = message->requested_mode == njord_interfaces::msg::ControlState::MODE_MANUAL ?
+      OperatingMode::MANUAL : message->requested_mode ==
+      njord_interfaces::msg::ControlState::MODE_AUTO ? OperatingMode::AUTO : OperatingMode::UNKNOWN;
+      control_emergency_stop_ = message->emergency_stop;
+      control_auto_permitted_ = message->auto_permitted;
+      control_state_received_ = true;
+      last_control_state_ = now();
+    });
+  health_state_sub_ = create_subscription<njord_interfaces::msg::HealthState>(
+    declare_parameter<std::string>("topics.health_state", "/health/state"), canonical_qos,
+    [this](const njord_interfaces::msg::HealthState::SharedPtr message) {
+      health_critical_ = message->summary_state == njord_interfaces::msg::HealthState::ERROR;
+      health_degraded_ = message->summary_state == njord_interfaces::msg::HealthState::DEGRADED ||
+      message->summary_state == njord_interfaces::msg::HealthState::STALE ||
+      message->summary_state == njord_interfaces::msg::HealthState::UNKNOWN;
+      health_state_received_ = true;
+      last_health_state_ = now();
+    });
+  mission_status_sub_ = create_subscription<njord_interfaces::msg::MissionStatus>(
+    declare_parameter<std::string>("topics.mission_status", "/mission/status"), canonical_qos,
+    [this](const njord_interfaces::msg::MissionStatus::SharedPtr message) {
+      mission_failed_ = message->state == njord_interfaces::msg::MissionStatus::STATE_FAILED ||
+      message->state == njord_interfaces::msg::MissionStatus::STATE_REJECTED;
+      mission_status_received_ = true;
+      last_mission_status_ = now();
     });
   command_pub_ = create_publisher<msg::AlertLampCommand>(
     declare_parameter<std::string>("topics.alert_command", "/alert_lamp/command"), 10);
@@ -142,9 +170,15 @@ void AlertLampManager::updateHeartbeat(const std::string & name)
 SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
 {
   SystemStatus status;
-  status.mode = mode_;
-  status.emergency_stop = emergency_stop_;
-  status.autonomy_ready = autonomy_ready_;
+  status.state_unknown = false;
+  const bool control_fresh = control_state_received_ &&
+    (current - last_control_state_).seconds() <= control_state_timeout_sec_;
+  // The control stack is the owner of mode, E-stop, and AUTO permission.  Keep
+  // the legacy inputs only as a pre-migration fallback for installations that do
+  // not yet publish /control/state.
+  status.mode = control_state_received_ ? control_mode_ : mode_;
+  status.emergency_stop = control_state_received_ ? control_emergency_stop_ : emergency_stop_;
+  status.autonomy_ready = control_state_received_ ? control_auto_permitted_ : autonomy_ready_;
   status.driver_alive = heartbeats_.isAlive("driver", current, driver_timeout_sec_);
   status.high_level_alive = heartbeats_.isAlive("high_level", current, high_level_timeout_sec_);
   status.autonomy_alive = heartbeats_.isAlive("autonomy", current, autonomy_timeout_sec_);
@@ -160,10 +194,28 @@ SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
   status.rtk_fix = !require_rtk_fix_ ||
     (rtk_received_ && (current - last_rtk_fix_).seconds() <= rtk_grace_period_sec_);
   status.required_sensor_not_ready = required_sensor_not_ready_;
-  status.critical_driver_failure = critical_driver_failure_;
-  status.critical_diagnostics = critical_diagnostics_;
-  status.state_unknown = !mode_received_ || !emergency_received_ ||
-    (mode_ == OperatingMode::AUTO && !autonomy_ready_received_);
+  status.critical_driver_failure = critical_driver_failure_ || health_critical_;
+  status.mission_failed = mission_failed_;
+  const bool health_fresh = health_state_received_ &&
+    (current - last_health_state_).seconds() <= health_state_timeout_sec_;
+  if (health_state_received_) {
+    status.required_sensor_not_ready = status.required_sensor_not_ready || health_degraded_;
+    status.state_unknown = !health_fresh;
+  }
+  const bool mission_fresh = mission_status_received_ &&
+    (current - last_mission_status_).seconds() <= mission_status_timeout_sec_;
+  if (mission_status_received_) {
+    status.state_unknown = status.state_unknown || !mission_fresh;
+  } else if (require_mission_status_) {
+    status.state_unknown = true;
+  }
+  if (control_state_received_) {
+    status.state_unknown = status.state_unknown || !control_fresh ||
+      control_mode_ == OperatingMode::UNKNOWN;
+  } else {
+    status.state_unknown = status.state_unknown || !mode_received_ || !emergency_received_ ||
+      (mode_ == OperatingMode::AUTO && !autonomy_ready_received_);
+  }
   return status;
 }
 
@@ -213,6 +265,15 @@ void AlertLampManager::updateDiagnostic(diagnostic_updater::DiagnosticStatusWrap
   stat.add("localization_stable", status.localization_stable);
   stat.add("rtk_fix", status.rtk_fix);
   stat.add("emergency_stop", status.emergency_stop);
+  stat.add("control_state_received", control_state_received_);
+  stat.add("health_state_received", health_state_received_);
+  stat.add("mission_status_received", mission_status_received_);
+  stat.add("control_state_age", control_state_received_ ?
+    (current - last_control_state_).seconds() : -1.0);
+  stat.add("health_state_age", health_state_received_ ?
+    (current - last_health_state_).seconds() : -1.0);
+  stat.add("mission_status_age", mission_status_received_ ?
+    (current - last_mission_status_).seconds() : -1.0);
 }
 
 }  // namespace alert_lamp

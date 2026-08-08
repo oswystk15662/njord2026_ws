@@ -6,8 +6,9 @@ the command into on/off outputs and enters red blink when manager commands time 
 
 ## Nodes
 
-- `alert_lamp_manager_node`: subscribes to mode, E-stop, readiness, localization,
-  GNSS, diagnostics, and configurable heartbeat topics. It publishes
+- `alert_lamp_manager_node`: consumes canonical control, mission, and health state
+  first, with legacy mode/E-stop/readiness inputs retained as a migration fallback.
+  It also monitors localization, GNSS, and configurable watchdog heartbeats. It publishes
   `alert_lamp/msg/AlertLampCommand` on `/alert_lamp/command` and manager diagnostics.
 - `alert_lamp_driver_node`: performs blinking and publishes `std_msgs/msg/Bool` to
   `/red`, `/yellow`, and `/green`. Those are the existing inputs of
@@ -19,12 +20,23 @@ nodes. The integration contract is:
 
 | Input | Type | Default topic |
 | --- | --- | --- |
-| Operating mode | `std_msgs/msg/String` (`manual` or `auto`) | `/system/operating_mode` |
-| Emergency stop | `std_msgs/msg/UInt8` (`RUNNING=0`, `SOFT_EMG=1`, `HARD_EMG=2`) | `/safety/emergency_stop` |
-| Autonomy ready | `std_msgs/msg/Bool` | `/autonomy/ready` |
+| Canonical control state | `njord_interfaces/msg/ControlState` | `/control/state` |
+| Canonical mission status | `njord_interfaces/msg/MissionStatus` | `/mission/status` |
+| Canonical health state | `njord_interfaces/msg/HealthState` | `/health/state` |
+| Legacy operating mode | `std_msgs/msg/String` (`manual` or `auto`) | `/system/operating_mode` |
+| Legacy emergency stop | `std_msgs/msg/UInt8` (`RUNNING=0`, `SOFT_EMG=1`, `HARD_EMG=2`) | `/safety/emergency_stop` |
+| Legacy autonomy ready | `std_msgs/msg/Bool` | `/autonomy/ready` |
 | Localization | `nav_msgs/msg/Odometry` | `/odometry/filtered/global` |
 | GNSS / RTK quality | `sensor_msgs/msg/NavSatFix` | `/sensor/vehicle_gnss/fix/raw` |
 | Heartbeats | configurable serialized type | `/heartbeat/*` |
+
+`/control/state` is authoritative once received: its requested mode, E-stop, and
+AUTO permission replace the three legacy inputs. A stale canonical control, health,
+or received mission stream is a red-blink-safe unknown state. A typed health `ERROR`
+or terminal mission `FAILED`/`REJECTED` is also critical; typed health
+`DEGRADED`/`STALE`/`UNKNOWN` prevents an AUTO-normal indication. The manager does
+not subscribe to `DiagnosticArray`, so an unrelated `/diagnostics` `ERROR` cannot
+change propulsion/lamp policy.
 
 Heartbeat subscriptions use ROS 2 generic subscriptions. Driver and localization
 heartbeats are `std_msgs/msg/Empty` outputs from `diagnostic_monitors` aggregators;

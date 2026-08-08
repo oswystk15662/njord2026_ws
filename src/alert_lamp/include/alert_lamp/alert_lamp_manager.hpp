@@ -4,9 +4,11 @@
 #include <string>
 
 #include "diagnostic_updater/diagnostic_updater.hpp"
-#include "diagnostic_msgs/msg/diagnostic_array.hpp"
 #include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "njord_interfaces/msg/control_state.hpp"
+#include "njord_interfaces/msg/health_state.hpp"
+#include "njord_interfaces/msg/mission_status.hpp"
 #include "rclcpp/generic_subscription.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
@@ -40,7 +42,6 @@ private:
   bool autonomy_ready_{false};
   bool required_sensor_not_ready_{false};
   bool critical_driver_failure_{false};
-  bool critical_diagnostics_{false};
   bool mode_received_{false};
   bool emergency_received_{false};
   bool autonomy_ready_received_{false};
@@ -49,6 +50,18 @@ private:
   bool localization_covariance_ok_{false};
   rclcpp::Time last_localization_{0, 0, RCL_ROS_TIME};
   rclcpp::Time last_rtk_fix_{0, 0, RCL_ROS_TIME};
+  OperatingMode control_mode_{OperatingMode::UNKNOWN};
+  bool control_emergency_stop_{true};
+  bool control_auto_permitted_{false};
+  bool control_state_received_{false};
+  bool health_state_received_{false};
+  bool mission_status_received_{false};
+  bool health_critical_{false};
+  bool health_degraded_{false};
+  bool mission_failed_{false};
+  rclcpp::Time last_control_state_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_health_state_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_mission_status_{0, 0, RCL_ROS_TIME};
   AlertState last_state_{AlertState::INITIALIZING};
   bool has_last_state_{false};
 
@@ -63,7 +76,9 @@ private:
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr autonomy_ready_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr localization_sub_;
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr rtk_sub_;
-  rclcpp::Subscription<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::ControlState>::SharedPtr control_state_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::HealthState>::SharedPtr health_state_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::MissionStatus>::SharedPtr mission_status_sub_;
   rclcpp::Publisher<msg::AlertLampCommand>::SharedPtr command_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   diagnostic_updater::Updater updater_;
@@ -77,6 +92,10 @@ private:
   double position_covariance_threshold_{1.0};
   double rtk_grace_period_sec_{10.0};
   double rtk_covariance_threshold_{0.01};
+  double control_state_timeout_sec_{1.0};
+  double health_state_timeout_sec_{3.0};
+  double mission_status_timeout_sec_{1.0};
+  bool require_mission_status_{false};
   bool require_rtk_fix_{false};
   float green_period_{1.0F};
   float yellow_period_{1.0F};
