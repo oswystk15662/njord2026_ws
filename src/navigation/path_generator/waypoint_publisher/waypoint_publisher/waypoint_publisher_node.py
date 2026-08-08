@@ -123,6 +123,8 @@ class WaypointPublisher(Node):
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
         self.from_ll_client = self.create_client(FromLL, self.from_ll_service)
         self.geodetic_futures = None
+        self.geodetic_indices = []
+        self.geodetic_positions = []
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -249,20 +251,23 @@ class WaypointPublisher(Node):
     def _start_geodetic_waypoint_conversion(self):
         """Project all configured GPS waypoints with navsat_transform /fromLL."""
         waypoints = self._active_waypoints()
-        missing = [self._display_waypoint_id(wp, i) for i, wp in enumerate(waypoints)
-                   if 'latitude' not in wp or 'longitude' not in wp]
-        if missing:
-            self.get_logger().error(
-                'Geodetic waypoint mode requires latitude/longitude for every active WP: '
-                + ', '.join(missing))
+        incomplete = [self._display_waypoint_id(wp, i) for i, wp in enumerate(waypoints)
+                      if ('latitude' in wp) != ('longitude' in wp)]
+        if incomplete:
+            self.get_logger().error('GPS waypoint needs both latitude and longitude: ' + ', '.join(incomplete))
             self.first_publish = True
             return
-        if not self.from_ll_client.service_is_ready():
+        self.geodetic_indices = [i for i, wp in enumerate(waypoints)
+                                  if 'latitude' in wp and 'longitude' in wp]
+        self.geodetic_positions = [
+            (float(wp.get('x', 0.0)), float(wp.get('y', 0.0))) for wp in waypoints]
+        if self.geodetic_indices and not self.from_ll_client.service_is_ready():
             self.get_logger().warn(f'Waiting for map projection service {self.from_ll_service}')
             self.first_publish = True
             return
         self.geodetic_futures = []
-        for waypoint in waypoints:
+        for index in self.geodetic_indices:
+            waypoint = waypoints[index]
             request = FromLL.Request()
             request.ll_point = GeoPoint(latitude=float(waypoint['latitude']),
                                         longitude=float(waypoint['longitude']),
@@ -273,18 +278,20 @@ class WaypointPublisher(Node):
         if not all(future.done() for future in self.geodetic_futures):
             return
         try:
-            positions = [(future.result().map_point.x, future.result().map_point.y)
-                         for future in self.geodetic_futures]
+            for index, future in zip(self.geodetic_indices, self.geodetic_futures):
+                self.geodetic_positions[index] = (
+                    future.result().map_point.x, future.result().map_point.y)
         except Exception as error:
             self.get_logger().error(f'GPS waypoint map conversion failed: {error}')
             self.geodetic_futures = None
+            self.geodetic_indices = []
             self.first_publish = True
             return
         self.geodetic_futures = None
         waypoints = self._active_waypoints()
-        self._publish_waypoint_markers(positions)
+        self._publish_waypoint_markers(self.geodetic_positions)
         poses = [self._pose_from_waypoint(wp, position)
-                 for wp, position in zip(waypoints, positions)]
+                 for wp, position in zip(waypoints, self.geodetic_positions)]
         self._send_navigate_through_poses_goal(poses)
         self.get_logger().info(f'Published {len(poses)} geodetic waypoints for {self.task_type.value}')
     

@@ -53,9 +53,10 @@ The Task1 config uses a simulation-local Cartesian approximation of the NJORD
 
 ### Real-vessel GPS waypoint mode
 
-Set `use_geodetic_waypoints:=true` to project every active waypoint through
-`navsat_transform_node`'s `/fromLL` service.  Each waypoint (including
-sub-waypoints such as `1.1`) must then contain `latitude`, `longitude`, and
-optionally `altitude`; the existing `x`/`y` fields are ignored.  This ensures
-the goals use the same fixed datum and `map` axes as GNSS localization and
-the virtual buoy walls.
+Set `use_geodetic_waypoints:=true` to project every waypoint that has both
+`latitude` and `longitude` through `navsat_transform_node`'s `/fromLL`
+service.  Any number of waypoint records (including sub-waypoints such as
+`1.1`) may be added or removed; their YAML order is the route order. A record
+without latitude/longitude remains a `map`-coordinate `x`/`y` waypoint. This
+lets a route be built incrementally while keeping every projected goal in the
+same datum and map axes as GNSS localization and the virtual buoy walls.
