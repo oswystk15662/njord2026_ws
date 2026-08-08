@@ -13,6 +13,7 @@ from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_ros import Buffer, TransformException, TransformListener
 import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
+from visualization_msgs.msg import Marker, MarkerArray
 
 from buoy_obstacle_publisher.cardinal_wall_geometry import (
     CARDINAL_DIRECTIONS,
@@ -22,6 +23,22 @@ from buoy_obstacle_publisher.cardinal_wall_geometry import (
 
 
 WALL_CLASSES = set(CARDINAL_DIRECTIONS) | {BuoyDetection.CLASS_GREEN, BuoyDetection.CLASS_RED}
+CLASS_LABELS = {
+    BuoyDetection.CLASS_GREEN: 'GREEN / STARBOARD',
+    BuoyDetection.CLASS_RED: 'RED / PORT',
+    BuoyDetection.CLASS_NORTH: 'N',
+    BuoyDetection.CLASS_EAST: 'E',
+    BuoyDetection.CLASS_SOUTH: 'S',
+    BuoyDetection.CLASS_WEST: 'W',
+}
+CLASS_COLOURS = {
+    BuoyDetection.CLASS_GREEN: (0.0, 0.53, 0.28),
+    BuoyDetection.CLASS_RED: (0.80, 0.03, 0.12),
+    BuoyDetection.CLASS_NORTH: (1.0, 0.78, 0.0),
+    BuoyDetection.CLASS_EAST: (1.0, 0.78, 0.0),
+    BuoyDetection.CLASS_SOUTH: (1.0, 0.78, 0.0),
+    BuoyDetection.CLASS_WEST: (1.0, 0.78, 0.0),
+}
 
 
 class CardinalWallPublisher(Node):
@@ -31,6 +48,7 @@ class CardinalWallPublisher(Node):
         super().__init__('cardinal_wall_publisher')
         self.declare_parameter('detection_topic', '/buoy_detections_3d')
         self.declare_parameter('output_topic', '/virtual_obstacles')
+        self.declare_parameter('marker_topic', '/virtual_obstacle_markers')
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('course_bounds', [-100.0, 100.0, -100.0, 100.0])
         self.declare_parameter('wall_width_m', 0.2)
@@ -66,6 +84,7 @@ class CardinalWallPublisher(Node):
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.pub = self.create_publisher(PointCloud2, self.get_parameter('output_topic').value, 10)
+        self.marker_pub = self.create_publisher(MarkerArray, self.get_parameter('marker_topic').value, 10)
         self.create_subscription(
             BuoyDetectionArray, self.get_parameter('detection_topic').value, self._on_detections, 10)
         retirement_topic = self.get_parameter('retirement_frontier_topic').value
@@ -198,6 +217,62 @@ class CardinalWallPublisher(Node):
         msg.is_dense = True
         msg.data = b''.join(struct.pack('fff', *point) for point in points)
         self.pub.publish(msg)
+        self._publish_detection_markers(msg.header.stamp)
+
+    def _publish_detection_markers(self, stamp):
+        """Visualize every confirmed buoy in the map frame.
+
+        This is intentionally driven by the same fused tracks as the virtual
+        walls, so Foxglove/RViz shows the class that planning is actually
+        using on the vessel, rather than a separate simulator-only annotation.
+        """
+        markers = MarkerArray()
+        for index, track in enumerate(self.tracks):
+            class_id = track.get('class_id')
+            if class_id is None:
+                continue
+            colour = CLASS_COLOURS.get(class_id, (1.0, 1.0, 1.0))
+            label = CLASS_LABELS.get(class_id, str(class_id))
+            if class_id in CARDINAL_DIRECTIONS:
+                label = f'{label} / CARDINAL'
+            if not track.get('wall_active', True):
+                label = f'{label} / WALL RETIRED'
+
+            body = Marker()
+            body.header.frame_id = self.map_frame
+            body.header.stamp = stamp
+            body.ns = 'detected_buoy_body'
+            body.id = index
+            body.type = Marker.CYLINDER
+            body.action = Marker.ADD
+            body.pose.position.x = track['x']
+            body.pose.position.y = track['y']
+            body.pose.position.z = 0.35
+            body.pose.orientation.w = 1.0
+            body.scale.x = 0.35
+            body.scale.y = 0.35
+            body.scale.z = 0.70
+            body.color.r, body.color.g, body.color.b = colour
+            body.color.a = 0.90
+            markers.markers.append(body)
+
+            text = Marker()
+            text.header.frame_id = self.map_frame
+            text.header.stamp = stamp
+            text.ns = 'detected_buoy_label'
+            text.id = index
+            text.type = Marker.TEXT_VIEW_FACING
+            text.action = Marker.ADD
+            text.pose.position.x = track['x']
+            text.pose.position.y = track['y']
+            text.pose.position.z = 0.90
+            text.pose.orientation.w = 1.0
+            text.scale.z = 0.30
+            text.color.r, text.color.g, text.color.b = colour
+            text.color.a = 1.0
+            text.text = label
+            markers.markers.append(text)
+        self.marker_pub.publish(markers)
 
 
 def main(args=None):

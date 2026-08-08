@@ -198,7 +198,14 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
-                "allocation.wrench_sign": [1.0, 1.0, 1.0],
+                # The simulator consumes forces in [FR, FL, RR, RL] order,
+                # while the shared driver is configured as [FL, FR, RL, RR].
+                # Surge is invariant under that permutation, but sway and
+                # yaw are reversed. Correct before allocation so a positive
+                # Nav2 yaw command produces a positive simulated yaw rate;
+                # otherwise the velocity feedback loop turns in place and
+                # diverges continuously.
+                "allocation.wrench_sign": [1.0, -1.0, -1.0],
                 "thrusters.reverse": [False, False, False, False],
             },
         ],

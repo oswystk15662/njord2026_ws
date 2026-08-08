@@ -393,6 +393,10 @@ class Task1Orchestrator(Node):
         black = (0.02, 0.02, 0.02)
         # RAL1003 (signal yellow), specified by the Challenge handbook.
         yellow = (1.0, 0.78, 0.0)
+        # IALA lateral-mark colours: red port-hand and green starboard-hand.
+        # These deliberately avoid the saturated debug-marker primary hues.
+        lateral_red = (0.80, 0.03, 0.12)
+        lateral_green = (0.0, 0.53, 0.28)
         # Segment order is waterline -> top, matching the official patterns:
         # N black/yellow, E black/yellow/black, S yellow/black,
         # W yellow/black/yellow when read from top to bottom.
@@ -402,6 +406,26 @@ class Task1Orchestrator(Node):
             "S": (black, yellow),
             "W": (yellow, black, yellow),
         }
+
+        def add_sphere(marker_id, namespace, x, y, z, diameter, rgb):
+            """Add the floating body of a buoy, centred at its waterline."""
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = namespace
+            marker.id = marker_id
+            marker.type = Marker.SPHERE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = float(z)
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = diameter
+            marker.scale.y = diameter
+            marker.scale.z = diameter
+            marker.color.r, marker.color.g, marker.color.b = rgb
+            marker.color.a = 1.0
+            marker_array.markers.append(marker)
 
         def add_cylinder(marker_id, namespace, x, y, z, diameter, height, rgb):
             marker = Marker()
@@ -420,6 +444,24 @@ class Task1Orchestrator(Node):
             marker.scale.z = height
             marker.color.r, marker.color.g, marker.color.b = rgb
             marker.color.a = 1.0
+            marker_array.markers.append(marker)
+
+        def add_text(marker_id, namespace, x, y, z, text, rgb):
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = namespace
+            marker.id = marker_id
+            marker.type = Marker.TEXT_VIEW_FACING
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = float(z)
+            marker.pose.orientation.w = 1.0
+            marker.scale.z = 0.30
+            marker.color.r, marker.color.g, marker.color.b = rgb
+            marker.color.a = 1.0
+            marker.text = text
             marker_array.markers.append(marker)
 
         def add_topmark(marker_id, x, y, z, points_up):
@@ -451,43 +493,48 @@ class Task1Orchestrator(Node):
             marker_array.markers.append(marker)
 
         def add_reference_buoy(marker_id, x, y, rgb):
-            marker = Marker()
-            marker.header.frame_id = self.frame_id
-            marker.header.stamp = stamp
-            marker.ns = "task1_red_green_reference_buoys"
-            marker.id = marker_id
-            marker.type = Marker.SPHERE
-            marker.action = Marker.ADD
-            marker.pose.position.x = float(x)
-            marker.pose.position.y = float(y)
-            marker.pose.position.z = 0.25
-            marker.pose.orientation.w = 1.0
-            marker.scale.x = 0.5
-            marker.scale.y = 0.5
-            marker.scale.z = 0.5
-            marker.color.r, marker.color.g, marker.color.b = rgb
-            marker.color.a = 0.95
-            marker_array.markers.append(marker)
+            """Add a coloured floating buoy and its visible cylindrical mast."""
+            add_sphere(
+                marker_id,
+                "task1_red_green_reference_buoys",
+                x,
+                y,
+                0.25,
+                0.5,
+                rgb,
+            )
+            # Keep the mast proportion consistent with the official cardinal
+            # mark: it rises from the 40 cm float and is 14 cm wide.
+            add_cylinder(
+                marker_id,
+                "task1_red_green_reference_buoy_masts",
+                x,
+                y,
+                0.60,
+                0.14,
+                0.40,
+                rgb,
+            )
 
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
-            # Official mark: a 40 cm striped buoy, a 14 cm x 40 cm striped
-            # cylinder, then two black cardinal topmark cones.  The colour
-            # bands are black/yellow per the 2026 handbook.
+            # Official mark: a 40 cm floating buoy, a 14 cm x 40 cm striped
+            # cylinder, then two black cardinal topmark cones. The float uses
+            # the waterline colour and the mast carries every prescribed
+            # black / RAL1003-yellow band from the 2026 handbook.
             marker_base_id = idx * 10
             pattern = pattern_by_mark.get(mark, pattern_by_mark["N"])
             segment_height = 0.4 / len(pattern)
+            add_sphere(
+                marker_base_id + 1,
+                "task1_cardinal_buoy_float",
+                bx,
+                by,
+                0.20,
+                0.40,
+                pattern[0],
+            )
             for segment_idx, rgb in enumerate(pattern):
-                add_cylinder(
-                    marker_base_id + 1 + segment_idx,
-                    "task1_cardinal_buoy",
-                    bx,
-                    by,
-                    (segment_idx + 0.5) * segment_height,
-                    0.4,
-                    segment_height,
-                    rgb,
-                )
                 add_cylinder(
                     marker_base_id + 4 + segment_idx,
                     "task1_cardinal_mast",
@@ -508,6 +555,9 @@ class Task1Orchestrator(Node):
             }.get(mark, (True, True))
             add_topmark(marker_base_id + 8, bx, by, 0.88, cone_orientation[0])
             add_topmark(marker_base_id + 9, bx, by, 1.08, cone_orientation[1])
+            # Make the simulated cardinal direction unambiguous at a glance;
+            # the real detection visualizer publishes the same label.
+            add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 1.28, mark, (1.0, 1.0, 1.0))
 
             # Red is on the port side and green on the starboard side of the
             # nominal WP3 -> WP4 course. They are visual references only; the
@@ -515,9 +565,15 @@ class Task1Orchestrator(Node):
             port_x, port_y = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
             reference_offset = 0.9
             add_reference_buoy(marker_base_id + 5, bx + port_x * reference_offset,
-                               by + port_y * reference_offset, (1.0, 0.0, 0.0))
+                               by + port_y * reference_offset, lateral_red)
             add_reference_buoy(marker_base_id + 6, bx - port_x * reference_offset,
-                               by - port_y * reference_offset, (0.0, 0.9, 0.1))
+                               by - port_y * reference_offset, lateral_green)
+            add_text(marker_base_id + 5, "task1_lateral_buoy_labels",
+                     bx + port_x * reference_offset, by + port_y * reference_offset,
+                     1.10, "RED / PORT", lateral_red)
+            add_text(marker_base_id + 6, "task1_lateral_buoy_labels",
+                     bx - port_x * reference_offset, by - port_y * reference_offset,
+                     1.10, "GREEN / STARBOARD", lateral_green)
 
         self.pub_buoy_markers.publish(marker_array)
 
