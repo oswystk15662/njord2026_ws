@@ -293,10 +293,10 @@ class CardinalWallPublisher(Node):
         return self.retirement_course_heading_rad
 
     def _retire_passed_cardinal_walls_from_base_pose(self):
-        """Retire each cardinal wall once the hull crosses its parallel plane.
+        """Retire each buoy wall once the hull crosses its parallel plane.
 
         The plane is perpendicular to the GPS3->4 course direction.  This
-        preserves walls for upcoming marks while removing only a passed mark,
+        preserves walls for upcoming marks while removing only a passed buoy,
         even when the boat takes a lateral avoidance path.
         """
         if not self.retire_passed_cardinal_walls_from_base_pose:
@@ -312,8 +312,7 @@ class CardinalWallPublisher(Node):
         forward_y = math.sin(self.retirement_course_heading_rad)
         retired = 0
         for track in self.tracks:
-            if (track.get('class_id') not in CARDINAL_DIRECTIONS or
-                    not track.get('wall_active', True)):
+            if not track.get('wall_active', True):
                 continue
             passed_distance = ((boat_x - track['x']) * forward_x +
                                (boat_y - track['y']) * forward_y)
@@ -322,7 +321,7 @@ class CardinalWallPublisher(Node):
                 retired += 1
         if retired:
             self.get_logger().info(
-                f'Disabled {retired} cardinal wall(s) passed by {self.retirement_margin:.2f} m')
+                f'Disabled {retired} passed-buoy wall(s) by {self.retirement_margin:.2f} m')
 
     def _publish_detection_markers(self, stamp):
         """Visualize every confirmed buoy in the map frame.
