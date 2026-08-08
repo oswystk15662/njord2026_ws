@@ -13,6 +13,7 @@ from std_msgs.msg import Bool, String, UInt8
 from njord_interfaces.msg import ControlState, HealthSignal, HealthState
 from njord_interfaces.srv import SetControlMode
 
+from .arbitration import derive_control_state
 from .policy import PolicyError, SafetyInputs, evaluate_auto_permission, load_policy
 
 
@@ -92,7 +93,7 @@ class SafetySupervisor(Node):
     def _fresh(self, received_ns: int | None, timeout_sec: float) -> bool:
         return received_ns is not None and (self.get_clock().now().nanoseconds - received_ns) <= int(timeout_sec * 1e9)
 
-    def _decision(self, nav_fresh: bool):
+    def _decision(self):
         if not self._active_policy:
             return False, ((ControlState.INHIBIT_TASK_NOT_READY, "no active task control policy"),)
         try:
@@ -105,7 +106,6 @@ class SafetySupervisor(Node):
                 emergency_stop=self._emergency_stop,
                 nav2_ready=self._nav2_ready,
                 task_ready=self._task_ready,
-                nav_command_fresh=nav_fresh,
                 health_states=self._health_states,
                 health_summary_critical=self._health_summary_critical,
                 task_requirements_ready=self._task_requirements_ready,
@@ -116,7 +116,6 @@ class SafetySupervisor(Node):
                 "emergency_stop": ControlState.INHIBIT_EMERGENCY_STOP,
                 "nav2_not_ready": ControlState.INHIBIT_NAV2_NOT_READY,
                 "task_not_ready": ControlState.INHIBIT_TASK_NOT_READY,
-                "nav_stale": ControlState.INHIBIT_NAV_COMMAND_STALE,
                 "require_ground_station": ControlState.INHIBIT_GROUND_STATION_UNAVAILABLE,
                 "require_driver_heartbeat": ControlState.INHIBIT_DRIVER_HEARTBEAT,
                 "require_localization_heartbeat": ControlState.INHIBIT_LOCALIZATION_HEARTBEAT,
@@ -130,7 +129,7 @@ class SafetySupervisor(Node):
     def _publish_state(self) -> None:
         nav_fresh = self._fresh(self._nav_received_ns, self._policy.nav_command_timeout_sec)
         manual_fresh = self._fresh(self._manual_received_ns, self._policy.nav_command_timeout_sec)
-        auto_permitted, reasons = self._decision(nav_fresh)
+        auto_permitted, reasons = self._decision()
         state = ControlState()
         state.stamp = self.get_clock().now().to_msg()
         state.requested_mode = self._requested_mode
@@ -140,18 +139,15 @@ class SafetySupervisor(Node):
         state.nav_command_fresh = nav_fresh
         state.inhibit_reason_codes = [code for code, _ in reasons]
         state.inhibit_reasons = [message for _, message in reasons]
-        if self._emergency_stop:
-            state.state = ControlState.STATE_EMERGENCY_STOP
-            state.effective_source = ControlState.SOURCE_ZERO
-        elif self._requested_mode == ControlState.MODE_MANUAL:
-            state.state = ControlState.STATE_MANUAL
-            state.effective_source = ControlState.SOURCE_MANUAL if manual_fresh else ControlState.SOURCE_ZERO
-        elif auto_permitted:
-            state.state = ControlState.STATE_AUTO_RUNNING if nav_fresh else ControlState.STATE_AUTO_ARMED
-            state.effective_source = ControlState.SOURCE_AUTO if nav_fresh else ControlState.SOURCE_ZERO
-        else:
-            state.state = ControlState.STATE_AUTO_INHIBITED
-            state.effective_source = ControlState.SOURCE_ZERO
+        control_state, effective_source = derive_control_state(
+            emergency_stop=self._emergency_stop,
+            auto_requested=self._requested_mode == ControlState.MODE_AUTO,
+            auto_permitted=auto_permitted,
+            manual_command_fresh=manual_fresh,
+            nav_command_fresh=nav_fresh,
+        )
+        state.state = int(control_state)
+        state.effective_source = int(effective_source)
         self._state_pub.publish(state)
 
 

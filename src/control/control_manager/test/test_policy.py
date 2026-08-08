@@ -15,7 +15,6 @@ INHIBITS = {
     "emergency_stop": 1,
     "nav2_not_ready": 2,
     "task_not_ready": 3,
-    "nav_stale": 4,
     "require_ground_station": 5,
     "require_driver_heartbeat": 6,
     "require_localization_heartbeat": 7,
@@ -53,7 +52,6 @@ def test_auto_permission_lists_all_failed_interlocks():
             emergency_stop=True,
             nav2_ready=False,
             task_ready=False,
-            nav_command_fresh=False,
             task_requirements_ready=False,
         ),
         health_ok_state=1,
@@ -61,14 +59,14 @@ def test_auto_permission_lists_all_failed_interlocks():
         inhibit_codes=INHIBITS,
     )
     assert not decision.auto_permitted
-    assert [code for code, _ in decision.reasons] == [1, 2, 3, 4, 10]
+    assert [code for code, _ in decision.reasons] == [1, 2, 3, 10]
 
 
 def test_no_task_policy_does_not_evaluate_task_specific_requirements():
     requirements = load_policy(POLICY).requirements_for("")
     decision = evaluate_auto_permission(
         requirements,
-        SafetyInputs(emergency_stop=False, nav2_ready=True, task_ready=True, nav_command_fresh=True),
+        SafetyInputs(emergency_stop=False, nav2_ready=True, task_ready=True),
         health_ok_state=1,
         health_disabled_state=5,
         inhibit_codes=INHIBITS,
@@ -87,7 +85,6 @@ def test_auto_permission_requires_ok_enabled_health_signal():
             emergency_stop=False,
             nav2_ready=True,
             task_ready=True,
-            nav_command_fresh=True,
             task_requirements_ready=True,
             health_states={"driver_heartbeat": 4},
         ),
@@ -98,3 +95,21 @@ def test_auto_permission_requires_ok_enabled_health_signal():
     assert not decision.auto_permitted
     assert "driver_heartbeat" in decision.reasons[0][1]
     assert decision.reasons[0][0] == 6
+
+
+def test_auto_permission_does_not_wait_for_a_navigation_command():
+    requirements = load_policy(POLICY).requirements_for("task1")
+    decision = evaluate_auto_permission(
+        requirements,
+        SafetyInputs(
+            emergency_stop=False,
+            nav2_ready=True,
+            task_ready=True,
+            task_requirements_ready=True,
+        ),
+        health_ok_state=1,
+        health_disabled_state=5,
+        inhibit_codes=INHIBITS,
+    )
+    assert decision.auto_permitted
+    assert decision.reasons == ()
