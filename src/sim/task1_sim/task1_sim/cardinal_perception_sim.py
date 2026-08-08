@@ -44,6 +44,8 @@ from std_srvs.srv import Trigger
 
 
 CARDINAL_CLASS_BY_MARK = {
+    "GREEN": BuoyDetection.CLASS_GREEN,
+    "RED": BuoyDetection.CLASS_RED,
     "N": BuoyDetection.CLASS_NORTH,
     "E": BuoyDetection.CLASS_EAST,
     "S": BuoyDetection.CLASS_SOUTH,

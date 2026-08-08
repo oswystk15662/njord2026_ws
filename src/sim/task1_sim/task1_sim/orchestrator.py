@@ -3,7 +3,7 @@ import math
 import random
 import struct
 
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PointStamped
 import rclpy
 from nav_msgs.msg import Odometry
 from rclpy.node import Node
@@ -14,7 +14,7 @@ from std_srvs.srv import Trigger
 from visualization_msgs.msg import Marker, MarkerArray
 
 
-CARDINAL_MARKS = ("N", "E", "S", "W")
+BUOY_MARKS = ("GREEN", "RED", "N", "E", "S", "W")
 
 
 def make_pointcloud2(frame_id: str, points: list[list[float]], stamp):
@@ -89,7 +89,9 @@ class Task1Orchestrator(Node):
         self.declare_parameter("waypoint1_xy", "[]")
         self.declare_parameter("waypoint2_xy", "[]")
         self.declare_parameter("buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]")
-        self.declare_parameter("buoy_marks", "[\"S\", \"N\", \"S\"]")
+        self.declare_parameter("buoy_marks", "[\"RED\", \"GREEN\", \"RED\"]")
+        self.declare_parameter("course_heading_rad", math.pi)
+        self.declare_parameter("wall_retirement_start_xy", [50.0, -25.0])
         self.declare_parameter("wall_radius", 2.5)
         self.declare_parameter("wall_points", 24)
         self.declare_parameter("goal_radius", 2.0)
@@ -131,13 +133,16 @@ class Task1Orchestrator(Node):
         # Per-marker cardinal orientation, aligned index-wise with
         # buoy_positions. forced_mark (if set) overrides every marker so
         # existing single-mark test tooling keeps working.
-        if self.forced_mark in CARDINAL_MARKS:
+        if self.forced_mark in BUOY_MARKS:
             self.buoy_marks = [self.forced_mark for _ in self.buoy_positions]
         else:
             buoy_marks_raw = parse_marks_json(self.get_parameter("buoy_marks").get_parameter_value().string_value)
             self.buoy_marks = self._align_marks(buoy_marks_raw, len(self.buoy_positions))
 
         self.course_bounds = list(self.get_parameter("course_bounds").get_parameter_value().double_array_value)
+        self.course_heading_rad = self.get_parameter("course_heading_rad").get_parameter_value().double_value
+        self.wall_retirement_start_xy = list(self.get_parameter("wall_retirement_start_xy").value)
+        self.wall_retirement_enabled = False
         self.center_line = list(self.get_parameter("center_line").get_parameter_value().double_array_value)
         self.pre_inference_block = self._parse_rect_json(
             self.get_parameter("pre_inference_block").get_parameter_value().string_value
@@ -163,6 +168,8 @@ class Task1Orchestrator(Node):
         self.pub_start = self.create_publisher(Bool, "/sim/start", transient_qos)
         self.pub_goal = self.create_publisher(Bool, "/sim/goal_reached", transient_qos)
         self.pub_cardinal = self.create_publisher(String, "/sim/cardinal_mark", 10)
+        self.pub_wall_retirement = self.create_publisher(
+            PointStamped, "/sim/task1_wall_retirement_frontier", 10)
         # Fixed simulator geometry is distinct from perception-derived
         # cardinal walls, which own /virtual_obstacles.
         self.pub_sim_obstacles = self.create_publisher(PointCloud2, "/sim_obstacles", 10)
@@ -194,12 +201,11 @@ class Task1Orchestrator(Node):
         return required
 
     def _align_marks(self, marks: list[str], count: int) -> list[str]:
-        """Pad/truncate a parsed buoy_marks list to match buoy_positions,
-        defaulting missing entries to "N" and dropping invalid letters."""
+        """Pad/truncate per-buoy classes, defaulting missing entries to RED."""
         aligned = []
         for i in range(count):
-            mark = marks[i] if i < len(marks) else "N"
-            aligned.append(mark if mark in CARDINAL_MARKS else "N")
+            mark = marks[i] if i < len(marks) else "RED"
+            aligned.append(mark if mark in BUOY_MARKS else "RED")
         return aligned
 
     def _init_buoy_states(self):
@@ -219,6 +225,21 @@ class Task1Orchestrator(Node):
         msg.data = text
         self.pub_status.publish(msg)
         self.get_logger().info(f"task1_status: {text}")
+
+    def _publish_wall_retirement_frontier(self, x: float, y: float):
+        """Advance the wall-retirement frontier after Task1.2 starts at WP3."""
+        if not self.wall_retirement_enabled:
+            if (len(self.wall_retirement_start_xy) >= 2 and
+                    math.hypot(x - self.wall_retirement_start_xy[0],
+                               y - self.wall_retirement_start_xy[1]) <= self.waypoint_reach_radius):
+                self.wall_retirement_enabled = True
+            return
+        frontier = PointStamped()
+        frontier.header.frame_id = self.frame_id
+        frontier.header.stamp = self.get_clock().now().to_msg()
+        frontier.point.x = float(x)
+        frontier.point.y = float(y)
+        self.pub_wall_retirement.publish(frontier)
 
     def publish_start(self):
         start_msg = Bool()
@@ -243,6 +264,13 @@ class Task1Orchestrator(Node):
         return response
 
     def _signed_side_value(self, mark: str, x: float, y: float, bx: float, by: float) -> float:
+        if mark in ("RED", "GREEN"):
+            # Red stays to port (left); green stays to starboard (right).
+            forward_x = math.cos(self.course_heading_rad)
+            forward_y = math.sin(self.course_heading_rad)
+            side_x, side_y = ((-forward_y, forward_x) if mark == "RED"
+                              else (forward_y, -forward_x))
+            return (x - bx) * side_x + (y - by) * side_y
         if mark == "N":
             return y - by
         if mark == "S":
@@ -370,9 +398,22 @@ class Task1Orchestrator(Node):
             "W": (-1.0, 0.0),
         }
 
+        def marker_color(r, g, b):
+            value = ColorRGBA()
+            value.r, value.g, value.b, value.a = r, g, b, 1.0
+            return value
+
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
-            dx, dy = arrow_by_mark.get(mark, (0.0, 1.0))
+            if mark == "RED":
+                dx, dy = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
+                rgba = marker_color(1.0, 0.0, 0.0)
+            elif mark == "GREEN":
+                dx, dy = math.sin(self.course_heading_rad), -math.cos(self.course_heading_rad)
+                rgba = marker_color(0.0, 0.9, 0.1)
+            else:
+                dx, dy = arrow_by_mark.get(mark, (0.0, 1.0))
+                rgba = marker_color(1.0, 0.85, 0.0)
             marker = Marker()
             marker.header.frame_id = self.frame_id
             marker.header.stamp = stamp
@@ -395,10 +436,7 @@ class Task1Orchestrator(Node):
             marker.scale.x = 0.25
             marker.scale.y = 0.75
             marker.scale.z = 0.75
-            marker.color.r = 1.0
-            marker.color.g = 0.85
-            marker.color.b = 0.0
-            marker.color.a = 1.0
+            marker.color = rgba
             marker_array.markers.append(marker)
 
         self.pub_cardinal_markers.publish(marker_array)
@@ -415,6 +453,7 @@ class Task1Orchestrator(Node):
             if math.hypot(x - wx, y - wy) <= self.waypoint_reach_radius:
                 self.next_waypoint_idx += 1
                 self._publish_status(f"waypoint_reached={self.next_waypoint_idx}/{len(self.required_waypoints)}")
+                self._publish_wall_retirement_frontier(wx, wy)
 
         if self.inference_done:
             self._evaluate_buoy_avoidance(x, y)

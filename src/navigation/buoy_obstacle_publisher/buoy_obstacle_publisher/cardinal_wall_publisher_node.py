@@ -16,7 +16,7 @@ import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
 from buoy_obstacle_publisher.cardinal_wall_geometry import CARDINAL_DIRECTIONS, wall_points
 
 
-CARDINAL_CLASSES = set(CARDINAL_DIRECTIONS)
+WALL_CLASSES = set(CARDINAL_DIRECTIONS) | {BuoyDetection.CLASS_GREEN, BuoyDetection.CLASS_RED}
 
 
 class CardinalWallPublisher(Node):
@@ -33,6 +33,9 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('marker_merge_radius_m', 2.0)
         self.declare_parameter('confirmations_required', 2)
         self.declare_parameter('publish_rate_hz', 2.0)
+        self.declare_parameter('course_heading_rad', 0.0)
+        self.declare_parameter('retirement_frontier_topic', '')
+        self.declare_parameter('retirement_margin_m', 0.5)
 
         self.map_frame = self.get_parameter('map_frame').value
         self.bounds = list(self.get_parameter('course_bounds').value)
@@ -42,6 +45,8 @@ class CardinalWallPublisher(Node):
         self.spacing = max(0.02, float(self.get_parameter('point_spacing_m').value))
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
+        self.course_heading_rad = float(self.get_parameter('course_heading_rad').value)
+        self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
         self.tracks = []
 
         self.tf_buffer = Buffer()
@@ -49,12 +54,15 @@ class CardinalWallPublisher(Node):
         self.pub = self.create_publisher(PointCloud2, self.get_parameter('output_topic').value, 10)
         self.create_subscription(
             BuoyDetectionArray, self.get_parameter('detection_topic').value, self._on_detections, 10)
+        retirement_topic = self.get_parameter('retirement_frontier_topic').value
+        if retirement_topic:
+            self.create_subscription(PointStamped, retirement_topic, self._on_retirement_frontier, 10)
         rate = max(0.2, float(self.get_parameter('publish_rate_hz').value))
         self.create_timer(1.0 / rate, self.publish_walls)
 
     def _on_detections(self, msg):
         for detection in msg.detections:
-            if detection.class_id not in CARDINAL_CLASSES:
+            if detection.class_id not in WALL_CLASSES:
                 continue
             if detection.position_source == BuoyDetection.POSITION_NONE:
                 continue
@@ -80,6 +88,29 @@ class CardinalWallPublisher(Node):
                 continue
             self._record_detection(mapped.point.x, mapped.point.y, detection.class_id)
 
+    def _on_retirement_frontier(self, msg):
+        """Disable walls behind a reached waypoint while retaining their tracks."""
+        point = msg
+        if msg.header.frame_id and msg.header.frame_id != self.map_frame:
+            try:
+                point = self.tf_buffer.transform(msg, self.map_frame, timeout=Duration(seconds=0.2))
+            except TransformException as error:
+                self.get_logger().debug(f'Cannot transform retirement frontier: {error}')
+                return
+        forward = (math.cos(self.course_heading_rad), math.sin(self.course_heading_rad))
+        retired = 0
+        for track in self.tracks:
+            behind_frontier = (
+                (track['x'] - point.point.x) * forward[0] +
+                (track['y'] - point.point.y) * forward[1]
+            ) < -self.retirement_margin
+            if behind_frontier and track.get('wall_active', True):
+                track['wall_active'] = False
+                retired += 1
+        if retired:
+            self.get_logger().info(
+                f'Disabled {retired} passed-buoy virtual wall(s); detection tracks are retained')
+
     def _record_detection(self, x, y, class_id):
         nearest = None
         nearest_distance = self.merge_radius
@@ -89,7 +120,10 @@ class CardinalWallPublisher(Node):
                 nearest = track
                 nearest_distance = distance
         if nearest is None:
-            nearest = {'x': x, 'y': y, 'candidate': class_id, 'count': 1, 'class_id': None}
+            nearest = {
+                'x': x, 'y': y, 'candidate': class_id, 'count': 1,
+                'class_id': None, 'wall_active': True,
+            }
             self.tracks.append(nearest)
         elif nearest['class_id'] is None:
             if nearest['candidate'] == class_id:
@@ -105,10 +139,10 @@ class CardinalWallPublisher(Node):
     def publish_walls(self):
         points = []
         for track in self.tracks:
-            if track['class_id'] is not None:
+            if track['class_id'] is not None and track.get('wall_active', True):
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
-                    track['x'], track['y'], track['class_id']))
+                    track['x'], track['y'], track['class_id'], self.course_heading_rad))
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame

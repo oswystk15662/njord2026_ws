@@ -39,6 +39,9 @@ def launch_cardinal_walls(context):
             "wall_width_m": 0.2,
             "point_spacing_m": 0.05,
             "confirmations_required": 2,
+            # Main Task1.2 direction: GPS waypoint 3 -> 4 (west in this map).
+            "course_heading_rad": 3.141592653589793,
+            "retirement_frontier_topic": "/sim/task1_wall_retirement_frontier",
         }],
         output="screen",
     )]

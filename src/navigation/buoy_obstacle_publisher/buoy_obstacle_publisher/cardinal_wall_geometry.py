@@ -11,18 +11,51 @@ CARDINAL_DIRECTIONS = {
 }
 
 
-def wall_points(bounds, wall_width, spacing, x, y, class_id):
-    """Return a filled wall from a marker to its forbidden course edge."""
-    dx, dy = CARDINAL_DIRECTIONS[class_id]
+def direction_for_class(class_id, course_heading_rad):
+    """Return the forbidden-side direction for cardinal or lateral marks.
+
+    Red lateral marks must stay to port (left of the course heading), so the
+    wall blocks starboard.  Green marks do the inverse.
+    """
+    if class_id in CARDINAL_DIRECTIONS:
+        return CARDINAL_DIRECTIONS[class_id]
+    forward_x = math.cos(course_heading_rad)
+    forward_y = math.sin(course_heading_rad)
+    if class_id == 1:  # red: keep mark on port, exclude starboard
+        return forward_y, -forward_x
+    if class_id == 0:  # green: keep mark on starboard, exclude port
+        return -forward_y, forward_x
+    return None
+
+
+def _ray_end(bounds, x, y, dx, dy):
+    """Return where the positive ray (x,y)+t*(dx,dy) meets the rectangle."""
     min_x, max_x, min_y, max_y = bounds
-    if dx < 0:
-        end_x, end_y = min_x, y
-    elif dx > 0:
-        end_x, end_y = max_x, y
-    elif dy < 0:
-        end_x, end_y = x, min_y
-    else:
-        end_x, end_y = x, max_y
+    candidates = []
+    if dx > 1.0e-9:
+        candidates.append((max_x - x) / dx)
+    elif dx < -1.0e-9:
+        candidates.append((min_x - x) / dx)
+    if dy > 1.0e-9:
+        candidates.append((max_y - y) / dy)
+    elif dy < -1.0e-9:
+        candidates.append((min_y - y) / dy)
+    valid = [t for t in candidates if t >= 0.0]
+    if not valid:
+        return x, y
+    t = min(valid)
+    return x + t * dx, y + t * dy
+
+
+def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0):
+    """Return a filled wall from a marker to its forbidden course edge."""
+    direction = direction_for_class(class_id, course_heading_rad)
+    if direction is None:
+        return []
+    dx, dy = direction
+    length = math.hypot(dx, dy)
+    dx, dy = dx / length, dy / length
+    end_x, end_y = _ray_end(bounds, x, y, dx, dy)
 
     spacing = max(0.02, spacing)
     longitudinal_steps = max(1, math.ceil(math.hypot(end_x - x, end_y - y) / spacing))
@@ -34,5 +67,5 @@ def wall_points(bounds, wall_width, spacing, x, y, class_id):
         py = y + (end_y - y) * fraction
         for j in range(lateral_steps + 1):
             offset = -wall_width / 2.0 + wall_width * j / lateral_steps
-            points.append((px + (offset if dy else 0.0), py + (offset if dx else 0.0), 0.0))
+            points.append((px - offset * dy, py + offset * dx, 0.0))
     return points
