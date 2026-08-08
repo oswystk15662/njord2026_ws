@@ -393,7 +393,7 @@ def generate_launch_description():
             "frame_id": "map",
             "publish_rate_hz": "2.0",
             "waypoint_marker_topic": "/sim/task1_waypoint_markers",
-            "nav2_goal_tolerance_m": "1.0",
+            "nav2_goal_tolerance_m": "2.0",
             "show_waypoint_route_line": "false",
         },
     )
