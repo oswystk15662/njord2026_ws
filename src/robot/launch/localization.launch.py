@@ -200,7 +200,11 @@ def generate_launch_description():
         ],
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
-            ("odometry/filtered", "odometry/filtered/local"),
+            # navsat output inherits the input odometry world frame.  Use the
+            # global EKF here so /odometry/gps/um982 is map-referenced before
+            # feeding it back to that EKF.  Using the local (odom-referenced)
+            # output creates a map<->odom feedback loop after global TF starts.
+            ("odometry/filtered", "odometry/filtered/global"),
             ("odometry/gps", "/odometry/gps/um982"),
         ],
         condition=IfCondition(LaunchConfiguration("enable_navsat_transform")),

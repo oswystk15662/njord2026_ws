@@ -81,8 +81,8 @@ def generate_launch_description():
     )
     arg_frame_id = DeclareLaunchArgument(
         'heading_frame_id',
-        default_value='odom',
-        description='Frame ID for the heading message'
+        default_value='map',
+        description='World frame for the absolute ENU heading message'
     )
     arg_publish_feedback_odometry = DeclareLaunchArgument(
         'publish_feedback_odometry',
