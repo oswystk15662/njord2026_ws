@@ -25,8 +25,8 @@ struct JoyConfig
   int64_t green_button{1};
   int64_t yellow_button{2};
   int64_t red_button{3};
-  int64_t manual_mode_button{3};
-  int64_t auto_mode_button{2};
+  int64_t manual_mode_button{4};
+  int64_t auto_mode_button{5};
   double linear_x_scale{0.2};
   double linear_y_scale{0.2};
   double angular_z_scale{0.2};
