@@ -16,9 +16,11 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point, PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
+from rclpy.qos import DurabilityPolicy, QoSProfile
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
 from pathlib import Path
 from enum import Enum
@@ -60,6 +62,10 @@ class WaypointPublisher(Node):
         self.declare_parameter('use_dynamic_gate_midpoints', True)
         self.declare_parameter('run_full_sequence', False)
         self.declare_parameter('max_goal_retries', 1)
+        self.declare_parameter('waypoint_marker_topic', '/waypoint_markers')
+        self.declare_parameter('nav2_goal_tolerance_m', 1.0)
+        self.declare_parameter('show_waypoint_route_line', False)
+        self.declare_parameter('waypoint_route_z', -0.05)
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -68,6 +74,10 @@ class WaypointPublisher(Node):
         self.use_dynamic_gate_midpoints = self.get_parameter('use_dynamic_gate_midpoints').value
         self.run_full_sequence = self.get_parameter('run_full_sequence').value
         self.max_goal_retries = int(self.get_parameter('max_goal_retries').value)
+        self.waypoint_marker_topic = self.get_parameter('waypoint_marker_topic').value
+        self.nav2_goal_tolerance_m = float(self.get_parameter('nav2_goal_tolerance_m').value)
+        self.show_waypoint_route_line = self.get_parameter('show_waypoint_route_line').value
+        self.waypoint_route_z = float(self.get_parameter('waypoint_route_z').value)
         
         # Validate task type
         try:
@@ -78,6 +88,11 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
+
+        marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.waypoint_marker_pub = self.create_publisher(
+            MarkerArray, self.waypoint_marker_topic, marker_qos)
+        self._publish_waypoint_markers()
 
         # TF lookup is used to replace Task3 gate waypoints with the live midpoint
         # between the corresponding red and green buoys when those frames exist.
@@ -229,6 +244,50 @@ class WaypointPublisher(Node):
             poses.append(self._pose_from_waypoint(wp))
         
         return poses
+
+    def _publish_waypoint_markers(self):
+        """Publish numbered waypoint discs and their Nav2 reach radius."""
+        waypoints = self.config.get('waypoints', [])
+        if not waypoints:
+            return
+        stamp = self.get_clock().now().to_msg()
+        markers = MarkerArray()
+        route = Marker()
+        route.header.frame_id, route.header.stamp = self.frame_id, stamp
+        route.ns, route.id, route.type, route.action = 'task_waypoint_route', 0, Marker.LINE_STRIP, Marker.ADD
+        route.pose.orientation.w, route.scale.x = 1.0, 0.12
+        route.color.r, route.color.g, route.color.b, route.color.a = 0.1, 0.9, 1.0, 0.9
+        for index, waypoint in enumerate(waypoints):
+            x, y = float(waypoint.get('x', 0.0)), float(waypoint.get('y', 0.0))
+            route.points.append(Point(x=x, y=y, z=self.waypoint_route_z))
+            disc = Marker()
+            disc.header.frame_id, disc.header.stamp = self.frame_id, stamp
+            disc.ns, disc.id, disc.type, disc.action = 'task_waypoint_reach_radius', index, Marker.CYLINDER, Marker.ADD
+            disc.pose.position.x, disc.pose.position.y, disc.pose.position.z = x, y, 0.01
+            disc.pose.orientation.w = 1.0
+            disc.scale.x = disc.scale.y = 2.0 * self.nav2_goal_tolerance_m
+            disc.scale.z = 0.02
+            disc.color.r, disc.color.g, disc.color.b, disc.color.a = 0.1, 0.8, 1.0, 0.22
+            markers.markers.append(disc)
+            dot = Marker()
+            dot.header.frame_id, dot.header.stamp = self.frame_id, stamp
+            dot.ns, dot.id, dot.type, dot.action = 'task_waypoint_point', index, Marker.SPHERE, Marker.ADD
+            dot.pose.position.x, dot.pose.position.y, dot.pose.position.z = x, y, 0.18
+            dot.pose.orientation.w = 1.0
+            dot.scale.x = dot.scale.y = dot.scale.z = 0.35
+            dot.color.g, dot.color.b, dot.color.a = 0.95, 1.0, 1.0
+            markers.markers.append(dot)
+            label = Marker()
+            label.header.frame_id, label.header.stamp = self.frame_id, stamp
+            label.ns, label.id, label.type, label.action = 'task_waypoint_label', index, Marker.TEXT_VIEW_FACING, Marker.ADD
+            label.pose.position.x, label.pose.position.y, label.pose.position.z = x, y, 0.65
+            label.pose.orientation.w, label.scale.z = 1.0, 0.45
+            label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+            label.text = f"WP {waypoint.get('id', index + 1)}\\nreach {self.nav2_goal_tolerance_m:.1f} m"
+            markers.markers.append(label)
+        if self.show_waypoint_route_line:
+            markers.markers.insert(0, route)
+        self.waypoint_marker_pub.publish(markers)
 
     def _build_poses_for_ids(self, waypoint_ids: list) -> list:
         """Build poses for the requested waypoint ids, preserving the id order."""

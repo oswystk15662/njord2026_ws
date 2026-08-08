@@ -275,6 +275,7 @@ def generate_launch_description():
             "marker_topic": "/actual_path_marker",
             "parent_frame": "odom",
             "child_frame": "base_link",
+            "line_width": 0.08,
         }],
     )
     ground_speed = Node(
@@ -373,6 +374,9 @@ def generate_launch_description():
             "task_type": LaunchConfiguration("task_type"),
             "frame_id": "map",
             "publish_rate_hz": "2.0",
+            "waypoint_marker_topic": "/sim/task1_waypoint_markers",
+            "nav2_goal_tolerance_m": "1.0",
+            "show_waypoint_route_line": "false",
         },
     )
 
