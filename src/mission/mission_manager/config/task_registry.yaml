@@ -1,0 +1,62 @@
+# Legacy waypoint files remain the source of route coordinates during Phase 3.
+# Runtime Nav2 profile switching is deliberately unsupported in this slice.
+nav2_profiles: [task1, task2, task3]
+control_policies: [task1, task2, task3]
+tasks:
+  task1:
+    display_name: Task 1
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task1_waypoints.yaml
+    route_key: task1_config
+    frame_id: map
+    nav2_profile: task1
+    control_policy: task1
+    features: {cardinal_walls: true}
+  task1_skip_1_1:
+    display_name: Task 1 GPS smoke test
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task1_skip_1_1_waypoints.yaml
+    route_key: task1_skip_1_1_config
+    frame_id: map
+    nav2_profile: task1
+    control_policy: task1
+  task1_2:
+    display_name: Task 1-2 marker-driven route
+    availability: not_implemented
+    reason: Marker-driven route generation is not implemented
+  task2:
+    display_name: Task 2
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task2_waypoints.yaml
+    route_key: task2_config
+    frame_id: map
+    nav2_profile: task2
+    control_policy: task2
+    features: {collision_monitor: true}
+  task3_1:
+    display_name: Task 3-1
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_1_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
+    features: {collision_monitor: true, dynamic_gate_midpoints: true}
+  task3_2:
+    display_name: Task 3-2
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_2_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
