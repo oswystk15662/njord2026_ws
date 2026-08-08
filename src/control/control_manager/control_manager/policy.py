@@ -188,6 +188,6 @@ def evaluate_auto_permission(
             reasons.append((inhibit_codes["health"], f"required health signal {signal!r} is not OK"))
     if requirements["require_no_critical_health_fault"] and inputs.health_summary_critical:
         reasons.append((inhibit_codes["critical_health"], "critical health fault is active"))
-    if any(requirements[key] for key in TASK_BOOLEAN_REQUIREMENTS) and not inputs.task_requirements_ready:
+    if any(requirements.get(key, False) for key in TASK_BOOLEAN_REQUIREMENTS) and not inputs.task_requirements_ready:
         reasons.append((inhibit_codes["task_requirement"], "task-specific requirement is not ready"))
     return SafetyDecision(not reasons, tuple(reasons))
