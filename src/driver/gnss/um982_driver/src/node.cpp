@@ -209,10 +209,12 @@ void UM982Driver::configure_gnss_output()
 
     // Apply volatile startup configuration only. Do not send SAVECONFIG.
     // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
-    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII. UNIHEADING supports
-    // both ASCII (UNIHEADINGA) and binary (UNIHEADINGB) output; per policy, use the
-    // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
-    // fallback heading sentence.
+    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII.  Although UM982
+    // supports UNIHEADINGB, the live receiver repeatedly delivers CRC-invalid
+    // frames at 115200 bps.  The N4 command reference specifies GPTHS as the
+    // UM982 true-heading log with a validity flag, so use that validated ASCII
+    // message as the sole heading source until the serial binary stream is proven
+    // reliable.
     write_to_gnss("UNLOG\r\n");
 
     // UNLOG can stop a binary message halfway through transmission.  If that
@@ -230,11 +232,10 @@ void UM982Driver::configure_gnss_output()
 
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
-    write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, UNIHEADINGB(binary)/GPTHS(ASCII fallback)=%ss",
+        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss",
         fix_period.c_str(), heading_period.c_str());
 }
 
