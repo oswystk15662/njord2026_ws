@@ -24,6 +24,7 @@ def generate_launch_description():
         "back_video_jitter_latency_ms"
     )
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
+    enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
@@ -63,7 +64,8 @@ def generate_launch_description():
             PathJoinSubstitution(
                 [FindPackageShare("foxglove_bridge"), "launch", "foxglove_bridge_launch.xml"]
             )
-        )
+        ),
+        condition=IfCondition(enable_foxglove_bridge),
     )
 
     joy_node = Node(
@@ -150,6 +152,11 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
             DeclareLaunchArgument(
+                "enable_foxglove_bridge",
+                default_value="false",
+                description="Expose mission action/service APIs to a Foxglove GUI.",
+            ),
+            DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",
                 description="Start the Ground PC zenoh-bridge-ros2dds process.",
@@ -172,7 +179,7 @@ def generate_launch_description():
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,
-            # foxglove_bridge_launch,
+            foxglove_bridge_launch,
             ntrip_caster,
             networking_launch,
         ]
