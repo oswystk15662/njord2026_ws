@@ -27,6 +27,9 @@ controller_server:
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
       rotate_to_heading_at_start: true
+      # Surface-vessel yaw has substantial inertia.  Limit the controller's
+      # angular acceleration to prevent repeated over-corrections.
+      max_angular_accel: 0.8
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
@@ -203,6 +206,14 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
+    smoothing_frequency: 20.0
+    feedback: "CLOSED_LOOP"
+    odom_topic: "/odom"
+    odom_duration: 0.1
+    max_velocity: [0.8, 0.0, 1.0]
+    min_velocity: [-0.3, 0.0, -1.0]
+    max_accel: [1.0, 0.0, 0.8]
+    max_decel: [-1.0, 0.0, -0.8]
 
 smoother_server:
   ros__parameters:

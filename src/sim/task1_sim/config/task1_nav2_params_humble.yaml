@@ -36,6 +36,9 @@ controller_server:
       # oscillate indefinitely at the first waypoint. Let RPP converge while
       # translating instead of insisting on an initial heading alignment.
       use_rotate_to_heading: false
+      # Surface-vessel yaw has substantial inertia.  The Nav2 default of
+      # 3.2 rad/s^2 makes the controller over-correct after each path update.
+      max_angular_accel: 0.8
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
@@ -212,6 +215,16 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
+    smoothing_frequency: 20.0
+    feedback: "CLOSED_LOOP"
+    odom_topic: "/odom"
+    odom_duration: 0.1
+    # Constrain yaw changes more tightly than the Nav2 defaults so the
+    # simulated vessel settles onto the path instead of repeatedly circling.
+    max_velocity: [0.8, 0.0, 1.0]
+    min_velocity: [-0.3, 0.0, -1.0]
+    max_accel: [1.0, 0.0, 0.8]
+    max_decel: [-1.0, 0.0, -0.8]
 
 smoother_server:
   ros__parameters:
