@@ -1,13 +1,11 @@
+# V1: smartphone/VPN receiver template. Fill the miniPC VPN bind IP before use.
 critical_link_receiver:
   ros__parameters:
     joy_output_topic: /joy
     heartbeat_output_topic: /heartbeat/ground_station
     diagnostic_stale_after_sec: 3.0
-    # Format: name|miniPC bind IPv4|UDP port
+    # - "v1_internet_vpn|100.82.157.125|45103"
     udp_paths:
-      - "usb_wifi|192.168.122.210|45100"
-      - "builtin_wifi|192.168.122.22|45101"
       - "v1_internet_vpn|100.82.157.125|45103"
-    # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""
     serial_baud: 921600

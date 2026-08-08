@@ -37,6 +37,14 @@ export NJORD_ROLE="${ROLE}"
 export ROS_DISTRO="${ROS_DISTRO_NAME}"
 export ROS_LOCALHOST_ONLY=0
 
+# Keep Humble on the miniPC isolated from the Jazzy machines.  Do not inherit
+# an interactive shell's ROS_DOMAIN_ID: zenoh-bridge-ros2dds gives that value
+# precedence over its JSON5 `plugins/ros2dds/domain` setting.
+case "${ROLE}" in
+  minipc) export ROS_DOMAIN_ID=5 ;;
+  jetson) export ROS_DOMAIN_ID=6 ;;
+esac
+
 # shellcheck disable=SC1091
 source "${ROS_SETUP}"
 # shellcheck disable=SC1091

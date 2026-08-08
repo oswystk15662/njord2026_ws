@@ -51,6 +51,7 @@ private:
     void process_gnss_buffer();
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
+    void parse_uniheadinga(const std::string& line);
     void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
     void publish_feedback_odometry(
@@ -77,14 +78,17 @@ private:
     // RTK Client
     std::unique_ptr<boost::asio::ip::tcp::socket> rtk_socket_;
     std::unique_ptr<boost::asio::ip::tcp::resolver> rtk_resolver_;
-    boost::asio::streambuf rtk_read_buf_;
-    bool is_rtk_connected_;
+    std::array<uint8_t, 4096> rtk_read_chunk_;
+    std::vector<uint8_t> rtk_response_buffer_;
+    bool rtk_response_header_received_{false};
+    // The ROS timer and the Asio I/O thread both inspect RTK state.  Keep it
+    // atomic so a retry cannot race an in-flight connection attempt.
+    std::atomic_bool is_rtk_connected_{false};
+    std::atomic_bool rtk_connection_in_progress_{false};
 
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_debug_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_debug_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr feedback_odom_pub_;
 
     // ROS Subscribers & Timers
@@ -123,11 +127,16 @@ private:
         
         int fix_freq;
         int heading_freq;
+        int rtk_status_freq;
+        std::string heading_log_format;
+        std::string rtk_status_log_format;
         bool rtk_enable;
         std::string heading_frame_id;
         std::string log_file_name;
         bool publish_feedback_odometry;
         std::string feedback_odometry_topic;
+        std::string feedback_frame_id;
+        std::string feedback_child_frame_id;
         double feedback_velocity_filter_alpha;
         double feedback_max_speed_mps;
 

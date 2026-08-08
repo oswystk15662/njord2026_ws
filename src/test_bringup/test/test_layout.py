@@ -29,3 +29,17 @@ def test_network_test_guide_is_linked_from_readme():
     guide = PACKAGE_ROOT / "about_networktest.md"
     assert guide.is_file()
     assert "about_networktest.md" in (PACKAGE_ROOT / "README.md").read_text()
+
+
+def test_critical_link_route_templates_are_present():
+    config_dir = PACKAGE_ROOT / "config" / "critical_link_test_config"
+    assert {path.name for path in config_dir.glob("*.yaml")} == {
+        "e1_ground.yaml",
+        "e1_minipc.yaml",
+        "u1_ground.yaml",
+        "u1_minipc.yaml",
+        "u2_ground.yaml",
+        "u2_minipc.yaml",
+        "v1_ground.yaml",
+        "v1_minipc.yaml",
+    }

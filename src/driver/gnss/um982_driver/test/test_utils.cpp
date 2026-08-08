@@ -37,4 +37,42 @@ TEST(UnicoreBinaryProtocol, CapturedUniheadingFrameHasValidCrc)
     EXPECT_EQ(calculated, received);
 }
 
+TEST(NumericParsing, AcceptsOnlyCompleteFiniteValues)
+{
+    double value = 0.0;
+    EXPECT_TRUE(um982_driver::utils::parse_finite_double("-12.5", value));
+    EXPECT_DOUBLE_EQ(value, -12.5);
+    EXPECT_FALSE(um982_driver::utils::parse_finite_double("nan", value));
+    EXPECT_FALSE(um982_driver::utils::parse_finite_double("inf", value));
+    EXPECT_FALSE(um982_driver::utils::parse_finite_double("12.5junk", value));
+    EXPECT_FALSE(um982_driver::utils::parse_finite_double("", value));
+
+    int integer = 0;
+    EXPECT_TRUE(um982_driver::utils::parse_int("4", integer));
+    EXPECT_EQ(integer, 4);
+    EXPECT_FALSE(um982_driver::utils::parse_int("4.0", integer));
+    EXPECT_FALSE(um982_driver::utils::parse_int("invalid", integer));
+}
+
+TEST(NmeaParsing, ChecksumRequiresExactlyTwoHexDigits)
+{
+    EXPECT_TRUE(um982_driver::utils::validate_checksum("$GPGGA*56"));
+    EXPECT_FALSE(um982_driver::utils::validate_checksum("$GPGGA*56junk"));
+    EXPECT_FALSE(um982_driver::utils::validate_checksum("$GPGGA*5"));
+    EXPECT_FALSE(um982_driver::utils::validate_checksum("$GPGGA*ZZ"));
+}
+
+TEST(NmeaParsing, RejectsNonFiniteMalformedAndOutOfRangeCoordinates)
+{
+    double coordinate = 0.0;
+    EXPECT_TRUE(um982_driver::utils::convert_nmea_to_latlon("3541.6053", "N", coordinate));
+    EXPECT_NEAR(coordinate, 35.6934216667, 1e-10);
+    EXPECT_TRUE(um982_driver::utils::convert_nmea_to_latlon("13941.1234", "W", coordinate));
+    EXPECT_LT(coordinate, 0.0);
+    EXPECT_FALSE(um982_driver::utils::convert_nmea_to_latlon("nan", "N", coordinate));
+    EXPECT_FALSE(um982_driver::utils::convert_nmea_to_latlon("3561.0", "N", coordinate));
+    EXPECT_FALSE(um982_driver::utils::convert_nmea_to_latlon("18100.0", "E", coordinate));
+    EXPECT_FALSE(um982_driver::utils::convert_nmea_to_latlon("3541.0", "X", coordinate));
+}
+
 }  // namespace

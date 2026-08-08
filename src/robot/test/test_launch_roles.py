@@ -14,6 +14,7 @@ anything, and so it works the same way in CI.
 
 import importlib.util
 import os
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -26,10 +27,12 @@ _GPU_ONLY_PACKAGES = ["glim_ros", "livox_ros_driver2", "glim_config"]
 _MINIPC_ONLY_PACKAGES = ["robot_localization", "thruster_driver", "micon_driver_fd", "joy_node"]
 
 _GENERATE_LAUNCH_DESCRIPTION_FILES = [
+    "glim_um982_localization.launch.py",
     "minipc_bringup.launch.py",
     "task1.launch.py",
     "task2.launch.py",
     "task3.launch.py",
+    "networking.launch.py",
 ]
 
 
@@ -215,6 +218,8 @@ def test_standalone_does_not_restore_removed_or_unsafe_defaults():
     assert '"enable_glim",\n                default_value="false"' in source
     assert '"enable_pcl_buoy_detection", default_value="false"' in source
     assert '"enable_ground_video", default_value="true"' in source
+    assert '"enable_zenoh_bridge", default_value="false"' in source
+    assert '"enable_critical_link", default_value="false"' in source
 
 
 def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
@@ -232,6 +237,31 @@ def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
         True, True, True,
         True, True, True,
     ]
+
+
+def test_global_ekf_uses_only_guarded_continuous_inputs():
+    config_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_global.yaml")
+    )
+    with open(config_path, "r") as stream:
+        params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+
+    assert params["odom0"] == "/odometry/gps/um982"
+    assert params["pose0"] == "/sensor/vehicle_gnss/compass/validated"
+    assert params["imu0"] == "/livox/imu/validated"
+    assert params["imu0_config"] == [
+        False, False, False,
+        False, False, False,
+        False, False, False,
+        False, False, True,
+        True, True, False,
+    ]
+
+
+def test_localization_launch_guards_navsat_output_before_global_ekf():
+    source = _read_launch_source("localization.launch.py")
+    assert 'executable="localization_input_guard"' in source
+    assert '("odometry/gps", "/odometry/gps/um982/raw")' in source
 
 
 def test_camera_frames_match_measured_mounting_geometry():
@@ -285,7 +315,7 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     with open(config_path, "r") as stream:
         params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
 
-    assert params["odom1"] == "/odom"
+    assert params["odom1"] == "/odom/validated"
     assert params["publish_tf"] is True
     assert params["world_frame"] == "map"
 
@@ -323,6 +353,31 @@ def test_task1_tf_authorities_and_local_virtual_wall_contract():
     local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
     assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
     assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
+def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
+    launch_source = _read_launch_source("glim_um982_localization.launch.py")
+    assert '"feedback_frame_id": "map"' in launch_source
+    assert '"ekf_glim_local.yaml"' in launch_source
+    assert '"ekf_um982_map.yaml"' in launch_source
+
+    local_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_glim_local.yaml")
+    )
+    global_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_um982_map.yaml")
+    )
+    with open(local_path, "r") as stream:
+        local = yaml.safe_load(stream)["ekf_filter_node_glim_local"]["ros__parameters"]
+    with open(global_path, "r") as stream:
+        global_ = yaml.safe_load(stream)["ekf_filter_node_um982_map"]["ros__parameters"]
+
+    assert local["publish_tf"] is True
+    assert local["world_frame"] == "odom"
+    assert local["odom0"] == "/odom"
+    assert global_["publish_tf"] is True
+    assert global_["world_frame"] == "map"
+    assert global_["odom0"] == "/odometry/feedback"
 
 
 @pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
@@ -432,7 +487,7 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     assert '"/livox/lidar"' not in source
 
 
-def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
+def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
     zenoh_dir = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
     )
@@ -446,6 +501,38 @@ def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
             sources[filename] = stream.read()
 
     for topic in ('"/joy"', '"/heartbeat/ground_station"'):
-        assert topic in sources["bridge_groundpc.json5"]
-        assert topic in sources["bridge_minipc.json5"]
-        assert topic not in sources["bridge_jetson.json5"]
+        for source in sources.values():
+            allow_lists = re.sub(r"//.*$", "", source, flags=re.MULTILINE)
+            assert topic not in allow_lists
+
+
+def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '("/joy", "/critical_link/input/joy")' in source
+    assert '"topic": "/critical_link/input/heartbeat"' in source
+    assert '"topic": "/heartbeat/ground_station"' not in source
+
+
+def test_terminal_bringups_include_role_specific_networking():
+    for filename, role in (
+        ("ground_pc.launch.py", "groundpc"),
+        ("jetson_bringup.launch.py", "jetson"),
+        ("minipc_bringup.launch.py", "minipc"),
+    ):
+        source = _read_launch_source(filename)
+        assert '"networking.launch.py"' in source
+        assert f'"role": "{role}"' in source
+
+
+def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
+    source = _read_launch_source("networking.launch.py")
+
+    assert '"zenoh-bridge-ros2dds"' in source
+    assert '"env", "-u", "ROS_DOMAIN_ID"' in source
+    assert "bridge_" in source
+    assert ".json5" in source
+    assert '"ground_sender.launch.py"' in source
+    assert '"vessel_receiver.launch.py"' in source
+    assert '_role_condition("groundpc")' in source
+    assert '_role_condition("minipc")' in source
