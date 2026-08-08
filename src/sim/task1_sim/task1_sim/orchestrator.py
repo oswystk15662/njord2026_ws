@@ -461,7 +461,7 @@ class Task1Orchestrator(Node):
             start = Point()
             # Offset the direction arrow beyond the buoy sphere so the
             # cardinal indication remains readable in Foxglove/RViz.
-            display_offset = 0.75
+            display_offset = 2.0
             start.x = float(bx + dx * display_offset)
             start.y = float(by + dy * display_offset)
             start.z = 1.0
