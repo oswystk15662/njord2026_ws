@@ -61,6 +61,9 @@ def generate_launch_description():
     start_competition_waypoint_arg = DeclareLaunchArgument(
         'start_competition_waypoint', default_value='',
         description='Competition waypoint label from which to start the route (Task1 sim)')
+    use_geodetic_waypoints_arg = DeclareLaunchArgument(
+        'use_geodetic_waypoints', default_value='false',
+        description='Project waypoint latitude/longitude through navsat_transform /fromLL into map')
     
     # Create node
     waypoint_publisher_node = Node(
@@ -90,6 +93,8 @@ def generate_launch_description():
                 # competition label as a string to select the route slice.
                 'start_competition_waypoint': ParameterValue(
                     LaunchConfiguration('start_competition_waypoint'), value_type=str),
+                'use_geodetic_waypoints': ParameterValue(
+                    LaunchConfiguration('use_geodetic_waypoints'), value_type=bool),
             }
         ],
         output='screen',
@@ -107,6 +112,7 @@ def generate_launch_description():
         nav2_goal_tolerance_arg,
         waypoint_route_line_arg,
         start_competition_waypoint_arg,
+        use_geodetic_waypoints_arg,
         waypoint_publisher_node,
     ])
     

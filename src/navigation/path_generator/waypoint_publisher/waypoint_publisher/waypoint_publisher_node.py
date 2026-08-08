@@ -17,7 +17,9 @@ from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
 from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Point, PoseStamped
+from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
+from robot_localization.srv import FromLL
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformListener
@@ -70,6 +72,8 @@ class WaypointPublisher(Node):
         self.declare_parameter('cardinal_wall_enable_topic', '/task1/cardinal_wall_enable')
         self.declare_parameter('cardinal_wall_enable_waypoint', '3')
         self.declare_parameter('start_competition_waypoint', '')
+        self.declare_parameter('use_geodetic_waypoints', False)
+        self.declare_parameter('from_ll_service', '/fromLL')
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -87,6 +91,8 @@ class WaypointPublisher(Node):
             self.get_parameter('cardinal_wall_enable_waypoint').value)
         self.start_competition_waypoint = str(
             self.get_parameter('start_competition_waypoint').value).strip()
+        self.use_geodetic_waypoints = self.get_parameter('use_geodetic_waypoints').value
+        self.from_ll_service = self.get_parameter('from_ll_service').value
         
         # Validate task type
         try:
@@ -115,6 +121,8 @@ class WaypointPublisher(Node):
         
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
+        self.from_ll_client = self.create_client(FromLL, self.from_ll_service)
+        self.geodetic_futures = None
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -213,6 +221,9 @@ class WaypointPublisher(Node):
     
     def _timer_callback(self):
         """Timer callback to publish waypoints"""
+        if self.geodetic_futures is not None:
+            self._finish_geodetic_waypoint_conversion()
+            return
         if not self.first_publish:
             return
         
@@ -221,6 +232,9 @@ class WaypointPublisher(Node):
             return
         
         self.first_publish = False
+        if self.use_geodetic_waypoints:
+            self._start_geodetic_waypoint_conversion()
+            return
         
         if self.task_type in [
             TaskType.TASK1,
@@ -231,6 +245,48 @@ class WaypointPublisher(Node):
             self._publish_waypoints_single_stage()
         elif self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self._publish_task3_first_stage()
+
+    def _start_geodetic_waypoint_conversion(self):
+        """Project all configured GPS waypoints with navsat_transform /fromLL."""
+        waypoints = self._active_waypoints()
+        missing = [self._display_waypoint_id(wp, i) for i, wp in enumerate(waypoints)
+                   if 'latitude' not in wp or 'longitude' not in wp]
+        if missing:
+            self.get_logger().error(
+                'Geodetic waypoint mode requires latitude/longitude for every active WP: '
+                + ', '.join(missing))
+            self.first_publish = True
+            return
+        if not self.from_ll_client.service_is_ready():
+            self.get_logger().warn(f'Waiting for map projection service {self.from_ll_service}')
+            self.first_publish = True
+            return
+        self.geodetic_futures = []
+        for waypoint in waypoints:
+            request = FromLL.Request()
+            request.ll_point = GeoPoint(latitude=float(waypoint['latitude']),
+                                        longitude=float(waypoint['longitude']),
+                                        altitude=float(waypoint.get('altitude', 0.0)))
+            self.geodetic_futures.append(self.from_ll_client.call_async(request))
+
+    def _finish_geodetic_waypoint_conversion(self):
+        if not all(future.done() for future in self.geodetic_futures):
+            return
+        try:
+            positions = [(future.result().map_point.x, future.result().map_point.y)
+                         for future in self.geodetic_futures]
+        except Exception as error:
+            self.get_logger().error(f'GPS waypoint map conversion failed: {error}')
+            self.geodetic_futures = None
+            self.first_publish = True
+            return
+        self.geodetic_futures = None
+        waypoints = self._active_waypoints()
+        self._publish_waypoint_markers(positions)
+        poses = [self._pose_from_waypoint(wp, position)
+                 for wp, position in zip(waypoints, positions)]
+        self._send_navigate_through_poses_goal(poses)
+        self.get_logger().info(f'Published {len(poses)} geodetic waypoints for {self.task_type.value}')
     
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
@@ -304,7 +360,7 @@ class WaypointPublisher(Node):
         
         return poses
 
-    def _publish_waypoint_markers(self):
+    def _publish_waypoint_markers(self, projected_positions=None):
         """Publish numbered waypoint discs and their Nav2 reach radius."""
         waypoints = self._active_waypoints()
         if not waypoints:
@@ -317,7 +373,8 @@ class WaypointPublisher(Node):
         route.pose.orientation.w, route.scale.x = 1.0, 0.12
         route.color.r, route.color.g, route.color.b, route.color.a = 0.1, 0.9, 1.0, 0.9
         for index, waypoint in enumerate(waypoints):
-            x, y = float(waypoint.get('x', 0.0)), float(waypoint.get('y', 0.0))
+            x, y = (projected_positions[index] if projected_positions is not None
+                    else (float(waypoint.get('x', 0.0)), float(waypoint.get('y', 0.0))))
             route.points.append(Point(x=x, y=y, z=self.waypoint_route_z))
             disc = Marker()
             disc.header.frame_id, disc.header.stamp = self.frame_id, stamp
@@ -394,13 +451,12 @@ class WaypointPublisher(Node):
             stages = self.config.get('full_sequence_stages', stages)
         return stages.get(stage_name, [])
 
-    def _pose_from_waypoint(self, wp: dict) -> PoseStamped:
+    def _pose_from_waypoint(self, wp: dict, position_override=None) -> PoseStamped:
         pose = PoseStamped()
         pose.header.frame_id = self.frame_id
         pose.header.stamp = self.get_clock().now().to_msg()
 
-        x = float(wp.get('x', 0.0))
-        y = float(wp.get('y', 0.0))
+        x, y = position_override or (float(wp.get('x', 0.0)), float(wp.get('y', 0.0)))
         midpoint = self._gate_midpoint_from_tf(wp)
         if midpoint is not None:
             x, y = midpoint
