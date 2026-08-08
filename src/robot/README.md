@@ -32,6 +32,32 @@ miniPCのlocal odometryは既定でUM982 feedback EKFを使う。
 排他的に切り替える。両方のEKFが同時に
 `/odometry/filtered/local` と `odom -> base_link` を出すことはない。
 
+## GLIM local + UM982 map EKF（実験構成）
+
+dual EKFの入力を相互に混ぜず、TFの責務だけを分離して確認するためのlaunch:
+
+```bash
+ros2 launch robot glim_um982_localization.launch.py
+```
+
+このlaunchはUM982 driverも起動する。別プロセスですでに起動している場合は、driver側で
+`publish_feedback_odometry:=true feedback_frame_id:=map`を指定したうえで、次のようにする。
+
+```bash
+ros2 launch robot glim_um982_localization.launch.py enable_um982_driver:=false
+```
+
+TFとtopicの責務は次のとおり。
+
+```text
+GLIM /odom -> GLIM local EKF -> odom -> base_link
+UM982 first-fix ENU -> UM982 map EKF -> map -> odom
+```
+
+GLIM自身の`/tf`は外部へ出さないこと。既存のJetson bringupはGLIMのTFを
+`/glim/tf_unused`へ隔離している。このlaunchと従来の`localization.launch.py`または
+UM982 feedback EKFを同時に起動するとTFが競合するため、排他的に使用する。
+
 driver heartbeatは実データの鮮度から階層的に生成する。Jetsonが前カメラと
 LiDARのleaf heartbeatを生成し、miniPCがback camera、GNSS、Miconと合わせて
 `/heartbeat/driver` へ集約する。local/global odometryも

@@ -36,6 +36,7 @@ include_directories(include)
 # 2. ライブラリ（コンポーネント）の作成
 add_library(um982_driver_component SHARED
   src/node.cpp
+  src/parsing.cpp
   src/utils.cpp
 )
 

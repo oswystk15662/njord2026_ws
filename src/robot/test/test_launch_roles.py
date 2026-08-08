@@ -14,6 +14,7 @@ anything, and so it works the same way in CI.
 
 import importlib.util
 import os
+import re
 import xml.etree.ElementTree as ET
 
 import pytest
@@ -26,6 +27,7 @@ _GPU_ONLY_PACKAGES = ["glim_ros", "livox_ros_driver2", "glim_config"]
 _MINIPC_ONLY_PACKAGES = ["robot_localization", "thruster_driver", "micon_driver_fd", "joy_node"]
 
 _GENERATE_LAUNCH_DESCRIPTION_FILES = [
+    "glim_um982_localization.launch.py",
     "minipc_bringup.launch.py",
     "task1.launch.py",
     "task2.launch.py",
@@ -315,6 +317,31 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
+def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
+    launch_source = _read_launch_source("glim_um982_localization.launch.py")
+    assert '"feedback_frame_id": "map"' in launch_source
+    assert '"ekf_glim_local.yaml"' in launch_source
+    assert '"ekf_um982_map.yaml"' in launch_source
+
+    local_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_glim_local.yaml")
+    )
+    global_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_um982_map.yaml")
+    )
+    with open(local_path, "r") as stream:
+        local = yaml.safe_load(stream)["ekf_filter_node_glim_local"]["ros__parameters"]
+    with open(global_path, "r") as stream:
+        global_ = yaml.safe_load(stream)["ekf_filter_node_um982_map"]["ros__parameters"]
+
+    assert local["publish_tf"] is True
+    assert local["world_frame"] == "odom"
+    assert local["odom0"] == "/odom"
+    assert global_["publish_tf"] is True
+    assert global_["world_frame"] == "map"
+    assert global_["odom0"] == "/odometry/feedback"
+
+
 @pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
 def test_task_launch_files_declare_role_argument(filename):
     source = _read_launch_source(filename)
@@ -422,7 +449,7 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     assert '"/livox/lidar"' not in source
 
 
-def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
+def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
     zenoh_dir = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
     )
@@ -436,6 +463,14 @@ def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
             sources[filename] = stream.read()
 
     for topic in ('"/joy"', '"/heartbeat/ground_station"'):
-        assert topic in sources["bridge_groundpc.json5"]
-        assert topic in sources["bridge_minipc.json5"]
-        assert topic not in sources["bridge_jetson.json5"]
+        for source in sources.values():
+            allow_lists = re.sub(r"//.*$", "", source, flags=re.MULTILINE)
+            assert topic not in allow_lists
+
+
+def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '("/joy", "/critical_link/input/joy")' in source
+    assert '"topic": "/critical_link/input/heartbeat"' in source
+    assert '"topic": "/heartbeat/ground_station"' not in source

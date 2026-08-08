@@ -21,7 +21,9 @@
       domain: 5,
 
       // JetsonとGround PCの両bridgeに対するunion。各remote bridge側では
-      // 役割別にさらに絞り込む。
+      // 役割別にさらに絞り込む。/joy と /heartbeat/ground_station は
+      // critical_link_receiver だけがminiPCのcanonical topicへpublishする
+      // ため、ここには絶対に加えない。
       // Docs/two_machine_split.md「トピックの流れ」に対応。地上側の
       // /ground_video/image/compressed は意図的に含めず、Jetson へ戻さない。
       // LivoxのrawデータはminiPCのlocal EKFが使う/livox/imuだけを通し、
@@ -32,8 +34,7 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
-          "/heartbeat/ground_station",
-          "/joy", "/joy/set_feedback",
+          "/joy/set_feedback",
           "/foxglove_log",
           "/gui/battery_percent",
         ],
@@ -42,8 +43,7 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
-          "/heartbeat/ground_station",
-          "/joy", "/joy/set_feedback",
+          "/joy/set_feedback",
           "/foxglove_log",
           "/gui/battery_percent",
         ],

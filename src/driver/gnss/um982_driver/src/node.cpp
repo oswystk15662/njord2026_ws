@@ -1,8 +1,7 @@
 #include "um982_driver/node.hpp"
-#include <tf2/LinearMath/Quaternion.h>
-#include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include <termios.h>
 
 using namespace std::chrono_literals;
@@ -31,6 +30,18 @@ bool finite_quaternion(const geometry_msgs::msg::Quaternion & q)
     const double norm = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
     return std::isfinite(norm) && std::abs(norm - 1.0) < 1e-3;
 }
+
+std::string normalize_log_format(std::string format, const char* parameter_name)
+{
+    std::transform(format.begin(), format.end(), format.begin(),
+        [](unsigned char value) { return static_cast<char>(std::toupper(value)); });
+    if (format == "A" || format == "B") {
+        return format;
+    }
+    RCLCPP_WARN(rclcpp::get_logger("um982_driver"),
+        "%s must be A or B; using B", parameter_name);
+    return "B";
+}
 } // namespace
 
 namespace um982_driver
@@ -58,9 +69,7 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
     // Publishers
     fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss/fix/raw", 10);
-    fix_debug_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss_debug/fix/raw", 10);
     heading_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss/compass/raw", 10);
-    heading_debug_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss_debug/compass/raw", 10);
     if (params_.publish_feedback_odometry) {
         feedback_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             params_.feedback_odometry_topic, 10);
@@ -144,6 +153,9 @@ void UM982Driver::init_parameters()
     this->declare_parameter("uart_or_tcp", "tcp");
     this->declare_parameter("FIX_FREQ", 20);
     this->declare_parameter("HEADING_FREQ", 20);
+    this->declare_parameter("RTK_STATUS_FREQ", 1);
+    this->declare_parameter("UNIHEADING_FORMAT", "B");
+    this->declare_parameter("RTK_STATUS_FORMAT", "B");
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
@@ -151,6 +163,8 @@ void UM982Driver::init_parameters()
     // A relative name keeps the published Odometry independent from the
     // consumer.  Bringup launch files remap it to the required feedback topic.
     this->declare_parameter("feedback_odometry_topic", "odometry/feedback");
+    this->declare_parameter("feedback_frame_id", "odom");
+    this->declare_parameter("feedback_child_frame_id", "base_link");
     this->declare_parameter("feedback_velocity_filter_alpha", 0.35);
     this->declare_parameter("feedback_max_speed_mps", 4.0);
     this->declare_parameter("NTRIP_Server", params_.ntrip_server);
@@ -167,6 +181,12 @@ void UM982Driver::init_parameters()
     params_.uart_or_tcp = this->get_parameter("uart_or_tcp").as_string();
     params_.fix_freq = this->get_parameter("FIX_FREQ").as_int();
     params_.heading_freq = this->get_parameter("HEADING_FREQ").as_int();
+    params_.rtk_status_freq = static_cast<int>(std::max<int64_t>(
+        1, this->get_parameter("RTK_STATUS_FREQ").as_int()));
+    params_.heading_log_format = normalize_log_format(
+        this->get_parameter("UNIHEADING_FORMAT").as_string(), "UNIHEADING_FORMAT");
+    params_.rtk_status_log_format = normalize_log_format(
+        this->get_parameter("RTK_STATUS_FORMAT").as_string(), "RTK_STATUS_FORMAT");
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
@@ -174,6 +194,10 @@ void UM982Driver::init_parameters()
         this->get_parameter("publish_feedback_odometry").as_bool();
     params_.feedback_odometry_topic =
         this->get_parameter("feedback_odometry_topic").as_string();
+    params_.feedback_frame_id =
+        this->get_parameter("feedback_frame_id").as_string();
+    params_.feedback_child_frame_id =
+        this->get_parameter("feedback_child_frame_id").as_string();
     params_.feedback_velocity_filter_alpha = std::clamp(
         this->get_parameter("feedback_velocity_filter_alpha").as_double(), 0.0, 1.0);
     params_.feedback_max_speed_mps = std::max(
@@ -215,8 +239,10 @@ void UM982Driver::configure_gnss_output()
 {
     double fix_p = 1.0 / params_.fix_freq;
     double head_p = 1.0 / params_.heading_freq;
+    double rtk_status_p = 1.0 / params_.rtk_status_freq;
     std::string fix_period = format_period(fix_p);
     std::string heading_period = format_period(head_p);
+    std::string rtk_status_period = format_period(rtk_status_p);
 
     // Apply volatile startup configuration only. Do not send SAVECONFIG.
     // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
@@ -244,10 +270,12 @@ void UM982Driver::configure_gnss_output()
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
+    write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss",
-        fix_period.c_str(), heading_period.c_str());
+        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
+        fix_period.c_str(), heading_period.c_str(),
+        params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)
@@ -306,6 +334,9 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
     }
 }
 
+// Moved to parsing.cpp.  Keep this transition block excluded until the next
+// source-history cleanup, so the refactor remains easy to audit as a move.
+#if 0
 void UM982Driver::process_gnss_buffer()
 {
     while (!gnss_parse_buf_.empty()) {
@@ -390,11 +421,12 @@ void UM982Driver::process_gnss_line(std::string line)
     if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
+    } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
+        parse_uniheadinga(line);
     } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
         parse_ths(line);
     }
-    // UNIHEADINGはbinary(UNIHEADINGB)のみ要求しているため、ここには来ない。
-    // バイナリフレームはprocess_gnss_buffer()内でparse_uniheadingb()へ直接渡される。
+    // UNIHEADINGB is dispatched directly from process_gnss_buffer().
 }
 
 // --------------------------------------------------------------------------
@@ -466,7 +498,47 @@ void UM982Driver::parse_gga(const std::string& line)
         fix_pub_->publish(msg);
     }
     fix_debug_pub_->publish(msg);
-    publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
+    if (quality >= 1) {
+        publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
+    }
+}
+
+void UM982Driver::parse_uniheadinga(const std::string& line)
+{
+    const auto separator = line.find(';');
+    if (separator == std::string::npos) return;
+
+    std::string payload = line.substr(separator + 1);
+    const auto checksum = payload.find('*');
+    if (checksum != std::string::npos) payload.resize(checksum);
+    const auto fields = utils::split(payload, ',');
+    // sol_stat, pos_type, baseline, heading, pitch, ...
+    if (fields.size() < 5) return;
+
+    try {
+        if (fields[0] != "SOL_COMPUTED" ||
+            (fields[1] != "NARROW_INT" && fields[1] != "INS_RTKFIXED")) {
+            return;
+        }
+        const double yaw_rad = utils::deg2rad(90.0 - std::stod(fields[3]));
+        const double pitch_rad = utils::deg2rad(-std::stod(fields[4]));
+
+        latest_yaw_rad_ = yaw_rad;
+        latest_heading_stamp_ = this->now();
+        have_heading_ = true;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, pitch_rad, yaw_rad);
+        geometry_msgs::msg::PoseWithCovarianceStamped msg;
+        msg.header.stamp = latest_heading_stamp_;
+        msg.header.frame_id = params_.heading_frame_id;
+        msg.pose.pose.orientation = tf2::toMsg(q);
+        const double variance = std::pow(utils::deg2rad(0.5), 2);
+        msg.pose.covariance[28] = variance;
+        msg.pose.covariance[35] = variance;
+        if (!stop_publish_) heading_pub_->publish(msg);
+    } catch (...) {
+    }
 }
 
 void UM982Driver::publish_feedback_odometry(
@@ -531,11 +603,11 @@ void UM982Driver::publish_feedback_odometry(
 
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = stamp;
-    odom.header.frame_id = "odom";
-    odom.child_frame_id = "base_link";
-    // Relative ENU position with the first valid fix as the origin.  This is
-    // deliberately not a global map pose; it is the measurement consumed by
-    // the dedicated UM982 feedback filters.
+    odom.header.frame_id = params_.feedback_frame_id;
+    odom.child_frame_id = params_.feedback_child_frame_id;
+    // Relative ENU position with the first valid fix as the origin. The
+    // configured frame decides whether a consumer treats that datum-fixed
+    // plane as a local odom frame or as the navigation map frame.
     odom.pose.pose.position.x = east_m;
     odom.pose.pose.position.y = north_m;
     tf2::Quaternion orientation;
@@ -666,8 +738,9 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
         latest_heading_stamp_ = msg.header.stamp;
         have_heading_ = true;
     }
-    heading_debug_pub_->publish(msg);
 }
+
+#endif
 
 // --------------------------------------------------------------------------
 // RTK (NTRIP)
