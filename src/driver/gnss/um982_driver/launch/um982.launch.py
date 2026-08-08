@@ -10,7 +10,7 @@ def generate_launch_description():
     # 通信モード: 'uart' or 'tcp'
     arg_mode = DeclareLaunchArgument(
         'uart_or_tcp',
-        default_value='tcp',
+        default_value='uart',
         description='Connection mode: "uart" or "tcp"'
     )
 
@@ -56,7 +56,7 @@ def generate_launch_description():
     )
     arg_ntrip_server = DeclareLaunchArgument(
         'ntrip_server',
-        default_value='ntrip.ales-corp.co.jp',
+        default_value='osw-Stealth-14-AI-Studio-A1VGG.local',
         description='NTRIP caster hostname'
     )
     arg_ntrip_port = DeclareLaunchArgument(
@@ -66,17 +66,17 @@ def generate_launch_description():
     )
     arg_ntrip_mountpoint = DeclareLaunchArgument(
         'ntrip_mountpoint',
-        default_value='RTCM32MSM7',
+        default_value='RTCM3',
         description='NTRIP mountpoint'
     )
     arg_ntrip_username = DeclareLaunchArgument(
         'ntrip_username',
-        default_value='',
+        default_value='test',
         description='NTRIP username (leave empty for anonymous casters)'
     )
     arg_ntrip_password = DeclareLaunchArgument(
         'ntrip_password',
-        default_value='',
+        default_value='test',
         description='NTRIP password (leave empty for anonymous casters)'
     )
     arg_frame_id = DeclareLaunchArgument(
