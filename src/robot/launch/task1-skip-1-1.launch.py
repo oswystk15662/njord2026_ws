@@ -14,6 +14,8 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     forwarded_arguments = {
         'role': LaunchConfiguration('role'),
+        'start_role_bringup': LaunchConfiguration('start_role_bringup'),
+        'start_legacy_task_nodes': LaunchConfiguration('start_legacy_task_nodes'),
         'serial_port': LaunchConfiguration('serial_port'),
         'baud': LaunchConfiguration('baud'),
         'um982_port': LaunchConfiguration('um982_port'),
@@ -26,6 +28,20 @@ def generate_launch_description():
     }
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            'start_role_bringup', default_value='false',
+            description=(
+                'Compatibility only: include role hardware through task1.launch.py. '
+                'Keep false when persistent role bringup is already running.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'start_legacy_task_nodes', default_value='false',
+            description=(
+                'Compatibility only: start task1 legacy Nav2/waypoints. '
+                'Use /mission/run_task for normal operation.'
+            ),
+        ),
         DeclareLaunchArgument('role', default_value='minipc', choices=['minipc', 'standalone']),
         DeclareLaunchArgument(
             'serial_port',

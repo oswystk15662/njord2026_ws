@@ -372,6 +372,25 @@ def test_legacy_task_launches_disable_persistent_managers(filename):
     assert "'enable_control_manager': 'false'" in source
 
 
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
+def test_legacy_task_wrappers_are_opt_in(filename):
+    source = _read_launch_source(filename)
+    assert re.search(r"['\"]start_role_bringup['\"].*default_value=['\"]false", source, re.S)
+    assert re.search(r"['\"]start_legacy_task_nodes['\"].*default_value=['\"]false", source, re.S)
+    assert "LaunchConfiguration('start_legacy_task_nodes')" in source
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["task1-1.launch.py", "task1-2.launch.py", "task2-1.launch.py",
+     "task3-1.launch.py", "task3-2.launch.py"],
+)
+def test_numbered_legacy_task_launches_are_opt_in(filename):
+    source = _read_launch_source(filename)
+    assert '"enable_legacy_graph", default_value="false"' in source
+    assert 'LaunchConfiguration("enable_legacy_graph")' in source
+
+
 def test_ground_pc_keeps_front_and_back_video_receivers_separate():
     source = _read_launch_source("ground_pc.launch.py")
 

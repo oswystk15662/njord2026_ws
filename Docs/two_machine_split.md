@@ -133,10 +133,34 @@ ros2 launch robot jetson_bringup.launch.py
 miniPC:
 ```bash
 source /opt/ros/humble/setup.bash && source scripts/njord_env.sh && source install/setup.bash
-ros2 launch robot task1.launch.py          # role:=minipc が既定
+ros2 launch robot minipc_bringup.launch.py
 ```
 
-`task2.launch.py` / `task3.launch.py` も同様。
+Ground PC:
+```bash
+ros2 launch robot ground_pc.launch.py enable_foxglove_bridge:=true
+```
+
+タスクは常駐する Mission Manager の typed API から開始する。起動時は MANUAL / IDLE
+であり、自動目標は送信されない。
+
+```bash
+njord-task list
+njord-task check task1
+njord-task start task1 --auto
+```
+
+`task1.launch.py` / `task2.launch.py` / `task3.launch.py` は非推奨の
+compatibility wrapper で、既定では role bringup、Nav2、waypoint publisher を起動しない。
+歴史的な一括グラフを比較するときだけ、たとえば次のように明示する。
+
+```bash
+ros2 launch robot task1.launch.py \
+  start_role_bringup:=true start_legacy_task_nodes:=true
+```
+
+`task1-1.launch.py` などの番号付き実験launchも `enable_legacy_graph:=true` を
+指定した場合だけ旧ハードウェア/Nav2グラフを起動する。常駐bringupと併用しないこと。
 
 ### systemd による基盤 bringup の常駐化
 
@@ -159,7 +183,8 @@ scripts/install_bringup_service.sh --role minipc --ros-distro humble --domain-id
 
 miniPC service は `enable_nav2:=false` 固定である。Nav2、waypoint publisher、
 autonomy supervisor は task manager が start/stop を管理するタスク層であり、
-常駐 service に含めない。
+常駐 service に含めない。Mission Manager と control_manager は常駐し、Nav2プロファイル
+の互換性を検査してから `/mission/run_task` を受け付ける。
 
 確認・停止・無効化:
 
@@ -180,10 +205,12 @@ sudo systemctl disable --now njord-minipc-bringup.service
 Jetson 1台で分割前と同じ構成を動かす:
 
 ```bash
-ros2 launch robot task1.launch.py role:=standalone
+ros2 launch robot standalone_bringup.launch.py
 ```
 
-`standalone_bringup.launch.py` が `jetson_bringup` と `minipc_bringup` の両方を include する。分割前の `manual_control.launch.py` にあった段階起動（LiDAR 18 秒、カメラ 20 秒）も再現する。
+`standalone_bringup.launch.py` が `jetson_bringup` と `minipc_bringup` の両方を include する。分割前の段階起動を回帰確認する場合は、
+番号付き実験launchに `enable_legacy_graph:=true` を明示して、他のbringupを
+同時に起動しないこと。
 
 `simple_manual/launch/manual_control.launch.py` は従来経路としてそのまま残してある。
 
