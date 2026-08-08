@@ -459,12 +459,15 @@ class Task1Orchestrator(Node):
             marker.pose.orientation.w = 1.0
 
             start = Point()
-            start.x = float(bx)
-            start.y = float(by)
+            # Offset the direction arrow beyond the buoy sphere so the
+            # cardinal indication remains readable in Foxglove/RViz.
+            display_offset = 0.75
+            start.x = float(bx + dx * display_offset)
+            start.y = float(by + dy * display_offset)
             start.z = 1.0
             end = Point()
-            end.x = float(bx + dx * 3.0)
-            end.y = float(by + dy * 3.0)
+            end.x = float(bx + dx * (display_offset + 3.0))
+            end.y = float(by + dy * (display_offset + 3.0))
             end.z = 1.0
             marker.points = [start, end]
 
