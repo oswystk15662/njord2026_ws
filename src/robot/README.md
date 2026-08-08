@@ -6,9 +6,9 @@ this pkg is for launch and visualization
 
 | launch | 動かす端末 | 内容 |
 |---|---|---|
-| `ground_pc.launch.py` | Ground PC | joy、前後映像受信、Foxglove bridge、ground-station heartbeat、実軌跡マーカー |
-| `jetson_bringup.launch.py` | Jetson | MID360S + ZED 2i + GPU camera/LiDAR buoy detection。GLIMと単体PCL検出は既定OFF |
-| `minipc_bringup.launch.py` | miniPC | micon、UM982、localization、スラスタ、back camera、Foxglove logger。Drogger/WIT IMUノードは起動対象外 |
+| `ground_pc.launch.py` | Ground PC | joy、前後映像受信、Foxglove bridge、ground-station heartbeat、実軌跡マーカー、Zenoh bridge、critical-link sender |
+| `jetson_bringup.launch.py` | Jetson | MID360S + ZED 2i + GPU camera/LiDAR buoy detection、Zenoh bridge。GLIMと単体PCL検出は既定OFF |
+| `minipc_bringup.launch.py` | miniPC | micon、UM982、localization、スラスタ、back camera、Foxglove logger、Zenoh bridge、critical-link receiver。Drogger/WIT IMUノードは起動対象外 |
 | `standalone_bringup.launch.py` | Jetson 1台 | Jetson用とminiPC用bringupを両方includeする回帰用 |
 
 ```
@@ -20,6 +20,12 @@ ros2 launch robot task1.launch.py           # role:=minipc が既定
 ```
 
 `task1/2/3.launch.py` は `role` 引数(`minipc` / `standalone`、既定 `minipc`)でどちらの bringup を使うか選ぶ。
+
+端末別 bringup は既定で `zenoh-bridge-ros2dds` を起動する。bridgeは端末ごとの
+JSON5設定でROS domainを選ぶため、親の`ROS_DOMAIN_ID`はbridgeプロセスへ引き継がない。
+Ground PCでは`critical_link_sender`、miniPCでは`critical_link_receiver`も既定で起動する。
+必要に応じて、それぞれ`enable_zenoh_bridge:=false`、`enable_critical_link:=false`で無効化できる。
+`standalone_bringup.launch.py`は1台で両ロールを含む回帰用のため、両方とも既定で無効である。
 
 miniPCは既定でUM982とAdvanced Navigation Spatialの両方をGround PCのNTRIP caster
 （`192.168.1.72:2101`、mountpoint `RTCM3`）へ接続する。
