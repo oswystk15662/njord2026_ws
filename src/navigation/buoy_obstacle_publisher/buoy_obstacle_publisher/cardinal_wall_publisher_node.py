@@ -1,5 +1,6 @@
 """Convert fused cardinal-marker detections into Nav2 virtual obstacles."""
 
+import json
 import math
 import struct
 
@@ -39,6 +40,12 @@ CLASS_COLOURS = {
     BuoyDetection.CLASS_SOUTH: (1.0, 0.78, 0.0),
     BuoyDetection.CLASS_WEST: (1.0, 0.78, 0.0),
 }
+CARDINAL_CLASS_BY_LABEL = {
+    'N': BuoyDetection.CLASS_NORTH,
+    'E': BuoyDetection.CLASS_EAST,
+    'S': BuoyDetection.CLASS_SOUTH,
+    'W': BuoyDetection.CLASS_WEST,
+}
 
 
 class CardinalWallPublisher(Node):
@@ -63,6 +70,10 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retirement_course_heading_rad', float('nan'))
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
+        # Simulation-only ground-truth preview. It is visualization-only and
+        # is deliberately never included in /virtual_obstacles.
+        self.declare_parameter('preview_buoy_positions', '[]')
+        self.declare_parameter('preview_buoy_marks', '[]')
 
         self.map_frame = self.get_parameter('map_frame').value
         self.bounds = list(self.get_parameter('course_bounds').value)
@@ -80,6 +91,9 @@ class CardinalWallPublisher(Node):
         self.base_frame_id = self.get_parameter('base_frame_id').value
         self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
         self.tracks = []
+        self.preview_tracks = self._load_preview_tracks(
+            self.get_parameter('preview_buoy_positions').value,
+            self.get_parameter('preview_buoy_marks').value)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -95,6 +109,29 @@ class CardinalWallPublisher(Node):
             self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
         rate = max(0.2, float(self.get_parameter('publish_rate_hz').value))
         self.create_timer(1.0 / rate, self.publish_walls)
+
+    @staticmethod
+    def _load_preview_tracks(positions_value, marks_value):
+        """Read optional simulator ground truth without affecting planning."""
+        try:
+            positions = json.loads(positions_value) if isinstance(positions_value, str) else positions_value
+            marks = json.loads(marks_value) if isinstance(marks_value, str) else marks_value
+        except (TypeError, json.JSONDecodeError):
+            return []
+        if not isinstance(positions, list) or not isinstance(marks, list):
+            return []
+        preview = []
+        for index, position in enumerate(positions):
+            if not isinstance(position, (list, tuple)) or len(position) < 2:
+                continue
+            class_id = CARDINAL_CLASS_BY_LABEL.get(str(marks[index]).upper()) if index < len(marks) else None
+            if class_id is None:
+                continue
+            try:
+                preview.append((float(position[0]), float(position[1]), class_id))
+            except (TypeError, ValueError):
+                continue
+        return preview
 
     def _on_detections(self, msg):
         for detection in msg.detections:
@@ -230,6 +267,54 @@ class CardinalWallPublisher(Node):
         clear = Marker()
         clear.action = Marker.DELETEALL
         markers.markers.append(clear)
+        for index, (x, y, class_id) in enumerate(self.preview_tracks):
+            # A confirmed track replaces its nearby ground-truth preview.
+            confirmed = any(
+                track.get('class_id') == class_id
+                and math.hypot(track['x'] - x, track['y'] - y) <= self.merge_radius
+                for track in self.tracks)
+            if confirmed:
+                continue
+
+            preview_wall = Marker()
+            preview_wall.header.frame_id = self.map_frame
+            preview_wall.header.stamp = stamp
+            preview_wall.ns = 'preview_virtual_obstacle_wall'
+            preview_wall.id = index
+            preview_wall.type = Marker.POINTS
+            preview_wall.action = Marker.ADD
+            preview_wall.pose.orientation.w = 1.0
+            preview_wall.scale.x = self.wall_width + 0.04
+            preview_wall.scale.y = self.wall_width + 0.04
+            preview_wall.color.r = 0.65
+            preview_wall.color.g = 0.20
+            preview_wall.color.b = 0.85
+            preview_wall.color.a = 0.22
+            for px, py, pz in wall_points(
+                    self.bounds, self.wall_width, self.spacing, x, y,
+                    class_id, self.true_north_yaw_rad):
+                preview_wall.points.append(Point(x=px, y=py, z=pz + 0.04))
+            markers.markers.append(preview_wall)
+
+            preview_text = Marker()
+            preview_text.header.frame_id = self.map_frame
+            preview_text.header.stamp = stamp
+            preview_text.ns = 'preview_cardinal_buoy_label'
+            preview_text.id = index
+            preview_text.type = Marker.TEXT_VIEW_FACING
+            preview_text.action = Marker.ADD
+            preview_text.pose.position.x = x
+            preview_text.pose.position.y = y
+            preview_text.pose.position.z = 1.10
+            preview_text.pose.orientation.w = 1.0
+            preview_text.scale.z = 0.30
+            preview_text.color.r = 0.85
+            preview_text.color.g = 0.85
+            preview_text.color.b = 0.85
+            preview_text.color.a = 0.55
+            preview_text.text = f'{CLASS_LABELS[class_id]} / NOT DETECTED'
+            markers.markers.append(preview_text)
+
         for index, track in enumerate(self.tracks):
             class_id = track.get('class_id')
             if class_id is None:

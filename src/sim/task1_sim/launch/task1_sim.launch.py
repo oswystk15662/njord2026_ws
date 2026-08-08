@@ -27,6 +27,7 @@ def launch_cardinal_walls(context):
     bounds = params.get("task1_orchestrator", {}).get("ros__parameters", {}).get(
         "course_bounds", [-5.0, 55.0, -40.0, 35.0]
     )
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
     return [Node(
         package="buoy_obstacle_publisher",
         executable="cardinal_wall_publisher",
@@ -46,6 +47,11 @@ def launch_cardinal_walls(context):
             # used by the vessel's dual-antenna GNSS receiver.
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
             "retirement_frontier_topic": "/sim/task1_wall_retirement_frontier",
+            # Show the known simulator marks faintly before perception
+            # confirms them. The wall node keeps these out of Nav2's actual
+            # /virtual_obstacles output.
+            "preview_buoy_positions": orchestrator_params.get("buoy_position_xy", "[]"),
+            "preview_buoy_marks": orchestrator_params.get("buoy_marks", "[]"),
         }],
         output="screen",
     )]
