@@ -32,6 +32,11 @@ def launch_setup(context, *args, **kwargs):
                     "pixel_format": LaunchConfiguration("pixel_format"),
                     "camera_name": "back_cam",
                     "frame_id": "back_cam_link",
+                    "brightness": 0,
+                    "contrast": 5,
+                    "gain": 0,
+                    "autoexposure": False,
+                    "exposure": 1,
                 }
             ],
         )
