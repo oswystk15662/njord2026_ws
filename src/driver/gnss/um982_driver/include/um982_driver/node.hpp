@@ -51,6 +51,7 @@ private:
     void process_gnss_buffer();
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
+    void parse_uniheadinga(const std::string& line);
     void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
     void publish_feedback_odometry(
@@ -84,9 +85,7 @@ private:
 
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_debug_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_pub_;
-    rclcpp::Publisher<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_debug_pub_;
     rclcpp::Publisher<nav_msgs::msg::Odometry>::SharedPtr feedback_odom_pub_;
 
     // ROS Subscribers & Timers
@@ -125,6 +124,9 @@ private:
         
         int fix_freq;
         int heading_freq;
+        int rtk_status_freq;
+        std::string heading_log_format;
+        std::string rtk_status_log_format;
         bool rtk_enable;
         std::string heading_frame_id;
         std::string log_file_name;

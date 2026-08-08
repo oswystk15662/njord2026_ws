@@ -1,8 +1,7 @@
 #include "um982_driver/node.hpp"
-#include <tf2/LinearMath/Quaternion.h>
-#include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include <termios.h>
 
 using namespace std::chrono_literals;
@@ -16,10 +15,18 @@ std::string format_period(double period)
     return ss.str();
 }
 
-// Unicoreバイナリログの同期バイト (Table 7-47)
-constexpr uint8_t kBinarySync[3] = {0xAA, 0x44, 0xB5};
-constexpr std::size_t kBinaryHeaderLen = 24; // Table 7-48
-constexpr uint16_t kUniheadingMessageId = 972; // UNIHEADING (Message ID)
+std::string normalize_log_format(std::string format, const char* parameter_name)
+{
+    std::transform(format.begin(), format.end(), format.begin(),
+        [](unsigned char value) { return static_cast<char>(std::toupper(value)); });
+    if (format == "A" || format == "B") {
+        return format;
+    }
+    RCLCPP_WARN(rclcpp::get_logger("um982_driver"),
+        "%s must be A or B; using B", parameter_name);
+    return "B";
+}
+
 } // namespace
 
 namespace um982_driver
@@ -48,9 +55,7 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
     // Publishers
     fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss/fix/raw", 10);
-    fix_debug_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss_debug/fix/raw", 10);
     heading_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss/compass/raw", 10);
-    heading_debug_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss_debug/compass/raw", 10);
     if (params_.publish_feedback_odometry) {
         feedback_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             params_.feedback_odometry_topic, 10);
@@ -125,6 +130,9 @@ void UM982Driver::init_parameters()
     this->declare_parameter("uart_or_tcp", "tcp");
     this->declare_parameter("FIX_FREQ", 20);
     this->declare_parameter("HEADING_FREQ", 20);
+    this->declare_parameter("RTK_STATUS_FREQ", 1);
+    this->declare_parameter("UNIHEADING_FORMAT", "B");
+    this->declare_parameter("RTK_STATUS_FORMAT", "B");
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
@@ -148,6 +156,12 @@ void UM982Driver::init_parameters()
     params_.uart_or_tcp = this->get_parameter("uart_or_tcp").as_string();
     params_.fix_freq = this->get_parameter("FIX_FREQ").as_int();
     params_.heading_freq = this->get_parameter("HEADING_FREQ").as_int();
+    params_.rtk_status_freq = static_cast<int>(std::max<int64_t>(
+        1, this->get_parameter("RTK_STATUS_FREQ").as_int()));
+    params_.heading_log_format = normalize_log_format(
+        this->get_parameter("UNIHEADING_FORMAT").as_string(), "UNIHEADING_FORMAT");
+    params_.rtk_status_log_format = normalize_log_format(
+        this->get_parameter("RTK_STATUS_FORMAT").as_string(), "RTK_STATUS_FORMAT");
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
@@ -196,15 +210,15 @@ void UM982Driver::configure_gnss_output()
 {
     double fix_p = 1.0 / params_.fix_freq;
     double head_p = 1.0 / params_.heading_freq;
+    double rtk_status_p = 1.0 / params_.rtk_status_freq;
     std::string fix_period = format_period(fix_p);
     std::string heading_period = format_period(head_p);
+    std::string rtk_status_period = format_period(rtk_status_p);
 
     // Apply volatile startup configuration only. Do not send SAVECONFIG.
-    // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
-    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII. UNIHEADING supports
-    // both ASCII (UNIHEADINGA) and binary (UNIHEADINGB) output; per policy, use the
-    // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
-    // fallback heading sentence.
+    // GPGGA/GPGGAH have no binary counterparts, so position stays NMEA/ASCII.
+    // UNIHEADING and RTKSTATUS can each be selected in ASCII (A) or binary (B)
+    // form.  Do not send SAVECONFIG: these diagnostics are session-local.
     write_to_gnss("UNLOG\r\n");
 
     // UNLOG can stop a binary message halfway through transmission.  If that
@@ -222,12 +236,14 @@ void UM982Driver::configure_gnss_output()
 
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
-    write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
-    write_to_gnss("GPTHS " + heading_period + "\r\n");
+    write_to_gnss("GPGGAH " + fix_period + "\r\n");
+    write_to_gnss("UNIHEADING" + params_.heading_log_format + " " + heading_period + "\r\n");
+    write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, UNIHEADINGB(binary)/GPTHS(ASCII fallback)=%ss",
-        fix_period.c_str(), heading_period.c_str());
+        "Configured volatile UM982 output: GPGGA/GPGGAH(ASCII)=%ss, UNIHEADING%s=%ss, RTKSTATUS%s=%ss",
+        fix_period.c_str(), params_.heading_log_format.c_str(), heading_period.c_str(),
+        params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)
@@ -277,6 +293,9 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
     }
 }
 
+// Moved to parsing.cpp.  Keep this transition block excluded until the next
+// source-history cleanup, so the refactor remains easy to audit as a move.
+#if 0
 void UM982Driver::process_gnss_buffer()
 {
     while (!gnss_parse_buf_.empty()) {
@@ -361,11 +380,12 @@ void UM982Driver::process_gnss_line(std::string line)
     if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
+    } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
+        parse_uniheadinga(line);
     } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
         parse_ths(line);
     }
-    // UNIHEADINGはbinary(UNIHEADINGB)のみ要求しているため、ここには来ない。
-    // バイナリフレームはprocess_gnss_buffer()内でparse_uniheadingb()へ直接渡される。
+    // UNIHEADINGB is dispatched directly from process_gnss_buffer().
 }
 
 // --------------------------------------------------------------------------
@@ -408,9 +428,46 @@ void UM982Driver::parse_gga(const std::string& line)
     if (!stop_publish_) {
         fix_pub_->publish(msg);
     }
-    fix_debug_pub_->publish(msg);
     if (quality >= 1) {
         publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
+    }
+}
+
+void UM982Driver::parse_uniheadinga(const std::string& line)
+{
+    const auto separator = line.find(';');
+    if (separator == std::string::npos) return;
+
+    std::string payload = line.substr(separator + 1);
+    const auto checksum = payload.find('*');
+    if (checksum != std::string::npos) payload.resize(checksum);
+    const auto fields = utils::split(payload, ',');
+    // sol_stat, pos_type, baseline, heading, pitch, ...
+    if (fields.size() < 5) return;
+
+    try {
+        if (fields[0] != "SOL_COMPUTED" ||
+            (fields[1] != "NARROW_INT" && fields[1] != "INS_RTKFIXED")) {
+            return;
+        }
+        const double yaw_rad = utils::deg2rad(90.0 - std::stod(fields[3]));
+        const double pitch_rad = utils::deg2rad(-std::stod(fields[4]));
+
+        latest_yaw_rad_ = yaw_rad;
+        latest_heading_stamp_ = this->now();
+        have_heading_ = true;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, pitch_rad, yaw_rad);
+        geometry_msgs::msg::PoseWithCovarianceStamped msg;
+        msg.header.stamp = latest_heading_stamp_;
+        msg.header.frame_id = params_.heading_frame_id;
+        msg.pose.pose.orientation = tf2::toMsg(q);
+        const double variance = std::pow(utils::deg2rad(0.5), 2);
+        msg.pose.covariance[28] = variance;
+        msg.pose.covariance[35] = variance;
+        if (!stop_publish_) heading_pub_->publish(msg);
+    } catch (...) {
     }
 }
 
@@ -522,7 +579,6 @@ void UM982Driver::parse_ths(const std::string& line)
         if (!stop_publish_) {
             heading_pub_->publish(msg);
         }
-        heading_debug_pub_->publish(msg);
     } catch (...) {
     }
 }
@@ -578,8 +634,9 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
         latest_heading_stamp_ = msg.header.stamp;
         have_heading_ = true;
     }
-    heading_debug_pub_->publish(msg);
 }
+
+#endif
 
 // --------------------------------------------------------------------------
 // RTK (NTRIP)

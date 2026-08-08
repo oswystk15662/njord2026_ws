@@ -49,6 +49,23 @@ def generate_launch_description():
         default_value='20',
         description='Frequency for Heading publishing (Hz)'
     )
+    arg_rtk_status_freq = DeclareLaunchArgument(
+        'rtk_status_freq',
+        default_value='1',
+        description='Frequency for RTKSTATUS diagnostic output (Hz)'
+    )
+    arg_uniheading_format = DeclareLaunchArgument(
+        'uniheading_format',
+        default_value='B',
+        choices=['A', 'B'],
+        description='UM982 UNIHEADING output format: ASCII (A) or binary (B)'
+    )
+    arg_rtk_status_format = DeclareLaunchArgument(
+        'rtk_status_format',
+        default_value='B',
+        choices=['A', 'B'],
+        description='UM982 RTKSTATUS output format: ASCII (A) or binary (B)'
+    )
     arg_rtk = DeclareLaunchArgument(
         'rtk_enable',
         default_value='true',
@@ -113,6 +130,9 @@ def generate_launch_description():
             'tcp_port': LaunchConfiguration('tcp_port'),
             'FIX_FREQ': LaunchConfiguration('fix_freq'),
             'HEADING_FREQ': LaunchConfiguration('heading_freq'),
+            'RTK_STATUS_FREQ': LaunchConfiguration('rtk_status_freq'),
+            'UNIHEADING_FORMAT': LaunchConfiguration('uniheading_format'),
+            'RTK_STATUS_FORMAT': LaunchConfiguration('rtk_status_format'),
             'GNSS_RTK_Enable': LaunchConfiguration('rtk_enable'),
             'NTRIP_Server': LaunchConfiguration('ntrip_server'),
             'NTRIP_Port': LaunchConfiguration('ntrip_port'),
@@ -133,6 +153,9 @@ def generate_launch_description():
         arg_tcp_port,
         arg_fix_freq,
         arg_heading_freq,
+        arg_rtk_status_freq,
+        arg_uniheading_format,
+        arg_rtk_status_format,
         arg_rtk,
         arg_ntrip_server,
         arg_ntrip_port,
