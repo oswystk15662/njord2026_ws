@@ -119,10 +119,16 @@ def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     assert '"enable_back_cam_jpeg_ground_video"' in source
 
 
-def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
+def test_minipc_bringup_uses_the_canonical_control_manager_by_default():
     source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"control_manager"' in source
+    assert '"control.launch.py"' in source
+    assert '"enable_control_manager",' in source
+    assert 'default_value="true"' in source
+    # Keep the old arbiter only for the explicit legacy comparison path; it
+    # cannot contend for /cmd_vel during normal role bringup.
     assert 'executable="command_arbiter_node"' in source
-    assert 'name="command_arbiter"' in source
+    assert 'condition=UnlessCondition(enable_control_manager)' in source
     assert 'package="twist_mux"' not in source
 
 
@@ -354,6 +360,16 @@ def test_task_launch_files_declare_role_argument(filename):
         or 'choices=["minipc", "standalone"]' in source
     )
     assert "default_value='minipc'" in source or 'default_value="minipc"' in source
+
+
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
+def test_legacy_task_launches_disable_persistent_managers(filename):
+    source = _read_launch_source(filename)
+    # Compatibility launches own their historical graph and must not start a
+    # second resident Nav2/control/mission graph from role bringup.
+    assert "'enable_nav2': 'false'" in source
+    assert "'enable_mission_manager': 'false'" in source
+    assert "'enable_control_manager': 'false'" in source
 
 
 def test_ground_pc_keeps_front_and_back_video_receivers_separate():
