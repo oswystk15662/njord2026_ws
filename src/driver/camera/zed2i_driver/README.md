@@ -33,6 +33,23 @@ SDK/CPUノードはいずれもROS 2 componentとして登録され、上記laun
 購読componentを追加した場合はintra-process通信を利用できる。Pythonノードなど
 container外の購読者との通信は従来どおりDDS経由になる。
 
+## 露出・ゲイン（ZED SDKモード）
+
+SDKモードでは、ZED SDKの自動露出・自動ゲイン（AEC/AGC）を使う。既定では画面下半分を
+測光ROIにするため、水面を優先して調整し、空などによるブイ周辺の白飛びを抑える。
+起動ログに `ZED automatic exposure/gain enabled with ROI ...` と出れば設定済みである。
+
+`config/zed2i_jetson_orin_nano.yaml` の以下は、すべて左画像に対する0.0--1.0の比率である。
+
+- `aec_agc_enable`: 自動露出・自動ゲインの有効化（既定 `true`）
+- `aec_agc_roi_enable`: ROI測光の有効化（既定 `true`）
+- `aec_agc_roi_x_ratio` / `aec_agc_roi_y_ratio`: ROI左上（既定 `0.0` / `0.5`）
+- `aec_agc_roi_width_ratio` / `aec_agc_roi_height_ratio`: ROIサイズ（既定 `1.0` / `0.5`）
+
+例えば水面の位置がさらに下寄りなら、`aec_agc_roi_y_ratio: 0.6` と
+`aec_agc_roi_height_ratio: 0.4` にする。手動露出に切り替える必要があるときだけ
+`aec_agc_enable: false` とする。
+
 ## 陸上映像伝送(ground video)の正しい起動手順
 
 Image トピックを DDS で流すと 1 本あたり約 442 Mbps になるため、陸上 PC で映像を見る場合は

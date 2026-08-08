@@ -21,6 +21,15 @@
     cy: 360.0
     depth_min_m: 0.3
     depth_max_m: 20.0
+    # Let the ZED SDK continuously adjust exposure and gain from the water
+    # area, rather than locking either value. Ratios are relative to the left
+    # image; this default is its lower half (x=0, y=0.5H, w=W, h=0.5H).
+    aec_agc_enable: true
+    aec_agc_roi_enable: true
+    aec_agc_roi_x_ratio: 0.0
+    aec_agc_roi_y_ratio: 0.5
+    aec_agc_roi_width_ratio: 1.0
+    aec_agc_roi_height_ratio: 0.5
     # Human-FOV-like elliptical region of interest. Disabled by default to
     # preserve existing behavior; when enabled, RGB/depth/points/perception/
     # ground-video are all restricted to inside the ellipse.
