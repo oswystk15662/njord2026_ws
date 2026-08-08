@@ -80,7 +80,10 @@ private:
     std::array<uint8_t, 4096> rtk_read_chunk_;
     std::vector<uint8_t> rtk_response_buffer_;
     bool rtk_response_header_received_{false};
-    bool is_rtk_connected_;
+    // The ROS timer and the Asio I/O thread both inspect RTK state.  Keep it
+    // atomic so a retry cannot race an in-flight connection attempt.
+    std::atomic_bool is_rtk_connected_{false};
+    std::atomic_bool rtk_connection_in_progress_{false};
 
     // ROS Publishers
     rclcpp::Publisher<sensor_msgs::msg::NavSatFix>::SharedPtr fix_pub_;

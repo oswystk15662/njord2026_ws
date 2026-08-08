@@ -28,7 +28,6 @@ namespace um982_driver
 UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 : Node("um982_driver_node", options),
   work_guard_(io_context_.get_executor()),
-  is_rtk_connected_(false),
   stop_publish_(false)
 {
     RCLCPP_INFO(this->get_logger(), "Initializing UM982 Driver Node (C++)...");
@@ -63,7 +62,16 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
     // IO Thread Start
     io_thread_ = std::thread([this]() {
-        io_context_.run();
+        // An exception escaping an Asio completion handler otherwise invokes
+        // std::terminate, which used to make the whole GNSS node abort.
+        while (!io_context_.stopped()) {
+            try {
+                io_context_.run();
+                break;
+            } catch (const std::exception & e) {
+                RCLCPP_ERROR(this->get_logger(), "Unhandled GNSS I/O exception: %s", e.what());
+            }
+        }
     });
 
     // Connect
@@ -587,22 +595,42 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
 
 void UM982Driver::init_rtk_connection()
 {
+    // The five-second GGA timer may fire while DNS/TCP connection is still
+    // pending.  Do not replace the socket/resolver beneath that operation.
+    if (rtk_connection_in_progress_.exchange(true)) {
+        return;
+    }
+
     rtk_response_buffer_.clear();
     rtk_response_header_received_ = false;
     is_rtk_connected_ = false;
-    rtk_socket_ = std::make_unique<boost::asio::ip::tcp::socket>(io_context_);
-    rtk_resolver_ = std::make_unique<boost::asio::ip::tcp::resolver>(io_context_);
+    try {
+        rtk_socket_ = std::make_unique<boost::asio::ip::tcp::socket>(io_context_);
+        rtk_resolver_ = std::make_unique<boost::asio::ip::tcp::resolver>(io_context_);
 
-    // 非同期接続
-    auto endpoints = rtk_resolver_->resolve(params_.ntrip_server, std::to_string(params_.ntrip_port));
-    boost::asio::async_connect(*rtk_socket_, endpoints,
-        [this](const boost::system::error_code& error, const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
-            if (!error) {
-                connect_rtk_client();
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "RTK Connect Failed: %s", error.message().c_str());
-            }
-        });
+        // DNS resolution can throw (for example while mDNS is unavailable).
+        auto endpoints = rtk_resolver_->resolve(
+            params_.ntrip_server, std::to_string(params_.ntrip_port));
+        boost::asio::async_connect(*rtk_socket_, endpoints,
+            [this](const boost::system::error_code& error, const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
+                if (error) {
+                    RCLCPP_ERROR(this->get_logger(), "RTK Connect Failed: %s", error.message().c_str());
+                    rtk_connection_in_progress_ = false;
+                    return;
+                }
+
+                try {
+                    connect_rtk_client();
+                } catch (const std::exception & e) {
+                    is_rtk_connected_ = false;
+                    rtk_connection_in_progress_ = false;
+                    RCLCPP_ERROR(this->get_logger(), "RTK request setup failed: %s", e.what());
+                }
+            });
+    } catch (const std::exception & e) {
+        rtk_connection_in_progress_ = false;
+        RCLCPP_ERROR(this->get_logger(), "RTK connection setup failed: %s", e.what());
+    }
 }
 
 void UM982Driver::connect_rtk_client()
@@ -623,9 +651,17 @@ void UM982Driver::connect_rtk_client()
     request << "\r\n";
 
     std::string req_str = request.str();
-    boost::asio::write(*rtk_socket_, boost::asio::buffer(req_str));
+    if (!rtk_socket_ || !rtk_socket_->is_open()) {
+        throw std::runtime_error("RTK socket is not open after connect");
+    }
+    boost::system::error_code write_error;
+    boost::asio::write(*rtk_socket_, boost::asio::buffer(req_str), write_error);
+    if (write_error) {
+        throw boost::system::system_error(write_error);
+    }
 
     is_rtk_connected_ = true;
+    rtk_connection_in_progress_ = false;
     RCLCPP_INFO(this->get_logger(), "Connected to RTK Server. Waiting for data...");
 
     start_rtk_read();
@@ -705,7 +741,13 @@ void UM982Driver::on_rtk_read(const boost::system::error_code& error, std::size_
         }
 
         if (data_size > 0) {
-            write_to_gnss(std::vector<uint8_t>(data_begin, data_begin + data_size));
+            try {
+                write_to_gnss(std::vector<uint8_t>(data_begin, data_begin + data_size));
+            } catch (const std::exception & e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to forward RTK data to UM982: %s", e.what());
+                is_rtk_connected_ = false;
+                return;
+            }
         }
 
         // 次の読み込み
