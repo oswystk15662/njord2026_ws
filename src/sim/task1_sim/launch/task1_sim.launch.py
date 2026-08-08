@@ -43,6 +43,8 @@ def launch_cardinal_walls(context):
             # Main Task1.2 direction: GPS waypoint 3 -> 4 (west in this map).
             "course_heading_rad": 3.141592653589793,
             "retirement_course_heading_rad": 3.141592653589793,
+            "retire_passed_cardinal_walls_from_base_pose": True,
+            "retirement_margin_m": 1.0,
             # The simulator publishes the same UM982 true-heading contract
             # used by the vessel's dual-antenna GNSS receiver.
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",

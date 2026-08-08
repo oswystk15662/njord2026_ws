@@ -71,6 +71,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retirement_course_heading_rad', float('nan'))
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
+        self.declare_parameter('retire_passed_cardinal_walls_from_base_pose', False)
         self.declare_parameter('wall_enable_topic', '')
         # Simulation-only ground-truth preview. It is visualization-only and
         # is deliberately never included in /virtual_obstacles.
@@ -92,6 +93,8 @@ class CardinalWallPublisher(Node):
         self.true_north_yaw_rad = float(self.get_parameter('true_north_yaw_rad').value)
         self.base_frame_id = self.get_parameter('base_frame_id').value
         self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
+        self.retire_passed_cardinal_walls_from_base_pose = self.get_parameter(
+            'retire_passed_cardinal_walls_from_base_pose').value
         self.tracks = []
         self.preview_tracks = self._load_preview_tracks(
             self.get_parameter('preview_buoy_positions').value,
@@ -244,6 +247,7 @@ class CardinalWallPublisher(Node):
                 f"Confirmed cardinal marker {nearest['class_id']} at ({nearest['x']:.2f}, {nearest['y']:.2f})")
 
     def publish_walls(self):
+        self._retire_passed_cardinal_walls_from_base_pose()
         points = []
         for track in self.tracks:
             if (self.walls_enabled and track['class_id'] is not None
@@ -269,6 +273,38 @@ class CardinalWallPublisher(Node):
         msg.data = b''.join(struct.pack('fff', *point) for point in points)
         self.pub.publish(msg)
         self._publish_detection_markers(msg.header.stamp)
+
+    def _retire_passed_cardinal_walls_from_base_pose(self):
+        """Retire each cardinal wall once the hull crosses its parallel plane.
+
+        The plane is perpendicular to the GPS3->4 course direction.  This
+        preserves walls for upcoming marks while removing only a passed mark,
+        even when the boat takes a lateral avoidance path.
+        """
+        if not self.retire_passed_cardinal_walls_from_base_pose:
+            return
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.map_frame, self.base_frame_id, Time(), timeout=Duration(seconds=0.05))
+        except TransformException:
+            return
+        boat_x = transform.transform.translation.x
+        boat_y = transform.transform.translation.y
+        forward_x = math.cos(self.retirement_course_heading_rad)
+        forward_y = math.sin(self.retirement_course_heading_rad)
+        retired = 0
+        for track in self.tracks:
+            if (track.get('class_id') not in CARDINAL_DIRECTIONS or
+                    not track.get('wall_active', True)):
+                continue
+            passed_distance = ((boat_x - track['x']) * forward_x +
+                               (boat_y - track['y']) * forward_y)
+            if passed_distance > self.retirement_margin:
+                track['wall_active'] = False
+                retired += 1
+        if retired:
+            self.get_logger().info(
+                f'Disabled {retired} cardinal wall(s) passed by {self.retirement_margin:.2f} m')
 
     def _publish_detection_markers(self, stamp):
         """Visualize every confirmed buoy in the map frame.
