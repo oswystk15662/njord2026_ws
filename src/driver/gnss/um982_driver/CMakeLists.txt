@@ -19,11 +19,40 @@ find_package(tf2_geometry_msgs REQUIRED)
 # Boost (Asioなどのため)
 find_package(Boost REQUIRED COMPONENTS system)
 
-find_package(njord_platform REQUIRED)
-njord_detect_platform()
-njord_distro_header(UM982_TF2_GEOMETRY_MSGS_HEADER tf2_geometry_msgs/tf2_geometry_msgs)
+# This driver has no CPU-, CUDA-, or device-specific code.  Probe the actual
+# installed tf2_geometry_msgs header instead of using platform detection (which
+# can pull in optional GPU SDK configuration while building this CPU-only node).
+# This keeps the package buildable on x86_64/amd64 and aarch64/arm64, including
+# cross-compilation, independent of the ROS distribution name.
+get_target_property(_um982_tf2_geometry_msgs_include_dirs
+  tf2_geometry_msgs::tf2_geometry_msgs INTERFACE_INCLUDE_DIRECTORIES)
+set(_um982_tf2_geometry_msgs_header_roots "")
+foreach(_um982_include_dir IN LISTS _um982_tf2_geometry_msgs_include_dirs)
+  # The exported target normally exposes <prefix>/include/tf2_geometry_msgs,
+  # while the public include is addressed from <prefix>/include.
+  get_filename_component(_um982_include_parent "${_um982_include_dir}" DIRECTORY)
+  list(APPEND _um982_tf2_geometry_msgs_header_roots
+    "${_um982_include_dir}" "${_um982_include_parent}")
+endforeach()
+find_file(UM982_TF2_GEOMETRY_MSGS_HPP_PATH
+  NAMES tf2_geometry_msgs/tf2_geometry_msgs.hpp
+  PATHS ${_um982_tf2_geometry_msgs_header_roots}
+  NO_DEFAULT_PATH)
+if(UM982_TF2_GEOMETRY_MSGS_HPP_PATH)
+  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs/tf2_geometry_msgs.hpp")
+else()
+  find_file(UM982_TF2_GEOMETRY_MSGS_H_PATH
+    NAMES tf2_geometry_msgs/tf2_geometry_msgs.h
+    PATHS ${_um982_tf2_geometry_msgs_header_roots}
+    NO_DEFAULT_PATH)
+  if(NOT UM982_TF2_GEOMETRY_MSGS_H_PATH)
+    message(FATAL_ERROR
+      "um982_driver requires tf2_geometry_msgs/tf2_geometry_msgs.hpp or .h")
+  endif()
+  set(UM982_TF2_GEOMETRY_MSGS_HEADER "tf2_geometry_msgs/tf2_geometry_msgs.h")
+endif()
 
-message(STATUS "um982_driver: ROS_DISTRO=${NJORD_ROS_DISTRO}, tf2_geometry_msgs header=${UM982_TF2_GEOMETRY_MSGS_HEADER}")
+message(STATUS "um982_driver: tf2_geometry_msgs header=${UM982_TF2_GEOMETRY_MSGS_HEADER}")
 
 configure_file(
   ${CMAKE_CURRENT_SOURCE_DIR}/cmake/tf2_geometry_msgs_include.hpp.in

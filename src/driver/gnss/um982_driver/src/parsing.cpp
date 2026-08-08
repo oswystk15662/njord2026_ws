@@ -95,13 +95,25 @@ void UM982Driver::parse_gga(const std::string& line)
     msg.header.stamp = this->now();
     msg.header.frame_id = "base_link";
     msg.status.service = 15;
-    msg.latitude = utils::convert_nmea_to_latlon(parts[2], parts[3]);
-    msg.longitude = utils::convert_nmea_to_latlon(parts[4], parts[5]);
-    const double altitude = parts[9].empty() ? 0.0 : std::stod(parts[9]);
-    const double separation = parts[11].empty() ? 0.0 : std::stod(parts[11]);
+    if (!utils::convert_nmea_to_latlon(parts[2], parts[3], msg.latitude) ||
+        !utils::convert_nmea_to_latlon(parts[4], parts[5], msg.longitude))
+    {
+        return;
+    }
+
+    double altitude = 0.0;
+    double separation = 0.0;
+    if ((!parts[9].empty() && !utils::parse_finite_double(parts[9], altitude)) ||
+        (!parts[11].empty() && !utils::parse_finite_double(parts[11], separation)))
+    {
+        return;
+    }
     msg.altitude = altitude - separation;
 
-    const int quality = parts[6].empty() ? 0 : std::stoi(parts[6]);
+    int quality = 0;
+    if (!parts[6].empty() && !utils::parse_int(parts[6], quality)) {
+        return;
+    }
     if (quality >= 1) {
         msg.position_covariance[0] = 0.02 * 0.02;
         msg.position_covariance[4] = 0.02 * 0.02;
