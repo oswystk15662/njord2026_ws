@@ -16,7 +16,10 @@ INHIBITS = {
     "nav2_not_ready": 2,
     "task_not_ready": 3,
     "nav_stale": 4,
-    "health": 5,
+    "require_ground_station": 5,
+    "require_driver_heartbeat": 6,
+    "require_localization_heartbeat": 7,
+    "require_rtk_fix": 8,
     "critical_health": 9,
     "task_requirement": 10,
 }
@@ -94,3 +97,4 @@ def test_auto_permission_requires_ok_enabled_health_signal():
     )
     assert not decision.auto_permitted
     assert "driver_heartbeat" in decision.reasons[0][1]
+    assert decision.reasons[0][0] == 6

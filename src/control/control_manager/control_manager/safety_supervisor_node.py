@@ -93,6 +93,8 @@ class SafetySupervisor(Node):
         return received_ns is not None and (self.get_clock().now().nanoseconds - received_ns) <= int(timeout_sec * 1e9)
 
     def _decision(self, nav_fresh: bool):
+        if not self._active_policy:
+            return False, ((ControlState.INHIBIT_TASK_NOT_READY, "no active task control policy"),)
         try:
             requirements = self._policy.requirements_for(self._active_policy)
         except PolicyError as exc:
@@ -115,7 +117,10 @@ class SafetySupervisor(Node):
                 "nav2_not_ready": ControlState.INHIBIT_NAV2_NOT_READY,
                 "task_not_ready": ControlState.INHIBIT_TASK_NOT_READY,
                 "nav_stale": ControlState.INHIBIT_NAV_COMMAND_STALE,
-                "health": ControlState.INHIBIT_GROUND_STATION_UNAVAILABLE,
+                "require_ground_station": ControlState.INHIBIT_GROUND_STATION_UNAVAILABLE,
+                "require_driver_heartbeat": ControlState.INHIBIT_DRIVER_HEARTBEAT,
+                "require_localization_heartbeat": ControlState.INHIBIT_LOCALIZATION_HEARTBEAT,
+                "require_rtk_fix": ControlState.INHIBIT_RTK_FIX,
                 "critical_health": ControlState.INHIBIT_CRITICAL_HEALTH_FAULT,
                 "task_requirement": ControlState.INHIBIT_TASK_REQUIREMENT,
             },
