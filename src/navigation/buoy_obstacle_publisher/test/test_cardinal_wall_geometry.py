@@ -7,15 +7,27 @@ from buoy_obstacle_publisher.cardinal_wall_geometry import (
 
 
 def test_north_marker_blocks_the_south_side():
-    points = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 2.0, 2)
+    # With a GNSS course heading north, N means pass forward/north, so the
+    # virtual wall blocks the south/back side.
+    points = wall_points(
+        [-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 2.0, 2, math.pi / 2.0)
     assert points
     assert min(y for _, y, _ in points) == -4.0
     assert max(y for _, y, _ in points) == 2.0
 
 
 def test_east_marker_blocks_the_west_side():
-    points = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 2.0, 3)
+    points = wall_points(
+        [-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 2.0, 3, math.pi / 2.0)
     assert points
+    assert min(x for x, _, _ in points) == -5.0
+    assert max(x for x, _, _ in points) == 1.0
+
+
+def test_true_north_rotation_is_applied_in_map_frame():
+    # A map whose true-north axis points along +x must rotate a north-marker
+    # south-wall onto the -x side.
+    points = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 2.0, 2, 0.0)
     assert min(x for x, _, _ in points) == -5.0
     assert max(x for x, _, _ in points) == 1.0
 

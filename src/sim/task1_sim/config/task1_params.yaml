@@ -13,9 +13,9 @@ task1_orchestrator:
     waypoint2_xy: "[[24.0, -35.0], [15.0, -15.0], [8.0, -35.0]]"
 
     buoy_position_xy: "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
-    # Official Task1 cardinal marks, aligned index-wise.  The S/N/S sequence
-    # matches the slalom waypoint route; red and green reference buoys are
-    # displayed adjacent to each cardinal mark by the simulator.
+    # Official Task1 cardinal marks, interpreted against GNSS true north.
+    # The S/N/S sequence matches the slalom waypoint route. Red and green
+    # reference buoys are shown adjacent to each mark by the simulator.
     buoy_marks: "[\"S\", \"N\", \"S\"]"
     course_heading_rad: 3.141592653589793
     # Main waypoint 3: start retiring passed buoy walls from the next WP.

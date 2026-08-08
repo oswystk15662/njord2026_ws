@@ -4,10 +4,10 @@ import math
 
 
 CARDINAL_DIRECTIONS = {
-    2: (0, -1),  # north marker: exclude south
-    3: (-1, 0),  # east marker: exclude west
-    4: (0, 1),   # south marker: exclude north
-    5: (1, 0),   # west marker: exclude east
+    2: "N",
+    3: "E",
+    4: "S",
+    5: "W",
 }
 
 
@@ -18,7 +18,20 @@ def direction_for_class(class_id, course_heading_rad):
     wall blocks starboard.  Green marks do the inverse.
     """
     if class_id in CARDINAL_DIRECTIONS:
-        return CARDINAL_DIRECTIONS[class_id]
+        # ``course_heading_rad`` is the map-frame angle of true north. It is
+        # estimated from the GNSS dual-antenna heading and map->base TF.
+        # The wall blocks the opposite geographical side.
+        north_x = math.cos(course_heading_rad)
+        north_y = math.sin(course_heading_rad)
+        east_x, east_y = north_y, -north_x
+        cardinal = CARDINAL_DIRECTIONS[class_id]
+        if cardinal == "N":
+            return -north_x, -north_y
+        if cardinal == "E":
+            return -east_x, -east_y
+        if cardinal == "S":
+            return north_x, north_y
+        return east_x, east_y
     forward_x = math.cos(course_heading_rad)
     forward_y = math.sin(course_heading_rad)
     if class_id == 1:  # red: keep mark on port, exclude starboard

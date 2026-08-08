@@ -27,6 +27,9 @@ controller_server:
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
       rotate_to_heading_at_start: true
+      # Costmaps and collision_monitor handle the simulator's virtual walls.
+      # Keep RPP from aborting FollowPath into a recovery loop.
+      use_collision_detection: false
       # Surface-vessel yaw has substantial inertia.  Limit the controller's
       # angular acceleration to prevent repeated over-corrections.
       max_angular_accel: 0.8

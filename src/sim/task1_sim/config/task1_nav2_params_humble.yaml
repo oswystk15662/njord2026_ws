@@ -36,6 +36,10 @@ controller_server:
       # oscillate indefinitely at the first waypoint. Let RPP converge while
       # translating instead of insisting on an initial heading alignment.
       use_rotate_to_heading: false
+      # Costmaps and collision_monitor handle the simulator's virtual walls.
+      # Avoid aborting FollowPath repeatedly from RPP's duplicate projection
+      # check, which otherwise triggers recovery loops and excessive circling.
+      use_collision_detection: false
       # Surface-vessel yaw has substantial inertia.  The Nav2 default of
       # 3.2 rad/s^2 makes the controller over-correct after each path update.
       max_angular_accel: 0.8

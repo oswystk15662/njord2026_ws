@@ -4,6 +4,7 @@ import math
 import struct
 
 from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped
 from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 import rclpy
 from rclpy.duration import Duration
@@ -38,6 +39,10 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('confirmations_required', 2)
         self.declare_parameter('publish_rate_hz', 2.0)
         self.declare_parameter('course_heading_rad', 0.0)
+        self.declare_parameter('true_north_heading_topic', '')
+        self.declare_parameter('base_frame_id', 'base_link')
+        self.declare_parameter('true_north_yaw_rad', math.pi / 2.0)
+        self.declare_parameter('retirement_course_heading_rad', float('nan'))
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
 
@@ -50,6 +55,11 @@ class CardinalWallPublisher(Node):
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
         self.course_heading_rad = float(self.get_parameter('course_heading_rad').value)
+        retirement_heading = float(self.get_parameter('retirement_course_heading_rad').value)
+        self.retirement_course_heading_rad = (
+            self.course_heading_rad if not math.isfinite(retirement_heading) else retirement_heading)
+        self.true_north_yaw_rad = float(self.get_parameter('true_north_yaw_rad').value)
+        self.base_frame_id = self.get_parameter('base_frame_id').value
         self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
         self.tracks = []
 
@@ -61,6 +71,9 @@ class CardinalWallPublisher(Node):
         retirement_topic = self.get_parameter('retirement_frontier_topic').value
         if retirement_topic:
             self.create_subscription(PointStamped, retirement_topic, self._on_retirement_frontier, 10)
+        true_north_topic = self.get_parameter('true_north_heading_topic').value
+        if true_north_topic:
+            self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
         rate = max(0.2, float(self.get_parameter('publish_rate_hz').value))
         self.create_timer(1.0 / rate, self.publish_walls)
 
@@ -105,13 +118,35 @@ class CardinalWallPublisher(Node):
         for track in self.tracks:
             behind_frontier = is_behind_retirement_frontier(
                 track['x'], track['y'], point.point.x, point.point.y,
-                self.course_heading_rad, self.retirement_margin)
+                self.retirement_course_heading_rad, self.retirement_margin)
             if behind_frontier and track.get('wall_active', True):
                 track['wall_active'] = False
                 retired += 1
         if retired:
             self.get_logger().info(
                 f'Disabled {retired} passed-buoy virtual wall(s); detection tracks are retained')
+
+    def _on_true_north_heading(self, msg):
+        """Estimate map-frame true north from UM982 dual-antenna heading."""
+        q = msg.pose.pose.orientation
+        compass_yaw = math.atan2(
+            2.0 * (q.w * q.z + q.x * q.y),
+            1.0 - 2.0 * (q.y * q.y + q.z * q.z))
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.map_frame, self.base_frame_id, Time(), timeout=Duration(seconds=0.2))
+        except TransformException as error:
+            self.get_logger().debug(f'Cannot estimate true north from GNSS heading: {error}')
+            return
+        q_map = transform.transform.rotation
+        map_body_yaw = math.atan2(
+            2.0 * (q_map.w * q_map.z + q_map.x * q_map.y),
+            1.0 - 2.0 * (q_map.y * q_map.y + q_map.z * q_map.z))
+        # UM982 publishes body heading in ENU (east=0, true north=pi/2).
+        # The difference aligns that true-north axis with the map frame.
+        self.true_north_yaw_rad = math.atan2(
+            math.sin(map_body_yaw + math.pi / 2.0 - compass_yaw),
+            math.cos(map_body_yaw + math.pi / 2.0 - compass_yaw))
 
     def _record_detection(self, x, y, class_id):
         nearest = None
@@ -124,7 +159,7 @@ class CardinalWallPublisher(Node):
         if nearest is None:
             nearest = {
                 'x': x, 'y': y, 'candidate': class_id, 'count': 1,
-                'class_id': None, 'wall_active': True,
+                'class_id': None, 'wall_active': True, 'true_north_yaw_rad': None,
             }
             self.tracks.append(nearest)
         elif nearest['class_id'] is None:
@@ -135,6 +170,7 @@ class CardinalWallPublisher(Node):
                 nearest['count'] = 1
         if nearest['class_id'] is None and nearest['count'] >= self.required_confirmations:
             nearest['class_id'] = nearest['candidate']
+            nearest['true_north_yaw_rad'] = self.true_north_yaw_rad
             self.get_logger().info(
                 f"Confirmed cardinal marker {nearest['class_id']} at ({nearest['x']:.2f}, {nearest['y']:.2f})")
 
@@ -144,7 +180,8 @@ class CardinalWallPublisher(Node):
             if track['class_id'] is not None and track.get('wall_active', True):
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
-                    track['x'], track['y'], track['class_id'], self.course_heading_rad))
+                    track['x'], track['y'], track['class_id'],
+                    track.get('true_north_yaw_rad', self.true_north_yaw_rad)))
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame

@@ -80,6 +80,9 @@ def generate_launch_description():
             'detection_topic': '/buoy_detections_3d',
             'output_topic': '/virtual_obstacles',
             'map_frame': 'map',
+            # UM982 dual-antenna heading is referenced to true north. The
+            # wall node maps it into the navigation map frame per detection.
+            'true_north_heading_topic': '/sensor/vehicle_gnss/compass/raw',
         }],
     )
 
