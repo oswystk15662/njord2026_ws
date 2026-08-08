@@ -234,6 +234,31 @@ def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
     ]
 
 
+def test_global_ekf_uses_only_guarded_continuous_inputs():
+    config_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_global.yaml")
+    )
+    with open(config_path, "r") as stream:
+        params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+
+    assert params["odom0"] == "/odometry/gps/um982"
+    assert params["pose0"] == "/sensor/vehicle_gnss/compass/validated"
+    assert params["imu0"] == "/livox/imu/validated"
+    assert params["imu0_config"] == [
+        False, False, False,
+        False, False, False,
+        False, False, False,
+        False, False, True,
+        True, True, False,
+    ]
+
+
+def test_localization_launch_guards_navsat_output_before_global_ekf():
+    source = _read_launch_source("localization.launch.py")
+    assert 'executable="localization_input_guard"' in source
+    assert '("odometry/gps", "/odometry/gps/um982/raw")' in source
+
+
 def test_camera_frames_match_measured_mounting_geometry():
     urdf_path = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "urdf", "robot.urdf.xacro")
@@ -285,7 +310,7 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     with open(config_path, "r") as stream:
         params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
 
-    assert params["odom1"] == "/odom"
+    assert params["odom1"] == "/odom/validated"
     assert params["publish_tf"] is True
     assert params["world_frame"] == "map"
 

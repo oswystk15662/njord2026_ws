@@ -135,6 +135,12 @@ GPS + heading + global EKF odometry ──> navsat_transform ──> global EKF
 
 条件未達なら、公式例へ機械的に変更せず、local EKFの絶対yawをnavsatに使う現在の設計を検証しながら維持します。
 
+### 本リポジトリの入力防御
+
+UM982ドライバは、GGA/THSの数値が不正、NaN/Inf、または無効fixなら通常topicへpublishしません。quality=0はSTATUS_NO_FIXとしてdebug topicだけに流します。予期しないパース例外が発生しても次のGNSS readを先に再登録するため、ノードだけ生存して入力が永久停止する状態を避けます。
+
+localization_input_guardはcompass、navsat変換後Odometry、Livox IMU、GLIM Odometryを検査し、全体が有限値でquaternionが正規化済みなmessageだけをglobal EKFへ中継します。global EKFにはGNSSと独立したLivoxのyaw rateと平面加速度も連続入力します。
+
 ## `odom`が大きく飛ぶとき
 
 望ましいのは`odom -> base_link`が連続で、GNSS補正により`map -> odom`だけが変化する状態です。

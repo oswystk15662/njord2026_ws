@@ -20,6 +20,17 @@ std::string format_period(double period)
 constexpr uint8_t kBinarySync[3] = {0xAA, 0x44, 0xB5};
 constexpr std::size_t kBinaryHeaderLen = 24; // Table 7-48
 constexpr uint16_t kUniheadingMessageId = 972; // UNIHEADING (Message ID)
+
+bool finite_quaternion(const geometry_msgs::msg::Quaternion & q)
+{
+    if (!std::isfinite(q.x) || !std::isfinite(q.y) ||
+        !std::isfinite(q.z) || !std::isfinite(q.w))
+    {
+        return false;
+    }
+    const double norm = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    return std::isfinite(norm) && std::abs(norm - 1.0) < 1e-3;
+}
 } // namespace
 
 namespace um982_driver
@@ -275,10 +286,19 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
         gnss_parse_buf_.insert(
             gnss_parse_buf_.end(), gnss_read_chunk_.begin(), gnss_read_chunk_.begin() + bytes_transferred);
 
-        process_gnss_buffer();
-
-        // 次の読み込み
+        // Re-arm before parsing. If a future parser unexpectedly throws, an
+        // outstanding read still exists and the input stream cannot silently
+        // die while the process remains alive.
         start_gnss_read();
+        try {
+            process_gnss_buffer();
+        } catch (const std::exception & e) {
+            RCLCPP_ERROR(this->get_logger(), "GNSS parse exception; resynchronizing: %s", e.what());
+            gnss_parse_buf_.clear();
+        } catch (...) {
+            RCLCPP_ERROR(this->get_logger(), "Unknown GNSS parse exception; resynchronizing");
+            gnss_parse_buf_.clear();
+        }
     } else {
         RCLCPP_ERROR(this->get_logger(), "GNSS Read Error: %s", error.message().c_str());
         // 再接続ロジックを入れるならここ
@@ -383,50 +403,82 @@ void UM982Driver::process_gnss_line(std::string line)
 
 void UM982Driver::parse_gga(const std::string& line)
 {
-    if (!utils::validate_checksum(line)) return;
+    if (!utils::validate_checksum(line)) {
+        return;
+    }
 
     // * チェックサムを除去して分割
     std::string payload = line.substr(0, line.find('*'));
     auto parts = utils::split(payload, ',');
 
-    if (parts.size() < 15) return;
+    if (parts.size() < 15) {
+        return;
+    }
+
+    int quality = 0;
+    if (!utils::parse_int(parts[6], quality) || quality < 0) {
+        RCLCPP_WARN(this->get_logger(), "Discarding GGA with invalid fix quality");
+        return;
+    }
 
     // $GNGGA,time,lat,N,lon,E,qual,sats,hdop,alt,M,sep,M,age,ref
     sensor_msgs::msg::NavSatFix msg;
     msg.header.stamp = this->now();
-    msg.header.frame_id = "base_link"; // Python通り
-    msg.status.service = 15; // GPS+GLONASS+...
+    msg.header.frame_id = "um982_link";
+    msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_GLONASS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_COMPASS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_GALILEO;
 
-    msg.latitude = utils::convert_nmea_to_latlon(parts[2], parts[3]);
-    msg.longitude = utils::convert_nmea_to_latlon(parts[4], parts[5]);
-
-    double alt = parts[9].empty() ? 0.0 : std::stod(parts[9]);
-    double sep = parts[11].empty() ? 0.0 : std::stod(parts[11]);
-    msg.altitude = alt - sep;
-
-    int quality = parts[6].empty() ? 0 : std::stoi(parts[6]);
-    if (quality >= 1) {
-        msg.position_covariance[0] = 0.02 * 0.02;
-        msg.position_covariance[4] = 0.02 * 0.02;
-        msg.position_covariance[8] = 0.02 * 0.02;
-        msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
-    } else {
-        msg.position_covariance[0] = -1; // 不明
+    if (quality == 0) {
+        msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+        msg.position_covariance_type =
+            sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+        // A no-fix record is useful for diagnostics, but must never enter
+        // navsat_transform as a normal measurement.
+        fix_debug_pub_->publish(msg);
+        return;
     }
+
+    double altitude_msl = 0.0;
+    double geoid_separation = 0.0;
+    if (!utils::convert_nmea_to_latlon(parts[2], parts[3], msg.latitude) ||
+        !utils::convert_nmea_to_latlon(parts[4], parts[5], msg.longitude) ||
+        !utils::parse_finite_double(parts[9], altitude_msl) ||
+        !utils::parse_finite_double(parts[11], geoid_separation))
+    {
+        RCLCPP_WARN(this->get_logger(), "Discarding GGA with malformed or non-finite position");
+        return;
+    }
+    msg.altitude = altitude_msl - geoid_separation;
+    if (!std::isfinite(msg.altitude)) {
+        return;
+    }
+    msg.status.status = quality >= 2 ?
+        sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX :
+        sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+    msg.position_covariance[0] = 0.02 * 0.02;
+    msg.position_covariance[4] = 0.02 * 0.02;
+    msg.position_covariance[8] = 0.02 * 0.02;
+    msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
 
     if (!stop_publish_) {
         fix_pub_->publish(msg);
     }
     fix_debug_pub_->publish(msg);
-    if (quality >= 1) {
-        publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
-    }
+    publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
 }
 
 void UM982Driver::publish_feedback_odometry(
     double latitude_deg, double longitude_deg, const rclcpp::Time& stamp)
 {
     if (!params_.publish_feedback_odometry || !feedback_odom_pub_ || !have_heading_) {
+        return;
+    }
+    if (!std::isfinite(latitude_deg) || !std::isfinite(longitude_deg) ||
+        !std::isfinite(latest_yaw_rad_))
+    {
+        RCLCPP_WARN(this->get_logger(), "Rejecting non-finite feedback odometry input");
         return;
     }
 
@@ -498,6 +550,16 @@ void UM982Driver::publish_feedback_odometry(
     odom.pose.covariance[0] = 0.25;
     odom.pose.covariance[7] = 0.25;
     odom.pose.covariance[35] = 0.02;
+    if (!std::isfinite(odom.pose.pose.position.x) ||
+        !std::isfinite(odom.pose.pose.position.y) ||
+        !finite_quaternion(odom.pose.pose.orientation) ||
+        !std::isfinite(odom.twist.twist.linear.x) ||
+        !std::isfinite(odom.twist.twist.linear.y) ||
+        !std::isfinite(odom.twist.twist.angular.z))
+    {
+        RCLCPP_WARN(this->get_logger(), "Rejecting non-finite feedback Odometry");
+        return;
+    }
     feedback_odom_pub_->publish(odom);
 }
 
@@ -509,31 +571,39 @@ void UM982Driver::parse_ths(const std::string& line)
     auto parts = utils::split(payload, ',');
     if (parts.size() < 3 || parts[2] == "V") return;
 
-    try {
-        double heading_deg = std::stod(parts[1]);
-        double yaw_rad = utils::deg2rad(90.0 - heading_deg);
-
-        latest_yaw_rad_ = yaw_rad;
-        latest_heading_stamp_ = this->now();
-        have_heading_ = true;
-
-        tf2::Quaternion q;
-        q.setRPY(0, 0, yaw_rad);
-
-        geometry_msgs::msg::PoseWithCovarianceStamped msg;
-        msg.header.stamp = this->now();
-        msg.header.frame_id = params_.heading_frame_id;
-        msg.pose.pose.orientation = tf2::toMsg(q);
-
-        double var = utils::deg2rad(0.5);
-        msg.pose.covariance[35] = var * var;
-
-        if (!stop_publish_) {
-            heading_pub_->publish(msg);
-        }
-        heading_debug_pub_->publish(msg);
-    } catch (...) {
+    double heading_deg = 0.0;
+    if (!utils::parse_finite_double(parts[1], heading_deg)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding THS with invalid heading");
+        return;
     }
+    const double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+    if (!std::isfinite(yaw_rad)) {
+        return;
+    }
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, yaw_rad);
+
+    geometry_msgs::msg::PoseWithCovarianceStamped msg;
+    msg.header.stamp = this->now();
+    msg.header.frame_id = params_.heading_frame_id;
+    msg.pose.pose.orientation = tf2::toMsg(q);
+    if (!finite_quaternion(msg.pose.pose.orientation)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding THS with invalid quaternion");
+        return;
+    }
+
+    const double standard_deviation = utils::deg2rad(0.5);
+    msg.pose.covariance[35] = standard_deviation * standard_deviation;
+
+    latest_yaw_rad_ = yaw_rad;
+    latest_heading_stamp_ = msg.header.stamp;
+    have_heading_ = true;
+
+    if (!stop_publish_) {
+        heading_pub_->publish(msg);
+    }
+    heading_debug_pub_->publish(msg);
 }
 
 void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
@@ -556,6 +626,11 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
     double heading_deg = utils::read_f32_le(body + 12);
     double pitch_deg = utils::read_f32_le(body + 16);
 
+    if (!std::isfinite(heading_deg) || !std::isfinite(pitch_deg)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding UNIHEADINGB with non-finite angles");
+        return;
+    }
+
     double yaw_rad = utils::deg2rad(90.0 - heading_deg);
     double pitch_rad = utils::deg2rad(-1.0 * pitch_deg);
 
@@ -566,6 +641,10 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
     msg.header.stamp = this->now();
     msg.header.frame_id = params_.heading_frame_id;
     msg.pose.pose.orientation = tf2::toMsg(q);
+    if (!finite_quaternion(msg.pose.pose.orientation)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding UNIHEADINGB with invalid quaternion");
+        return;
+    }
 
     bool is_valid = (sol_stat == kSolComputed) &&
         (pos_type == kNarrowInt || pos_type == kInsRtkFixed);
