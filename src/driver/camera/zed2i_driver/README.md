@@ -50,6 +50,19 @@ SDKモードでは、ZED SDKの自動露出・自動ゲイン（AEC/AGC）を使
 `aec_agc_roi_height_ratio: 0.4` にする。手動露出に切り替える必要があるときだけ
 `aec_agc_enable: false` とする。
 
+全画面測光（比較用）は、設定ファイルを編集せず次で起動できる。
+
+```shell
+ros2 launch zed2i_driver zed2i.launch.py mode:=sdk aec_agc_roi_enable:=false
+```
+
+下半分測光（既定）は次である。
+
+```shell
+ros2 launch zed2i_driver zed2i.launch.py mode:=sdk \
+  aec_agc_roi_y_ratio:=0.5 aec_agc_roi_height_ratio:=0.5
+```
+
 ## 陸上映像伝送(ground video)の正しい起動手順
 
 Image トピックを DDS で流すと 1 本あたり約 442 Mbps になるため、陸上 PC で映像を見る場合は
