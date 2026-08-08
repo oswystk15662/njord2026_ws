@@ -28,6 +28,20 @@ ekf_filter_node_global:
     odom0_differential: false
     odom0_relative: false
 
+    # The UM982 dual-antenna heading is an absolute ENU yaw measurement.  The
+    # global filter must observe yaw (or yaw rate); otherwise robot_localization
+    # correctly reports unbounded yaw error and the map -> odom transform can
+    # behave erratically.  Fuse only yaw here, so the local UM982 feedback
+    # odometry position is still not double-counted with GPS odometry above.
+    pose0: /sensor/vehicle_gnss/compass/raw
+    pose0_config: [false, false, false,
+                   false, false, true,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    pose0_differential: false
+    pose0_relative: false
+
     # Advanced Navigation Spatial: fuse only its absolute yaw initially.
     # Angular velocity and acceleration remain disabled until the body/ROS
     # axis convention has been validated on the installed unit.
