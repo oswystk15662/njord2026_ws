@@ -3,7 +3,7 @@
 import math
 import struct
 
-from geometry_msgs.msg import PointStamped
+from geometry_msgs.msg import Point, PointStamped
 from geometry_msgs.msg import PoseWithCovarianceStamped
 from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 import rclpy
@@ -227,6 +227,9 @@ class CardinalWallPublisher(Node):
         using on the vessel, rather than a separate simulator-only annotation.
         """
         markers = MarkerArray()
+        clear = Marker()
+        clear.action = Marker.DELETEALL
+        markers.markers.append(clear)
         for index, track in enumerate(self.tracks):
             class_id = track.get('class_id')
             if class_id is None:
@@ -237,6 +240,32 @@ class CardinalWallPublisher(Node):
                 label = f'{label} / CARDINAL'
             if not track.get('wall_active', True):
                 label = f'{label} / WALL RETIRED'
+
+            if track.get('wall_active', True):
+                # /virtual_obstacles itself is PointCloud2, which is not
+                # shown by default in Foxglove/RViz. Mirror the exact wall
+                # samples as a thick magenta POINTS marker so the obstacle
+                # Nav2 receives is always visible without extra display setup.
+                wall = Marker()
+                wall.header.frame_id = self.map_frame
+                wall.header.stamp = stamp
+                wall.ns = 'virtual_obstacle_wall'
+                wall.id = index
+                wall.type = Marker.POINTS
+                wall.action = Marker.ADD
+                wall.pose.orientation.w = 1.0
+                wall.scale.x = self.wall_width + 0.10
+                wall.scale.y = self.wall_width + 0.10
+                wall.color.r = 1.0
+                wall.color.g = 0.0
+                wall.color.b = 1.0
+                wall.color.a = 0.85
+                for x, y, z in wall_points(
+                        self.bounds, self.wall_width, self.spacing,
+                        track['x'], track['y'], class_id,
+                        track.get('true_north_yaw_rad', self.true_north_yaw_rad)):
+                    wall.points.append(Point(x=x, y=y, z=z + 0.08))
+                markers.markers.append(wall)
 
             body = Marker()
             body.header.frame_id = self.map_frame
