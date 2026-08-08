@@ -46,6 +46,7 @@ def launch_cardinal_walls(context):
             # The simulator publishes the same UM982 true-heading contract
             # used by the vessel's dual-antenna GNSS receiver.
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
+            "wall_enable_topic": "/task1/cardinal_wall_enable",
             "retirement_frontier_topic": "/sim/task1_wall_retirement_frontier",
             # Show the known simulator marks faintly before perception
             # confirms them. The wall node keeps these out of Nav2's actual

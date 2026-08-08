@@ -19,6 +19,7 @@ from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import Point, PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 import yaml
@@ -66,6 +67,8 @@ class WaypointPublisher(Node):
         self.declare_parameter('nav2_goal_tolerance_m', 1.0)
         self.declare_parameter('show_waypoint_route_line', False)
         self.declare_parameter('waypoint_route_z', -0.05)
+        self.declare_parameter('cardinal_wall_enable_topic', '/task1/cardinal_wall_enable')
+        self.declare_parameter('cardinal_wall_enable_waypoint_id', 13)
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -78,6 +81,9 @@ class WaypointPublisher(Node):
         self.nav2_goal_tolerance_m = float(self.get_parameter('nav2_goal_tolerance_m').value)
         self.show_waypoint_route_line = self.get_parameter('show_waypoint_route_line').value
         self.waypoint_route_z = float(self.get_parameter('waypoint_route_z').value)
+        self.cardinal_wall_enable_topic = self.get_parameter('cardinal_wall_enable_topic').value
+        self.cardinal_wall_enable_waypoint_id = int(
+            self.get_parameter('cardinal_wall_enable_waypoint_id').value)
         
         # Validate task type
         try:
@@ -92,6 +98,11 @@ class WaypointPublisher(Node):
         marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.waypoint_marker_pub = self.create_publisher(
             MarkerArray, self.waypoint_marker_topic, marker_qos)
+        self.cardinal_wall_enable_pub = self.create_publisher(
+            Bool, self.cardinal_wall_enable_topic, marker_qos)
+        self.cardinal_wall_enabled = False
+        self.cardinal_wall_enable_goal_index = self._cardinal_wall_enable_goal_index()
+        self._publish_cardinal_wall_enable()
         self._publish_waypoint_markers()
 
         # TF lookup is used to replace Task3 gate waypoints with the live midpoint
@@ -163,6 +174,33 @@ class WaypointPublisher(Node):
             return full_config['task3_1_config']
         elif self.task_type == TaskType.TASK3_2:
             return full_config['task3_2_config']
+
+    def _cardinal_wall_enable_goal_index(self):
+        """Return the Task1 NavigateThroughPoses index for GPS3 (ID 13)."""
+        if self.task_type != TaskType.TASK1:
+            return None
+        for index, waypoint in enumerate(self.config.get('waypoints', [])):
+            if int(waypoint.get('id', -1)) == self.cardinal_wall_enable_waypoint_id:
+                return index
+        self.get_logger().warn(
+            f'GPS3 waypoint ID {self.cardinal_wall_enable_waypoint_id} is absent; '
+            'cardinal virtual walls remain disabled')
+        return None
+
+    def _publish_cardinal_wall_enable(self):
+        msg = Bool()
+        msg.data = self.cardinal_wall_enabled
+        self.cardinal_wall_enable_pub.publish(msg)
+
+    def _on_navigation_feedback(self, feedback_msg):
+        """Enable Task1 cardinal walls only after Nav2 reports GPS3 passed."""
+        if self.cardinal_wall_enabled or self.cardinal_wall_enable_goal_index is None:
+            return
+        current_waypoint = int(feedback_msg.feedback.current_waypoint)
+        if current_waypoint >= self.cardinal_wall_enable_goal_index:
+            self.cardinal_wall_enabled = True
+            self._publish_cardinal_wall_enable()
+            self.get_logger().info('GPS3 reached: enabled cardinal virtual walls')
     
     def _timer_callback(self):
         """Timer callback to publish waypoints"""
@@ -397,7 +435,10 @@ class WaypointPublisher(Node):
         
         self.get_logger().debug(f"Sending goal with {len(poses)} poses")
         
-        self.nav_client.send_goal_async(goal_msg).add_done_callback(self._goal_response_callback)
+        self.nav_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self._on_navigation_feedback,
+        ).add_done_callback(self._goal_response_callback)
     
     def _goal_response_callback(self, future):
         """Callback for NavigateThroughPoses goal response"""

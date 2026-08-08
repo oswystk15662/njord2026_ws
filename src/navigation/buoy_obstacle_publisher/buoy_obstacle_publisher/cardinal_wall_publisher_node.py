@@ -12,6 +12,7 @@ from rclpy.duration import Duration
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
+from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformException, TransformListener
 import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
 from visualization_msgs.msg import Marker, MarkerArray
@@ -70,6 +71,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retirement_course_heading_rad', float('nan'))
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
+        self.declare_parameter('wall_enable_topic', '')
         # Simulation-only ground-truth preview. It is visualization-only and
         # is deliberately never included in /virtual_obstacles.
         self.declare_parameter('preview_buoy_positions', '[]')
@@ -94,6 +96,9 @@ class CardinalWallPublisher(Node):
         self.preview_tracks = self._load_preview_tracks(
             self.get_parameter('preview_buoy_positions').value,
             self.get_parameter('preview_buoy_marks').value)
+        wall_enable_topic = self.get_parameter('wall_enable_topic').value
+        # Deployments without a task-stage signal retain the legacy behavior.
+        self.walls_enabled = not bool(wall_enable_topic)
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -104,6 +109,8 @@ class CardinalWallPublisher(Node):
         retirement_topic = self.get_parameter('retirement_frontier_topic').value
         if retirement_topic:
             self.create_subscription(PointStamped, retirement_topic, self._on_retirement_frontier, 10)
+        if wall_enable_topic:
+            self.create_subscription(Bool, wall_enable_topic, self._on_wall_enable, 10)
         true_north_topic = self.get_parameter('true_north_heading_topic').value
         if true_north_topic:
             self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
@@ -160,6 +167,12 @@ class CardinalWallPublisher(Node):
                 self.get_logger().debug(f'Cannot transform cardinal detection: {error}')
                 continue
             self._record_detection(mapped.point.x, mapped.point.y, detection.class_id)
+
+    def _on_wall_enable(self, msg):
+        """Gate planning walls by the Task1 GPS3 completion signal."""
+        if msg.data and not self.walls_enabled:
+            self.walls_enabled = True
+            self.get_logger().info('GPS3 reached: enabling confirmed buoy virtual walls')
 
     def _on_retirement_frontier(self, msg):
         """Disable walls behind a reached waypoint while retaining their tracks."""
@@ -233,7 +246,8 @@ class CardinalWallPublisher(Node):
     def publish_walls(self):
         points = []
         for track in self.tracks:
-            if track['class_id'] is not None and track.get('wall_active', True):
+            if (self.walls_enabled and track['class_id'] is not None
+                    and track.get('wall_active', True)):
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
                     track['x'], track['y'], track['class_id'],
@@ -276,25 +290,26 @@ class CardinalWallPublisher(Node):
             if confirmed:
                 continue
 
-            preview_wall = Marker()
-            preview_wall.header.frame_id = self.map_frame
-            preview_wall.header.stamp = stamp
-            preview_wall.ns = 'preview_virtual_obstacle_wall'
-            preview_wall.id = index
-            preview_wall.type = Marker.POINTS
-            preview_wall.action = Marker.ADD
-            preview_wall.pose.orientation.w = 1.0
-            preview_wall.scale.x = self.wall_width + 0.04
-            preview_wall.scale.y = self.wall_width + 0.04
-            preview_wall.color.r = 0.65
-            preview_wall.color.g = 0.20
-            preview_wall.color.b = 0.85
-            preview_wall.color.a = 0.22
-            for px, py, pz in wall_points(
-                    self.bounds, self.wall_width, self.spacing, x, y,
-                    class_id, self.true_north_yaw_rad):
-                preview_wall.points.append(Point(x=px, y=py, z=pz + 0.04))
-            markers.markers.append(preview_wall)
+            if self.walls_enabled:
+                preview_wall = Marker()
+                preview_wall.header.frame_id = self.map_frame
+                preview_wall.header.stamp = stamp
+                preview_wall.ns = 'preview_virtual_obstacle_wall'
+                preview_wall.id = index
+                preview_wall.type = Marker.POINTS
+                preview_wall.action = Marker.ADD
+                preview_wall.pose.orientation.w = 1.0
+                preview_wall.scale.x = self.wall_width + 0.04
+                preview_wall.scale.y = self.wall_width + 0.04
+                preview_wall.color.r = 0.65
+                preview_wall.color.g = 0.20
+                preview_wall.color.b = 0.85
+                preview_wall.color.a = 0.22
+                for px, py, pz in wall_points(
+                        self.bounds, self.wall_width, self.spacing, x, y,
+                        class_id, self.true_north_yaw_rad):
+                    preview_wall.points.append(Point(x=px, y=py, z=pz + 0.04))
+                markers.markers.append(preview_wall)
 
             preview_text = Marker()
             preview_text.header.frame_id = self.map_frame
@@ -312,7 +327,8 @@ class CardinalWallPublisher(Node):
             preview_text.color.g = 0.85
             preview_text.color.b = 0.85
             preview_text.color.a = 0.55
-            preview_text.text = f'{CLASS_LABELS[class_id]} / NOT DETECTED'
+            state = 'NOT DETECTED' if self.walls_enabled else 'WAITING GPS3'
+            preview_text.text = f'{CLASS_LABELS[class_id]} / {state}'
             markers.markers.append(preview_text)
 
         for index, track in enumerate(self.tracks):
@@ -323,10 +339,12 @@ class CardinalWallPublisher(Node):
             label = CLASS_LABELS.get(class_id, str(class_id))
             if class_id in CARDINAL_DIRECTIONS:
                 label = f'{label} / CARDINAL'
+            if not self.walls_enabled:
+                label = f'{label} / WAITING GPS3'
             if not track.get('wall_active', True):
                 label = f'{label} / WALL RETIRED'
 
-            if track.get('wall_active', True):
+            if self.walls_enabled and track.get('wall_active', True):
                 # /virtual_obstacles itself is PointCloud2, which is not
                 # shown by default in Foxglove/RViz. Mirror the exact wall
                 # samples as a thick magenta POINTS marker so the obstacle

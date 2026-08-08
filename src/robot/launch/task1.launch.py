@@ -83,6 +83,9 @@ def generate_launch_description():
             # UM982 dual-antenna heading is referenced to true north. The
             # wall node maps it into the navigation map frame per detection.
             'true_north_heading_topic': '/sensor/vehicle_gnss/compass/raw',
+            # waypoint_publisher latches this true only after its GPS3
+            # waypoint (Task1 route ID 13) is passed.
+            'wall_enable_topic': '/task1/cardinal_wall_enable',
         }],
     )
 
