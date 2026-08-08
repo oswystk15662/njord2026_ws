@@ -89,7 +89,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("waypoint1_xy", "[]")
         self.declare_parameter("waypoint2_xy", "[]")
         self.declare_parameter("buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]")
-        self.declare_parameter("buoy_marks", "[\"RED\", \"GREEN\", \"RED\"]")
+        self.declare_parameter("buoy_marks", "[\"S\", \"N\", \"S\"]")
         self.declare_parameter("course_heading_rad", math.pi)
         self.declare_parameter("wall_retirement_start_xy", [50.0, -25.0])
         self.declare_parameter("wall_radius", 2.5)
@@ -205,11 +205,11 @@ class Task1Orchestrator(Node):
         return required
 
     def _align_marks(self, marks: list[str], count: int) -> list[str]:
-        """Pad/truncate per-buoy classes, defaulting missing entries to RED."""
+        """Pad/truncate per-buoy classes, defaulting missing entries to North."""
         aligned = []
         for i in range(count):
-            mark = marks[i] if i < len(marks) else "RED"
-            aligned.append(mark if mark in BUOY_MARKS else "RED")
+            mark = marks[i] if i < len(marks) else "N"
+            aligned.append(mark if mark in BUOY_MARKS else "N")
         return aligned
 
     def _init_buoy_states(self):
@@ -386,36 +386,88 @@ class Task1Orchestrator(Node):
         self.pub_boundary_markers.publish(marker_array)
 
     def publish_buoy_markers(self):
-        """Publish Task1 red/green buoy spheres on the Task3 marker topic."""
+        """Publish official cardinal marks plus nearby red/green reference buoys."""
         marker_array = MarkerArray()
         stamp = self.get_clock().now().to_msg()
 
-        for idx, (bx, by) in enumerate(self.buoy_positions):
-            mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "RED"
+        black = (0.02, 0.02, 0.02)
+        yellow = (1.0, 0.78, 0.0)
+        # Segment order is waterline -> top, matching the official patterns:
+        # N black/yellow, E black/yellow/black, S yellow/black,
+        # W yellow/black/yellow when read from top to bottom.
+        pattern_by_mark = {
+            "N": (yellow, black),
+            "E": (black, yellow, black),
+            "S": (black, yellow),
+            "W": (yellow, black, yellow),
+        }
+
+        def add_cylinder(marker_id, namespace, x, y, z, diameter, height, rgb):
             marker = Marker()
             marker.header.frame_id = self.frame_id
             marker.header.stamp = stamp
-            marker.ns = "task1_buoys"
-            marker.id = idx
+            marker.ns = namespace
+            marker.id = marker_id
+            marker.type = Marker.CYLINDER
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = float(z)
+            marker.pose.orientation.w = 1.0
+            marker.scale.x = diameter
+            marker.scale.y = diameter
+            marker.scale.z = height
+            marker.color.r, marker.color.g, marker.color.b = rgb
+            marker.color.a = 1.0
+            marker_array.markers.append(marker)
+
+        def add_reference_buoy(marker_id, x, y, rgb):
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = "task1_red_green_reference_buoys"
+            marker.id = marker_id
             marker.type = Marker.SPHERE
             marker.action = Marker.ADD
-            marker.pose.position.x = float(bx)
-            marker.pose.position.y = float(by)
-            marker.pose.position.z = 0.45
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = 0.25
             marker.pose.orientation.w = 1.0
-            marker.scale.x = 0.9
-            marker.scale.y = 0.9
-            marker.scale.z = 0.9
-            marker.color.a = 0.9
-            if mark == "GREEN":
-                marker.color.g = 1.0
-            elif mark == "RED":
-                marker.color.r = 1.0
-            else:
-                # Retain a readable fallback for legacy cardinal-mark input.
-                marker.color.r = 1.0
-                marker.color.g = 0.85
+            marker.scale.x = 0.5
+            marker.scale.y = 0.5
+            marker.scale.z = 0.5
+            marker.color.r, marker.color.g, marker.color.b = rgb
+            marker.color.a = 0.95
             marker_array.markers.append(marker)
+
+        for idx, (bx, by) in enumerate(self.buoy_positions):
+            mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
+            # Official mark: 40 cm buoy and a 14 cm x 40 cm striped cylinder.
+            marker_base_id = idx * 10
+            add_cylinder(marker_base_id, "task1_cardinal_buoy", bx, by, 0.2, 0.4, 0.4, black)
+            pattern = pattern_by_mark.get(mark, pattern_by_mark["N"])
+            segment_height = 0.4 / len(pattern)
+            for segment_idx, rgb in enumerate(pattern):
+                add_cylinder(
+                    marker_base_id + 1 + segment_idx,
+                    "task1_cardinal_buoy",
+                    bx,
+                    by,
+                    0.4 + (segment_idx + 0.5) * segment_height,
+                    0.14,
+                    segment_height,
+                    rgb,
+                )
+
+            # Red is on the port side and green on the starboard side of the
+            # nominal WP3 -> WP4 course. They are visual references only; the
+            # cardinal mark above is the detection / virtual-wall input.
+            port_x, port_y = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
+            reference_offset = 0.9
+            add_reference_buoy(marker_base_id + 5, bx + port_x * reference_offset,
+                               by + port_y * reference_offset, (1.0, 0.0, 0.0))
+            add_reference_buoy(marker_base_id + 6, bx - port_x * reference_offset,
+                               by - port_y * reference_offset, (0.0, 0.9, 0.1))
 
         self.pub_buoy_markers.publish(marker_array)
 

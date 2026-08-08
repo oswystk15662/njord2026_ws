@@ -13,9 +13,10 @@ task1_orchestrator:
     waypoint2_xy: "[[24.0, -35.0], [15.0, -15.0], [8.0, -35.0]]"
 
     buoy_position_xy: "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
-    # Per-buoy class, aligned index-wise.  In the WP3 -> WP4 heading (west),
-    # red keeps the buoy on port (south) and green on starboard (north).
-    buoy_marks: "[\"RED\", \"GREEN\", \"RED\"]"
+    # Official Task1 cardinal marks, aligned index-wise.  The S/N/S sequence
+    # matches the slalom waypoint route; red and green reference buoys are
+    # displayed adjacent to each cardinal mark by the simulator.
+    buoy_marks: "[\"S\", \"N\", \"S\"]"
     course_heading_rad: 3.141592653589793
     # Main waypoint 3: start retiring passed buoy walls from the next WP.
     wall_retirement_start_xy: [50.0, -25.0]
@@ -27,7 +28,7 @@ task1_orchestrator:
     avoidance_margin: 0.5
     # Testing override only: forces every marker (not just one) to this
     # buoy class, ignoring buoy_marks above. Leave empty for the
-    # competition red/green slalom.
+    # competition cardinal-mark slalom.
     forced_mark: ""
 
     # This visual boundary includes spawn and every Task1-1/slalom waypoint.
