@@ -321,11 +321,32 @@ class WaypointPublisher(Node):
             label.pose.position.x, label.pose.position.y, label.pose.position.z = x, y, 0.65
             label.pose.orientation.w, label.scale.z = 1.0, 0.45
             label.color.r = label.color.g = label.color.b = label.color.a = 1.0
-            label.text = f"WP {waypoint.get('id', index + 1)}\\nreach {self.nav2_goal_tolerance_m:.1f} m"
+            label.text = (
+                f"WP {self._display_waypoint_id(waypoint, index)}\\n"
+                f"reach {self.nav2_goal_tolerance_m:.1f} m"
+            )
             markers.markers.append(label)
         if self.show_waypoint_route_line:
             markers.markers.insert(0, route)
         self.waypoint_marker_pub.publish(markers)
+
+    def _display_waypoint_id(self, waypoint: dict, index: int) -> str:
+        """Return Task1's grouped competition number for display only."""
+        waypoint_id = int(waypoint.get('id', index + 1))
+        if self.task_type == TaskType.TASK1:
+            if waypoint_id == 1:
+                return '1'
+            if 2 <= waypoint_id <= 11:
+                return f'1.{waypoint_id - 1}'
+            if waypoint_id == 12:
+                return '2'
+            if waypoint_id == 13:
+                return '3'
+            if 14 <= waypoint_id <= 16:
+                return f'3.{waypoint_id - 13}'
+            if waypoint_id == 17:
+                return '4'
+        return str(waypoint_id)
 
     def _build_poses_for_ids(self, waypoint_ids: list) -> list:
         """Build poses for the requested waypoint ids, preserving the id order."""

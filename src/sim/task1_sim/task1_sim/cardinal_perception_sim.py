@@ -13,9 +13,9 @@ This node closes that gap without inventing new marker geometry: it reuses
 `task1_orchestrator` uses) and the per-marker cardinal marks broadcast as a
 JSON array on `/sim/cardinal_mark` (aligned index-wise with
 `buoy_position_xy`, e.g. `["S", "N", "S"]`), and only emits a detection once
-the simulated boat pose is within the sensor's range + field of view of a
-marker -- mirroring the real driver's detection gate instead of teleporting
-knowledge of every marker onto the topic from t=0.
+the simulated boat is within a configurable recognition radius. This keeps
+the marker unknown at course start while avoiding camera-pose artifacts in a
+simulation that has no rendered camera image.
 
 Detection range/FOV defaults are taken directly from the real driver
 configs:
@@ -84,7 +84,11 @@ class CardinalPerceptionSim(Node):
         self.declare_parameter("detection_topic", "/buoy_detections_3d")
         self.declare_parameter("output_frame", "base_link")
         self.declare_parameter("buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]")
+        self.declare_parameter("buoy_marks", "[]")
         self.declare_parameter("publish_rate_hz", 5.0)
+        # Simulation-only proximity gate. It deliberately does not alter the
+        # real ZED2i/Mid-360 perception pipeline.
+        self.declare_parameter("recognition_range_m", 8.0)
 
         # ZED2i stereo depth envelope (zed2i_jetson_orin_nano.yaml: depth_min_m/depth_max_m).
         self.declare_parameter("camera_min_range_m", 0.3)
@@ -110,7 +114,11 @@ class CardinalPerceptionSim(Node):
         self.buoy_positions = parse_xy_json(
             self.get_parameter("buoy_position_xy").get_parameter_value().string_value
         )
+        configured_marks = self._parse_marks(
+            self.get_parameter("buoy_marks").get_parameter_value().string_value)
         self.publish_rate_hz = max(0.5, self.get_parameter("publish_rate_hz").get_parameter_value().double_value)
+        self.recognition_range_m = max(
+            0.1, self.get_parameter("recognition_range_m").get_parameter_value().double_value)
 
         self.camera_min_range_m = self.get_parameter("camera_min_range_m").get_parameter_value().double_value
         self.camera_max_range_m = self.get_parameter("camera_max_range_m").get_parameter_value().double_value
@@ -137,8 +145,8 @@ class CardinalPerceptionSim(Node):
         # course. Marks are not used for classification until have_mark is
         # True (mirrors the real pipeline needing YOLO inference to confirm
         # the marker type before it is trusted).
-        self.current_marks = []
-        self.have_mark = False
+        self.current_marks = configured_marks
+        self.have_mark = bool(configured_marks)
         self.latest_odom = None
         self.inference_requested = False
 
@@ -231,8 +239,11 @@ class CardinalPerceptionSim(Node):
                 dx = bx - x
                 dy = by - y
                 distance = math.hypot(dx, dy)
-                bearing = wrap_to_pi(math.atan2(dy, dx) - yaw)
-                if not self._within_sensor_gate(distance, bearing):
+                # The simulator has no image plane, so proximity is the
+                # recognition criterion. This is intentionally independent
+                # of heading/FOV; static buoy classes are loaded from the
+                # same scenario config as their positions.
+                if distance > self.recognition_range_m:
                     continue
                 any_in_range = True
                 if not self.have_mark:

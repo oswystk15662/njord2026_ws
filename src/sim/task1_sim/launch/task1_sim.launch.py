@@ -68,6 +68,7 @@ def launch_cardinal_perception_sim(context):
     buoy_position_xy = orchestrator_params.get(
         "buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
     )
+    buoy_marks = orchestrator_params.get("buoy_marks", "[]")
     return [Node(
         package="task1_sim",
         executable="cardinal_perception_sim",
@@ -78,6 +79,8 @@ def launch_cardinal_perception_sim(context):
             "detection_topic": "/buoy_detections_3d",
             "output_frame": "base_link",
             "buoy_position_xy": buoy_position_xy,
+            "buoy_marks": buoy_marks,
+            "recognition_range_m": 8.0,
         }],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_cardinal_perception_sim")),
