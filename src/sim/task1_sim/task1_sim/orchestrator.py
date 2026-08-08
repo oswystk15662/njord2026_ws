@@ -388,6 +388,9 @@ class Task1Orchestrator(Node):
     def publish_buoy_markers(self):
         """Publish official cardinal marks plus nearby red/green reference buoys."""
         marker_array = MarkerArray()
+        clear_marker = Marker()
+        clear_marker.action = Marker.DELETEALL
+        marker_array.markers.append(clear_marker)
         stamp = self.get_clock().now().to_msg()
 
         black = (0.02, 0.02, 0.02)
@@ -458,7 +461,7 @@ class Task1Orchestrator(Node):
             marker.pose.position.y = float(y)
             marker.pose.position.z = float(z)
             marker.pose.orientation.w = 1.0
-            marker.scale.z = 0.30
+            marker.scale.z = 0.48
             marker.color.r, marker.color.g, marker.color.b = rgb
             marker.color.a = 1.0
             marker.text = text
@@ -485,9 +488,9 @@ class Task1Orchestrator(Node):
             else:
                 marker.pose.orientation.x = 1.0
                 marker.pose.orientation.w = 0.0
-            marker.scale.x = 0.18
-            marker.scale.y = 0.18
-            marker.scale.z = 0.18
+            marker.scale.x = 0.32
+            marker.scale.y = 0.32
+            marker.scale.z = 0.32
             marker.color.r, marker.color.g, marker.color.b = black
             marker.color.a = 1.0
             marker_array.markers.append(marker)
@@ -499,39 +502,38 @@ class Task1Orchestrator(Node):
                 "task1_red_green_reference_buoys",
                 x,
                 y,
-                0.25,
-                0.5,
+                0.40,
+                0.80,
                 rgb,
             )
-            # Keep the mast proportion consistent with the official cardinal
-            # mark: it rises from the 40 cm float and is 14 cm wide.
+            # Deliberately oversized for a readable course display.
             add_cylinder(
                 marker_id,
                 "task1_red_green_reference_buoy_masts",
                 x,
                 y,
-                0.60,
-                0.14,
-                0.40,
+                1.00,
+                0.22,
+                0.75,
                 rgb,
             )
 
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
-            # Official mark: a 40 cm floating buoy, a 14 cm x 40 cm striped
-            # cylinder, then two black cardinal topmark cones. The float uses
-            # the waterline colour and the mast carries every prescribed
-            # black / RAL1003-yellow band from the 2026 handbook.
+            # Preserve the official black/RAL1003 pattern and topmarks, but
+            # deliberately enlarge every visual element for course readability.
             marker_base_id = idx * 10
             pattern = pattern_by_mark.get(mark, pattern_by_mark["N"])
-            segment_height = 0.4 / len(pattern)
+            float_diameter = 0.70
+            mast_height = 0.80
+            segment_height = mast_height / len(pattern)
             add_sphere(
                 marker_base_id + 1,
                 "task1_cardinal_buoy_float",
                 bx,
                 by,
-                0.20,
-                0.40,
+                float_diameter / 2.0,
+                float_diameter,
                 pattern[0],
             )
             for segment_idx, rgb in enumerate(pattern):
@@ -540,8 +542,8 @@ class Task1Orchestrator(Node):
                     "task1_cardinal_mast",
                     bx,
                     by,
-                    0.4 + (segment_idx + 0.5) * segment_height,
-                    0.14,
+                    float_diameter + (segment_idx + 0.5) * segment_height,
+                    0.22,
                     segment_height,
                     rgb,
                 )
@@ -553,27 +555,29 @@ class Task1Orchestrator(Node):
                 "S": (False, False),
                 "W": (True, False),
             }.get(mark, (True, True))
-            add_topmark(marker_base_id + 8, bx, by, 0.88, cone_orientation[0])
-            add_topmark(marker_base_id + 9, bx, by, 1.08, cone_orientation[1])
+            add_topmark(marker_base_id + 8, bx, by, 1.68, cone_orientation[0])
+            add_topmark(marker_base_id + 9, bx, by, 1.98, cone_orientation[1])
             # Make the simulated cardinal direction unambiguous at a glance;
             # the real detection visualizer publishes the same label.
-            add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 1.28, mark, (1.0, 1.0, 1.0))
+            add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 2.28, mark, (1.0, 1.0, 1.0))
 
-            # Red is on the port side and green on the starboard side of the
-            # nominal WP3 -> WP4 course. They are visual references only; the
-            # cardinal mark above is the detection / virtual-wall input.
+            # Exactly one lateral reference buoy accompanies each cardinal
+            # mark. Its colour identifies the side the route must take: red
+            # for port, green for starboard, relative to the main course.
             port_x, port_y = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
-            reference_offset = 0.9
-            add_reference_buoy(marker_base_id + 5, bx + port_x * reference_offset,
-                               by + port_y * reference_offset, lateral_red)
-            add_reference_buoy(marker_base_id + 6, bx - port_x * reference_offset,
-                               by - port_y * reference_offset, lateral_green)
+            passage_direction = {
+                "N": (0.0, 1.0), "E": (1.0, 0.0),
+                "S": (0.0, -1.0), "W": (-1.0, 0.0),
+            }.get(mark, (0.0, 1.0))
+            is_port = passage_direction[0] * port_x + passage_direction[1] * port_y >= 0.0
+            reference_offset = 1.45
+            reference_x = bx + (port_x if is_port else -port_x) * reference_offset
+            reference_y = by + (port_y if is_port else -port_y) * reference_offset
+            reference_colour = lateral_red if is_port else lateral_green
+            reference_label = "RED / PORT" if is_port else "GREEN / STARBOARD"
+            add_reference_buoy(marker_base_id + 5, reference_x, reference_y, reference_colour)
             add_text(marker_base_id + 5, "task1_lateral_buoy_labels",
-                     bx + port_x * reference_offset, by + port_y * reference_offset,
-                     1.10, "RED / PORT", lateral_red)
-            add_text(marker_base_id + 6, "task1_lateral_buoy_labels",
-                     bx - port_x * reference_offset, by - port_y * reference_offset,
-                     1.10, "GREEN / STARBOARD", lateral_green)
+                     reference_x, reference_y, 1.52, reference_label, reference_colour)
 
         self.pub_buoy_markers.publish(marker_array)
 
