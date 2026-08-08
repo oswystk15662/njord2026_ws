@@ -198,8 +198,8 @@ void UM982Driver::publish_feedback_odometry(
     const double north_m = kEarthRadiusM * (latitude_rad - reference_latitude_rad_);
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = stamp;
-    odom.header.frame_id = "odom";
-    odom.child_frame_id = "base_link";
+    odom.header.frame_id = params_.feedback_frame_id;
+    odom.child_frame_id = params_.feedback_child_frame_id;
     odom.pose.pose.position.x = east_m;
     odom.pose.pose.position.y = north_m;
     tf2::Quaternion orientation;

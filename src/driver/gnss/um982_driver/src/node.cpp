@@ -140,6 +140,8 @@ void UM982Driver::init_parameters()
     // A relative name keeps the published Odometry independent from the
     // consumer.  Bringup launch files remap it to the required feedback topic.
     this->declare_parameter("feedback_odometry_topic", "odometry/feedback");
+    this->declare_parameter("feedback_frame_id", "odom");
+    this->declare_parameter("feedback_child_frame_id", "base_link");
     this->declare_parameter("feedback_velocity_filter_alpha", 0.35);
     this->declare_parameter("feedback_max_speed_mps", 4.0);
     this->declare_parameter("NTRIP_Server", params_.ntrip_server);
@@ -169,6 +171,10 @@ void UM982Driver::init_parameters()
         this->get_parameter("publish_feedback_odometry").as_bool();
     params_.feedback_odometry_topic =
         this->get_parameter("feedback_odometry_topic").as_string();
+    params_.feedback_frame_id =
+        this->get_parameter("feedback_frame_id").as_string();
+    params_.feedback_child_frame_id =
+        this->get_parameter("feedback_child_frame_id").as_string();
     params_.feedback_velocity_filter_alpha = std::clamp(
         this->get_parameter("feedback_velocity_filter_alpha").as_double(), 0.0, 1.0);
     params_.feedback_max_speed_mps = std::max(
@@ -527,11 +533,11 @@ void UM982Driver::publish_feedback_odometry(
 
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = stamp;
-    odom.header.frame_id = "odom";
-    odom.child_frame_id = "base_link";
-    // Relative ENU position with the first valid fix as the origin.  This is
-    // deliberately not a global map pose; it is the measurement consumed by
-    // the dedicated UM982 feedback filters.
+    odom.header.frame_id = params_.feedback_frame_id;
+    odom.child_frame_id = params_.feedback_child_frame_id;
+    // Relative ENU position with the first valid fix as the origin. The
+    // configured frame decides whether a consumer treats that datum-fixed
+    // plane as a local odom frame or as the navigation map frame.
     odom.pose.pose.position.x = east_m;
     odom.pose.pose.position.y = north_m;
     tf2::Quaternion orientation;

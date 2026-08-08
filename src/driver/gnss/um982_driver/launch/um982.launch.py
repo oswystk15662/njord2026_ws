@@ -106,6 +106,16 @@ def generate_launch_description():
         default_value='false',
         description='Publish UM982-derived local odometry for the feedback filter'
     )
+    arg_feedback_frame_id = DeclareLaunchArgument(
+        'feedback_frame_id',
+        default_value='odom',
+        description='Parent frame of the local-ENU feedback odometry'
+    )
+    arg_feedback_child_frame_id = DeclareLaunchArgument(
+        'feedback_child_frame_id',
+        default_value='base_link',
+        description='Child frame of the local-ENU feedback odometry'
+    )
 
     # ログ設定
     arg_log = DeclareLaunchArgument(
@@ -141,6 +151,8 @@ def generate_launch_description():
             'NTRIP_Password': LaunchConfiguration('ntrip_password'),
             'Heading_FrameID': LaunchConfiguration('heading_frame_id'),
             'publish_feedback_odometry': LaunchConfiguration('publish_feedback_odometry'),
+            'feedback_frame_id': LaunchConfiguration('feedback_frame_id'),
+            'feedback_child_frame_id': LaunchConfiguration('feedback_child_frame_id'),
             'log_file_name': LaunchConfiguration('log_file_name'),
         }]
     )
@@ -164,6 +176,8 @@ def generate_launch_description():
         arg_ntrip_password,
         arg_frame_id,
         arg_publish_feedback_odometry,
+        arg_feedback_frame_id,
+        arg_feedback_child_frame_id,
         arg_log,
         um982_node
     ])

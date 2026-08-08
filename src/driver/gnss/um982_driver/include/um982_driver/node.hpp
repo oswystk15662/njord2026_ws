@@ -132,6 +132,8 @@ private:
         std::string log_file_name;
         bool publish_feedback_odometry;
         std::string feedback_odometry_topic;
+        std::string feedback_frame_id;
+        std::string feedback_child_frame_id;
         double feedback_velocity_filter_alpha;
         double feedback_max_speed_mps;
 
