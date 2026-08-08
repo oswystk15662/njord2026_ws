@@ -36,8 +36,10 @@ def test_red_and_green_block_opposite_sides_of_the_course():
     # Course heading west: port is south and starboard is north.
     red = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 0.0, 1, math.pi)
     green = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 0.0, 0, math.pi)
-    assert max(y for _, y, _ in red) == 4.0
-    assert min(y for _, y, _ in green) == -4.0
+    # Closing red's port/south side makes the vessel pass north, leaving red
+    # on port. Green closes north/starboard and makes the vessel pass south.
+    assert min(y for _, y, _ in red) == -4.0
+    assert max(y for _, y, _ in green) == 4.0
 
 
 def test_reached_next_waypoint_retires_only_cardinal_marks_behind_it():

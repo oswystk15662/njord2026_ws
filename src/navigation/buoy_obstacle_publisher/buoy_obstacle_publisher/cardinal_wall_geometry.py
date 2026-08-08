@@ -14,8 +14,9 @@ CARDINAL_DIRECTIONS = {
 def direction_for_class(class_id, course_heading_rad):
     """Return the forbidden-side direction for cardinal or lateral marks.
 
-    Red lateral marks must stay to port (left of the course heading), so the
-    wall blocks starboard.  Green marks do the inverse.
+    Red lateral marks must remain on port (left), so the wall closes the port
+    side of the mark and forces the vessel to pass on its starboard side.
+    Green marks similarly close their starboard side.
     """
     if class_id in CARDINAL_DIRECTIONS:
         # ``course_heading_rad`` is the map-frame angle of true north. It is
@@ -34,10 +35,10 @@ def direction_for_class(class_id, course_heading_rad):
         return east_x, east_y
     forward_x = math.cos(course_heading_rad)
     forward_y = math.sin(course_heading_rad)
-    if class_id == 1:  # red: keep mark on port, exclude starboard
-        return forward_y, -forward_x
-    if class_id == 0:  # green: keep mark on starboard, exclude port
+    if class_id == 1:  # red: close port side, pass starboard of the mark
         return -forward_y, forward_x
+    if class_id == 0:  # green: close starboard side, pass port of the mark
+        return forward_y, -forward_x
     return None
 
 
