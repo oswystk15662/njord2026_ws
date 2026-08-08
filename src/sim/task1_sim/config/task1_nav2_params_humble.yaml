@@ -26,7 +26,10 @@ controller_server:
       min_lookahead_dist: 0.5
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
-      rotate_to_heading_at_start: true
+      # Small initial-EKF offsets can make Humble's rotate-in-place mode
+      # oscillate indefinitely at the first waypoint. Let RPP converge while
+      # translating instead of insisting on an initial heading alignment.
+      use_rotate_to_heading: false
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
