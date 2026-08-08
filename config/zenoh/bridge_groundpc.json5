@@ -8,7 +8,7 @@
   // スマートフォンInternet経路を使う場合も7447をInternetへ直接公開せず、
   // WireGuard等のVPN内アドレスをendpointにする。
   connect: {
-    endpoints: ["tcp/gembu-EliteMini-Series.local:7447"],
+    endpoints: ["tcp/gembu-EliteMini-Series:7447"],
   },
 
   scouting: {

@@ -41,7 +41,7 @@ def generate_launch_description():
             os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
         ),
         launch_arguments={
-            "port": "5602",
+            "port": "5601",
             "topic": "/ground_video/back_cam_jpeg/compressed",
         }.items(),
     )
@@ -143,6 +143,6 @@ def generate_launch_description():
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,
             # foxglove_bridge_launch,
-            # ntrip_caster,
+            ntrip_caster,
         ]
     )
