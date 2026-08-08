@@ -1,0 +1,38 @@
+# This is the sole AUTO inhibition policy.  Signal inventory remains in
+# diagnostic_monitors; enabled requirements below select only from this list.
+control_policy:
+  health_signals:
+    - ground_station_heartbeat
+    - driver_heartbeat
+    - local_odometry
+    - gnss
+
+  common:
+    require_emergency_stop_clear: true
+    require_nav2_ready: true
+    require_task_ready: true
+    require_fresh_nav_command: true
+    nav_command_timeout_sec: 0.5
+    require_ground_station: false
+    require_driver_heartbeat: false
+    require_localization_heartbeat: false
+    require_rtk_fix: false
+    require_no_critical_health_fault: false
+
+  task1:
+    require_waypoint_plan: true
+    require_collision_monitor: false
+    require_buoy_perception: false
+    require_dynamic_gate_tf: false
+
+  task2:
+    require_waypoint_plan: true
+    require_collision_monitor: true
+    require_buoy_perception: true
+    require_dynamic_gate_tf: false
+
+  task3:
+    require_waypoint_plan: true
+    require_collision_monitor: true
+    require_buoy_perception: false
+    require_dynamic_gate_tf: true
