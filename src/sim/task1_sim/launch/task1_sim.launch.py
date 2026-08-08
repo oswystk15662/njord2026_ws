@@ -181,7 +181,8 @@ def generate_launch_description():
     )
     sim_true_north_yaw_arg = DeclareLaunchArgument(
         "sim_true_north_yaw_rad",
-        default_value="1.5707963267948966",
+        # True north is 30 deg east of map +Y (60 deg CCW from map +X).
+        default_value="1.0471975511965976",
         description="Geographical true-north direction in Task1 sim map coordinates (rad)",
     )
     driver_delay_arg = DeclareLaunchArgument(
