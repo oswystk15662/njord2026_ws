@@ -1,7 +1,7 @@
-#　If you want to disable all miniPC heartbeat monitoring, uncomment the following line.
-minipc_heartbeat: []
-
-# miniPC heartbeat tree. Each entry is a HeartbeatAggregator node.
+# Compatibility heartbeat tree for the legacy heartbeat.launch.py. The
+# canonical named signal inventory is config/heartbeat/minipc.yaml; this file
+# remains a single, unambiguous list while the legacy tree is migrated.
+# Each entry is a HeartbeatAggregator node.
 # Comment out a complete entry to stop monitoring it. Uncomment optional
 # entries (and add their output to the aggregate inputs) to monitor them.
 minipc_heartbeat:
