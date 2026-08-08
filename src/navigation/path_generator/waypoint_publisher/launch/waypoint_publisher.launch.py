@@ -85,7 +85,11 @@ def generate_launch_description():
                     LaunchConfiguration('nav2_goal_tolerance_m'), value_type=float),
                 'show_waypoint_route_line': ParameterValue(
                     LaunchConfiguration('show_waypoint_route_line'), value_type=bool),
-                'start_competition_waypoint': LaunchConfiguration('start_competition_waypoint'),
+                # A numeric label such as "3" is otherwise inferred as an
+                # integer by the ROS parameter parser.  The node uses the
+                # competition label as a string to select the route slice.
+                'start_competition_waypoint': ParameterValue(
+                    LaunchConfiguration('start_competition_waypoint'), value_type=str),
             }
         ],
         output='screen',
