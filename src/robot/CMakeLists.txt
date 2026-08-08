@@ -29,6 +29,14 @@ install(DIRECTORY
   DESTINATION share/${PROJECT_NAME}
 )
 
+# Zenoh bridge configuration is shared by the three physical-machine
+# bringups.  Keep the source-of-truth at the workspace-level config path,
+# while installing it with robot so launch files work from an installed tree.
+install(DIRECTORY
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../config/zenoh
+  DESTINATION share/${PROJECT_NAME}/config
+)
+
 # GLIM only accepts a single config directory containing a "config.json"
 # that it reads at startup, so the CPU-backend variant needs its own
 # directory (glim_config_cpu) rather than a config-file switch. Install a

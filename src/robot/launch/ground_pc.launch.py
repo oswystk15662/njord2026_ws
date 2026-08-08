@@ -114,6 +114,19 @@ def generate_launch_description():
         condition=IfCondition(enable_ntrip_caster),
     )
 
+    networking_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("robot"), "launch", "networking.launch.py"]
+            )
+        ),
+        launch_arguments={
+            "role": "groundpc",
+            "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
+            "enable_critical_link": LaunchConfiguration("enable_critical_link"),
+        }.items(),
+    )
+
     return LaunchDescription(
         [
             # The two receivers ingest different RTP streams and must keep
@@ -137,6 +150,16 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
             DeclareLaunchArgument(
+                "enable_zenoh_bridge",
+                default_value="true",
+                description="Start the Ground PC zenoh-bridge-ros2dds process.",
+            ),
+            DeclareLaunchArgument(
+                "enable_critical_link",
+                default_value="true",
+                description="Start critical_link_sender for joystick and Ground heartbeat.",
+            ),
+            DeclareLaunchArgument(
                 "ntrip_caster_config",
                 default_value=PathJoinSubstitution(
                     [FindPackageShare("ntripcaster"), "config", "ntripcaster.json"]
@@ -151,5 +174,6 @@ def generate_launch_description():
             back_cam_jpeg_receiver_launch,
             # foxglove_bridge_launch,
             ntrip_caster,
+            networking_launch,
         ]
     )

@@ -346,6 +346,17 @@ def generate_launch_description():
         {"role": "minipc"},
     )
 
+    networking_launch = include_launch(
+        "robot",
+        ["launch", "networking.launch.py"],
+        None,
+        {
+            "role": "minipc",
+            "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
+            "enable_critical_link": LaunchConfiguration("enable_critical_link"),
+        },
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -461,6 +472,16 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument(
+                "enable_zenoh_bridge",
+                default_value="true",
+                description="Start the miniPC zenoh-bridge-ros2dds process.",
+            ),
+            DeclareLaunchArgument(
+                "enable_critical_link",
+                default_value="true",
+                description="Start critical_link_receiver for vessel control inputs.",
+            ),
+            DeclareLaunchArgument(
                 "use_sim_time",
                 default_value="false",
                 description="Use the /clock topic (set true when replaying a rosbag).",
@@ -512,5 +533,6 @@ def generate_launch_description():
             nav2_launch,
             autonomy_supervisor,
             heartbeat_launch,
+            networking_launch,
         ]
     )

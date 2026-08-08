@@ -32,6 +32,7 @@ _GENERATE_LAUNCH_DESCRIPTION_FILES = [
     "task1.launch.py",
     "task2.launch.py",
     "task3.launch.py",
+    "networking.launch.py",
 ]
 
 
@@ -217,6 +218,8 @@ def test_standalone_does_not_restore_removed_or_unsafe_defaults():
     assert '"enable_glim",\n                default_value="false"' in source
     assert '"enable_pcl_buoy_detection", default_value="false"' in source
     assert '"enable_ground_video", default_value="true"' in source
+    assert '"enable_zenoh_bridge", default_value="false"' in source
+    assert '"enable_critical_link", default_value="false"' in source
 
 
 def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
@@ -474,3 +477,27 @@ def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
     assert '("/joy", "/critical_link/input/joy")' in source
     assert '"topic": "/critical_link/input/heartbeat"' in source
     assert '"topic": "/heartbeat/ground_station"' not in source
+
+
+def test_terminal_bringups_include_role_specific_networking():
+    for filename, role in (
+        ("ground_pc.launch.py", "groundpc"),
+        ("jetson_bringup.launch.py", "jetson"),
+        ("minipc_bringup.launch.py", "minipc"),
+    ):
+        source = _read_launch_source(filename)
+        assert '"networking.launch.py"' in source
+        assert f'"role": "{role}"' in source
+
+
+def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
+    source = _read_launch_source("networking.launch.py")
+
+    assert '"zenoh-bridge-ros2dds"' in source
+    assert '"env", "-u", "ROS_DOMAIN_ID"' in source
+    assert "bridge_" in source
+    assert ".json5" in source
+    assert '"ground_sender.launch.py"' in source
+    assert '"vessel_receiver.launch.py"' in source
+    assert '_role_condition("groundpc")' in source
+    assert '_role_condition("minipc")' in source

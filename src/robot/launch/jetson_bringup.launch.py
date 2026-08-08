@@ -105,6 +105,17 @@ def generate_launch_description():
         },
     )
 
+    networking_launch = include_launch(
+        "robot",
+        ["launch", "networking.launch.py"],
+        None,
+        {
+            "role": "jetson",
+            "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
+            "enable_critical_link": "false",
+        },
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -148,6 +159,11 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_height", default_value="240"),
             DeclareLaunchArgument("ground_video_fps", default_value="3.0"),
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_zenoh_bridge",
+                default_value="true",
+                description="Start the Jetson zenoh-bridge-ros2dds process.",
+            ),
             DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
             # Staged startup, carried over from manual_control.launch.py. On a
@@ -175,5 +191,6 @@ def generate_launch_description():
                 actions=[zed2i_launch],
             ),
             heartbeat_launch,
+            networking_launch,
         ]
     )
