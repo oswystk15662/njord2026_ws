@@ -23,6 +23,7 @@ from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
 from njord_interfaces.srv import GetMissionStatus, ListTasks, StartTask, StopTask
 
 from .executors import DummyExecutor, ExecutorStatus, StagedDockingExecutor, WaypointSequenceExecutor
+from .nav2_profiles import Nav2ProfileApplicationManager, Nav2ProfileCatalog, Nav2ProfileError
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
 from .task_registry import RegistryError, TaskDefinition, TaskRegistry
 from .waypoint_config import Route, Waypoint, WaypointConfigLoader
@@ -121,6 +122,7 @@ class MissionManager(Node):
         super().__init__("mission_manager")
         self.declare_parameter("registry_file", "")
         self.declare_parameter("active_nav2_profile", "task1")
+        self.declare_parameter("nav2_profile_catalog_file", "")
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
@@ -139,10 +141,15 @@ class MissionManager(Node):
         self._task_ready = False
         self._task_requirements_ready = False
         self._active_control_policy = ""
+        self._requested_nav2_profile = ""
 
         registry_path = self._registry_path()
         shares = {"waypoint_publisher": self._waypoint_share_path()}
         self._registry = TaskRegistry.from_file(registry_path, package_shares=shares)
+        self._profile_catalog = Nav2ProfileCatalog.from_file(self._profile_catalog_path())
+        self._profile_manager = Nav2ProfileApplicationManager(
+            self._profile_catalog, str(self.get_parameter("active_nav2_profile").value)
+        )
 
         self._status_pub = self.create_publisher(MissionStatus, "/mission/status", _STATUS_QOS)
         self._plan_pub = self.create_publisher(NavPath, "/task/plan", _STATUS_QOS)
@@ -183,6 +190,12 @@ class MissionManager(Node):
         if configured:
             return Path(configured)
         return Path(__file__).resolve().parents[1] / "config" / "task_registry.yaml"
+
+    def _profile_catalog_path(self) -> Path:
+        configured = str(self.get_parameter("nav2_profile_catalog_file").value)
+        if configured:
+            return Path(configured)
+        return Path(__file__).resolve().parents[1] / "config" / "nav2_profiles" / "profiles.yaml"
 
     @staticmethod
     def _waypoint_share_path() -> Path:
@@ -267,12 +280,21 @@ class MissionManager(Node):
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support AUTO")
         if request.dry_run and not task.supports_dry_run:
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support dry run")
-        active_profile = str(self.get_parameter("active_nav2_profile").value)
-        if task.nav2_profile != active_profile:
+        self._requested_nav2_profile = task.nav2_profile
+        try:
+            profile_decision = self._profile_manager.plan(
+                task.nav2_profile,
+                self._effective_source == MissionStatus.SOURCE_ZERO,
+            )
+        except Nav2ProfileError as exc:
+            return self._reject_started(
+                decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc)
+            )
+        if not profile_decision.accepted:
             return self._reject_started(
                 decision.execution_id,
                 ResultCode.CONFIGURATION_FAILED,
-                f"task requires Nav2 profile {task.nav2_profile}; active profile is {active_profile}",
+                profile_decision.message,
             )
         try:
             route = self._load_route(task)
@@ -436,6 +458,8 @@ class MissionManager(Node):
         message.effective_control_source = self._effective_source
         message.auto_permitted = self._auto_permitted
         message.inhibit_reasons = self._inhibit_reasons
+        message.active_nav2_profile = self._profile_manager.active_profile
+        message.requested_nav2_profile = self._requested_nav2_profile
         message.last_transition_time = self._last_transition
         return message
 
@@ -489,7 +513,7 @@ def main(args=None) -> None:
     try:
         node = MissionManager()
         rclpy.spin(node)
-    except RegistryError as exc:
+    except (RegistryError, Nav2ProfileError) as exc:
         rclpy.logging.get_logger("mission_manager").fatal(f"mission registry invalid: {exc}")
         raise
     finally:

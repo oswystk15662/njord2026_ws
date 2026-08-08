@@ -28,4 +28,6 @@ uint8 requested_control_mode
 uint8 effective_control_source
 bool auto_permitted
 string[] inhibit_reasons
+string active_nav2_profile
+string requested_nav2_profile
 builtin_interfaces/Time last_transition_time

@@ -1,0 +1,42 @@
+schema_version: 1
+apply_mode: startup_only
+base: base.yaml
+supported_distros: [humble, jazzy]
+profiles:
+  task1:
+    task_overlay: tasks/task1.yaml
+    distro_overlays: {jazzy: distros/jazzy/task1.yaml}
+    topology:
+      controller_plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      planner_plugin: nav2_navfn_planner::NavfnPlanner
+      global_costmap_plugins: [obstacle_layer, inflation_layer]
+      lifecycle_nodes: [controller_server, smoother_server, planner_server, behavior_server,
+        bt_navigator, waypoint_follower, velocity_smoother, collision_monitor]
+      collision_monitor: true
+    required_actions: [/navigate_through_poses]
+    required_topics: [/cmd_vel_nav, /local_costmap/costmap_raw]
+  task2:
+    task_overlay: tasks/task2.yaml
+    distro_overlays: {jazzy: distros/jazzy/task2.yaml}
+    topology:
+      controller_plugin: nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
+      planner_plugin: nav2_theta_star_planner::ThetaStarPlanner
+      global_costmap_plugins: [obstacle_layer, inflation_layer]
+      lifecycle_nodes: [controller_server, smoother_server, planner_server, behavior_server,
+        bt_navigator, waypoint_follower, velocity_smoother]
+      collision_monitor: false
+    required_actions: [/navigate_through_poses]
+    required_topics: [/cmd_vel_nav, /local_costmap/costmap_raw, /pointcloud]
+  task3:
+    task_overlay: tasks/task3.yaml
+    distro_overlays: {jazzy: distros/jazzy/task3.yaml}
+    topology:
+      controller_plugin: dwb_core::DWBLocalPlanner
+      planner_plugin: nav2_theta_star_planner::ThetaStarPlanner
+      global_costmap_plugins: [field_boundary_layer, obstacle_layer, inflation_layer]
+      lifecycle_nodes: [controller_server, smoother_server, planner_server, behavior_server,
+        bt_navigator, waypoint_follower, velocity_smoother, collision_monitor]
+      collision_monitor: true
+    required_actions: [/navigate_through_poses]
+    required_topics: [/cmd_vel_nav, /local_costmap/costmap_raw, /pointcloud,
+      /field_boundary_costmap]

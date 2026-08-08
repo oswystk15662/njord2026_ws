@@ -13,6 +13,18 @@ setup(
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
         ("share/" + package_name + "/config", glob("config/*.yaml")),
+        (
+            "share/" + package_name + "/config/nav2_profiles",
+            glob("config/nav2_profiles/*.yaml"),
+        ),
+        (
+            "share/" + package_name + "/config/nav2_profiles/tasks",
+            glob("config/nav2_profiles/tasks/*.yaml"),
+        ),
+        (
+            "share/" + package_name + "/config/nav2_profiles/distros/jazzy",
+            glob("config/nav2_profiles/distros/jazzy/*.yaml"),
+        ),
         ("share/" + package_name + "/launch", glob("launch/*.launch.py")),
     ],
     install_requires=["setuptools", "PyYAML"],

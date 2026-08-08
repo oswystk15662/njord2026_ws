@@ -63,6 +63,10 @@ def main(argv=None) -> int:
         if args.command == "status":
             status = client.call(client.status_client, GetMissionStatus.Request()).status
             print(f"state={status.state} task={status.task_id or '-'} execution={status.execution_id or '-'}")
+            print(
+                f"nav2_profile={status.active_nav2_profile or '-'} "
+                f"requested_profile={status.requested_nav2_profile or '-'}"
+            )
             print(f"stage={status.stage or '-'} progress={status.progress:.0%} auto_permitted={status.auto_permitted}")
             if status.message:
                 print(status.message)
