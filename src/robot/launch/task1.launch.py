@@ -26,7 +26,10 @@ def _include(package, launch_file, arguments=None, condition=None):
 
 
 def _role_is(name):
-    return IfCondition(PythonExpression(["'", LaunchConfiguration('role'), "' == '", name, "'"]))
+    return IfCondition(PythonExpression([
+        "'", LaunchConfiguration('start_role_bringup'), "' == 'true' and '",
+        LaunchConfiguration('role'), "' == '", name, "'",
+    ]))
 
 
 def generate_launch_description():
@@ -74,6 +77,7 @@ def generate_launch_description():
             'frame_id': 'odom',
             'publish_rate_hz': '2.0',
         },
+        condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )
     cardinal_walls = Node(
         package='buoy_obstacle_publisher',
@@ -85,6 +89,7 @@ def generate_launch_description():
             'output_topic': '/virtual_obstacles',
             'map_frame': 'map',
         }],
+        condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )
 
     return LaunchDescription([
@@ -92,6 +97,22 @@ def generate_launch_description():
             'DEPRECATED: task1.launch.py owns a legacy comparison graph. '
             'Use minipc_bringup.launch.py followed by /mission/run_task for operation.'
         )),
+        DeclareLaunchArgument(
+            'start_role_bringup',
+            default_value='false',
+            description=(
+                'Compatibility only: include the selected role bringup. Keep false '
+                'when jetson_bringup/minipc_bringup is already persistent.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'start_legacy_task_nodes',
+            default_value='false',
+            description=(
+                'Compatibility only: start the legacy Nav2 and waypoint graph. '
+                'Use /mission/run_task for normal operation.'
+            ),
+        ),
         DeclareLaunchArgument(
             'role',
             default_value='minipc',
@@ -138,6 +159,12 @@ def generate_launch_description():
         minipc_role,
         standalone_role,
         cardinal_walls,
-        TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
-        TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
+        TimerAction(
+            period=LaunchConfiguration('nav2_start_delay'), actions=[nav2],
+            condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
+        ),
+        TimerAction(
+            period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints],
+            condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
+        ),
     ])
