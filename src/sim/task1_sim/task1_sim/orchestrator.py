@@ -391,6 +391,7 @@ class Task1Orchestrator(Node):
         stamp = self.get_clock().now().to_msg()
 
         black = (0.02, 0.02, 0.02)
+        # RAL1003 (signal yellow), specified by the Challenge handbook.
         yellow = (1.0, 0.78, 0.0)
         # Segment order is waterline -> top, matching the official patterns:
         # N black/yellow, E black/yellow/black, S yellow/black,
@@ -421,6 +422,34 @@ class Task1Orchestrator(Node):
             marker.color.a = 1.0
             marker_array.markers.append(marker)
 
+        def add_topmark(marker_id, x, y, z, points_up):
+            """Add one black cardinal topmark cone.
+
+            A pair of cones differentiates N/E/S/W according to the standard
+            cardinal shapes: up/up, base/base, down/down, tip/tip.
+            """
+            marker = Marker()
+            marker.header.frame_id = self.frame_id
+            marker.header.stamp = stamp
+            marker.ns = "task1_cardinal_topmark"
+            marker.id = marker_id
+            marker.type = Marker.CONE
+            marker.action = Marker.ADD
+            marker.pose.position.x = float(x)
+            marker.pose.position.y = float(y)
+            marker.pose.position.z = float(z)
+            if points_up:
+                marker.pose.orientation.w = 1.0
+            else:
+                marker.pose.orientation.x = 1.0
+                marker.pose.orientation.w = 0.0
+            marker.scale.x = 0.18
+            marker.scale.y = 0.18
+            marker.scale.z = 0.18
+            marker.color.r, marker.color.g, marker.color.b = black
+            marker.color.a = 1.0
+            marker_array.markers.append(marker)
+
         def add_reference_buoy(marker_id, x, y, rgb):
             marker = Marker()
             marker.header.frame_id = self.frame_id
@@ -442,9 +471,10 @@ class Task1Orchestrator(Node):
 
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
-            # Official mark: 40 cm buoy and a 14 cm x 40 cm striped cylinder.
+            # Official mark: a 40 cm striped buoy, a 14 cm x 40 cm striped
+            # cylinder, then two black cardinal topmark cones.  The colour
+            # bands are black/yellow per the 2026 handbook.
             marker_base_id = idx * 10
-            add_cylinder(marker_base_id, "task1_cardinal_buoy", bx, by, 0.2, 0.4, 0.4, black)
             pattern = pattern_by_mark.get(mark, pattern_by_mark["N"])
             segment_height = 0.4 / len(pattern)
             for segment_idx, rgb in enumerate(pattern):
@@ -453,11 +483,31 @@ class Task1Orchestrator(Node):
                     "task1_cardinal_buoy",
                     bx,
                     by,
+                    (segment_idx + 0.5) * segment_height,
+                    0.4,
+                    segment_height,
+                    rgb,
+                )
+                add_cylinder(
+                    marker_base_id + 4 + segment_idx,
+                    "task1_cardinal_mast",
+                    bx,
+                    by,
                     0.4 + (segment_idx + 0.5) * segment_height,
                     0.14,
                     segment_height,
                     rgb,
                 )
+
+            # Cone orientations ordered from lower to upper cone.
+            cone_orientation = {
+                "N": (True, True),
+                "E": (False, True),
+                "S": (False, False),
+                "W": (True, False),
+            }.get(mark, (True, True))
+            add_topmark(marker_base_id + 8, bx, by, 0.88, cone_orientation[0])
+            add_topmark(marker_base_id + 9, bx, by, 1.08, cone_orientation[1])
 
             # Red is on the port side and green on the starboard side of the
             # nominal WP3 -> WP4 course. They are visual references only; the

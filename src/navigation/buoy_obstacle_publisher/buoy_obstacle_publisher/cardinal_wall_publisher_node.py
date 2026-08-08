@@ -13,7 +13,11 @@ from sensor_msgs.msg import PointCloud2, PointField
 from tf2_ros import Buffer, TransformException, TransformListener
 import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
 
-from buoy_obstacle_publisher.cardinal_wall_geometry import CARDINAL_DIRECTIONS, wall_points
+from buoy_obstacle_publisher.cardinal_wall_geometry import (
+    CARDINAL_DIRECTIONS,
+    is_behind_retirement_frontier,
+    wall_points,
+)
 
 
 WALL_CLASSES = set(CARDINAL_DIRECTIONS) | {BuoyDetection.CLASS_GREEN, BuoyDetection.CLASS_RED}
@@ -97,13 +101,11 @@ class CardinalWallPublisher(Node):
             except TransformException as error:
                 self.get_logger().debug(f'Cannot transform retirement frontier: {error}')
                 return
-        forward = (math.cos(self.course_heading_rad), math.sin(self.course_heading_rad))
         retired = 0
         for track in self.tracks:
-            behind_frontier = (
-                (track['x'] - point.point.x) * forward[0] +
-                (track['y'] - point.point.y) * forward[1]
-            ) < -self.retirement_margin
+            behind_frontier = is_behind_retirement_frontier(
+                track['x'], track['y'], point.point.x, point.point.y,
+                self.course_heading_rad, self.retirement_margin)
             if behind_frontier and track.get('wall_active', True):
                 track['wall_active'] = False
                 retired += 1

@@ -1,6 +1,9 @@
 import math
 
-from buoy_obstacle_publisher.cardinal_wall_geometry import wall_points
+from buoy_obstacle_publisher.cardinal_wall_geometry import (
+    is_behind_retirement_frontier,
+    wall_points,
+)
 
 
 def test_north_marker_blocks_the_south_side():
@@ -23,3 +26,11 @@ def test_red_and_green_block_opposite_sides_of_the_course():
     green = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 0.0, 0, math.pi)
     assert max(y for _, y, _ in red) == 4.0
     assert min(y for _, y, _ in green) == -4.0
+
+
+def test_reached_next_waypoint_retires_only_cardinal_marks_behind_it():
+    # The Task1.2 main course heads west (WP3 -> WP4). Once the next
+    # waypoint is reached at x=24, the marker at x=28 has been passed, while
+    # a later marker at x=18 must retain its wall.
+    assert is_behind_retirement_frontier(28.0, -25.0, 24.0, -35.0, math.pi, 0.5)
+    assert not is_behind_retirement_frontier(18.0, -25.0, 24.0, -35.0, math.pi, 0.5)

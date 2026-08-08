@@ -47,6 +47,22 @@ def _ray_end(bounds, x, y, dx, dy):
     return x + t * dx, y + t * dy
 
 
+def is_behind_retirement_frontier(marker_x, marker_y, frontier_x, frontier_y,
+                                  course_heading_rad, margin_m=0.0):
+    """Whether a marker is behind the reached next-waypoint frontier.
+
+    The frontier advances along the main waypoint direction.  A marker's
+    track remains available for display/re-identification, but its wall is
+    retired once the frontier has passed the marker by ``margin_m``.
+    """
+    forward_x = math.cos(course_heading_rad)
+    forward_y = math.sin(course_heading_rad)
+    return (
+        (marker_x - frontier_x) * forward_x
+        + (marker_y - frontier_y) * forward_y
+    ) < -max(0.0, margin_m)
+
+
 def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0):
     """Return a filled wall from a marker to its forbidden course edge."""
     direction = direction_for_class(class_id, course_heading_rad)
