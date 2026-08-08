@@ -68,7 +68,7 @@ class WaypointPublisher(Node):
         self.declare_parameter('show_waypoint_route_line', False)
         self.declare_parameter('waypoint_route_z', -0.05)
         self.declare_parameter('cardinal_wall_enable_topic', '/task1/cardinal_wall_enable')
-        self.declare_parameter('cardinal_wall_enable_waypoint_id', 13)
+        self.declare_parameter('cardinal_wall_enable_waypoint', '3')
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -82,8 +82,8 @@ class WaypointPublisher(Node):
         self.show_waypoint_route_line = self.get_parameter('show_waypoint_route_line').value
         self.waypoint_route_z = float(self.get_parameter('waypoint_route_z').value)
         self.cardinal_wall_enable_topic = self.get_parameter('cardinal_wall_enable_topic').value
-        self.cardinal_wall_enable_waypoint_id = int(
-            self.get_parameter('cardinal_wall_enable_waypoint_id').value)
+        self.cardinal_wall_enable_waypoint = str(
+            self.get_parameter('cardinal_wall_enable_waypoint').value)
         
         # Validate task type
         try:
@@ -176,14 +176,14 @@ class WaypointPublisher(Node):
             return full_config['task3_2_config']
 
     def _cardinal_wall_enable_goal_index(self):
-        """Return the Task1 NavigateThroughPoses index for GPS3 (ID 13)."""
+        """Return the Task1 NavigateThroughPoses index for competition WP3."""
         if self.task_type != TaskType.TASK1:
             return None
         for index, waypoint in enumerate(self.config.get('waypoints', [])):
-            if int(waypoint.get('id', -1)) == self.cardinal_wall_enable_waypoint_id:
+            if str(waypoint.get('competition_id', waypoint.get('id'))) == self.cardinal_wall_enable_waypoint:
                 return index
         self.get_logger().warn(
-            f'GPS3 waypoint ID {self.cardinal_wall_enable_waypoint_id} is absent; '
+            f'competition waypoint {self.cardinal_wall_enable_waypoint} is absent; '
             'cardinal virtual walls remain disabled')
         return None
 
@@ -332,6 +332,9 @@ class WaypointPublisher(Node):
 
     def _display_waypoint_id(self, waypoint: dict, index: int) -> str:
         """Return Task1's grouped competition number for display only."""
+        competition_id = waypoint.get('competition_id')
+        if competition_id is not None:
+            return str(competition_id)
         waypoint_id = int(waypoint.get('id', index + 1))
         if self.task_type == TaskType.TASK1:
             if waypoint_id == 1:
