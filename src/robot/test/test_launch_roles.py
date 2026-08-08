@@ -290,6 +290,41 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
+def test_task1_tf_authorities_and_local_virtual_wall_contract():
+    """Keep Task 1's map-frame walls transformable into the local costmap."""
+    robot_config_dir = os.path.normpath(os.path.join(_THIS_DIR, "..", "config"))
+    with open(os.path.join(robot_config_dir, "ekf_global.yaml"), encoding="utf-8") as stream:
+        global_ekf = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+    with open(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "localization",
+            "um982_feedback_filter",
+            "config",
+            "um982_feedback_ekf.yaml",
+        ),
+        encoding="utf-8",
+    ) as stream:
+        local_ekf = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
+    with open(os.path.join(robot_config_dir, "nav2_params_humble.yaml"), encoding="utf-8") as stream:
+        nav2 = yaml.safe_load(stream)
+
+    assert global_ekf["publish_tf"] is True
+    assert global_ekf["world_frame"] == "map"
+    assert global_ekf["map_frame"] == "map"
+    assert global_ekf["odom_frame"] == "odom"
+    assert local_ekf["publish_tf"] is True
+    assert local_ekf["world_frame"] == "odom"
+    assert local_ekf["odom_frame"] == "odom"
+    assert local_ekf["base_link_frame"] == "base_link"
+
+    local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
+    assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
+    assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
 @pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
 def test_task_launch_files_declare_role_argument(filename):
     source = _read_launch_source(filename)
