@@ -45,6 +45,7 @@ def launch_cardinal_walls(context):
             "retirement_course_heading_rad": 3.141592653589793,
             "retire_passed_cardinal_walls_from_base_pose": True,
             "retirement_margin_m": 1.0,
+            "retirement_heading_topic": "/task1/gps3_to_gps4_heading",
             # The simulator publishes the same UM982 true-heading contract
             # used by the vessel's dual-antenna GNSS receiver.
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",

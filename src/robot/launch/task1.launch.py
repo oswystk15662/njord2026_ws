@@ -89,12 +89,11 @@ def generate_launch_description():
             # waypoint_publisher latches this true only after competition
             # waypoint GPS3 is passed.
             'wall_enable_topic': '/task1/cardinal_wall_enable',
-            # Set this to the map-frame heading from GPS3 to GPS4 when the
-            # official geodetic route is entered. Passed cardinal walls are
-            # retired from the live hull position, not waypoint feedback.
+            # GPS3->4 map heading is calculated by waypoint_publisher from
+            # the configured (possibly geodetic) route points.
             'retire_passed_cardinal_walls_from_base_pose': True,
-            'retirement_course_heading_rad': LaunchConfiguration('gps3_to_gps4_heading_rad'),
             'retirement_margin_m': 1.0,
+            'retirement_heading_topic': '/task1/gps3_to_gps4_heading',
         }],
     )
 
@@ -133,11 +132,6 @@ def generate_launch_description():
             'use_geodetic_waypoints',
             default_value='true',
             description='Use latitude/longitude on every waypoint and project them to map via /fromLL.',
-        ),
-        DeclareLaunchArgument(
-            'gps3_to_gps4_heading_rad',
-            default_value='0.0',
-            description='GPS3->GPS4 map-frame heading used to retire passed cardinal walls.',
         ),
         DeclareLaunchArgument(
             'lidar_start_delay',

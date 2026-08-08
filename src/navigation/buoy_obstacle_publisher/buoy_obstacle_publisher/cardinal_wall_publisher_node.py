@@ -13,6 +13,7 @@ from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Bool
+from std_msgs.msg import Float64
 from tf2_ros import Buffer, TransformException, TransformListener
 import tf2_geometry_msgs  # noqa: F401 - registers PointStamped conversions.
 from visualization_msgs.msg import Marker, MarkerArray
@@ -72,6 +73,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
         self.declare_parameter('retire_passed_cardinal_walls_from_base_pose', False)
+        self.declare_parameter('retirement_heading_topic', '')
         self.declare_parameter('wall_enable_topic', '')
         # Simulation-only ground-truth preview. It is visualization-only and
         # is deliberately never included in /virtual_obstacles.
@@ -114,6 +116,9 @@ class CardinalWallPublisher(Node):
             self.create_subscription(PointStamped, retirement_topic, self._on_retirement_frontier, 10)
         if wall_enable_topic:
             self.create_subscription(Bool, wall_enable_topic, self._on_wall_enable, 10)
+        heading_topic = self.get_parameter('retirement_heading_topic').value
+        if heading_topic:
+            self.create_subscription(Float64, heading_topic, self._on_retirement_heading, 10)
         true_north_topic = self.get_parameter('true_north_heading_topic').value
         if true_north_topic:
             self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
@@ -176,6 +181,11 @@ class CardinalWallPublisher(Node):
         if msg.data and not self.walls_enabled:
             self.walls_enabled = True
             self.get_logger().info('GPS3 reached: enabling confirmed buoy virtual walls')
+
+    def _on_retirement_heading(self, msg):
+        """Accept the map-frame GPS3->4 heading calculated from route points."""
+        if math.isfinite(msg.data):
+            self.retirement_course_heading_rad = msg.data
 
     def _on_retirement_frontier(self, msg):
         """Disable walls behind a reached waypoint while retaining their tracks."""

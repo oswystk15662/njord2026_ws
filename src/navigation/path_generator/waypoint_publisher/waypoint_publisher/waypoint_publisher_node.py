@@ -22,9 +22,11 @@ from nav2_msgs.action import NavigateThroughPoses
 from robot_localization.srv import FromLL
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool
+from std_msgs.msg import Float64
 from tf2_ros import Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 import yaml
+import math
 from pathlib import Path
 from enum import Enum
 
@@ -74,6 +76,7 @@ class WaypointPublisher(Node):
         self.declare_parameter('start_competition_waypoint', '')
         self.declare_parameter('use_geodetic_waypoints', False)
         self.declare_parameter('from_ll_service', '/fromLL')
+        self.declare_parameter('cardinal_retirement_heading_topic', '/task1/gps3_to_gps4_heading')
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -93,6 +96,8 @@ class WaypointPublisher(Node):
             self.get_parameter('start_competition_waypoint').value).strip()
         self.use_geodetic_waypoints = self.get_parameter('use_geodetic_waypoints').value
         self.from_ll_service = self.get_parameter('from_ll_service').value
+        self.cardinal_retirement_heading_topic = self.get_parameter(
+            'cardinal_retirement_heading_topic').value
         
         # Validate task type
         try:
@@ -109,6 +114,8 @@ class WaypointPublisher(Node):
             MarkerArray, self.waypoint_marker_topic, marker_qos)
         self.cardinal_wall_enable_pub = self.create_publisher(
             Bool, self.cardinal_wall_enable_topic, marker_qos)
+        self.cardinal_retirement_heading_pub = self.create_publisher(
+            Float64, self.cardinal_retirement_heading_topic, marker_qos)
         self.cardinal_wall_enabled = False
         self.cardinal_wall_enable_goal_index = self._cardinal_wall_enable_goal_index()
         self._publish_cardinal_wall_enable()
@@ -292,16 +299,37 @@ class WaypointPublisher(Node):
         self._publish_waypoint_markers(self.geodetic_positions)
         poses = [self._pose_from_waypoint(wp, position)
                  for wp, position in zip(waypoints, self.geodetic_positions)]
+        self._publish_cardinal_retirement_heading(waypoints, self.geodetic_positions)
         self._send_navigate_through_poses_goal(poses)
         self.get_logger().info(f'Published {len(poses)} geodetic waypoints for {self.task_type.value}')
     
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
         waypoints = self._build_poses_from_config()
+        self._publish_cardinal_retirement_heading(
+            self._active_waypoints(),
+            [(pose.pose.position.x, pose.pose.position.y) for pose in waypoints])
         self._send_navigate_through_poses_goal(waypoints)
         
         task_name = self.task_type.value
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
+
+    def _publish_cardinal_retirement_heading(self, configured_waypoints, positions):
+        """Publish the map-frame course heading calculated from GPS3 to GPS4."""
+        by_competition_id = {
+            str(waypoint.get('competition_id')): position
+            for waypoint, position in zip(configured_waypoints, positions)
+        }
+        gps3, gps4 = by_competition_id.get('3'), by_competition_id.get('4')
+        if gps3 is None or gps4 is None:
+            return
+        dx, dy = gps4[0] - gps3[0], gps4[1] - gps3[1]
+        if dx * dx + dy * dy < 1.0e-8:
+            self.get_logger().warn('GPS3 and GPS4 map positions are identical; cannot set wall retirement heading')
+            return
+        heading = Float64()
+        heading.data = math.atan2(dy, dx)
+        self.cardinal_retirement_heading_pub.publish(heading)
 
     def _active_waypoints(self) -> list:
         """Return the configured route, optionally sliced at a competition WP."""
