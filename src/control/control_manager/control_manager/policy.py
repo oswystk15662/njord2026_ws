@@ -35,7 +35,6 @@ COMMON_BOOLEAN_REQUIREMENTS = frozenset(
         "require_emergency_stop_clear",
         "require_nav2_ready",
         "require_task_ready",
-        "require_fresh_nav_command",
         "require_ground_station",
         "require_driver_heartbeat",
         "require_localization_heartbeat",
@@ -156,7 +155,6 @@ class SafetyInputs:
     emergency_stop: bool = True
     nav2_ready: bool = False
     task_ready: bool = False
-    nav_command_fresh: bool = False
     health_states: Mapping[str, int] = None  # HealthSignal constants are supplied by the node.
     health_summary_critical: bool = False
     task_requirements_ready: bool = False
@@ -180,8 +178,6 @@ def evaluate_auto_permission(
         reasons.append((inhibit_codes["nav2_not_ready"], "Nav2 is not ready"))
     if requirements["require_task_ready"] and not inputs.task_ready:
         reasons.append((inhibit_codes["task_not_ready"], "task is not ready"))
-    if requirements["require_fresh_nav_command"] and not inputs.nav_command_fresh:
-        reasons.append((inhibit_codes["nav_stale"], "navigation command is stale"))
     states = inputs.health_states or {}
     for requirement, signal in HEALTH_REQUIREMENT_SIGNALS.items():
         # A DISABLED monitor is observable but can never satisfy an enabled control requirement.

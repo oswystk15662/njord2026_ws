@@ -11,7 +11,8 @@ control_policy:
     require_emergency_stop_clear: true
     require_nav2_ready: true
     require_task_ready: true
-    require_fresh_nav_command: true
+    # Nav command freshness is a runtime Command Arbiter gate, not an AUTO
+    # pre-arm requirement.  The timeout remains here for ControlState telemetry.
     nav_command_timeout_sec: 0.5
     require_ground_station: false
     require_driver_heartbeat: false
