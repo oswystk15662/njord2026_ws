@@ -4,7 +4,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, LogInfo, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -76,6 +76,10 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        LogInfo(msg=(
+            'DEPRECATED: task3.launch.py owns a legacy comparison graph. '
+            'Use minipc_bringup.launch.py followed by /mission/run_task for operation.'
+        )),
         DeclareLaunchArgument(
             'role',
             default_value='minipc',
