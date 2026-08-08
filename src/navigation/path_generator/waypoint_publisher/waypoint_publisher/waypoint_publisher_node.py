@@ -15,6 +15,7 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
+from ament_index_python.packages import get_package_share_directory
 from geometry_msgs.msg import PoseStamped
 from nav2_msgs.action import NavigateThroughPoses
 from tf2_ros import Buffer, TransformListener
@@ -112,8 +113,9 @@ class WaypointPublisher(Node):
         Load waypoint configuration from YAML file
         Returns: dict with task configuration
         """
-        # Construct config file path
-        package_share_dir = Path(__file__).parent.parent / 'config'
+        # Installed ROS packages keep data files under share/<package>, not
+        # beside the Python module under lib/python*/site-packages.
+        package_share_dir = Path(get_package_share_directory('waypoint_publisher')) / 'config'
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
