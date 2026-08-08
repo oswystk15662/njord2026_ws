@@ -262,10 +262,14 @@ class CardinalWallPublisher(Node):
         for track in self.tracks:
             if (self.walls_enabled and track['class_id'] is not None
                     and track.get('wall_active', True)):
+                wall_heading = (
+                    track.get('true_north_yaw_rad', self.true_north_yaw_rad)
+                    if track['class_id'] in CARDINAL_DIRECTIONS
+                    else self.retirement_course_heading_rad)
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
                     track['x'], track['y'], track['class_id'],
-                    track.get('true_north_yaw_rad', self.true_north_yaw_rad)))
+                    wall_heading))
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame

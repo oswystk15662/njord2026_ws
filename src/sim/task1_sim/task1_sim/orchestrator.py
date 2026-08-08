@@ -520,6 +520,16 @@ class Task1Orchestrator(Node):
 
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
+            # Lateral marks are standalone red/green buoys. Unlike cardinal
+            # marks, they have no black/yellow bands or cardinal topmarks.
+            if mark in {"RED", "GREEN"}:
+                colour = lateral_red if mark == "RED" else lateral_green
+                label = "RED / PORT" if mark == "RED" else "GREEN / STARBOARD"
+                marker_base_id = idx * 10
+                add_reference_buoy(marker_base_id + 1, bx, by, colour)
+                add_text(marker_base_id + 1, "task1_lateral_buoy_labels",
+                         bx, by, 7.60, label, colour)
+                continue
             # Preserve the official black/RAL1003 pattern and topmarks, but
             # deliberately enlarge every visual element for course readability.
             marker_base_id = idx * 10
