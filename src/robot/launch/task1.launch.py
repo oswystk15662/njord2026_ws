@@ -125,7 +125,7 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'use_geodetic_waypoints',
-            default_value='false',
+            default_value='true',
             description='Use latitude/longitude on every waypoint and project them to map via /fromLL.',
         ),
         DeclareLaunchArgument(

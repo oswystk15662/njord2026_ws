@@ -416,6 +416,9 @@ def generate_launch_description():
             "publish_rate_hz": "2.0",
             "waypoint_marker_topic": "/sim/task1_waypoint_markers",
             "nav2_goal_tolerance_m": "2.0",
+            # The simulator course is intentionally authored in local map
+            # coordinates; real Task1 defaults to GPS waypoint projection.
+            "use_geodetic_waypoints": "false",
             "start_competition_waypoint": PythonExpression([
                 "'3' if '", LaunchConfiguration("start_at_wp3"), "' == 'true' else ''"
             ]),
