@@ -12,7 +12,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 
 from njord_interfaces.action import RunTask
-from njord_interfaces.srv import GetMissionStatus, ListTasks, StartTask, StopTask
+from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
 
 class TaskClient(Node):
@@ -22,6 +22,7 @@ class TaskClient(Node):
         self.status_client = self.create_client(GetMissionStatus, "/mission/get_status")
         self.start_client = self.create_client(StartTask, "/mission/start_task")
         self.stop_client = self.create_client(StopTask, "/mission/stop_task")
+        self.set_mode_client = self.create_client(SetControlMode, "/control/set_mode")
         self.run_client = ActionClient(self, RunTask, "/mission/run_task")
 
     def call(self, client, request, timeout: float = 5.0):
@@ -76,11 +77,20 @@ def main(argv=None) -> int:
         if args.command == "check":
             return _check(client, args.task_id)
         if args.command == "start":
+            request_id = f"njord-task-{uuid.uuid4()}"
+            if args.auto:
+                mode_request = SetControlMode.Request()
+                mode_request.requested_mode = SetControlMode.Request.MODE_AUTO
+                mode_request.request_id = request_id
+                mode_response = client.call(client.set_mode_client, mode_request)
+                if not mode_response.accepted:
+                    print(f"AUTO request rejected: {mode_response.message}", file=sys.stderr)
+                    return 2
             request = StartTask.Request()
             request.task_id = args.task_id
             request.request_auto_mode = args.auto
             request.dry_run = args.dry_run
-            request.request_id = f"njord-task-{uuid.uuid4()}"
+            request.request_id = request_id
             response = client.call(client.start_client, request)
             print(response.message)
             if response.execution_id:

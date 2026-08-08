@@ -20,12 +20,18 @@ from std_msgs.msg import Bool, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
-from njord_interfaces.srv import GetMissionStatus, ListTasks, StartTask, StopTask
+from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
 from .executors import DummyExecutor, ExecutorStatus, StagedDockingExecutor, WaypointSequenceExecutor
 from .nav2_profiles import Nav2ProfileApplicationManager, Nav2ProfileCatalog, Nav2ProfileError
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
-from .task_registry import RegistryError, TaskDefinition, TaskRegistry
+from .task_registry import (
+    RUNTIME_READINESS_FEATURES,
+    RegistryError,
+    TaskDefinition,
+    TaskRegistry,
+    required_runtime_readiness,
+)
 from .waypoint_config import Route, Waypoint, WaypointConfigLoader
 
 
@@ -131,6 +137,7 @@ class MissionManager(Node):
         self._active_executor = None
         self._active_route: Route | None = None
         self._pending_start = None
+        self._active_task: TaskDefinition | None = None
         self._action_results: dict[str, tuple[ResultCode, str]] = {}
         self._auto_permitted = False
         self._requested_mode = MissionStatus.MODE_MANUAL
@@ -141,6 +148,7 @@ class MissionManager(Node):
         self._task_ready = False
         self._task_requirements_ready = False
         self._active_control_policy = ""
+        self._runtime_readiness = {name: False for name in RUNTIME_READINESS_FEATURES}
         self._requested_nav2_profile = ""
 
         registry_path = self._registry_path()
@@ -161,10 +169,23 @@ class MissionManager(Node):
             String, "/mission/active_control_policy", _STATUS_QOS
         )
         self._navigation = _RosNavigationClient(self, self._plan_pub)
+        self._mode_client = self.create_client(
+            SetControlMode, "/control/set_mode", callback_group=self._cb_group
+        )
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
         )
+        for name in RUNTIME_READINESS_FEATURES:
+            self.create_subscription(
+                Bool,
+                f"/mission/readiness/{name}",
+                lambda message, readiness_name=name: self._on_runtime_readiness(
+                    readiness_name, message
+                ),
+                _STATUS_QOS,
+                callback_group=self._cb_group,
+            )
         self._action = ActionServer(
             self, RunTask, "/mission/run_task", self._execute_action,
             goal_callback=self._goal_callback, cancel_callback=self._cancel_callback,
@@ -306,12 +327,20 @@ class MissionManager(Node):
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
         self._active_route = route
+        self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
-        # A validated route/profile is a task-ready input, but task-specific
-        # runtime requirements must remain false until an executor is running.
-        self._publish_task_readiness(True, False, task.control_policy)
         self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                  stage="configure", message="task route validated")
+        if request.request_auto_mode:
+            if not self._request_auto_mode(decision.execution_id, task, request.dry_run):
+                return self._reject_started(
+                    decision.execution_id,
+                    ResultCode.INTERNAL_ERROR,
+                    "Mode Manager /control/set_mode is unavailable",
+                )
+            self._publish_status()
+            return decision
+        self._activate_task_readiness(decision.execution_id, task)
         if request.dry_run:
             self._complete(decision.execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
             return decision
@@ -324,11 +353,79 @@ class MissionManager(Node):
         self._publish_status()
         return decision
 
+    def _request_auto_mode(self, execution_id: str, task: TaskDefinition, dry_run: bool) -> bool:
+        """Request AUTO through its sole owner without treating it as permission."""
+        if not self._mode_client.service_is_ready():
+            return False
+        request = SetControlMode.Request()
+        request.requested_mode = SetControlMode.Request.MODE_AUTO
+        # The Mode Manager's operation is naturally idempotent: repeating AUTO
+        # only re-publishes the same requested mode.  The execution ID still
+        # gives operators and logs a stable correlation identifier.
+        request.request_id = execution_id
+        try:
+            future = self._mode_client.call_async(request)
+        except Exception as exc:
+            self.get_logger().error(f"Could not request AUTO from Mode Manager: {exc}")
+            return False
+        future.add_done_callback(
+            lambda response_future: self._on_auto_mode_requested(
+                response_future, execution_id, task, dry_run
+            )
+        )
+        return True
+
+    def _on_auto_mode_requested(
+        self, future, execution_id: str, task: TaskDefinition, dry_run: bool
+    ) -> None:
+        try:
+            response = future.result()
+        except Exception as exc:
+            response = None
+            message = f"Mode Manager AUTO request failed: {exc}"
+        else:
+            message = response.message if response is not None else "Mode Manager returned no response"
+        with self._lock:
+            # A cancellation or a newer execution makes this response stale.
+            if not self._machine.is_current(execution_id) or self._machine.snapshot.state != MissionState.CONFIGURING:
+                return
+            if response is None or not response.accepted:
+                self._reject_started(
+                    execution_id,
+                    ResultCode.SAFETY_INHIBITED,
+                    f"AUTO request rejected by Mode Manager: {message}",
+                )
+                return
+            self._activate_task_readiness(execution_id, task)
+            if dry_run:
+                self._complete(execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
+                return
+            if self._machine.snapshot.state == MissionState.CONFIGURING:
+                self._pending_start = (execution_id, task)
+                self._machine.transition(
+                    MissionState.WAITING_FOR_AUTO_PERMISSION,
+                    execution_id=execution_id,
+                    stage="permission",
+                    message="AUTO requested; waiting for safety permission",
+                )
+            self._publish_status()
+
+    def _activate_task_readiness(self, execution_id: str, task: TaskDefinition) -> None:
+        """Publish inputs that Safety Supervisor can evaluate before execution."""
+        if not self._machine.is_current(execution_id):
+            return
+        self._publish_task_readiness(True, self._requirements_ready(task), task.control_policy)
+
+    def _requirements_ready(self, task: TaskDefinition) -> bool:
+        return all(self._runtime_readiness[name] for name in required_runtime_readiness(task))
+
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
         self._action_results[execution_id] = (code, message)
         self._publish_status()
         self._machine.reset_to_idle(execution_id)
+        self._active_task = None
+        self._publish_task_readiness(False, False, "")
         self._publish_status()
         return type("Decision", (), {"accepted": False, "result_code": code, "message": message,
                                       "execution_id": execution_id, "duplicate": False})()
@@ -343,7 +440,6 @@ class MissionManager(Node):
         self._pending_start = None
         self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
                                  stage="starting", message="starting task executor")
-        self._publish_task_readiness(True, True, task.control_policy)
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
@@ -402,6 +498,7 @@ class MissionManager(Node):
         self._action_results[execution_id] = (code, message)
         self._pending_start = None
         self._active_executor = None
+        self._active_task = None
         self._publish_status()
         self._publish_task_readiness(False, False, "")
         self._machine.reset_to_idle(execution_id)
@@ -413,6 +510,13 @@ class MissionManager(Node):
             self._requested_mode = message.requested_mode
             self._effective_source = message.effective_source
             self._inhibit_reasons = list(message.inhibit_reasons)
+
+    def _on_runtime_readiness(self, name: str, message: Bool) -> None:
+        with self._lock:
+            self._runtime_readiness[name] = message.data
+            task = self._active_task
+            if task is not None and self._machine.active:
+                self._publish_task_readiness(True, self._requirements_ready(task), task.control_policy)
 
     def _tick(self) -> None:
         with self._lock:

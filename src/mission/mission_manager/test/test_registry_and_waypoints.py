@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mission_manager.task_registry import RegistryError, TaskRegistry
+from mission_manager.task_registry import RegistryError, TaskRegistry, required_runtime_readiness
 from mission_manager.waypoint_config import WaypointConfigLoader
 
 
@@ -35,3 +35,17 @@ def test_duplicate_yaml_keys_are_rejected(tmp_path):
     bad.write_text("tasks: {}\ntasks: {}\n", encoding="utf-8")
     with pytest.raises(RegistryError, match="duplicate YAML key"):
         TaskRegistry.from_file(bad)
+
+
+def test_route_validation_only_satisfies_task1_requirements():
+    registry = TaskRegistry.from_file(
+        PACKAGE_ROOT / "config" / "task_registry.yaml",
+        package_shares={"waypoint_publisher": WAYPOINT_ROOT},
+    )
+    assert required_runtime_readiness(registry.get("task1")) == frozenset()
+    assert required_runtime_readiness(registry.get("task2")) == {
+        "collision_monitor", "buoy_perception"
+    }
+    assert required_runtime_readiness(registry.get("task3_1")) == {
+        "collision_monitor", "dynamic_gate_tf"
+    }

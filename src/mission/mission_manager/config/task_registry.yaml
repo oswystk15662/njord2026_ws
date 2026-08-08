@@ -38,7 +38,7 @@ tasks:
     frame_id: map
     nav2_profile: task2
     control_policy: task2
-    features: {collision_monitor: true}
+    features: {collision_monitor: true, buoy_perception: true}
   task3_1:
     display_name: Task 3-1
     availability: experimental
@@ -49,7 +49,7 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task3
-    features: {collision_monitor: true, dynamic_gate_midpoints: true}
+    features: {collision_monitor: true, dynamic_gate_tf: true, dynamic_gate_midpoints: true}
   task3_2:
     display_name: Task 3-2
     availability: experimental
@@ -60,3 +60,4 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task3
+    features: {collision_monitor: true, dynamic_gate_tf: true, dynamic_gate_midpoints: true}

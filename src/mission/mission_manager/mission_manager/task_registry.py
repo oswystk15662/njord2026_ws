@@ -65,6 +65,25 @@ class TaskDefinition:
         return self.availability in {"available", "experimental"}
 
 
+# These inputs are deliberately supplied by their owning runtime components;
+# Mission Manager must not infer them merely because it has started an executor.
+RUNTIME_READINESS_FEATURES = frozenset(
+    {"collision_monitor", "buoy_perception", "dynamic_gate_tf"}
+)
+
+
+def required_runtime_readiness(task: TaskDefinition) -> frozenset[str]:
+    """Return task requirements that cannot be proven by route validation.
+
+    A waypoint route is validated locally before a task is armed.  In contrast,
+    perception, collision-monitor, and dynamic-TF readiness describe live
+    systems and must be provided by their respective owners.
+    """
+    return frozenset(
+        name for name in RUNTIME_READINESS_FEATURES if task.features.get(name) is True
+    )
+
+
 class TaskRegistry:
     """Validated task definitions plus the reasons non-runnable tasks remain visible."""
 
