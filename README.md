@@ -277,6 +277,13 @@ sudo tcpdump -ni any udp port 5600 -c 20
 Jetson Nano + Ubuntu 20.04 + ROS2 Foxy では、ZED/ROS系とYOLO系を同じPython環境に混ぜないでください。
 `numpy` の競合で `cv_bridge` が壊れることがあります。
 
+YOLOノードが使用する ROS メッセージ定義は別途必要である。Humble 環境では、初回に
+次を実行する。
+
+```shell
+sudo apt install ros-humble-vision-msgs
+```
+
 運用ルール:
 * ROS2/ZED ノードはシステム環境（apt + colcon）で実行する
 * YOLOノードは `.venv` で実行する
