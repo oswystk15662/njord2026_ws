@@ -199,10 +199,14 @@ class WaypointPublisher(Node):
         """Enable Task1 cardinal walls only after Nav2 reports GPS3 passed."""
         if self.cardinal_wall_enabled or self.cardinal_wall_enable_goal_index is None:
             return
-        current_waypoint = int(feedback_msg.feedback.current_waypoint)
-        # Feedback identifies the currently active goal. The competition WP
-        # itself is considered passed only after Nav2 advances to the next one.
-        if current_waypoint > self.cardinal_wall_enable_goal_index:
+        # NavigateThroughPoses feedback in Humble does not expose the active
+        # waypoint index.  It does expose the number of poses still pending;
+        # it decreases only after the current pose is passed.  This works both
+        # for the complete Task1 route and for the route sliced to start at
+        # competition WP3.
+        total_poses = len(self._active_waypoints())
+        poses_remaining = int(feedback_msg.feedback.number_of_poses_remaining)
+        if poses_remaining < total_poses - self.cardinal_wall_enable_goal_index:
             self.cardinal_wall_enabled = True
             self._publish_cardinal_wall_enable()
             self.get_logger().info('GPS3 reached: enabled cardinal virtual walls')
