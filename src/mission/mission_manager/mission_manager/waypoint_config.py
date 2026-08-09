@@ -7,7 +7,7 @@ place these files can move into this package without changing this API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 from pathlib import Path
 from typing import Mapping
@@ -24,6 +24,20 @@ class Waypoint:
     name: str
     waypoint_type: str
     gate_pair: object = None
+    # Competition checkpoint identity is distinct from the sequential YAML
+    # id (for example, sequential id 13 is competition GPS3).  Mission
+    # Manager needs this metadata to apply Task1 stage safety behavior.
+    competition_id: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    altitude: float = 0.0
+
+
+@dataclass(frozen=True)
+class GeodeticPoint:
+    latitude: float
+    longitude: float
+    altitude: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -33,12 +47,44 @@ class Route:
     stages: Mapping[str, tuple[str, ...]]
     full_sequence_stages: Mapping[str, tuple[str, ...]]
     constraints: Mapping[str, object]
+    coordinate_mode: str = "map_xy"
+    origin: GeodeticPoint | None = None
 
     def stage(self, name: str, *, full_sequence: bool = False) -> tuple[Waypoint, ...]:
         stage_set = self.full_sequence_stages if full_sequence else self.stages
         ids = stage_set.get(name, ())
         by_id = {waypoint.waypoint_id: waypoint for waypoint in self.waypoints}
         return tuple(by_id[item] for item in ids)
+
+    def projection_points(self) -> tuple[GeodeticPoint, ...]:
+        """GPS points which must be converted by navsat_transform /fromLL."""
+        if self.coordinate_mode == "map_xy":
+            return ()
+        if self.coordinate_mode == "origin_relative_xy":
+            assert self.origin is not None
+            return (self.origin,)
+        return tuple(
+            GeodeticPoint(w.latitude, w.longitude, w.altitude)
+            for w in self.waypoints
+        )
+
+    def with_projected_points(self, points: tuple[tuple[float, float], ...]) -> "Route":
+        """Return map-coordinate waypoints after /fromLL conversion."""
+        if self.coordinate_mode == "map_xy":
+            return self
+        if self.coordinate_mode == "origin_relative_xy":
+            if len(points) != 1:
+                raise RegistryError("origin_relative_xy requires one projected origin")
+            ox, oy = points[0]
+            waypoints = tuple(replace(w, x=ox + w.x, y=oy + w.y) for w in self.waypoints)
+        else:
+            if len(points) != len(self.waypoints):
+                raise RegistryError("geodetic requires one projected point per waypoint")
+            waypoints = tuple(
+                replace(w, x=position[0], y=position[1])
+                for w, position in zip(self.waypoints, points)
+            )
+        return replace(self, waypoints=waypoints)
 
 
 class WaypointConfigLoader:
@@ -51,6 +97,7 @@ class WaypointConfigLoader:
             raise RegistryError(f"route key {route_key!r} is absent from {path}")
         allowed = {
             "frame_id", "publish_rate_hz", "origin", "gps_points", "waypoints", "constraints",
+            "coordinate_mode",
             "scenario", "stages", "full_sequence_stages",
         }
         unknown = set(raw).difference(allowed)
@@ -59,7 +106,16 @@ class WaypointConfigLoader:
         frame_id = raw.get("frame_id")
         if not isinstance(frame_id, str) or not frame_id:
             raise RegistryError(f"route {route_key!r} requires a non-empty frame_id")
-        waypoints = self._waypoints(raw.get("waypoints"), route_key)
+        coordinate_mode = raw.get("coordinate_mode", "map_xy")
+        if coordinate_mode not in {"map_xy", "origin_relative_xy", "geodetic"}:
+            raise RegistryError(
+                f"route {route_key!r} coordinate_mode must be map_xy, "
+                "origin_relative_xy, or geodetic"
+            )
+        origin = self._geodetic_point(raw.get("origin"), route_key, "origin", required=False)
+        if coordinate_mode == "origin_relative_xy" and origin is None:
+            raise RegistryError(f"route {route_key!r} origin_relative_xy requires origin latitude/longitude")
+        waypoints = self._waypoints(raw.get("waypoints"), route_key, coordinate_mode)
         ids = {waypoint.waypoint_id for waypoint in waypoints}
         stages = self._stages(raw.get("stages", {}), ids, route_key, "stages")
         full_stages = self._stages(
@@ -68,10 +124,36 @@ class WaypointConfigLoader:
         constraints = raw.get("constraints", {})
         if not isinstance(constraints, dict):
             raise RegistryError(f"route {route_key!r} constraints must be a mapping")
-        return Route(frame_id, tuple(waypoints), stages, full_stages, constraints)
+        return Route(
+            frame_id, tuple(waypoints), stages, full_stages, constraints,
+            coordinate_mode=coordinate_mode, origin=origin,
+        )
 
     @staticmethod
-    def _waypoints(raw: object, route_key: str) -> list[Waypoint]:
+    def _geodetic_point(raw: object, route_key: str, label: str, *, required: bool) -> GeodeticPoint | None:
+        if raw is None and not required:
+            return None
+        if not isinstance(raw, dict):
+            raise RegistryError(f"route {route_key!r} {label} must be a mapping with latitude/longitude")
+        has_latitude = "latitude" in raw
+        has_longitude = "longitude" in raw
+        if not required and not has_latitude and not has_longitude:
+            return None
+        if has_latitude != has_longitude:
+            raise RegistryError(f"route {route_key!r} {label} requires both latitude and longitude")
+        values = {}
+        for name, low, high in (("latitude", -90.0, 90.0), ("longitude", -180.0, 180.0)):
+            value = raw.get(name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or not low <= value <= high:
+                raise RegistryError(f"route {route_key!r} {label} has invalid {name}")
+            values[name] = float(value)
+        altitude = raw.get("altitude", 0.0)
+        if isinstance(altitude, bool) or not isinstance(altitude, (int, float)) or not isfinite(altitude):
+            raise RegistryError(f"route {route_key!r} {label} has invalid altitude")
+        return GeodeticPoint(values["latitude"], values["longitude"], float(altitude))
+
+    @classmethod
+    def _waypoints(cls, raw: object, route_key: str, coordinate_mode: str) -> list[Waypoint]:
         if not isinstance(raw, list) or not raw:
             raise RegistryError(f"route {route_key!r} requires non-empty waypoints")
         result = []
@@ -87,7 +169,8 @@ class WaypointConfigLoader:
                 raise RegistryError(f"route {route_key!r} waypoint IDs must be unique")
             seen.add(waypoint_id)
             values = {}
-            for name in ("x", "y", "yaw"):
+            required_position_names = ("x", "y") if coordinate_mode != "geodetic" else ()
+            for name in (*required_position_names, "yaw"):
                 value = item.get(name)
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                     raise RegistryError(
@@ -98,10 +181,21 @@ class WaypointConfigLoader:
             waypoint_type = item.get("type", "waypoint")
             if not isinstance(name, str) or not isinstance(waypoint_type, str):
                 raise RegistryError(f"route {route_key!r} waypoint {waypoint_id!r} has invalid metadata")
-            result.append(
-                Waypoint(waypoint_id, values["x"], values["y"], values["yaw"], name, waypoint_type,
-                         item.get("gate_pair"))
+            competition_id = item.get("competition_id", waypoint_id)
+            if isinstance(competition_id, bool) or not isinstance(competition_id, (str, int, float)):
+                raise RegistryError(
+                    f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
+                )
+            geodetic = cls._geodetic_point(
+                item, route_key, f"waypoint {waypoint_id!r}", required=coordinate_mode == "geodetic"
             )
+            result.append(Waypoint(
+                waypoint_id, values.get("x", 0.0), values.get("y", 0.0), values["yaw"],
+                name, waypoint_type, item.get("gate_pair"), str(competition_id),
+                latitude=None if geodetic is None else geodetic.latitude,
+                longitude=None if geodetic is None else geodetic.longitude,
+                altitude=0.0 if geodetic is None else geodetic.altitude,
+            ))
         return result
 
     @staticmethod

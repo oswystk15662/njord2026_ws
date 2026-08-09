@@ -24,6 +24,10 @@
 
 task1_config:
   frame_id: "map"
+  # map_xy: YAML x/y are already map coordinates.
+  # origin_relative_xy: add each x/y (east/north metres) to this origin GPS.
+  # geodetic: write latitude/longitude on every waypoint instead of x/y.
+  coordinate_mode: "origin_relative_xy"
   publish_rate_hz: 2.0
   origin:
     latitude: 34.5456666667
