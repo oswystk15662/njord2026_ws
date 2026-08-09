@@ -16,8 +16,8 @@ control_policy:
   # 全タスク共通の要求。タスク側キーとマージされ、タスク側が優先される。
   common:
     require_emergency_stop_clear: true    # 非常停止が解除されていること
-    require_nav2_ready: true              # Nav2 のアクションサーバが利用可能であること
-    require_task_ready: true              # Mission Manager がタスク準備完了を報告していること
+    require_nav2_ready: false              # Nav2 のアクションサーバが利用可能であること
+    require_task_ready: false              # Mission Manager がタスク準備完了を報告していること
     # Nav 指令の鮮度は Command Arbiter の出力ゲートで判定する。
     nav_command_timeout_sec: 0.5          # 出力の鮮度判定閾値（秒、正数のみ）
     require_ground_station: false         # ground_station_heartbeat が OK であること
