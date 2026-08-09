@@ -142,6 +142,8 @@ public:
     depth_frame_id_ = declare_parameter<std::string>("depth_frame_id", left_frame_id_);
     framerate_ = declare_parameter<int>("framerate", 15);
     publish_pointcloud_ = declare_parameter<bool>("publish_pointcloud", true);
+    pointcloud_stride_ = std::max(
+      1, static_cast<int>(declare_parameter<int>("pointcloud_stride", 2)));
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
     const bool disable_self_calibration = declare_parameter<bool>("disable_self_calibration", true);
@@ -197,6 +199,10 @@ public:
       channel_heading_rad_ = declare_parameter<double>("channel_heading_rad", NAN);
       wall_radius_m_ = declare_parameter<double>("wall_radius_m", 2.0);
       wall_points_per_full_circle_ = declare_parameter<int>("wall_points_per_full_circle", 40);
+      connect_same_color_buoys_ = declare_parameter<bool>("connect_same_color_buoys", true);
+      same_color_wall_max_gap_m_ = declare_parameter<double>("same_color_wall_max_gap_m", 12.0);
+      same_color_wall_point_spacing_m_ = declare_parameter<double>(
+        "same_color_wall_point_spacing_m", 0.2);
       lidar_topic_ = declare_parameter<std::string>("lidar_topic", "/livox/lidar");
       lidar_max_age_sec_ = declare_parameter<double>("lidar_max_age_sec", 0.15);
       lidar_cluster_tolerance_m_ = declare_parameter<double>("lidar_cluster_tolerance_m", 0.15);
@@ -694,7 +700,9 @@ private:
               virtual_wall_pub_->publish(to_virtual_wall_cloud(
                 wall_detections, wall_header, wall_frame_,
                 static_cast<float>(channel_heading_rad_), static_cast<float>(wall_radius_m_),
-                wall_points_per_full_circle_));
+                wall_points_per_full_circle_, connect_same_color_buoys_,
+                static_cast<float>(same_color_wall_max_gap_m_),
+                static_cast<float>(same_color_wall_point_spacing_m_)));
             }
           } catch (const std::exception & error) {
             RCLCPP_ERROR_THROTTLE(
@@ -764,7 +772,8 @@ private:
       }
       pointcloud_pub_->publish(
         depth_to_point_cloud_msg(
-          depth_m, fx_, fy_, cx_, cy_, 1, depth_min_m_, depth_max_m_, depth_frame_id_, stamp));
+          depth_m, fx_, fy_, cx_, cy_, pointcloud_stride_, depth_min_m_, depth_max_m_,
+          depth_frame_id_, stamp));
     }
   }
 
@@ -774,6 +783,7 @@ private:
   std::string depth_frame_id_;
   int framerate_;
   bool publish_pointcloud_;
+  int pointcloud_stride_;
   double depth_min_m_;
   double depth_max_m_;
   bool aec_agc_enable_{true};
@@ -833,6 +843,9 @@ private:
   double channel_heading_rad_{};
   double wall_radius_m_{};
   int wall_points_per_full_circle_{};
+  bool connect_same_color_buoys_{};
+  double same_color_wall_max_gap_m_{};
+  double same_color_wall_point_spacing_m_{};
   rclcpp::Publisher<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr detection_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr virtual_wall_pub_;
   std::string lidar_topic_;

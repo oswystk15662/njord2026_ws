@@ -43,9 +43,12 @@ njord_interfaces::msg::BuoyDetectionArray to_detection_array(
 
 sensor_msgs::msg::PointCloud2 to_virtual_wall_cloud(
   const std::vector<PositionedDetection> & detections, const std_msgs::msg::Header & header,
-  const std::string & wall_frame, float heading, float radius, int density)
+  const std::string & wall_frame, float heading, float radius, int density,
+  bool connect_same_color_buoys, float same_color_max_gap, float same_color_point_spacing)
 {
   std::vector<WallPoint> points;
+  std::vector<WallPoint> green_buoys;
+  std::vector<WallPoint> red_buoys;
   for (const auto & detection : detections) {
     if (detection.source == PositionSource::kNone ||
       !std::isfinite(detection.position_base[0]) || !std::isfinite(detection.position_base[1])) { continue; }
@@ -53,6 +56,19 @@ sensor_msgs::msg::PointCloud2 to_virtual_wall_cloud(
       detection.detection.class_id, detection.position_base[0], detection.position_base[1],
       heading, radius, density);
     points.insert(points.end(), wall.begin(), wall.end());
+    if (detection.detection.class_id == 0) {
+      green_buoys.push_back({detection.position_base[0], detection.position_base[1], 0.0F});
+    } else if (detection.detection.class_id == 1) {
+      red_buoys.push_back({detection.position_base[0], detection.position_base[1], 0.0F});
+    }
+  }
+  if (connect_same_color_buoys) {
+    const auto green_wall = same_color_wall_points(
+      green_buoys, heading, same_color_max_gap, same_color_point_spacing);
+    const auto red_wall = same_color_wall_points(
+      red_buoys, heading, same_color_max_gap, same_color_point_spacing);
+    points.insert(points.end(), green_wall.begin(), green_wall.end());
+    points.insert(points.end(), red_wall.begin(), red_wall.end());
   }
   sensor_msgs::msg::PointCloud2 message;
   message.header = header;

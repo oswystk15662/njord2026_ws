@@ -41,12 +41,24 @@ tasks:
     features: {buoy_perception: true}
   task3_1:
     display_name: Task 3-1
-    availability: disabled
-    reason: Nav2 profile and dynamic gate TF readiness are not verified
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_1_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
   task3_2:
     display_name: Task 3-2
-    availability: disabled
-    reason: Nav2 profile and dynamic gate TF readiness are not verified
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_2_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
   return_home:
     display_name: Ground-link failsafe return home
     availability: experimental

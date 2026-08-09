@@ -29,8 +29,22 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task2 = loader.load(WAYPOINT_ROOT / "config/task2_waypoints.yaml", "task2_config")
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
     assert len(task1.waypoints) == 17
+    assert len(task1.projection_points()) == len(task1.waypoints)
+    assert task1.waypoints[12].competition_id == "3"
+    assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
+
+
+def test_route_supports_latitude_longitude_coordinates(tmp_path):
+    config = tmp_path / "coordinates.yaml"
+    config.write_text(
+        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: 35.0, longitude: 139.0, yaw: 0.0}\n""",
+        encoding="utf-8",
+    )
+    route = WaypointConfigLoader().load(config, "route")
+    assert len(route.projection_points()) == 1
+    assert [(w.x, w.y) for w in route.with_projected_points(((1.5, 2.5),)).waypoints] == [(1.5, 2.5)]
 
 
 def test_duplicate_yaml_keys_are_rejected(tmp_path):

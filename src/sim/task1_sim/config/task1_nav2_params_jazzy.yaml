@@ -19,14 +19,26 @@ controller_server:
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     controller_plugins: ["FollowPath"]
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 2.0
+      yaw_goal_tolerance: 0.785
+      stateful: true
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 1.0
-      lookahead_dist: 1.5
-      min_lookahead_dist: 0.5
-      max_lookahead_dist: 3.0
-      lookahead_time: 1.5
-      rotate_to_heading_at_start: true
+      desired_linear_vel: 0.80
+      lookahead_dist: 2.5
+      min_lookahead_dist: 1.5
+      max_lookahead_dist: 4.0
+      lookahead_time: 2.0
+      rotate_to_heading_at_start: false
+      # Costmaps and collision_monitor handle the simulator's virtual walls.
+      # Keep RPP from aborting FollowPath into a recovery loop.
+      use_collision_detection: false
+      # Surface-vessel yaw has substantial inertia.  Limit the controller's
+      # angular acceleration to prevent repeated over-corrections.
+      max_angular_accel: 0.35
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
@@ -203,6 +215,14 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
+    smoothing_frequency: 20.0
+    feedback: "OPEN_LOOP"
+    odom_topic: "/odom"
+    odom_duration: 0.1
+    max_velocity: [0.85, 0.0, 0.55]
+    min_velocity: [-0.25, 0.0, -0.55]
+    max_accel: [0.80, 0.0, 0.40]
+    max_decel: [-0.80, 0.0, -0.40]
 
 smoother_server:
   ros__parameters:

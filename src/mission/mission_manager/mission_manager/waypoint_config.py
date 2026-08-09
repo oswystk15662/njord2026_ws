@@ -7,7 +7,7 @@ place these files can move into this package without changing this API.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from math import isfinite
 from pathlib import Path
 from typing import Mapping
@@ -25,6 +25,20 @@ class Waypoint:
     name: str
     waypoint_type: str
     gate_pair: object = None
+    # Competition checkpoint identity is distinct from the sequential YAML
+    # id (for example, sequential id 13 is competition GPS3).  Mission
+    # Manager needs this metadata to apply Task1 stage safety behavior.
+    competition_id: str = ""
+    latitude: float | None = None
+    longitude: float | None = None
+    altitude: float = 0.0
+
+
+@dataclass(frozen=True)
+class GeodeticPoint:
+    latitude: float
+    longitude: float
+    altitude: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -41,6 +55,23 @@ class Route:
         by_id = {waypoint.waypoint_id: waypoint for waypoint in self.waypoints}
         return tuple(by_id[item] for item in ids)
 
+    def projection_points(self) -> tuple[GeodeticPoint, ...]:
+        """GPS points which must be converted by navsat_transform /fromLL."""
+        return tuple(
+            GeodeticPoint(w.latitude, w.longitude, w.altitude)
+            for w in self.waypoints
+        )
+
+    def with_projected_points(self, points: tuple[tuple[float, float], ...]) -> "Route":
+        """Return map-coordinate waypoints after /fromLL conversion."""
+        if len(points) != len(self.waypoints):
+            raise RegistryError("latitude/longitude requires one projected point per waypoint")
+        waypoints = tuple(
+            replace(w, x=position[0], y=position[1])
+            for w, position in zip(self.waypoints, points)
+        )
+        return replace(self, waypoints=waypoints)
+
 
 class WaypointConfigLoader:
     """Loads one named route config, without sending any Nav2 goal."""
@@ -54,7 +85,7 @@ class WaypointConfigLoader:
         if not isinstance(raw, dict):
             raise RegistryError(f"route key {route_key!r} is absent from {path}")
         allowed = {
-            "frame_id", "publish_rate_hz", "origin", "gps_points", "waypoints", "constraints",
+            "frame_id", "publish_rate_hz", "waypoints", "constraints",
             "scenario", "stages", "full_sequence_stages",
         }
         unknown = set(raw).difference(allowed)
@@ -72,7 +103,32 @@ class WaypointConfigLoader:
         constraints = raw.get("constraints", {})
         if not isinstance(constraints, dict):
             raise RegistryError(f"route {route_key!r} constraints must be a mapping")
-        return Route(frame_id, tuple(waypoints), stages, full_stages, constraints)
+        return Route(
+            frame_id, tuple(waypoints), stages, full_stages, constraints,
+        )
+
+    @staticmethod
+    def _geodetic_point(raw: object, route_key: str, label: str, *, required: bool) -> GeodeticPoint | None:
+        if raw is None and not required:
+            return None
+        if not isinstance(raw, dict):
+            raise RegistryError(f"route {route_key!r} {label} must be a mapping with latitude/longitude")
+        has_latitude = "latitude" in raw
+        has_longitude = "longitude" in raw
+        if not required and not has_latitude and not has_longitude:
+            return None
+        if has_latitude != has_longitude:
+            raise RegistryError(f"route {route_key!r} {label} requires both latitude and longitude")
+        values = {}
+        for name, low, high in (("latitude", -90.0, 90.0), ("longitude", -180.0, 180.0)):
+            value = raw.get(name)
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or not low <= value <= high:
+                raise RegistryError(f"route {route_key!r} {label} has invalid {name}")
+            values[name] = float(value)
+        altitude = raw.get("altitude", 0.0)
+        if isinstance(altitude, bool) or not isinstance(altitude, (int, float)) or not isfinite(altitude):
+            raise RegistryError(f"route {route_key!r} {label} has invalid altitude")
+        return GeodeticPoint(values["latitude"], values["longitude"], float(altitude))
 
     def _waypoints(self, raw: object, route_key: str) -> list[Waypoint]:
         if not isinstance(raw, list) or not raw:
@@ -97,45 +153,28 @@ class WaypointConfigLoader:
                         f"route {route_key!r} waypoint {waypoint_id!r} has non-finite {name}"
                     )
                 values[name] = float(value)
-            has_map = "x" in item or "y" in item
-            has_geographic = "latitude" in item or "longitude" in item
-            if has_map == has_geographic:
-                raise RegistryError(
-                    f"route {route_key!r} waypoint {waypoint_id!r} requires exactly one of x/y or latitude/longitude"
-                )
-            if has_map:
-                for name in ("x", "y"):
-                    value = item.get(name)
-                    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
-                        raise RegistryError(
-                            f"route {route_key!r} waypoint {waypoint_id!r} has non-finite {name}"
-                        )
-                    values[name] = float(value)
-            else:
-                if self._home_datum is None:
-                    raise RegistryError(
-                        f"route {route_key!r} waypoint {waypoint_id!r} uses latitude/longitude but no home datum is configured"
-                    )
-                latitude = item.get("latitude")
-                longitude = item.get("longitude")
-                if (
-                    isinstance(latitude, bool) or isinstance(longitude, bool)
-                    or not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float))
-                    or not isfinite(latitude) or not isfinite(longitude)
-                    or not -90.0 <= latitude <= 90.0 or not -180.0 <= longitude <= 180.0
-                ):
-                    raise RegistryError(
-                        f"route {route_key!r} waypoint {waypoint_id!r} has invalid latitude/longitude"
-                    )
-                values["x"], values["y"] = wgs84_to_enu(latitude, longitude, self._home_datum)
             name = item.get("name", waypoint_id)
             waypoint_type = item.get("type", "waypoint")
             if not isinstance(name, str) or not isinstance(waypoint_type, str):
                 raise RegistryError(f"route {route_key!r} waypoint {waypoint_id!r} has invalid metadata")
-            result.append(
-                Waypoint(waypoint_id, values["x"], values["y"], values["yaw"], name, waypoint_type,
-                         item.get("gate_pair"))
+            competition_id = item.get("competition_id", waypoint_id)
+            if isinstance(competition_id, bool) or not isinstance(competition_id, (str, int, float)):
+                raise RegistryError(
+                    f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
+                )
+            geodetic = self._geodetic_point(
+                item, route_key, f"waypoint {waypoint_id!r}", required=True
             )
+            x, y = 0.0, 0.0
+            if self._home_datum is not None:
+                x, y = wgs84_to_enu(geodetic.latitude, geodetic.longitude, self._home_datum)
+            result.append(Waypoint(
+                waypoint_id, x, y, values["yaw"],
+                name, waypoint_type, item.get("gate_pair"), str(competition_id),
+                latitude=None if geodetic is None else geodetic.latitude,
+                longitude=None if geodetic is None else geodetic.longitude,
+                altitude=0.0 if geodetic is None else geodetic.altitude,
+            ))
         return result
 
     @staticmethod

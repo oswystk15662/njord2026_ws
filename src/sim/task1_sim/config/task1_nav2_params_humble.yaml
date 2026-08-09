@@ -19,14 +19,35 @@ controller_server:
     min_y_velocity_threshold: 0.5
     min_theta_velocity_threshold: 0.001
     controller_plugins: ["FollowPath"]
+    goal_checker_plugins: ["general_goal_checker"]
+    general_goal_checker:
+      plugin: "nav2_controller::SimpleGoalChecker"
+      xy_goal_tolerance: 2.0
+      yaw_goal_tolerance: 0.785
+      stateful: true
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 1.0
-      lookahead_dist: 1.5
-      min_lookahead_dist: 0.5
-      max_lookahead_dist: 3.0
-      lookahead_time: 1.5
-      rotate_to_heading_at_start: true
+      # The MMG vessel needs a longer horizon than a wheeled robot: a short
+      # velocity-scaled lookahead chases every waypoint corner and produces
+      # visible S-turning instead of tracking the route smoothly.
+      # Sim-only cruise speed. Physical Task1 launches keep their own Nav2
+      # parameters; this shortens scenario runs without time-scale artifacts.
+      desired_linear_vel: 0.80
+      lookahead_dist: 2.5
+      min_lookahead_dist: 1.5
+      max_lookahead_dist: 4.0
+      lookahead_time: 2.0
+      # Small initial-EKF offsets can make Humble's rotate-in-place mode
+      # oscillate indefinitely at the first waypoint. Let RPP converge while
+      # translating instead of insisting on an initial heading alignment.
+      use_rotate_to_heading: false
+      # Costmaps and collision_monitor handle the simulator's virtual walls.
+      # Avoid aborting FollowPath repeatedly from RPP's duplicate projection
+      # check, which otherwise triggers recovery loops and excessive circling.
+      use_collision_detection: false
+      # Surface-vessel yaw has substantial inertia.  The Nav2 default of
+      # 3.2 rad/s^2 makes the controller over-correct after each path update.
+      max_angular_accel: 0.35
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
       min_approach_linear_velocity: 0.05
@@ -203,6 +224,21 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: false
+    smoothing_frequency: 20.0
+    # The raw MMG velocity is intentionally disturbed/noisy. Feeding it back
+    # into Nav2's simple smoother held a 0.6 m/s path command near 0.2 m/s
+    # and made waypoint following visibly lag. Use the same open-loop command
+    # ramp as Task3; the thruster driver's own velocity loop still closes the
+    # physical control loop.
+    feedback: "OPEN_LOOP"
+    odom_topic: "/odom"
+    odom_duration: 0.1
+    # Constrain yaw changes more tightly than the Nav2 defaults so the
+    # simulated vessel settles onto the path instead of repeatedly circling.
+    max_velocity: [0.85, 0.0, 0.55]
+    min_velocity: [-0.25, 0.0, -0.55]
+    max_accel: [0.80, 0.0, 0.40]
+    max_decel: [-0.80, 0.0, -0.40]
 
 smoother_server:
   ros__parameters:

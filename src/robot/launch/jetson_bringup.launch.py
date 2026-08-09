@@ -20,6 +20,7 @@ from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch_ros.substitutions import FindPackageShare
+from launch_ros.actions import Node
 
 
 def include_launch(package_name, path_parts, condition, launch_arguments=None):
@@ -63,6 +64,7 @@ def generate_launch_description():
     ground_video_fps = LaunchConfiguration("ground_video_fps")
     heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
     heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
+    enable_task1_safety_points = LaunchConfiguration("enable_task1_safety_points")
 
     mid360_launch = include_launch(
         "robot",
@@ -105,6 +107,39 @@ def generate_launch_description():
             "heartbeat_monitor_zed2i": heartbeat_monitor_zed2i,
             "heartbeat_monitor_lidar": heartbeat_monitor_lidar,
         },
+    )
+
+    # Do not forward raw depth or LiDAR clouds to the miniPC. This compact,
+    # base_link-frame cloud is generated from the ZED2i depth point cloud and
+    # is the only near-field obstacle feed sent across the link for Task 1.
+    task1_safety_points = Node(
+        package="task2_perception",
+        executable="task2_cloud_filter_node",
+        name="task1_safety_points",
+        output="screen",
+        parameters=[{
+            "input_topic": "/zed2i/points",
+            "output_topic": "/task1/safety_points",
+            "visual_output_topic": "/task1/safety_points_visual",
+            "publish_visual_z_mirror": False,
+            "output_frame": "base_link",
+            "min_range_m": 0.5,
+            "max_range_m": 8.0,
+            "min_valid_input_points": 0,
+            "publish_empty_on_invalid_input": True,
+            "voxel_leaf_size_m": 0.25,
+            "accumulation_frames": 1,
+            "process_rate_hz": 5.0,
+            "waterline_z_m": 0.0,
+            "water_remove_min_z_m": -0.3,
+            "water_remove_max_z_m": 0.15,
+            "use_water_plane_ransac": False,
+            "object_min_z_m": -0.5,
+            "object_max_z_m": 2.0,
+            "publish_self_marker": False,
+            "publish_debug": False,
+        }],
+        condition=IfCondition(enable_task1_safety_points),
     )
 
     networking_launch = include_launch(
@@ -167,6 +202,14 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_fps", default_value="3.0"),
             DeclareLaunchArgument("enable_heartbeats", default_value="true"),
             DeclareLaunchArgument(
+                "enable_task1_safety_points",
+                default_value="true",
+                description=(
+                    "Publish compact near-field LiDAR safety points for the "
+                    "miniPC Task 1 collision monitor."
+                ),
+            ),
+            DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",
                 description="Start the Jetson zenoh-bridge-ros2dds process.",
@@ -197,6 +240,7 @@ def generate_launch_description():
                 period=LaunchConfiguration("camera_start_delay"),
                 actions=[zed2i_launch],
             ),
+            task1_safety_points,
             heartbeat_launch,
             networking_launch,
         ]

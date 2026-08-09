@@ -401,6 +401,41 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
+def test_task1_tf_authorities_and_local_virtual_wall_contract():
+    """Keep Task 1's map-frame walls transformable into the local costmap."""
+    robot_config_dir = os.path.normpath(os.path.join(_THIS_DIR, "..", "config"))
+    with open(os.path.join(robot_config_dir, "ekf_global.yaml"), encoding="utf-8") as stream:
+        global_ekf = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+    with open(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "localization",
+            "um982_feedback_filter",
+            "config",
+            "um982_feedback_ekf.yaml",
+        ),
+        encoding="utf-8",
+    ) as stream:
+        local_ekf = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
+    with open(os.path.join(robot_config_dir, "nav2_params_humble.yaml"), encoding="utf-8") as stream:
+        nav2 = yaml.safe_load(stream)
+
+    assert global_ekf["publish_tf"] is True
+    assert global_ekf["world_frame"] == "map"
+    assert global_ekf["map_frame"] == "map"
+    assert global_ekf["odom_frame"] == "odom"
+    assert local_ekf["publish_tf"] is True
+    assert local_ekf["world_frame"] == "odom"
+    assert local_ekf["odom_frame"] == "odom"
+    assert local_ekf["base_link_frame"] == "base_link"
+
+    local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
+    assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
+    assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
 def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
     launch_source = _read_launch_source("glim_um982_localization.launch.py")
     assert '"feedback_frame_id": "map"' in launch_source
@@ -539,6 +574,36 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
 
     assert '"/livox/imu"' in source
     assert '"/livox/lidar"' not in source
+
+
+def test_task1_safety_cloud_is_compacted_on_jetson_and_bridged_to_minipc():
+    jetson_source = _read_launch_source("jetson_bringup.launch.py")
+    assert 'name="task1_safety_points"' in jetson_source
+    assert '"input_topic": "/zed2i/points"' in jetson_source
+    assert '"output_topic": "/task1/safety_points"' in jetson_source
+    assert '"max_range_m": 8.0' in jetson_source
+    assert '"min_valid_input_points": 0' in jetson_source
+    assert '"publish_empty_on_invalid_input": True' in jetson_source
+    assert '"voxel_leaf_size_m": 0.25' in jetson_source
+    assert '"process_rate_hz": 5.0' in jetson_source
+
+    zed_config = os.path.normpath(
+        os.path.join(
+            _THIS_DIR, "..", "..", "driver", "camera", "zed2i_driver",
+            "config", "zed2i_jetson_orin_nano.yaml",
+        )
+    )
+    with open(zed_config, "r") as stream:
+        zed_source = stream.read()
+    assert "publish_pointcloud: true" in zed_source
+    assert "pointcloud_stride: 4" in zed_source
+
+    for filename in ("bridge_jetson.json5", "bridge_minipc.json5"):
+        path = os.path.normpath(
+            os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", filename)
+        )
+        with open(path, "r") as stream:
+            assert '"/task1/safety_points"' in stream.read()
 
 
 def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():

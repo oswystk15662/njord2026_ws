@@ -37,6 +37,7 @@
       allow: {
         publishers: [
           "/odom", "/livox/imu",
+          "/task1/safety_points",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
@@ -44,6 +45,7 @@
         ],
         subscribers: [
           "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/task1/safety_points",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

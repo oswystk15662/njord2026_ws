@@ -44,7 +44,7 @@ control_policy:
     require_waypoint_plan: true
     require_collision_monitor: true
     require_buoy_perception: false
-    require_dynamic_gate_tf: true
+    require_dynamic_gate_tf: false
 
   # Ground link loss cannot permit normal AUTO continuation.  This dedicated
   # policy is used only after the timed GNSS/compass return-home failsafe gate.
