@@ -107,7 +107,7 @@ ros2 topic echo --once /critical_link/test/output/heartbeat
 ros2 topic echo /diagnostics
 ```
 
-axes、buttonsが一致し、Joyの`frame_id`が`critical_link`になること、receiver aggregateの
+axes、buttonsが一致し、Joyの`frame_id`が`critical_link/loopback_ground`になること、receiver aggregateの
 `accepted_joy`と`accepted_heartbeat`が増えることを合格条件とする。
 
 ## 2台での実経路試験

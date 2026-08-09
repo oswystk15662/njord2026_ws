@@ -28,7 +28,7 @@ def test_default_policy_is_complete_and_task_requirements_overlay_common():
     policy = load_policy(POLICY)
     requirements = policy.requirements_for("task2")
     assert requirements["require_nav2_ready"] is True
-    assert requirements["require_collision_monitor"] is True
+    assert requirements["require_collision_monitor"] is False
     assert policy.nav_command_timeout_sec == 0.5
 
 

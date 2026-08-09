@@ -3,6 +3,17 @@ critical_link_receiver:
     joy_output_topic: /joy
     heartbeat_output_topic: /heartbeat/ground_station
     diagnostic_stale_after_sec: 3.0
+    # Format: source_id|name|priority.  This vessel-owned policy is the only
+    # place priority is configured.  Add backup stations here before enabling
+    # their sender.
+    source_specs:
+      - "100|primary_ground|100"
+    source_command_timeout_sec: 0.25
+    source_heartbeat_timeout_sec: 1.5
+    neutral_before_handover_sec: 0.05
+    takeover_request_timeout_sec: 0.5
+    source_publish_period_sec: 0.05
+    heartbeat_publish_period_sec: 1.0
     # Format: name|miniPC bind IPv4|UDP port
     udp_paths:
       - "usb_wifi|192.168.122.210|45100"

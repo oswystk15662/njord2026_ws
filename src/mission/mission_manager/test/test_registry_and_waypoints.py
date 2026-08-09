@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mission_manager.task_registry import RegistryError, TaskRegistry
+from mission_manager.task_registry import RegistryError, TaskRegistry, required_runtime_readiness
 from mission_manager.waypoint_config import WaypointConfigLoader
 
 
@@ -16,6 +16,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
         package_shares={"waypoint_publisher": WAYPOINT_ROOT},
     )
     assert registry.get("task1").runnable
+    assert registry.get("task2").executor == "task2_mppi"
+    assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
 

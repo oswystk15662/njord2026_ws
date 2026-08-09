@@ -22,9 +22,21 @@ from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
 from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
-from .executors import DummyExecutor, ExecutorStatus, StagedDockingExecutor, WaypointSequenceExecutor
+from .executors import (
+    DummyExecutor,
+    ExecutorStatus,
+    StagedDockingExecutor,
+    Task2MppiExecutor,
+    WaypointSequenceExecutor,
+)
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
-from .task_registry import RegistryError, TaskDefinition, TaskRegistry
+from .task_registry import (
+    RUNTIME_READINESS_FEATURES,
+    RegistryError,
+    TaskDefinition,
+    TaskRegistry,
+    required_runtime_readiness,
+)
 from .waypoint_config import Route, Waypoint, WaypointConfigLoader
 
 
@@ -127,6 +139,7 @@ class MissionManager(Node):
         self._machine = MissionStateMachine()
         self._loader = WaypointConfigLoader()
         self._active_executor = None
+        self._active_task: TaskDefinition | None = None
         self._active_route: Route | None = None
         self._pending_start = None
         self._auto_permission_deadline_ns: int | None = None
@@ -142,6 +155,7 @@ class MissionManager(Node):
         self._task_ready = False
         self._task_requirements_ready = False
         self._active_control_policy = ""
+        self._runtime_readiness = {name: False for name in RUNTIME_READINESS_FEATURES}
 
         registry_path = self._registry_path()
         shares = {"waypoint_publisher": self._waypoint_share_path()}
@@ -156,11 +170,23 @@ class MissionManager(Node):
         self._active_policy_pub = self.create_publisher(
             String, "/mission/active_control_policy", _STATUS_QOS
         )
+        self._task2_enabled_pub = self.create_publisher(Bool, "/mission/task2/enabled", _STATUS_QOS)
+        self._set_task2_enabled(False)
         self._navigation = _RosNavigationClient(self, self._plan_pub)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
         )
+        for name in RUNTIME_READINESS_FEATURES:
+            self.create_subscription(
+                Bool,
+                f"/mission/readiness/{name}",
+                lambda message, readiness_name=name: self._on_runtime_readiness(
+                    readiness_name, message
+                ),
+                _STATUS_QOS,
+                callback_group=self._cb_group,
+            )
         self._action = ActionServer(
             self, RunTask, "/mission/run_task", self._execute_action,
             goal_callback=self._goal_callback, cancel_callback=self._cancel_callback,
@@ -178,6 +204,7 @@ class MissionManager(Node):
 
     def destroy_node(self):
         with self._lock:
+            self._set_task2_enabled(False)
             if self._active_executor and self._machine.snapshot.execution_id:
                 self._active_executor.cleanup(self._machine.snapshot.execution_id)
         return super().destroy_node()
@@ -290,11 +317,12 @@ class MissionManager(Node):
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
         self._active_route = route
+        self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
         # Task 1's only required runtime input is the route just validated
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
-        self._publish_task_readiness(True, True, task.control_policy)
+        self._activate_task_readiness(decision.execution_id, task)
         self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                  stage="configure", message="task route validated")
         if request.dry_run:
@@ -327,6 +355,9 @@ class MissionManager(Node):
         self._action_results[execution_id] = (code, message)
         self._publish_status()
         self._machine.reset_to_idle(execution_id)
+        self._active_task = None
+        self._set_task2_enabled(False)
+        self._publish_task_readiness(False, False, "")
         self._publish_status()
         return type("Decision", (), {"accepted": False, "result_code": code, "message": message,
                                       "execution_id": execution_id, "duplicate": False})()
@@ -351,11 +382,27 @@ class MissionManager(Node):
             )
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
+        elif task.executor == "task2_mppi":
+            executor = Task2MppiExecutor(self._set_task2_enabled)
+            executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
+                           self._executor_complete(execution_id))
         elif task.executor == "dummy":
             executor = DummyExecutor()
             executor.start(execution_id, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
         self._active_executor = executor
+
+    def _set_task2_enabled(self, enabled: bool) -> None:
+        self._task2_enabled_pub.publish(Bool(data=enabled))
+
+    def _activate_task_readiness(self, execution_id: str, task: TaskDefinition) -> None:
+        if self._machine.is_current(execution_id):
+            self._publish_task_readiness(
+                True, self._requirements_ready(task), task.control_policy
+            )
+
+    def _requirements_ready(self, task: TaskDefinition) -> bool:
+        return all(self._runtime_readiness[name] for name in required_runtime_readiness(task))
 
     def _request_auto_mode(self) -> None:
         """Request AUTO through the sole typed mode owner, never by topic spoofing."""
@@ -405,6 +452,7 @@ class MissionManager(Node):
             return False, "execution is not active"
         was_canceling = self._machine.snapshot.state == MissionState.CANCELING
         self._machine.begin_cancel(execution_id)
+        self._set_task2_enabled(False)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
         self._auto_permission_deadline_ns = None
@@ -440,6 +488,8 @@ class MissionManager(Node):
         self._auto_permission_deadline_ns = None
         self._auto_mode_request_sent = False
         self._active_executor = None
+        self._active_task = None
+        self._set_task2_enabled(False)
         self._publish_status()
         self._publish_task_readiness(False, False, "")
         self._machine.reset_to_idle(execution_id)
@@ -451,6 +501,15 @@ class MissionManager(Node):
             self._requested_mode = message.requested_mode
             self._effective_source = message.effective_source
             self._inhibit_reasons = list(message.inhibit_reasons)
+
+    def _on_runtime_readiness(self, name: str, message: Bool) -> None:
+        with self._lock:
+            self._runtime_readiness[name] = message.data
+            task = self._active_task
+            if task is not None and self._machine.active:
+                self._publish_task_readiness(
+                    True, self._requirements_ready(task), task.control_policy
+                )
 
     def _tick(self) -> None:
         with self._lock:

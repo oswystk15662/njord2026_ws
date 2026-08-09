@@ -6,10 +6,11 @@ import rclpy
 from geometry_msgs.msg import Twist
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import String
 
 from njord_interfaces.msg import ControlState
 
-from .arbitration import Source, select_source
+from .arbitration import Source, compatibility_control_status, select_source
 
 
 TRANSIENT_QOS = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
@@ -30,6 +31,7 @@ class CommandArbiter(Node):
         self._manual_received_ns: int | None = None
         self._nav_received_ns: int | None = None
         self._command_pub = self.create_publisher(Twist, "/cmd_vel", 10)
+        self._control_status_pub = self.create_publisher(String, "/system/control_status", TRANSIENT_QOS)
         self.create_subscription(ControlState, "/control/state", self._on_state, TRANSIENT_QOS)
         self.create_subscription(Twist, "/cmd_vel_manual", self._on_manual, 10)
         self.create_subscription(Twist, "/cmd_vel_nav", self._on_nav, 10)
@@ -37,6 +39,10 @@ class CommandArbiter(Node):
 
     def _on_state(self, message: ControlState) -> None:
         self._state = message
+        self._control_status_pub.publish(String(data=compatibility_control_status(
+            emergency_stop=message.emergency_stop,
+            requested_mode=message.requested_mode,
+        )))
 
     def _on_manual(self, message: Twist) -> None:
         self._manual_command = message

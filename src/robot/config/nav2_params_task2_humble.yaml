@@ -1,21 +1,7 @@
 # nav2_params_task2.yaml
-# Task2 collision avoidance simulation uses an ideal 2D PointCloud2 outline
-# from /pointcloud. COLREG-specific cost semantics are intentionally deferred.
-
-amcl:
-  ros__parameters:
-    enabled: false
-
-bt_navigator:
-  ros__parameters:
-    use_sim_time: false
-    global_frame: map
-    robot_base_frame: base_link
-    odom_topic: /odometry/filtered/global
-    bt_loop_duration: 10
-    default_server_timeout: 20
-    default_nav_to_pose_bt_xml: ""
-    default_nav_through_poses_bt_xml: ""
+# Task 2 uses MPPI/CRM for avoidance and sends its path directly to FollowPath.
+# The controller's local costmap is intentionally empty: no LiDAR topic is
+# consumed by this Nav2 subset.
 
 controller_server:
   ros__parameters:
@@ -50,6 +36,7 @@ controller_server:
       regulated_linear_scaling_min_radius: 1.0
       regulated_linear_scaling_min_speed: 0.1
       use_cost_regulated_linear_velocity_scaling: false
+      use_collision_detection: false
       transform_tolerance: 0.3
       max_linear_accel: 0.5
 
@@ -58,18 +45,6 @@ controller_server:
       plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 1.0
       yaw_goal_tolerance: 0.6
-
-planner_server:
-  ros__parameters:
-    expected_planner_frequency: 5.0
-    use_sim_time: false
-    planner_plugins: ["GridBased"]
-    GridBased:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
-      how_many_corners: 8
-      w_euc_cost: 1.0
-      w_traversal_cost: 2.0
-      w_heuristic_cost: 1.0
 
 local_costmap:
   local_costmap:
@@ -84,96 +59,11 @@ local_costmap:
       height: 30
       resolution: 0.1
       robot_radius: 0.35
-      plugins: ["obstacle_layer", "inflation_layer"]
-
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /pointcloud
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "PointCloud2"
-          raytrace_max_range: 35.0
-          obstacle_max_range: 30.0
-
+      plugins: ["inflation_layer"]
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
         cost_scaling_factor: 2.5
         inflation_radius: 1.2
-
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 5.0
-      global_frame: map
-      robot_base_frame: base_link
-      use_sim_time: false
-      robot_radius: 0.35
-      resolution: 0.2
-      rolling_window: false
-      width: 100
-      height: 60
-      origin_x: -20.0
-      origin_y: -30.0
-      track_unknown_space: false
-      plugins: ["obstacle_layer", "inflation_layer"]
-
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
-        observation_sources: pointcloud
-        pointcloud:
-          topic: /pointcloud
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "PointCloud2"
-          raytrace_max_range: 85.0
-          obstacle_max_range: 80.0
-
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 2.5
-        inflation_radius: 1.2
-
-map_server:
-  ros__parameters:
-    use_sim_time: false
-    yaml_filename: ""
-
-lifecycle_manager:
-  ros__parameters:
-    use_sim_time: false
-    autostart: true
-    node_names:
-      - controller_server
-      - smoother_server
-      - planner_server
-      - behavior_server
-      - bt_navigator
-      - waypoint_follower
-      - velocity_smoother
-
-behavior_server:
-  ros__parameters:
-    costmap_topic: local_costmap/costmap_raw
-    footprint_topic: local_costmap/published_footprint
-    cycle_frequency: 10.0
-    behavior_plugins: ["backup", "wait", "drive_on_heading"]
-    backup:
-      plugin: "nav2_behaviors/BackUp"
-    wait:
-      plugin: "nav2_behaviors/Wait"
-    drive_on_heading:
-      plugin: "nav2_behaviors/DriveOnHeading"
-    global_frame: odom
-    robot_base_frame: base_link
-    transform_tolerance: 0.2
-    use_sim_time: false
 
 velocity_smoother:
   ros__parameters:
@@ -184,12 +74,3 @@ velocity_smoother:
     max_accel: [0.5, 0.5, 1.0]
     max_decel: [-0.5, -0.5, -1.0]
     odom_topic: "odom"
-
-smoother_server:
-  ros__parameters:
-    use_sim_time: false
-    smoother_plugins: ["natural_cubic_spline"]
-    natural_cubic_spline:
-      plugin: "natural_cubic_spline::NaturalCubicSplineSmoother"
-      path_point_spacing: 0.05
-      control_point_spacing: 0.5
