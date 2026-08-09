@@ -5,6 +5,7 @@
 
 #include <atomic>
 #include <chrono>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <thread>
@@ -24,6 +25,15 @@
 
 namespace livox_bag_replayer
 {
+
+int64_t bagMessageTimestamp(const rosbag2_storage::SerializedBagMessage & message)
+{
+#if LIVOX_BAG_REPLAYER_HAS_RECV_TIMESTAMP
+  return message.recv_timestamp;
+#else
+  return message.time_stamp;
+#endif
+}
 
 class BagReplayerNode : public rclcpp::Node
 {
@@ -116,13 +126,13 @@ private:
 
       if (!have_offset) {
         wall_start = std::chrono::system_clock::now();
-        first_bag_ns = bag_msg->recv_timestamp;
+        first_bag_ns = bagMessageTimestamp(*bag_msg);
         have_offset = true;
       }
 
       const double rate = rate_ > 0.0 ? rate_ : 1.0;
       const double elapsed_s =
-        static_cast<double>(bag_msg->recv_timestamp - first_bag_ns) / 1e9 / rate;
+        static_cast<double>(bagMessageTimestamp(*bag_msg) - first_bag_ns) / 1e9 / rate;
       const auto target = wall_start +
         std::chrono::duration_cast<std::chrono::system_clock::duration>(
         std::chrono::duration<double>(elapsed_s));
