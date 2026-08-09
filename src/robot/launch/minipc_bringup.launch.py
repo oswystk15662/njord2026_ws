@@ -322,9 +322,11 @@ def generate_launch_description():
             "output_topic": "/virtual_obstacles",
             "map_frame": "map",
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
+            "true_north_confirmations_required": 10,
             "wall_enable_topic": "/task1/cardinal_wall_enable",
             "retire_passed_cardinal_walls_from_base_pose": True,
             "retirement_margin_m": 1.0,
+            "retirement_confirmations_required": 5,
             "retirement_heading_topic": "/task1/gps3_to_gps4_heading",
         }],
         condition=IfCondition(PythonExpression([

@@ -32,6 +32,15 @@ def test_true_north_rotation_is_applied_in_map_frame():
     assert max(x for x, _, _ in points) == 1.0
 
 
+def test_thirty_degree_true_north_offset_rotates_cardinal_wall():
+    # In the Task1 simulator true north is 30 degrees clockwise from map +Y,
+    # i.e. pi/3 from map +X.  A north marker's forbidden south ray must not
+    # remain aligned to map -Y.
+    points = wall_points([-5.0, 5.0, -5.0, 5.0], 0.2, 0.1, 0.0, 0.0, 2, math.pi / 3.0)
+    assert min(y for _, y, _ in points) <= -5.0
+    assert min(x for x, _, _ in points) < -2.0
+
+
 def test_red_and_green_block_opposite_sides_of_the_course():
     # Course heading west: port is south and starboard is north.
     red = wall_points([-5.0, 5.0, -4.0, 4.0], 0.2, 0.1, 1.0, 0.0, 1, math.pi)

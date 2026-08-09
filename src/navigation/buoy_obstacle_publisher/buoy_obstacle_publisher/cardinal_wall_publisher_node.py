@@ -67,11 +67,13 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('publish_rate_hz', 2.0)
         self.declare_parameter('course_heading_rad', 0.0)
         self.declare_parameter('true_north_heading_topic', '')
+        self.declare_parameter('true_north_confirmations_required', 10)
         self.declare_parameter('base_frame_id', 'base_link')
         self.declare_parameter('true_north_yaw_rad', math.pi / 2.0)
         self.declare_parameter('retirement_course_heading_rad', float('nan'))
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
+        self.declare_parameter('retirement_confirmations_required', 3)
         self.declare_parameter('retire_passed_cardinal_walls_from_base_pose', False)
         self.declare_parameter('retirement_heading_topic', '')
         self.declare_parameter('wall_enable_topic', '')
@@ -93,8 +95,12 @@ class CardinalWallPublisher(Node):
         self.retirement_course_heading_rad = (
             self.course_heading_rad if not math.isfinite(retirement_heading) else retirement_heading)
         self.true_north_yaw_rad = float(self.get_parameter('true_north_yaw_rad').value)
+        self.true_north_confirmations_required = max(
+            1, int(self.get_parameter('true_north_confirmations_required').value))
         self.base_frame_id = self.get_parameter('base_frame_id').value
         self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
+        self.retirement_confirmations_required = max(
+            1, int(self.get_parameter('retirement_confirmations_required').value))
         self.retire_passed_cardinal_walls_from_base_pose = self.get_parameter(
             'retire_passed_cardinal_walls_from_base_pose').value
         self.tracks = []
@@ -102,8 +108,16 @@ class CardinalWallPublisher(Node):
             self.get_parameter('preview_buoy_positions').value,
             self.get_parameter('preview_buoy_marks').value)
         wall_enable_topic = self.get_parameter('wall_enable_topic').value
+        true_north_topic = self.get_parameter('true_north_heading_topic').value
         # Deployments without a task-stage signal retain the legacy behavior.
         self.walls_enabled = not bool(wall_enable_topic)
+        # A configured GNSS heading source is authoritative.  Do not freeze
+        # the default map +Y value into a cardinal track before its first
+        # map-frame heading estimate is available.
+        self.has_true_north_heading = not bool(true_north_topic)
+        self._true_north_samples = 0
+        self._true_north_sin_sum = 0.0
+        self._true_north_cos_sum = 0.0
 
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -119,7 +133,6 @@ class CardinalWallPublisher(Node):
         heading_topic = self.get_parameter('retirement_heading_topic').value
         if heading_topic:
             self.create_subscription(Float64, heading_topic, self._on_retirement_heading, 10)
-        true_north_topic = self.get_parameter('true_north_heading_topic').value
         if true_north_topic:
             self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
         rate = max(0.2, float(self.get_parameter('publish_rate_hz').value))
@@ -196,6 +209,8 @@ class CardinalWallPublisher(Node):
 
     def _on_retirement_frontier(self, msg):
         """Disable walls behind a reached waypoint while retaining their tracks."""
+        if not self.walls_enabled:
+            return
         point = msg
         if msg.header.frame_id and msg.header.frame_id != self.map_frame:
             try:
@@ -233,11 +248,30 @@ class CardinalWallPublisher(Node):
             1.0 - 2.0 * (q_map.y * q_map.y + q_map.z * q_map.z))
         # UM982 publishes body heading in ENU (east=0, true north=pi/2).
         # The difference aligns that true-north axis with the map frame.
-        self.true_north_yaw_rad = math.atan2(
+        sample = math.atan2(
             math.sin(map_body_yaw + math.pi / 2.0 - compass_yaw),
             math.cos(map_body_yaw + math.pi / 2.0 - compass_yaw))
+        if not self.has_true_north_heading:
+            # GPS1->GPS3 is the settling interval.  Circular averaging avoids
+            # both angle-wrap errors and freezing a single noisy GNSS sample
+            # into every cardinal wall for the rest of the task.
+            self._true_north_sin_sum += math.sin(sample)
+            self._true_north_cos_sum += math.cos(sample)
+            self._true_north_samples += 1
+            if self._true_north_samples < self.true_north_confirmations_required:
+                return
+            self.true_north_yaw_rad = math.atan2(
+                self._true_north_sin_sum, self._true_north_cos_sum)
+            self.has_true_north_heading = True
+            self.get_logger().info(
+                'Locked map-frame true-north heading from '
+                f'{self._true_north_samples} GNSS samples; cardinal walls may now confirm')
 
     def _record_detection(self, x, y, class_id):
+        if class_id in CARDINAL_DIRECTIONS and not self.has_true_north_heading:
+            # Cardinal N/E/S/W sides depend on true north.  Red/green walls
+            # use the GPS3->GPS4 route heading and remain independent.
+            return
         nearest = None
         nearest_distance = self.merge_radius
         for track in self.tracks:
@@ -249,6 +283,7 @@ class CardinalWallPublisher(Node):
             nearest = {
                 'x': x, 'y': y, 'candidate': class_id, 'count': 1,
                 'class_id': None, 'wall_active': True, 'true_north_yaw_rad': None,
+                'passed_samples': 0,
             }
             self.tracks.append(nearest)
         elif nearest['class_id'] is None:
@@ -264,7 +299,10 @@ class CardinalWallPublisher(Node):
                 f"Confirmed cardinal marker {nearest['class_id']} at ({nearest['x']:.2f}, {nearest['y']:.2f})")
 
     def publish_walls(self):
-        self._retire_passed_cardinal_walls_from_base_pose()
+        # GPS3 is the start of the cardinal course.  Before that gate, the
+        # boat position must not retire future course walls.
+        if self.walls_enabled:
+            self._retire_passed_cardinal_walls_from_base_pose()
         points = []
         for track in self.tracks:
             if (self.walls_enabled and track['class_id'] is not None
@@ -306,7 +344,7 @@ class CardinalWallPublisher(Node):
         preserves walls for upcoming marks while removing only a passed buoy,
         even when the boat takes a lateral avoidance path.
         """
-        if not self.retire_passed_cardinal_walls_from_base_pose:
+        if not self.walls_enabled or not self.retire_passed_cardinal_walls_from_base_pose:
             return
         try:
             transform = self.tf_buffer.lookup_transform(
@@ -324,11 +362,17 @@ class CardinalWallPublisher(Node):
             passed_distance = ((boat_x - track['x']) * forward_x +
                                (boat_y - track['y']) * forward_y)
             if passed_distance > self.retirement_margin:
-                track['wall_active'] = False
-                retired += 1
+                track['passed_samples'] = track.get('passed_samples', 0) + 1
+                if track['passed_samples'] >= self.retirement_confirmations_required:
+                    track['wall_active'] = False
+                    retired += 1
+            else:
+                # A one-cycle TF/localization jump must not retire a wall.
+                track['passed_samples'] = 0
         if retired:
             self.get_logger().info(
-                f'Disabled {retired} passed-buoy wall(s) by {self.retirement_margin:.2f} m')
+                f'Disabled {retired} passed-buoy wall(s) after '
+                f'{self.retirement_confirmations_required} confirmations')
 
     def _publish_detection_markers(self, stamp):
         """Visualize every confirmed buoy in the map frame.
