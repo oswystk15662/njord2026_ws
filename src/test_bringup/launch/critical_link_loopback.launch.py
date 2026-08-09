@@ -20,6 +20,7 @@ def generate_launch_description():
                         "heartbeat_output_topic": (
                             "/critical_link/test/output/heartbeat"
                         ),
+                        "source_specs": ["100|loopback_ground|100"],
                     }
                 ],
             ),
@@ -34,6 +35,7 @@ def generate_launch_description():
                             "loopback|127.0.0.1|127.0.0.1|45100"
                         ],
                         "serial_device": "",
+                        "source_id": 100,
                     }
                 ],
             ),

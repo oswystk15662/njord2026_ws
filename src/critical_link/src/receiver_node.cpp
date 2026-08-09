@@ -1,6 +1,7 @@
 #include "critical_link/io.hpp"
 #include "critical_link/joy_codec.hpp"
 #include "critical_link/protocol.hpp"
+#include "critical_link/source_arbiter.hpp"
 
 #include <sys/socket.h>
 #include <unistd.h>
@@ -8,6 +9,7 @@
 #include <array>
 #include <atomic>
 #include <chrono>
+#include <cmath>
 #include <cerrno>
 #include <memory>
 #include <mutex>
@@ -57,6 +59,45 @@ public:
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
     stale_after_sec_ = declare_parameter<double>("diagnostic_stale_after_sec", 3.0);
+    const double command_timeout_sec = declare_parameter<double>("source_command_timeout_sec", 0.25);
+    const double heartbeat_timeout_sec = declare_parameter<double>("source_heartbeat_timeout_sec", 1.5);
+    const double neutral_before_handover_sec = declare_parameter<double>(
+      "neutral_before_handover_sec", 0.05);
+    const double takeover_request_timeout_sec = declare_parameter<double>(
+      "takeover_request_timeout_sec", 0.5);
+    source_publish_period_sec_ = declare_parameter<double>("source_publish_period_sec", 0.05);
+    heartbeat_publish_period_sec_ = declare_parameter<double>(
+      "heartbeat_publish_period_sec", 1.0);
+    if (!std::isfinite(stale_after_sec_) || stale_after_sec_ <= 0.0 ||
+      !std::isfinite(command_timeout_sec) || command_timeout_sec <= 0.0 ||
+      !std::isfinite(heartbeat_timeout_sec) || heartbeat_timeout_sec <= 0.0 ||
+      !std::isfinite(neutral_before_handover_sec) || neutral_before_handover_sec < 0.0 ||
+      !std::isfinite(takeover_request_timeout_sec) || takeover_request_timeout_sec <= 0.0 ||
+      !std::isfinite(source_publish_period_sec_) || source_publish_period_sec_ <= 0.0 ||
+      !std::isfinite(heartbeat_publish_period_sec_) || heartbeat_publish_period_sec_ <= 0.0)
+    {
+      throw std::runtime_error("critical-link arbitration timeouts must be finite and positive");
+    }
+
+    std::vector<SourceConfig> source_configs;
+    for (const auto & text : declare_parameter<std::vector<std::string>>(
+        "source_specs", std::vector<std::string>{"1|primary_ground|100"}))
+    {
+      const auto source = parse_source_spec(text);
+      if (!source) {
+        throw std::runtime_error(
+                "invalid source_specs entry; expected source_id|name|priority: " + text);
+      }
+      source_configs.push_back(*source);
+    }
+    source_arbiter_ = std::make_unique<SourceArbiter>(
+      std::move(source_configs),
+      SourceArbiterConfig{
+        static_cast<uint64_t>(command_timeout_sec * 1000.0),
+        static_cast<uint64_t>(heartbeat_timeout_sec * 1000.0),
+        static_cast<uint64_t>(neutral_before_handover_sec * 1000.0),
+        static_cast<uint64_t>(takeover_request_timeout_sec * 1000.0),
+      });
 
     for (const auto & text : declare_parameter<std::vector<std::string>>(
         "udp_paths", std::vector<std::string>{}))
@@ -82,10 +123,15 @@ public:
     }
     diagnostics_timer_ = create_wall_timer(
       std::chrono::seconds(1), [this]() {publish_diagnostics();});
+    command_timer_ = create_wall_timer(
+      std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::duration<double>(source_publish_period_sec_)),
+      [this]() {publish_arbitrated_control();});
 
     RCLCPP_INFO(
-      get_logger(), "critical-link receiver udp_paths=%zu serial=%s",
-      udp_paths_.size(), serial_device_.empty() ? "disabled" : serial_device_.c_str());
+      get_logger(), "critical-link receiver udp_paths=%zu serial=%s sources=%zu",
+      udp_paths_.size(), serial_device_.empty() ? "disabled" : serial_device_.c_str(),
+      source_arbiter_->statuses(steady_milliseconds()).size());
   }
 
   ~CriticalLinkReceiver() override
@@ -205,26 +251,64 @@ private:
       return;
     }
 
+    const uint64_t receive_ms = steady_milliseconds();
     {
       std::lock_guard<std::mutex> lock(gate_mutex_);
-      if (!gate_.accept(frame.session_id, frame.stream, frame.sequence)) {
+      if (!source_arbiter_->known_source(frame.source_id)) {
+        ++unauthorized_source_;
+        return;
+      }
+      if (!gate_.accept(frame.source_id, frame.session_id, frame.stream, frame.sequence)) {
         ++duplicates_or_old_;
         return;
       }
+      source_arbiter_->accept(frame, joy, receive_ms);
     }
 
     if (frame.stream == StreamId::kJoy) {
-      joy->header.stamp = now();
-      joy->header.frame_id = "critical_link";
-      joy_pub_->publish(*joy);
-      last_joy_ms_ = steady_milliseconds();
       ++accepted_joy_;
     } else if (frame.stream == StreamId::kGroundHeartbeat) {
-      heartbeat_pub_->publish(std_msgs::msg::Empty{});
-      last_heartbeat_ms_ = steady_milliseconds();
       ++accepted_heartbeat_;
     } else if (frame.stream == StreamId::kLinkProbe) {
       last_probe_ms_ = steady_milliseconds();
+    }
+  }
+
+  void publish_arbitrated_control()
+  {
+    const uint64_t now_ms = steady_milliseconds();
+    ArbitrationDecision decision;
+    std::vector<SourceStatus> source_statuses;
+    {
+      std::lock_guard<std::mutex> lock(gate_mutex_);
+      decision = source_arbiter_->tick(now_ms);
+      source_statuses = source_arbiter_->statuses(now_ms);
+    }
+
+    std::string source_name = "neutral";
+    if (decision.selected_source) {
+      for (const auto & status : source_statuses) {
+        if (status.config.id == *decision.selected_source) {
+          source_name = status.config.name;
+          break;
+        }
+      }
+    }
+    decision.joy.header.stamp = now();
+    decision.joy.header.frame_id = "critical_link/" + source_name;
+    joy_pub_->publish(decision.joy);
+    if (decision.selected_source) {
+      last_joy_ms_ = now_ms;
+    }
+
+    if (decision.ground_station_alive &&
+      (last_heartbeat_publish_ms_ == 0U ||
+      now_ms - last_heartbeat_publish_ms_ >=
+      static_cast<uint64_t>(heartbeat_publish_period_sec_ * 1000.0)))
+    {
+      heartbeat_pub_->publish(std_msgs::msg::Empty{});
+      last_heartbeat_publish_ms_ = now_ms;
+      last_heartbeat_ms_ = now_ms;
     }
   }
 
@@ -262,20 +346,50 @@ private:
           serial_last_receive_ms_, serial_last_errno_));
     }
 
+    const uint64_t now_ms = steady_milliseconds();
+    std::vector<SourceStatus> source_statuses;
+    {
+      std::lock_guard<std::mutex> lock(gate_mutex_);
+      source_statuses = source_arbiter_->statuses(now_ms);
+    }
+    std::string active_source = "none";
+    bool selected_command_current = false;
+    for (const auto & source : source_statuses) {
+      diagnostic_msgs::msg::DiagnosticStatus status;
+      status.name = "critical_link/receiver/source/" + source.config.name;
+      status.hardware_id = std::to_string(source.config.id);
+      status.level = source.selected ? status.OK :
+        source.command_fresh ? status.WARN : status.STALE;
+      status.message = source.selected ? "selected command source" :
+        source.command_fresh ? "command source available but not selected" : "command source stale";
+      status.values.push_back(key_value("priority", std::to_string(source.config.priority)));
+      status.values.push_back(key_value("command_fresh", source.command_fresh ? "true" : "false"));
+      status.values.push_back(key_value("heartbeat_fresh", source.heartbeat_fresh ? "true" : "false"));
+      status.values.push_back(key_value("control_active", source.control_active ? "true" : "false"));
+      status.values.push_back(key_value("last_command_ms", std::to_string(source.last_command_ms)));
+      status.values.push_back(key_value("last_heartbeat_ms", std::to_string(source.last_heartbeat_ms)));
+      if (source.selected) {
+        active_source = source.config.name;
+        selected_command_current = true;
+      }
+      array.status.push_back(std::move(status));
+    }
+
     diagnostic_msgs::msg::DiagnosticStatus aggregate;
     aggregate.name = "critical_link/receiver/aggregate";
     aggregate.hardware_id = "critical_link";
-    const uint64_t now_ms = steady_milliseconds();
-    const bool joy_stale = last_joy_ms_ == 0U ||
-      now_ms - last_joy_ms_ > static_cast<uint64_t>(stale_after_sec_ * 1000.0);
+    const bool joy_stale = !selected_command_current;
     aggregate.level = joy_stale ? aggregate.WARN : aggregate.OK;
-    aggregate.message = joy_stale ? "no recent accepted Joy" : "accepted Joy is current";
+    aggregate.message = joy_stale ? "no selected fresh Joy source" : "selected Joy source is current";
     aggregate.values.push_back(key_value("accepted_joy", std::to_string(accepted_joy_)));
     aggregate.values.push_back(
       key_value("accepted_heartbeat", std::to_string(accepted_heartbeat_)));
     aggregate.values.push_back(
       key_value("duplicate_or_old", std::to_string(duplicates_or_old_)));
+    aggregate.values.push_back(
+      key_value("unauthorized_source", std::to_string(unauthorized_source_)));
     aggregate.values.push_back(key_value("invalid_payload", std::to_string(invalid_payload_)));
+    aggregate.values.push_back(key_value("active_source", active_source));
     array.status.push_back(std::move(aggregate));
     diagnostics_pub_->publish(array);
   }
@@ -285,6 +399,8 @@ private:
   std::string serial_device_;
   int serial_baud_{921600};
   double stale_after_sec_{3.0};
+  double source_publish_period_sec_{0.05};
+  double heartbeat_publish_period_sec_{1.0};
   std::atomic<bool> running_{true};
   std::vector<std::unique_ptr<ReceivePath>> udp_paths_;
   std::thread serial_thread_;
@@ -294,17 +410,21 @@ private:
   std::atomic<int> serial_last_errno_{0};
   std::mutex gate_mutex_;
   SequenceGate gate_;
+  std::unique_ptr<SourceArbiter> source_arbiter_;
   std::atomic<uint64_t> accepted_joy_{0};
   std::atomic<uint64_t> accepted_heartbeat_{0};
   std::atomic<uint64_t> duplicates_or_old_{0};
+  std::atomic<uint64_t> unauthorized_source_{0};
   std::atomic<uint64_t> invalid_payload_{0};
   std::atomic<uint64_t> last_joy_ms_{0};
   std::atomic<uint64_t> last_heartbeat_ms_{0};
   std::atomic<uint64_t> last_probe_ms_{0};
+  uint64_t last_heartbeat_publish_ms_{0};
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr joy_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
+  rclcpp::TimerBase::SharedPtr command_timer_;
 };
 
 }  // namespace critical_link
