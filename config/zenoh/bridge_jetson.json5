@@ -19,7 +19,12 @@
 
   plugins: {
     ros2dds: {
-      domain: 6,
+      domain: 7,
+
+      transient_local_cache_multiplier: 20,
+      queries_timeout: {
+        transient_local_subscribers: 10.0,
+      },
 
       // The Jetson joins after the miniPC's robot_state_publisher in normal
       // operation.  Request the TRANSIENT_LOCAL /tf_static history instead
@@ -31,7 +36,7 @@
 
       allow: {
         publishers: [
-          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/odom", "/livox/imu",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
