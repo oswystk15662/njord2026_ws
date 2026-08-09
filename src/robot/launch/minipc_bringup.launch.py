@@ -345,6 +345,7 @@ def generate_launch_description():
         "robot",
         ["launch", "nav2.launch.py"],
         IfCondition(enable_nav2),
+        {"profile": LaunchConfiguration("active_nav2_profile")},
     )
 
     # The supervisor owns the readiness and liveness signals consumed by the

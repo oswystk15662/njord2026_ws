@@ -20,7 +20,7 @@ from std_msgs.msg import Bool, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
-from njord_interfaces.srv import GetMissionStatus, ListTasks, StartTask, StopTask
+from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
 from .executors import DummyExecutor, ExecutorStatus, StagedDockingExecutor, WaypointSequenceExecutor
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
@@ -129,6 +129,8 @@ class MissionManager(Node):
         self._active_executor = None
         self._active_route: Route | None = None
         self._pending_start = None
+        self._auto_permission_deadline_ns: int | None = None
+        self._auto_mode_request_sent = False
         self._action_results: dict[str, tuple[ResultCode, str]] = {}
         self._auto_permitted = False
         self._requested_mode = MissionStatus.MODE_MANUAL
@@ -167,6 +169,7 @@ class MissionManager(Node):
         self._stop_srv = self.create_service(StopTask, "/mission/stop_task", self._on_stop)
         self._list_srv = self.create_service(ListTasks, "/mission/list_tasks", self._on_list)
         self._status_srv = self.create_service(GetMissionStatus, "/mission/get_status", self._on_status)
+        self._set_mode_client = self.create_client(SetControlMode, "/control/set_mode")
         self._timer = self.create_timer(0.1, self._tick, callback_group=self._cb_group)
         self._publish_task_readiness(False, False, "")
         self._publish_status()
@@ -293,10 +296,23 @@ class MissionManager(Node):
         if request.dry_run:
             self._complete(decision.execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
             return decision
-        if request.request_auto_mode and not self._auto_permitted:
-            self._pending_start = (decision.execution_id, task)
-            self._machine.transition(MissionState.WAITING_FOR_AUTO_PERMISSION, execution_id=decision.execution_id,
-                                     stage="permission", message="waiting for AUTO permission")
+        if request.request_auto_mode:
+            # Start Nav2 while command selection remains zero/MANUAL.  Waiting
+            # for a fresh Nav2 command before starting the executor would form a
+            # deadlock with SafetySupervisor's freshness interlock.
+            self._machine.transition(
+                MissionState.WAITING_FOR_AUTO_PERMISSION,
+                execution_id=decision.execution_id,
+                stage="permission",
+                message="starting Nav2 with AUTO output inhibited",
+            )
+            self._begin_executor(decision.execution_id, task, waiting_for_auto=True)
+            self._auto_permission_deadline_ns = (
+                self.get_clock().now().nanoseconds
+                + int(float(self.get_parameter("auto_permission_timeout_sec").value) * 1e9)
+            )
+            self._auto_mode_request_sent = False
+            self._request_auto_mode()
         else:
             self._begin_executor(decision.execution_id, task)
         self._publish_status()
@@ -315,12 +331,15 @@ class MissionManager(Node):
         root = self._waypoint_share_path() if task.route_package == "waypoint_publisher" else self._registry_path().parent
         return self._loader.load(root / task.route, task.route_key)
 
-    def _begin_executor(self, execution_id: str, task: TaskDefinition) -> None:
+    def _begin_executor(
+        self, execution_id: str, task: TaskDefinition, *, waiting_for_auto: bool = False
+    ) -> None:
         if not self._machine.is_current(execution_id) or self._active_route is None:
             return
         self._pending_start = None
-        self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
-                                 stage="starting", message="starting task executor")
+        if not waiting_for_auto:
+            self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
+                                     stage="starting", message="starting task executor")
         self._publish_task_readiness(True, True, task.control_policy)
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
@@ -337,6 +356,26 @@ class MissionManager(Node):
             executor.start(execution_id, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
         self._active_executor = executor
+
+    def _request_auto_mode(self) -> None:
+        """Request AUTO through the sole typed mode owner, never by topic spoofing."""
+        if not self._set_mode_client.service_is_ready():
+            return
+        self._auto_mode_request_sent = True
+        request = SetControlMode.Request()
+        request.requested_mode = SetControlMode.Request.MODE_AUTO
+        request.request_id = f"mission-{self._machine.snapshot.execution_id}"
+        future = self._set_mode_client.call_async(request)
+
+        def completed(result_future) -> None:
+            try:
+                result = result_future.result()
+                if not result.accepted:
+                    self.get_logger().error(f"AUTO mode request rejected: {result.message}")
+            except Exception as exc:
+                self.get_logger().error(f"AUTO mode request failed: {exc}")
+
+        future.add_done_callback(completed)
 
     def _create_wait_timer(self, seconds: float, callback: Callable[[], None]):
         return self.create_timer(seconds if seconds > 0 else 0.001, callback, callback_group=self._cb_group)
@@ -367,6 +406,8 @@ class MissionManager(Node):
         self._machine.begin_cancel(execution_id)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
+        self._auto_permission_deadline_ns = None
+        self._auto_mode_request_sent = False
         if self._active_executor:
             self._active_executor.cancel(execution_id)
         else:
@@ -379,6 +420,8 @@ class MissionManager(Node):
             return
         self._action_results[execution_id] = (code, message)
         self._pending_start = None
+        self._auto_permission_deadline_ns = None
+        self._auto_mode_request_sent = False
         self._active_executor = None
         self._publish_status()
         self._publish_task_readiness(False, False, "")
@@ -394,9 +437,29 @@ class MissionManager(Node):
 
     def _tick(self) -> None:
         with self._lock:
-            if self._pending_start and self._auto_permitted:
-                execution_id, task = self._pending_start
-                self._begin_executor(execution_id, task)
+            snapshot = self._machine.snapshot
+            if snapshot.state == MissionState.WAITING_FOR_AUTO_PERMISSION:
+                if not self._auto_mode_request_sent:
+                    self._request_auto_mode()
+                if self._auto_permitted:
+                    self._machine.transition(
+                        MissionState.RUNNING,
+                        execution_id=snapshot.execution_id,
+                        stage="navigate",
+                        message="AUTO permission granted",
+                    )
+                    self._auto_permission_deadline_ns = None
+                elif (
+                    self._auto_permission_deadline_ns is not None
+                    and self.get_clock().now().nanoseconds >= self._auto_permission_deadline_ns
+                ):
+                    if self._active_executor:
+                        self._active_executor.cleanup(snapshot.execution_id)
+                    self._complete(
+                        snapshot.execution_id,
+                        ResultCode.SAFETY_INHIBITED,
+                        "AUTO permission timed out: " + "; ".join(self._inhibit_reasons),
+                    )
             self._publish_status()
 
     def _publish_status(self) -> None:

@@ -30,33 +30,13 @@ tasks:
     reason: Marker-driven route generation is not implemented
   task2:
     display_name: Task 2
-    availability: experimental
-    executor: waypoint_sequence
-    route_package: waypoint_publisher
-    route: config/task2_waypoints.yaml
-    route_key: task2_config
-    frame_id: map
-    nav2_profile: task2
-    control_policy: task2
-    features: {collision_monitor: true}
+    availability: disabled
+    reason: Nav2 collision-monitor topology and real sensor source are not verified
   task3_1:
     display_name: Task 3-1
-    availability: experimental
-    executor: staged_docking
-    route_package: waypoint_publisher
-    route: config/task3_waypoints.yaml
-    route_key: task3_1_config
-    frame_id: map
-    nav2_profile: task3
-    control_policy: task3
-    features: {collision_monitor: true, dynamic_gate_midpoints: true}
+    availability: disabled
+    reason: Nav2 profile and dynamic gate TF readiness are not verified
   task3_2:
     display_name: Task 3-2
-    availability: experimental
-    executor: staged_docking
-    route_package: waypoint_publisher
-    route: config/task3_waypoints.yaml
-    route_key: task3_2_config
-    frame_id: map
-    nav2_profile: task3
-    control_policy: task3
+    availability: disabled
+    reason: Nav2 profile and dynamic gate TF readiness are not verified

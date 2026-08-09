@@ -27,7 +27,10 @@ Jetson Orin Nano Super 1台で全ノードを動かしていた構成は、実�
 
 ESP32 Micon、UM982 GNSS、後方USBカメラはminiPCに接続する。DroggerとWIT IMUはlaunch定義を残しているが、現在は起動リストから外してあり引数も既定falseである。ゲームパッドはGround PCに接続する。
 
-Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が params ファイルを選んで起動する。
+Nav2 は `minipc_bringup` が常駐所有する。`active_nav2_profile:=task1|task2|task3`
+で起動時にパラメータファイルを選択する。Mission Manager は実行中にNav2を
+再起動・再設定せず、現在のprofileと異なるtaskは明確に拒否する。Task 2/3は
+collision-monitorの実機sourceとdynamic gate TFを検証するまでregistry上でdisabledである。
 
 ### Ground PC（`ground_pc.launch.py`）
 
@@ -133,10 +136,14 @@ ros2 launch robot jetson_bringup.launch.py
 miniPC:
 ```bash
 source /opt/ros/humble/setup.bash && source scripts/njord_env.sh && source install/setup.bash
-ros2 launch robot task1.launch.py          # role:=minipc が既定
+ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task1
+njord-task start task1 --auto
 ```
 
-`task2.launch.py` / `task3.launch.py` も同様。
+Task 2/3は対応するprofile、collision monitor、dynamic gate TFを検証してregistryを
+有効化してから同じMission APIを使う。
+`task1/2/3.launch.py` は比較用のdeprecated compatibility launchであり、実運用で
+task goalを自動送信してはならない。
 
 ### systemd による基盤 bringup の常駐化
 

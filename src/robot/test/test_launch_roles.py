@@ -126,6 +126,17 @@ def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     assert 'package="twist_mux"' not in source
 
 
+def test_resident_nav2_profile_is_selected_by_role_bringup():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    nav2_source = _read_launch_source("nav2.launch.py")
+
+    assert '"profile": LaunchConfiguration("active_nav2_profile")' in minipc_source
+    assert "'task1': 'nav2_params_humble.yaml'" in nav2_source
+    assert "'task2': 'nav2_params_task2_humble.yaml'" in nav2_source
+    assert "'task3': 'nav2_params_task3_humble.yaml'" in nav2_source
+    assert "changed by Mission Manager" in nav2_source
+
+
 def test_minipc_joy_converter_does_not_publish_physical_lamp_topics():
     source = _read_launch_source("minipc_bringup.launch.py")
 

@@ -8,7 +8,6 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     namespace = LaunchConfiguration('namespace')
     config = LaunchConfiguration('config')
-    require_rtk_fix = LaunchConfiguration('require_rtk_fix')
     return LaunchDescription([
         DeclareLaunchArgument('namespace', default_value=''),
         DeclareLaunchArgument(
@@ -19,12 +18,10 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument(
             'require_rtk_fix', default_value='false',
-            description='Require a recent RTK-quality GNSS fix for alert-lamp AUTO readiness.',
+            description='Deprecated compatibility argument; use control_policy.yaml instead.',
         ),
         Node(package='alert_lamp', executable='alert_lamp_manager_node',
-             namespace=namespace, output='screen', parameters=[config, {
-                 'localization.require_rtk_fix': require_rtk_fix,
-             }]),
+             namespace=namespace, output='screen', parameters=[config]),
         Node(package='alert_lamp', executable='alert_lamp_driver_node',
              namespace=namespace, output='screen', parameters=[config]),
     ])
