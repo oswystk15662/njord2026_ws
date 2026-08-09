@@ -20,6 +20,15 @@
     ros2dds: {
       domain: 5,
 
+      // /tf_static uses TRANSIENT_LOCAL durability.  Keep enough samples for
+      // all of its independent publishers (robot_state_publisher, UM982's
+      // static publisher, and navsat_transform), then give a late-joining
+      // remote subscriber time to retrieve that history.
+      transient_local_cache_multiplier: 20,
+      queries_timeout: {
+        transient_local_subscribers: 10.0,
+      },
+
       // JetsonとGround PCの両bridgeに対するunion。各remote bridge側では
       // 役割別にさらに絞り込む。/joy と /heartbeat/ground_station は
       // critical_link_receiver だけがminiPCのcanonical topicへpublishする
