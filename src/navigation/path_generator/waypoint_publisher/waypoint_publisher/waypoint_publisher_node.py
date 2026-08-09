@@ -164,7 +164,7 @@ class WaypointPublisher(Node):
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
             TaskType.TASK1_SKIP_1_1: 'task1_skip_1_1_waypoints.yaml',
-            TaskType.TASK1_FOLLOW: 'task1_waypoints.yaml',
+            TaskType.TASK1_FOLLOW: 'task1_follow_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
             TaskType.TASK3_2: 'task3_waypoints.yaml',
