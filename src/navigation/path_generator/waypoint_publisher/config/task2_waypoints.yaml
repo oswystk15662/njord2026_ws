@@ -4,11 +4,18 @@
 
 task2_config:
   frame_id: "map"
+  # === WP座標モード（Mission Manager / MPPI / 旧waypoint_publisherで共通） ===
+  # origin_relative_xy: originが基準GPS。x/yはそこから東+x、北+y [m]。
+  # geodetic: originは不要。全waypointにlatitude/longitudeを入力し、x/yを削除する。
+  # map_xy: 旧互換。x/yをmap座標としてそのまま使う。
+  coordinate_mode: "origin_relative_xy"
   publish_rate_hz: 2.0
+  # [origin_relative_xyで入力] 実機のGPS 5基準位置。
   origin:
     latitude: 34.5456666667
     longitude: 135.5070555556
     name: "GPS 5 - Start (same as GPS 1)"
+  # [参考のみ] gps_pointsは走行座標に使わない。originまたはwaypointsへ入力する。
   gps_points:
     - id: 5
       latitude: 34.5456666667
@@ -19,6 +26,7 @@ task2_config:
       longitude: 135.5074444444
       name: "GPS 6 - Goal (same as GPS 2)"
 
+  # [origin_relative_xyで入力] x/yを編集。geodeticでは各WPへlatitude/longitudeを入力。
   waypoints:
     - id: 5
       x: 0.0
