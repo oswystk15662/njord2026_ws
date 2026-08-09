@@ -7,11 +7,34 @@ endif()
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(geometry_msgs REQUIRED)
+find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(sensor_msgs REQUIRED)
+
+add_executable(localization_input_guard src/localization_input_guard.cpp)
+ament_target_dependencies(localization_input_guard
+  geometry_msgs
+  nav_msgs
+  rclcpp
+  sensor_msgs
+)
+
+install(TARGETS localization_input_guard
+  DESTINATION lib/${PROJECT_NAME}
+)
 
 install(DIRECTORY
   launch config urdf
   DESTINATION share/${PROJECT_NAME}
+)
+
+# Zenoh bridge configuration is shared by the three physical-machine
+# bringups.  Keep the source-of-truth at the workspace-level config path,
+# while installing it with robot so launch files work from an installed tree.
+install(DIRECTORY
+  ${CMAKE_CURRENT_SOURCE_DIR}/../../config/zenoh
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 # GLIM only accepts a single config directory containing a "config.json"

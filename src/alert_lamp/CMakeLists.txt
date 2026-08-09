@@ -13,6 +13,7 @@ find_package(nav_msgs REQUIRED)
 find_package(sensor_msgs REQUIRED)
 find_package(diagnostic_msgs REQUIRED)
 find_package(diagnostic_updater REQUIRED)
+find_package(njord_interfaces REQUIRED)
 
 rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/AlertLampCommand.msg"
@@ -40,7 +41,7 @@ target_include_directories(alert_lamp_nodes PUBLIC
   $<INSTALL_INTERFACE:include>
 )
 ament_target_dependencies(alert_lamp_nodes
-  rclcpp std_msgs nav_msgs sensor_msgs diagnostic_msgs diagnostic_updater
+  rclcpp std_msgs nav_msgs sensor_msgs diagnostic_msgs diagnostic_updater njord_interfaces
 )
 target_link_libraries(alert_lamp_nodes alert_lamp_core)
 rosidl_target_interfaces(alert_lamp_nodes ${PROJECT_NAME} "rosidl_typesupport_cpp")

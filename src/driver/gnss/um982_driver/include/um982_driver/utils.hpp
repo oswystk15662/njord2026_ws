@@ -30,9 +30,21 @@ bool validate_checksum(const std::string & sentence);
  * @brief NMEA形式 (ddmm.mmmm) を 十進度数 (dd.dddd) に変換する
  * * @param value NMEA形式の数値文字列 (例: "3541.6053")
  * @param direction 方角文字 (N, S, E, W)
- * @return double 変換後の度数。変換失敗時は 0.0
+ * @param result 変換後の度数
+ * @return 数値・方位・範囲がすべて正常なら true
  */
-double convert_nmea_to_latlon(const std::string & value, const std::string & direction);
+bool convert_nmea_to_latlon(
+    const std::string & value, const std::string & direction, double & result) noexcept;
+
+/**
+ * @brief 文字列全体を有限なdoubleとして解析する
+ */
+bool parse_finite_double(const std::string & value, double & result) noexcept;
+
+/**
+ * @brief 文字列全体を10進intとして解析する
+ */
+bool parse_int(const std::string & value, int & result) noexcept;
 
 /**
  * @brief Base64エンコード (NTRIP認証用)

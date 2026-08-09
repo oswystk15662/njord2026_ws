@@ -94,3 +94,14 @@ def test_glim_does_not_scale_si_livox_acceleration_twice():
         with open(path, "r") as stream:
             source = stream.read()
         assert '"acc_scale": 1.0' in source
+
+
+def test_glim_interprets_livox_point_timestamps_as_absolute_nanoseconds():
+    share_dir = get_package_share_directory("robot")
+    path = os.path.join(share_dir, "config", "glim_config", "config_sensors.json")
+    with open(path, "r") as stream:
+        source = stream.read()
+
+    assert '"autoconf_perpoint_times": false' in source
+    assert '"perpoint_relative_time": false' in source
+    assert '"perpoint_time_scale": 1e-9' in source

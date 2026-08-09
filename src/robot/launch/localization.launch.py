@@ -176,6 +176,17 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("enable_global_ekf")),
     )
 
+    # Only finite observations are forwarded to the global filter. Its
+    # GNSS-independent continuous observation comes from guarded Livox IMU.
+    localization_input_guard = Node(
+        package="robot",
+        executable="localization_input_guard",
+        name="localization_input_guard",
+        output="screen",
+        parameters=[{"use_sim_time": use_sim_time}],
+        condition=IfCondition(LaunchConfiguration("enable_global_ekf")),
+    )
+
     navsat_transform_node = Node(
         package="robot_localization",
         executable="navsat_transform_node",
@@ -200,8 +211,13 @@ def generate_launch_description():
         ],
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
-            ("odometry/filtered", "odometry/filtered/local"),
-            ("odometry/gps", "/odometry/gps/um982"),
+            # navsat output inherits the input odometry world frame.  Use the
+            # global EKF here so /odometry/gps/um982 is map-referenced before
+            # feeding it back to that EKF.  Using the local (odom-referenced)
+            # output creates a map<->odom feedback loop after global TF starts.
+            ("odometry/filtered", "odometry/filtered/global"),
+            # The guard republishes finite messages on /odometry/gps/um982.
+            ("odometry/gps", "/odometry/gps/um982/raw"),
         ],
         condition=IfCondition(LaunchConfiguration("enable_navsat_transform")),
     )
@@ -233,6 +249,7 @@ def generate_launch_description():
             um982_static_tf,
             local_ekf_node,
             global_ekf_node,
+            localization_input_guard,
             navsat_transform_node,
             diagnostics_launch,
         ]

@@ -10,7 +10,7 @@ def generate_launch_description():
     # 通信モード: 'uart' or 'tcp'
     arg_mode = DeclareLaunchArgument(
         'uart_or_tcp',
-        default_value='tcp',
+        default_value='uart',
         description='Connection mode: "uart" or "tcp"'
     )
 
@@ -49,6 +49,23 @@ def generate_launch_description():
         default_value='20',
         description='Frequency for Heading publishing (Hz)'
     )
+    arg_rtk_status_freq = DeclareLaunchArgument(
+        'rtk_status_freq',
+        default_value='1',
+        description='Frequency for RTKSTATUS diagnostic output (Hz)'
+    )
+    arg_uniheading_format = DeclareLaunchArgument(
+        'uniheading_format',
+        default_value='B',
+        choices=['A', 'B'],
+        description='UM982 UNIHEADING output format: ASCII (A) or binary (B)'
+    )
+    arg_rtk_status_format = DeclareLaunchArgument(
+        'rtk_status_format',
+        default_value='B',
+        choices=['A', 'B'],
+        description='UM982 RTKSTATUS output format: ASCII (A) or binary (B)'
+    )
     arg_rtk = DeclareLaunchArgument(
         'rtk_enable',
         default_value='true',
@@ -56,7 +73,7 @@ def generate_launch_description():
     )
     arg_ntrip_server = DeclareLaunchArgument(
         'ntrip_server',
-        default_value='ntrip.ales-corp.co.jp',
+        default_value='osw-Stealth-14-AI-Studio-A1VGG.local',
         description='NTRIP caster hostname'
     )
     arg_ntrip_port = DeclareLaunchArgument(
@@ -66,28 +83,38 @@ def generate_launch_description():
     )
     arg_ntrip_mountpoint = DeclareLaunchArgument(
         'ntrip_mountpoint',
-        default_value='RTCM32MSM7',
+        default_value='RTCM3',
         description='NTRIP mountpoint'
     )
     arg_ntrip_username = DeclareLaunchArgument(
         'ntrip_username',
-        default_value='',
+        default_value='test',
         description='NTRIP username (leave empty for anonymous casters)'
     )
     arg_ntrip_password = DeclareLaunchArgument(
         'ntrip_password',
-        default_value='',
+        default_value='test',
         description='NTRIP password (leave empty for anonymous casters)'
     )
     arg_frame_id = DeclareLaunchArgument(
         'heading_frame_id',
-        default_value='odom',
-        description='Frame ID for the heading message'
+        default_value='map',
+        description='World frame for the absolute ENU heading message'
     )
     arg_publish_feedback_odometry = DeclareLaunchArgument(
         'publish_feedback_odometry',
         default_value='false',
         description='Publish UM982-derived local odometry for the feedback filter'
+    )
+    arg_feedback_frame_id = DeclareLaunchArgument(
+        'feedback_frame_id',
+        default_value='odom',
+        description='Parent frame of the local-ENU feedback odometry'
+    )
+    arg_feedback_child_frame_id = DeclareLaunchArgument(
+        'feedback_child_frame_id',
+        default_value='base_link',
+        description='Child frame of the local-ENU feedback odometry'
     )
 
     # ログ設定
@@ -113,6 +140,9 @@ def generate_launch_description():
             'tcp_port': LaunchConfiguration('tcp_port'),
             'FIX_FREQ': LaunchConfiguration('fix_freq'),
             'HEADING_FREQ': LaunchConfiguration('heading_freq'),
+            'RTK_STATUS_FREQ': LaunchConfiguration('rtk_status_freq'),
+            'UNIHEADING_FORMAT': LaunchConfiguration('uniheading_format'),
+            'RTK_STATUS_FORMAT': LaunchConfiguration('rtk_status_format'),
             'GNSS_RTK_Enable': LaunchConfiguration('rtk_enable'),
             'NTRIP_Server': LaunchConfiguration('ntrip_server'),
             'NTRIP_Port': LaunchConfiguration('ntrip_port'),
@@ -121,6 +151,8 @@ def generate_launch_description():
             'NTRIP_Password': LaunchConfiguration('ntrip_password'),
             'Heading_FrameID': LaunchConfiguration('heading_frame_id'),
             'publish_feedback_odometry': LaunchConfiguration('publish_feedback_odometry'),
+            'feedback_frame_id': LaunchConfiguration('feedback_frame_id'),
+            'feedback_child_frame_id': LaunchConfiguration('feedback_child_frame_id'),
             'log_file_name': LaunchConfiguration('log_file_name'),
         }]
     )
@@ -133,6 +165,9 @@ def generate_launch_description():
         arg_tcp_port,
         arg_fix_freq,
         arg_heading_freq,
+        arg_rtk_status_freq,
+        arg_uniheading_format,
+        arg_rtk_status_format,
         arg_rtk,
         arg_ntrip_server,
         arg_ntrip_port,
@@ -141,6 +176,8 @@ def generate_launch_description():
         arg_ntrip_password,
         arg_frame_id,
         arg_publish_feedback_odometry,
+        arg_feedback_frame_id,
+        arg_feedback_child_frame_id,
         arg_log,
         um982_node
     ])

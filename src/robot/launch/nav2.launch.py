@@ -34,7 +34,21 @@ def _write_configured_bt_xml(source_file, replanning_frequency):
 
 
 def _launch_nav2(context, pkg_robot):
+    profile = LaunchConfiguration('profile').perform(context)
     params_file = LaunchConfiguration('params_file').perform(context)
+    if not params_file:
+        profile_files = {
+            'task1': 'nav2_params_humble.yaml',
+            'task2': 'nav2_params_task2_humble.yaml',
+            'task3': 'nav2_params_task3_humble.yaml',
+        }
+        try:
+            params_file = os.path.join(pkg_robot, 'config', profile_files[profile])
+        except KeyError as error:
+            raise RuntimeError(
+                f"Unknown Nav2 profile {profile!r}; expected one of "
+                f"{', '.join(sorted(profile_files))}"
+            ) from error
     nav_to_pose_bt_xml = LaunchConfiguration('nav_to_pose_bt_xml').perform(context)
     nav_through_poses_bt_xml = LaunchConfiguration('nav_through_poses_bt_xml').perform(context)
 
@@ -93,11 +107,6 @@ def _launch_nav2(context, pkg_robot):
 def generate_launch_description():
     pkg_robot = get_package_share_directory('robot')
 
-    default_params_file = os.path.join(
-        pkg_robot,
-        'config',
-        'nav2_params_humble.yaml'
-    )
     default_nav_to_pose_bt_xml = os.path.join(
         pkg_robot, 'config', 'navigate_to_pose_w_replanning_and_recovery.xml'
     )
@@ -107,8 +116,20 @@ def generate_launch_description():
 
     params_file_arg = DeclareLaunchArgument(
         'params_file',
-        default_value=default_params_file,
-        description='Full path to the Nav2 parameters file'
+        default_value='',
+        description=(
+            'Optional full path to Nav2 parameters. Leave empty to select the '
+            'validated profile-specific file.'
+        )
+    )
+    profile_arg = DeclareLaunchArgument(
+        'profile',
+        default_value='task1',
+        choices=['task1', 'task2', 'task3'],
+        description=(
+            'Resident Nav2 profile. It is selected at role bringup and is never '
+            'changed by Mission Manager while propulsion can be enabled.'
+        )
     )
     nav_to_pose_bt_xml_arg = DeclareLaunchArgument(
         'nav_to_pose_bt_xml',
@@ -135,6 +156,7 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        profile_arg,
         params_file_arg,
         nav_to_pose_bt_xml_arg,
         nav_through_poses_bt_xml_arg,

@@ -1,8 +1,7 @@
 #include "um982_driver/node.hpp"
-#include <tf2/LinearMath/Quaternion.h>
-#include "um982_driver/tf2_geometry_msgs_include.hpp"
 #include <chrono>
 #include <algorithm>
+#include <cctype>
 #include <termios.h>
 
 using namespace std::chrono_literals;
@@ -20,6 +19,29 @@ std::string format_period(double period)
 constexpr uint8_t kBinarySync[3] = {0xAA, 0x44, 0xB5};
 constexpr std::size_t kBinaryHeaderLen = 24; // Table 7-48
 constexpr uint16_t kUniheadingMessageId = 972; // UNIHEADING (Message ID)
+
+bool finite_quaternion(const geometry_msgs::msg::Quaternion & q)
+{
+    if (!std::isfinite(q.x) || !std::isfinite(q.y) ||
+        !std::isfinite(q.z) || !std::isfinite(q.w))
+    {
+        return false;
+    }
+    const double norm = q.x * q.x + q.y * q.y + q.z * q.z + q.w * q.w;
+    return std::isfinite(norm) && std::abs(norm - 1.0) < 1e-3;
+}
+
+std::string normalize_log_format(std::string format, const char* parameter_name)
+{
+    std::transform(format.begin(), format.end(), format.begin(),
+        [](unsigned char value) { return static_cast<char>(std::toupper(value)); });
+    if (format == "A" || format == "B") {
+        return format;
+    }
+    RCLCPP_WARN(rclcpp::get_logger("um982_driver"),
+        "%s must be A or B; using B", parameter_name);
+    return "B";
+}
 } // namespace
 
 namespace um982_driver
@@ -28,7 +50,6 @@ namespace um982_driver
 UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 : Node("um982_driver_node", options),
   work_guard_(io_context_.get_executor()),
-  is_rtk_connected_(false),
   stop_publish_(false)
 {
     RCLCPP_INFO(this->get_logger(), "Initializing UM982 Driver Node (C++)...");
@@ -48,9 +69,7 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
     // Publishers
     fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss/fix/raw", 10);
-    fix_debug_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/sensor/vehicle_gnss_debug/fix/raw", 10);
     heading_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss/compass/raw", 10);
-    heading_debug_pub_ = this->create_publisher<geometry_msgs::msg::PoseWithCovarianceStamped>("/sensor/vehicle_gnss_debug/compass/raw", 10);
     if (params_.publish_feedback_odometry) {
         feedback_odom_pub_ = this->create_publisher<nav_msgs::msg::Odometry>(
             params_.feedback_odometry_topic, 10);
@@ -63,7 +82,16 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
 
     // IO Thread Start
     io_thread_ = std::thread([this]() {
-        io_context_.run();
+        // An exception escaping an Asio completion handler otherwise invokes
+        // std::terminate, which used to make the whole GNSS node abort.
+        while (!io_context_.stopped()) {
+            try {
+                io_context_.run();
+                break;
+            } catch (const std::exception & e) {
+                RCLCPP_ERROR(this->get_logger(), "Unhandled GNSS I/O exception: %s", e.what());
+            }
+        }
     });
 
     // Connect
@@ -125,6 +153,9 @@ void UM982Driver::init_parameters()
     this->declare_parameter("uart_or_tcp", "tcp");
     this->declare_parameter("FIX_FREQ", 20);
     this->declare_parameter("HEADING_FREQ", 20);
+    this->declare_parameter("RTK_STATUS_FREQ", 1);
+    this->declare_parameter("UNIHEADING_FORMAT", "B");
+    this->declare_parameter("RTK_STATUS_FORMAT", "B");
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
@@ -132,6 +163,8 @@ void UM982Driver::init_parameters()
     // A relative name keeps the published Odometry independent from the
     // consumer.  Bringup launch files remap it to the required feedback topic.
     this->declare_parameter("feedback_odometry_topic", "odometry/feedback");
+    this->declare_parameter("feedback_frame_id", "odom");
+    this->declare_parameter("feedback_child_frame_id", "base_link");
     this->declare_parameter("feedback_velocity_filter_alpha", 0.35);
     this->declare_parameter("feedback_max_speed_mps", 4.0);
     this->declare_parameter("NTRIP_Server", params_.ntrip_server);
@@ -148,6 +181,12 @@ void UM982Driver::init_parameters()
     params_.uart_or_tcp = this->get_parameter("uart_or_tcp").as_string();
     params_.fix_freq = this->get_parameter("FIX_FREQ").as_int();
     params_.heading_freq = this->get_parameter("HEADING_FREQ").as_int();
+    params_.rtk_status_freq = static_cast<int>(std::max<int64_t>(
+        1, this->get_parameter("RTK_STATUS_FREQ").as_int()));
+    params_.heading_log_format = normalize_log_format(
+        this->get_parameter("UNIHEADING_FORMAT").as_string(), "UNIHEADING_FORMAT");
+    params_.rtk_status_log_format = normalize_log_format(
+        this->get_parameter("RTK_STATUS_FORMAT").as_string(), "RTK_STATUS_FORMAT");
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
@@ -155,6 +194,10 @@ void UM982Driver::init_parameters()
         this->get_parameter("publish_feedback_odometry").as_bool();
     params_.feedback_odometry_topic =
         this->get_parameter("feedback_odometry_topic").as_string();
+    params_.feedback_frame_id =
+        this->get_parameter("feedback_frame_id").as_string();
+    params_.feedback_child_frame_id =
+        this->get_parameter("feedback_child_frame_id").as_string();
     params_.feedback_velocity_filter_alpha = std::clamp(
         this->get_parameter("feedback_velocity_filter_alpha").as_double(), 0.0, 1.0);
     params_.feedback_max_speed_mps = std::max(
@@ -196,15 +239,19 @@ void UM982Driver::configure_gnss_output()
 {
     double fix_p = 1.0 / params_.fix_freq;
     double head_p = 1.0 / params_.heading_freq;
+    double rtk_status_p = 1.0 / params_.rtk_status_freq;
     std::string fix_period = format_period(fix_p);
     std::string heading_period = format_period(head_p);
+    std::string rtk_status_period = format_period(rtk_status_p);
 
     // Apply volatile startup configuration only. Do not send SAVECONFIG.
     // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
-    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII. UNIHEADING supports
-    // both ASCII (UNIHEADINGA) and binary (UNIHEADINGB) output; per policy, use the
-    // binary form only. GPTHS also has no binary counterpart and remains ASCII as a
-    // fallback heading sentence.
+    // FAILED NO MATCHING FUNC"), so position stays NMEA/ASCII.  Although UM982
+    // supports UNIHEADINGB, the live receiver repeatedly delivers CRC-invalid
+    // frames at 115200 bps.  The N4 command reference specifies GPTHS as the
+    // UM982 true-heading log with a validity flag, so use that validated ASCII
+    // message as the sole heading source until the serial binary stream is proven
+    // reliable.
     write_to_gnss("UNLOG\r\n");
 
     // UNLOG can stop a binary message halfway through transmission.  If that
@@ -222,12 +269,13 @@ void UM982Driver::configure_gnss_output()
 
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
-    write_to_gnss("UNIHEADINGB " + heading_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
+    write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, UNIHEADINGB(binary)/GPTHS(ASCII fallback)=%ss",
-        fix_period.c_str(), heading_period.c_str());
+        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
+        fix_period.c_str(), heading_period.c_str(),
+        params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)
@@ -266,10 +314,19 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
         gnss_parse_buf_.insert(
             gnss_parse_buf_.end(), gnss_read_chunk_.begin(), gnss_read_chunk_.begin() + bytes_transferred);
 
-        process_gnss_buffer();
-
-        // 次の読み込み
+        // Re-arm before parsing. If a future parser unexpectedly throws, an
+        // outstanding read still exists and the input stream cannot silently
+        // die while the process remains alive.
         start_gnss_read();
+        try {
+            process_gnss_buffer();
+        } catch (const std::exception & e) {
+            RCLCPP_ERROR(this->get_logger(), "GNSS parse exception; resynchronizing: %s", e.what());
+            gnss_parse_buf_.clear();
+        } catch (...) {
+            RCLCPP_ERROR(this->get_logger(), "Unknown GNSS parse exception; resynchronizing");
+            gnss_parse_buf_.clear();
+        }
     } else {
         RCLCPP_ERROR(this->get_logger(), "GNSS Read Error: %s", error.message().c_str());
         // 再接続ロジックを入れるならここ
@@ -277,6 +334,9 @@ void UM982Driver::on_gnss_read(const boost::system::error_code& error, std::size
     }
 }
 
+// Moved to parsing.cpp.  Keep this transition block excluded until the next
+// source-history cleanup, so the refactor remains easy to audit as a move.
+#if 0
 void UM982Driver::process_gnss_buffer()
 {
     while (!gnss_parse_buf_.empty()) {
@@ -361,11 +421,12 @@ void UM982Driver::process_gnss_line(std::string line)
     if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
+    } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
+        parse_uniheadinga(line);
     } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
         parse_ths(line);
     }
-    // UNIHEADINGはbinary(UNIHEADINGB)のみ要求しているため、ここには来ない。
-    // バイナリフレームはprocess_gnss_buffer()内でparse_uniheadingb()へ直接渡される。
+    // UNIHEADINGB is dispatched directly from process_gnss_buffer().
 }
 
 // --------------------------------------------------------------------------
@@ -374,36 +435,64 @@ void UM982Driver::process_gnss_line(std::string line)
 
 void UM982Driver::parse_gga(const std::string& line)
 {
-    if (!utils::validate_checksum(line)) return;
+    if (!utils::validate_checksum(line)) {
+        return;
+    }
 
     // * チェックサムを除去して分割
     std::string payload = line.substr(0, line.find('*'));
     auto parts = utils::split(payload, ',');
 
-    if (parts.size() < 15) return;
+    if (parts.size() < 15) {
+        return;
+    }
+
+    int quality = 0;
+    if (!utils::parse_int(parts[6], quality) || quality < 0) {
+        RCLCPP_WARN(this->get_logger(), "Discarding GGA with invalid fix quality");
+        return;
+    }
 
     // $GNGGA,time,lat,N,lon,E,qual,sats,hdop,alt,M,sep,M,age,ref
     sensor_msgs::msg::NavSatFix msg;
     msg.header.stamp = this->now();
-    msg.header.frame_id = "base_link"; // Python通り
-    msg.status.service = 15; // GPS+GLONASS+...
+    msg.header.frame_id = "um982_link";
+    msg.status.service = sensor_msgs::msg::NavSatStatus::SERVICE_GPS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_GLONASS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_COMPASS |
+        sensor_msgs::msg::NavSatStatus::SERVICE_GALILEO;
 
-    msg.latitude = utils::convert_nmea_to_latlon(parts[2], parts[3]);
-    msg.longitude = utils::convert_nmea_to_latlon(parts[4], parts[5]);
-
-    double alt = parts[9].empty() ? 0.0 : std::stod(parts[9]);
-    double sep = parts[11].empty() ? 0.0 : std::stod(parts[11]);
-    msg.altitude = alt - sep;
-
-    int quality = parts[6].empty() ? 0 : std::stoi(parts[6]);
-    if (quality >= 1) {
-        msg.position_covariance[0] = 0.02 * 0.02;
-        msg.position_covariance[4] = 0.02 * 0.02;
-        msg.position_covariance[8] = 0.02 * 0.02;
-        msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
-    } else {
-        msg.position_covariance[0] = -1; // 不明
+    if (quality == 0) {
+        msg.status.status = sensor_msgs::msg::NavSatStatus::STATUS_NO_FIX;
+        msg.position_covariance_type =
+            sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
+        // A no-fix record is useful for diagnostics, but must never enter
+        // navsat_transform as a normal measurement.
+        fix_debug_pub_->publish(msg);
+        return;
     }
+
+    double altitude_msl = 0.0;
+    double geoid_separation = 0.0;
+    if (!utils::convert_nmea_to_latlon(parts[2], parts[3], msg.latitude) ||
+        !utils::convert_nmea_to_latlon(parts[4], parts[5], msg.longitude) ||
+        !utils::parse_finite_double(parts[9], altitude_msl) ||
+        !utils::parse_finite_double(parts[11], geoid_separation))
+    {
+        RCLCPP_WARN(this->get_logger(), "Discarding GGA with malformed or non-finite position");
+        return;
+    }
+    msg.altitude = altitude_msl - geoid_separation;
+    if (!std::isfinite(msg.altitude)) {
+        return;
+    }
+    msg.status.status = quality >= 2 ?
+        sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX :
+        sensor_msgs::msg::NavSatStatus::STATUS_FIX;
+    msg.position_covariance[0] = 0.02 * 0.02;
+    msg.position_covariance[4] = 0.02 * 0.02;
+    msg.position_covariance[8] = 0.02 * 0.02;
+    msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
 
     if (!stop_publish_) {
         fix_pub_->publish(msg);
@@ -414,10 +503,54 @@ void UM982Driver::parse_gga(const std::string& line)
     }
 }
 
+void UM982Driver::parse_uniheadinga(const std::string& line)
+{
+    const auto separator = line.find(';');
+    if (separator == std::string::npos) return;
+
+    std::string payload = line.substr(separator + 1);
+    const auto checksum = payload.find('*');
+    if (checksum != std::string::npos) payload.resize(checksum);
+    const auto fields = utils::split(payload, ',');
+    // sol_stat, pos_type, baseline, heading, pitch, ...
+    if (fields.size() < 5) return;
+
+    try {
+        if (fields[0] != "SOL_COMPUTED" ||
+            (fields[1] != "NARROW_INT" && fields[1] != "INS_RTKFIXED")) {
+            return;
+        }
+        const double yaw_rad = utils::deg2rad(90.0 - std::stod(fields[3]));
+        const double pitch_rad = utils::deg2rad(-std::stod(fields[4]));
+
+        latest_yaw_rad_ = yaw_rad;
+        latest_heading_stamp_ = this->now();
+        have_heading_ = true;
+
+        tf2::Quaternion q;
+        q.setRPY(0.0, pitch_rad, yaw_rad);
+        geometry_msgs::msg::PoseWithCovarianceStamped msg;
+        msg.header.stamp = latest_heading_stamp_;
+        msg.header.frame_id = params_.heading_frame_id;
+        msg.pose.pose.orientation = tf2::toMsg(q);
+        const double variance = std::pow(utils::deg2rad(0.5), 2);
+        msg.pose.covariance[28] = variance;
+        msg.pose.covariance[35] = variance;
+        if (!stop_publish_) heading_pub_->publish(msg);
+    } catch (...) {
+    }
+}
+
 void UM982Driver::publish_feedback_odometry(
     double latitude_deg, double longitude_deg, const rclcpp::Time& stamp)
 {
     if (!params_.publish_feedback_odometry || !feedback_odom_pub_ || !have_heading_) {
+        return;
+    }
+    if (!std::isfinite(latitude_deg) || !std::isfinite(longitude_deg) ||
+        !std::isfinite(latest_yaw_rad_))
+    {
+        RCLCPP_WARN(this->get_logger(), "Rejecting non-finite feedback odometry input");
         return;
     }
 
@@ -470,11 +603,11 @@ void UM982Driver::publish_feedback_odometry(
 
     nav_msgs::msg::Odometry odom;
     odom.header.stamp = stamp;
-    odom.header.frame_id = "odom";
-    odom.child_frame_id = "base_link";
-    // Relative ENU position with the first valid fix as the origin.  This is
-    // deliberately not a global map pose; it is the measurement consumed by
-    // the dedicated UM982 feedback filters.
+    odom.header.frame_id = params_.feedback_frame_id;
+    odom.child_frame_id = params_.feedback_child_frame_id;
+    // Relative ENU position with the first valid fix as the origin. The
+    // configured frame decides whether a consumer treats that datum-fixed
+    // plane as a local odom frame or as the navigation map frame.
     odom.pose.pose.position.x = east_m;
     odom.pose.pose.position.y = north_m;
     tf2::Quaternion orientation;
@@ -489,6 +622,16 @@ void UM982Driver::publish_feedback_odometry(
     odom.pose.covariance[0] = 0.25;
     odom.pose.covariance[7] = 0.25;
     odom.pose.covariance[35] = 0.02;
+    if (!std::isfinite(odom.pose.pose.position.x) ||
+        !std::isfinite(odom.pose.pose.position.y) ||
+        !finite_quaternion(odom.pose.pose.orientation) ||
+        !std::isfinite(odom.twist.twist.linear.x) ||
+        !std::isfinite(odom.twist.twist.linear.y) ||
+        !std::isfinite(odom.twist.twist.angular.z))
+    {
+        RCLCPP_WARN(this->get_logger(), "Rejecting non-finite feedback Odometry");
+        return;
+    }
     feedback_odom_pub_->publish(odom);
 }
 
@@ -500,31 +643,39 @@ void UM982Driver::parse_ths(const std::string& line)
     auto parts = utils::split(payload, ',');
     if (parts.size() < 3 || parts[2] == "V") return;
 
-    try {
-        double heading_deg = std::stod(parts[1]);
-        double yaw_rad = utils::deg2rad(90.0 - heading_deg);
-
-        latest_yaw_rad_ = yaw_rad;
-        latest_heading_stamp_ = this->now();
-        have_heading_ = true;
-
-        tf2::Quaternion q;
-        q.setRPY(0, 0, yaw_rad);
-
-        geometry_msgs::msg::PoseWithCovarianceStamped msg;
-        msg.header.stamp = this->now();
-        msg.header.frame_id = params_.heading_frame_id;
-        msg.pose.pose.orientation = tf2::toMsg(q);
-
-        double var = utils::deg2rad(0.5);
-        msg.pose.covariance[35] = var * var;
-
-        if (!stop_publish_) {
-            heading_pub_->publish(msg);
-        }
-        heading_debug_pub_->publish(msg);
-    } catch (...) {
+    double heading_deg = 0.0;
+    if (!utils::parse_finite_double(parts[1], heading_deg)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding THS with invalid heading");
+        return;
     }
+    const double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+    if (!std::isfinite(yaw_rad)) {
+        return;
+    }
+
+    tf2::Quaternion q;
+    q.setRPY(0, 0, yaw_rad);
+
+    geometry_msgs::msg::PoseWithCovarianceStamped msg;
+    msg.header.stamp = this->now();
+    msg.header.frame_id = params_.heading_frame_id;
+    msg.pose.pose.orientation = tf2::toMsg(q);
+    if (!finite_quaternion(msg.pose.pose.orientation)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding THS with invalid quaternion");
+        return;
+    }
+
+    const double standard_deviation = utils::deg2rad(0.5);
+    msg.pose.covariance[35] = standard_deviation * standard_deviation;
+
+    latest_yaw_rad_ = yaw_rad;
+    latest_heading_stamp_ = msg.header.stamp;
+    have_heading_ = true;
+
+    if (!stop_publish_) {
+        heading_pub_->publish(msg);
+    }
+    heading_debug_pub_->publish(msg);
 }
 
 void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
@@ -547,6 +698,11 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
     double heading_deg = utils::read_f32_le(body + 12);
     double pitch_deg = utils::read_f32_le(body + 16);
 
+    if (!std::isfinite(heading_deg) || !std::isfinite(pitch_deg)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding UNIHEADINGB with non-finite angles");
+        return;
+    }
+
     double yaw_rad = utils::deg2rad(90.0 - heading_deg);
     double pitch_rad = utils::deg2rad(-1.0 * pitch_deg);
 
@@ -557,6 +713,10 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
     msg.header.stamp = this->now();
     msg.header.frame_id = params_.heading_frame_id;
     msg.pose.pose.orientation = tf2::toMsg(q);
+    if (!finite_quaternion(msg.pose.pose.orientation)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding UNIHEADINGB with invalid quaternion");
+        return;
+    }
 
     bool is_valid = (sol_stat == kSolComputed) &&
         (pos_type == kNarrowInt || pos_type == kInsRtkFixed);
@@ -578,8 +738,9 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
         latest_heading_stamp_ = msg.header.stamp;
         have_heading_ = true;
     }
-    heading_debug_pub_->publish(msg);
 }
+
+#endif
 
 // --------------------------------------------------------------------------
 // RTK (NTRIP)
@@ -587,19 +748,42 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
 
 void UM982Driver::init_rtk_connection()
 {
-    rtk_socket_ = std::make_unique<boost::asio::ip::tcp::socket>(io_context_);
-    rtk_resolver_ = std::make_unique<boost::asio::ip::tcp::resolver>(io_context_);
+    // The five-second GGA timer may fire while DNS/TCP connection is still
+    // pending.  Do not replace the socket/resolver beneath that operation.
+    if (rtk_connection_in_progress_.exchange(true)) {
+        return;
+    }
 
-    // 非同期接続
-    auto endpoints = rtk_resolver_->resolve(params_.ntrip_server, std::to_string(params_.ntrip_port));
-    boost::asio::async_connect(*rtk_socket_, endpoints,
-        [this](const boost::system::error_code& error, const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
-            if (!error) {
-                connect_rtk_client();
-            } else {
-                RCLCPP_ERROR(this->get_logger(), "RTK Connect Failed: %s", error.message().c_str());
-            }
-        });
+    rtk_response_buffer_.clear();
+    rtk_response_header_received_ = false;
+    is_rtk_connected_ = false;
+    try {
+        rtk_socket_ = std::make_unique<boost::asio::ip::tcp::socket>(io_context_);
+        rtk_resolver_ = std::make_unique<boost::asio::ip::tcp::resolver>(io_context_);
+
+        // DNS resolution can throw (for example while mDNS is unavailable).
+        auto endpoints = rtk_resolver_->resolve(
+            params_.ntrip_server, std::to_string(params_.ntrip_port));
+        boost::asio::async_connect(*rtk_socket_, endpoints,
+            [this](const boost::system::error_code& error, const boost::asio::ip::tcp::endpoint& /*endpoint*/) {
+                if (error) {
+                    RCLCPP_ERROR(this->get_logger(), "RTK Connect Failed: %s", error.message().c_str());
+                    rtk_connection_in_progress_ = false;
+                    return;
+                }
+
+                try {
+                    connect_rtk_client();
+                } catch (const std::exception & e) {
+                    is_rtk_connected_ = false;
+                    rtk_connection_in_progress_ = false;
+                    RCLCPP_ERROR(this->get_logger(), "RTK request setup failed: %s", e.what());
+                }
+            });
+    } catch (const std::exception & e) {
+        rtk_connection_in_progress_ = false;
+        RCLCPP_ERROR(this->get_logger(), "RTK connection setup failed: %s", e.what());
+    }
 }
 
 void UM982Driver::connect_rtk_client()
@@ -613,13 +797,24 @@ void UM982Driver::connect_rtk_client()
         std::string auth_str = params_.username + ":" + params_.password;
         request << "Authorization: Basic " << utils::base64_encode(auth_str) << "\r\n";
     }
-    request << "Connection: close\r\n";
+    // NTRIP correction streams are long-lived.  Asking the caster to close the
+    // connection causes compliant casters to terminate it immediately after
+    // their response header.
+    request << "Connection: keep-alive\r\n";
     request << "\r\n";
 
     std::string req_str = request.str();
-    boost::asio::write(*rtk_socket_, boost::asio::buffer(req_str));
+    if (!rtk_socket_ || !rtk_socket_->is_open()) {
+        throw std::runtime_error("RTK socket is not open after connect");
+    }
+    boost::system::error_code write_error;
+    boost::asio::write(*rtk_socket_, boost::asio::buffer(req_str), write_error);
+    if (write_error) {
+        throw boost::system::system_error(write_error);
+    }
 
     is_rtk_connected_ = true;
+    rtk_connection_in_progress_ = false;
     RCLCPP_INFO(this->get_logger(), "Connected to RTK Server. Waiting for data...");
 
     start_rtk_read();
@@ -629,21 +824,84 @@ void UM982Driver::start_rtk_read()
 {
     // RTKデータはバイナリかもしれないので、read_some で受信する
     auto handler = std::bind(&UM982Driver::on_rtk_read, this, std::placeholders::_1, std::placeholders::_2);
-    rtk_socket_->async_read_some(rtk_read_buf_.prepare(1024), handler); 
+    rtk_socket_->async_read_some(boost::asio::buffer(rtk_read_chunk_), handler);
 }
 
 void UM982Driver::on_rtk_read(const boost::system::error_code& error, std::size_t bytes_transferred)
 {
     if (!error) {
-        rtk_read_buf_.commit(bytes_transferred);
-        
-        // バッファからデータを取り出してGNSSへ転送
-        std::vector<uint8_t> data(bytes_transferred);
-        std::istream is(&rtk_read_buf_);
-        is.read(reinterpret_cast<char*>(data.data()), bytes_transferred);
-        
-        // GNSSへ書き込み
-        write_to_gnss(data);
+        const uint8_t * data_begin = rtk_read_chunk_.data();
+        std::size_t data_size = bytes_transferred;
+        std::vector<uint8_t> response_payload;
+
+        // The first bytes from an NTRIP caster are an HTTP/NTRIP response
+        // header.  Do not forward that ASCII header to UM982 as RTCM.
+        if (!rtk_response_header_received_) {
+            rtk_response_buffer_.insert(
+                rtk_response_buffer_.end(), data_begin, data_begin + data_size);
+
+            static constexpr char kLineEnd[] = "\r\n";
+            static constexpr char kHeaderEnd[] = "\r\n\r\n";
+            const bool is_icy_response =
+                rtk_response_buffer_.size() >= 4 &&
+                std::equal(rtk_response_buffer_.begin(), rtk_response_buffer_.begin() + 4, "ICY ");
+            const auto header_end = is_icy_response
+                ? std::search(
+                    rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
+                    kLineEnd, kLineEnd + 2)
+                : std::search(
+                    rtk_response_buffer_.begin(), rtk_response_buffer_.end(),
+                    kHeaderEnd, kHeaderEnd + 4);
+            if (header_end == rtk_response_buffer_.end()) {
+                if (rtk_response_buffer_.size() > 16 * 1024) {
+                    RCLCPP_ERROR(this->get_logger(), "RTK response header exceeds 16 KiB");
+                    is_rtk_connected_ = false;
+                    boost::system::error_code close_error;
+                    rtk_socket_->close(close_error);
+                    return;
+                }
+                start_rtk_read();
+                return;
+            }
+
+            // NTRIP v1 casters, including the project's ntripcaster, send
+            // only "ICY 200 OK\\r\\n" before the binary stream.  HTTP/NTRIP
+            // v2 responses have a complete \r\n\r\n-terminated header block.
+            const auto header_size = static_cast<std::size_t>(
+                std::distance(rtk_response_buffer_.begin(), header_end)) +
+                (is_icy_response ? 2 : 4);
+            const std::string header(
+                rtk_response_buffer_.begin(), rtk_response_buffer_.begin() + header_size);
+            const bool accepted =
+                header.rfind("ICY 200", 0) == 0 ||
+                header.rfind("HTTP/1.0 200", 0) == 0 ||
+                header.rfind("HTTP/1.1 200", 0) == 0;
+            if (!accepted) {
+                RCLCPP_ERROR(this->get_logger(), "RTK caster rejected request: %s",
+                    header.substr(0, header.find("\r\n")).c_str());
+                is_rtk_connected_ = false;
+                boost::system::error_code close_error;
+                rtk_socket_->close(close_error);
+                return;
+            }
+
+            rtk_response_header_received_ = true;
+            response_payload.assign(
+                rtk_response_buffer_.begin() + header_size, rtk_response_buffer_.end());
+            rtk_response_buffer_.clear();
+            data_begin = response_payload.data();
+            data_size = response_payload.size();
+        }
+
+        if (data_size > 0) {
+            try {
+                write_to_gnss(std::vector<uint8_t>(data_begin, data_begin + data_size));
+            } catch (const std::exception & e) {
+                RCLCPP_ERROR(this->get_logger(), "Failed to forward RTK data to UM982: %s", e.what());
+                is_rtk_connected_ = false;
+                return;
+            }
+        }
 
         // 次の読み込み
         start_rtk_read();

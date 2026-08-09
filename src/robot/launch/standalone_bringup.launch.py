@@ -63,6 +63,7 @@ def generate_launch_description():
             "ground_video_port": LaunchConfiguration("ground_video_port"),
             "heartbeat_monitor_zed2i": LaunchConfiguration("heartbeat_monitor_zed2i"),
             "heartbeat_monitor_lidar": LaunchConfiguration("heartbeat_monitor_lidar"),
+            "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
             "lidar_start_delay": LaunchConfiguration("lidar_start_delay"),
             "camera_start_delay": LaunchConfiguration("camera_start_delay"),
         },
@@ -92,7 +93,12 @@ def generate_launch_description():
             "enable_bms": LaunchConfiguration("enable_bms"),
             "enable_buoy_costmap": LaunchConfiguration("enable_buoy_costmap"),
             "enable_nav2": LaunchConfiguration("enable_nav2"),
+            "enable_control_manager": LaunchConfiguration("enable_control_manager"),
+            "enable_mission_manager": LaunchConfiguration("enable_mission_manager"),
+            "active_nav2_profile": LaunchConfiguration("active_nav2_profile"),
             "enable_diagnostics": LaunchConfiguration("enable_diagnostics"),
+            "enable_zenoh_bridge": LaunchConfiguration("enable_zenoh_bridge"),
+            "enable_critical_link": LaunchConfiguration("enable_critical_link"),
             "thruster_config_file": LaunchConfiguration("thruster_config_file"),
             "thruster_robot_description_file": LaunchConfiguration(
                 "thruster_robot_description_file"
@@ -129,6 +135,10 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_port", default_value="5600"),
             DeclareLaunchArgument("heartbeat_monitor_zed2i", default_value="true"),
             DeclareLaunchArgument("heartbeat_monitor_lidar", default_value="true"),
+            # The standalone regression launch contains both Jetson and miniPC
+            # roles, so it must not start two bridge processes on one host.
+            DeclareLaunchArgument("enable_zenoh_bridge", default_value="false"),
+            DeclareLaunchArgument("enable_critical_link", default_value="false"),
             # Reproduce the staged sensor startup the pre-split
             # manual_control.launch.py used on the single Jetson.
             DeclareLaunchArgument("lidar_start_delay", default_value="18.0"),
@@ -178,6 +188,11 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_bms", default_value="true"),
             DeclareLaunchArgument("enable_buoy_costmap", default_value="true"),
             DeclareLaunchArgument("enable_nav2", default_value="false"),
+            DeclareLaunchArgument("enable_control_manager", default_value="true"),
+            DeclareLaunchArgument("enable_mission_manager", default_value="true"),
+            DeclareLaunchArgument(
+                "active_nav2_profile", default_value="task1", choices=["task1", "task2", "task3"]
+            ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(

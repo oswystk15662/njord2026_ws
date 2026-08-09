@@ -4,7 +4,7 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, TimerAction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, LogInfo, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
@@ -29,7 +29,10 @@ def _include(package, launch_file, arguments=None, condition=None):
 
 
 def _role_is(name):
-    return IfCondition(PythonExpression(["'", LaunchConfiguration('role'), "' == '", name, "'"]))
+    return IfCondition(PythonExpression([
+        "'", LaunchConfiguration('start_role_bringup'), "' == 'true' and '",
+        LaunchConfiguration('role'), "' == '", name, "'",
+    ]))
 
 
 def generate_launch_description():
@@ -38,6 +41,10 @@ def generate_launch_description():
         'serial_port': LaunchConfiguration('serial_port'),
         'baud': LaunchConfiguration('baud'),
         'um982_port': LaunchConfiguration('um982_port'),
+        'enable_nav2': 'false',
+        'enable_mission_manager': 'false',
+        'enable_control_manager': 'false',
+        'active_nav2_profile': 'task3',
     }
     minipc_role = _include(
         'robot', 'minipc_bringup.launch.py', bringup_args, condition=_role_is('minipc')
@@ -62,6 +69,7 @@ def generate_launch_description():
             'frame_id': 'odom',
             'publish_rate_hz': '2.0',
         },
+        condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )
     cardinal_walls = Node(
         package='buoy_obstacle_publisher',
@@ -73,9 +81,28 @@ def generate_launch_description():
             'output_topic': '/virtual_obstacles',
             'map_frame': 'odom',
         }],
+        condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )
 
     return LaunchDescription([
+        LogInfo(msg=(
+            'DEPRECATED: task3.launch.py owns a legacy comparison graph. '
+            'Use minipc_bringup.launch.py followed by /mission/run_task for operation.'
+        )),
+        DeclareLaunchArgument(
+            'start_role_bringup', default_value='false',
+            description=(
+                'Compatibility only: include the selected role bringup. Keep false '
+                'when jetson_bringup/minipc_bringup is already persistent.'
+            ),
+        ),
+        DeclareLaunchArgument(
+            'start_legacy_task_nodes', default_value='false',
+            description=(
+                'Compatibility only: start the legacy Nav2 and waypoint graph. '
+                'Use /mission/run_task for normal operation.'
+            ),
+        ),
         DeclareLaunchArgument(
             'role',
             default_value='minipc',
@@ -103,6 +130,12 @@ def generate_launch_description():
         minipc_role,
         standalone_role,
         cardinal_walls,
-        TimerAction(period=LaunchConfiguration('nav2_start_delay'), actions=[nav2]),
-        TimerAction(period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints]),
+        TimerAction(
+            period=LaunchConfiguration('nav2_start_delay'), actions=[nav2],
+            condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
+        ),
+        TimerAction(
+            period=LaunchConfiguration('waypoint_start_delay'), actions=[waypoints],
+            condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
+        ),
     ])

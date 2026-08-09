@@ -52,8 +52,8 @@ JoyConverter::JoyConverter(const rclcpp::NodeOptions & options)
   config_.green_button = declare_parameter<int64_t>("button.green", 1);
   config_.yellow_button = declare_parameter<int64_t>("button.yellow", 2);
   config_.red_button = declare_parameter<int64_t>("button.red", 3);
-  config_.manual_mode_button = declare_parameter<int64_t>("button.manual_mode", 3);
-  config_.auto_mode_button = declare_parameter<int64_t>("button.auto_mode", 2);
+  config_.manual_mode_button = declare_parameter<int64_t>("button.manual_mode", 4);
+  config_.auto_mode_button = declare_parameter<int64_t>("button.auto_mode", 5);
   config_.linear_x_scale = declare_parameter<double>("scale.linear_x", 0.2);
   config_.linear_y_scale = declare_parameter<double>("scale.linear_y", 0.2);
   config_.angular_z_scale = declare_parameter<double>("scale.angular_z", 0.2);
@@ -92,9 +92,7 @@ void JoyConverter::joy_cb(const sensor_msgs::msg::Joy::SharedPtr msg)
   previous_manual_button_ = output.manual_mode;
   previous_auto_button_ = output.auto_mode;
 
-  if (manual_mode_) {
-    pub_cmd_vel_->publish(output.cmd_vel);
-  }
+  pub_cmd_vel_->publish(output.cmd_vel);
   pub_soft_emg_->publish(std_msgs::msg::Bool().set__data(output.emergency));
   pub_operating_mode_->publish(
     std_msgs::msg::String().set__data(manual_mode_ ? "manual" : "auto"));

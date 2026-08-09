@@ -274,6 +274,22 @@
       ],
       "foxglovePanelTitle": "CTRL Mode"
     },
+    "Indicator!control-state": {
+      "path": "/control/state.state",
+      "style": "bulb",
+      "fontSize": 28,
+      "fallbackColor": "#a0a0a0",
+      "fallbackLabel": "No control state",
+      "rules": [
+        {"operator": "=", "rawValue": "1", "color": "#f7d13d", "label": "MANUAL"},
+        {"operator": "=", "rawValue": "2", "color": "#f7d13d", "label": "AUTO REQUESTED"},
+        {"operator": "=", "rawValue": "3", "color": "#f7a13d", "label": "AUTO ARMED"},
+        {"operator": "=", "rawValue": "4", "color": "#51e358", "label": "AUTO RUNNING"},
+        {"operator": "=", "rawValue": "5", "color": "#f7a13d", "label": "AUTO INHIBITED"},
+        {"operator": "=", "rawValue": "6", "color": "#f01a1a", "label": "EMERGENCY STOP"}
+      ],
+      "foxglovePanelTitle": "CTRL State"
+    },
     "Tab!uld7tu": {
       "activeTabIdx": 0,
       "tabs": [
@@ -293,7 +309,11 @@
               },
               "second": {
                 "first": "Image!47e2xka",
-                "second": "Indicator!35h1ahn",
+                "second": {
+                  "first": "Indicator!35h1ahn",
+                  "second": "Indicator!control-state",
+                  "direction": "column"
+                },
                 "direction": "row"
               },
               "direction": "column"

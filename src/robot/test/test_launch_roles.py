@@ -284,7 +284,7 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     with open(config_path, "r") as stream:
         params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
 
-    assert params["odom1"] == "/odom"
+    assert params["odom1"] == "/odom/validated"
     assert params["publish_tf"] is True
     assert params["world_frame"] == "map"
 
@@ -341,11 +341,9 @@ def test_bringups_start_hierarchical_health_heartbeats():
 
     assert '"role": "jetson"' in jetson_source
     assert '"role": "minipc"' in minipc_source
-    assert '"/heartbeat/driver/camera/front"' in heartbeat_source
-    assert '"/heartbeat/driver/lidar"' in heartbeat_source
     assert '"heartbeat_monitor_zed2i"' in heartbeat_source
     assert '"heartbeat_monitor_lidar"' in heartbeat_source
-    assert "minipc_heartbeat.yaml" in heartbeat_source
+    assert '"heartbeat",' in heartbeat_source
     assert "heartbeat_monitor_" not in minipc_source
     assert "enable_heartbeats" not in minipc_source
     heartbeat_topics = {
@@ -396,7 +394,7 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     assert '"/livox/lidar"' not in source
 
 
-def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
+def test_zenoh_excludes_critical_link_topics_from_dds_bridges():
     zenoh_dir = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
     )
@@ -410,6 +408,6 @@ def test_zenoh_ground_topics_are_owned_by_groundpc_and_minipc_bridges():
             sources[filename] = stream.read()
 
     for topic in ('"/joy"', '"/heartbeat/ground_station"'):
-        assert topic in sources["bridge_groundpc.json5"]
-        assert topic in sources["bridge_minipc.json5"]
+        assert topic not in sources["bridge_groundpc.json5"]
+        assert topic not in sources["bridge_minipc.json5"]
         assert topic not in sources["bridge_jetson.json5"]

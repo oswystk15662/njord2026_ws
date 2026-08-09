@@ -27,7 +27,10 @@ Jetson Orin Nano Super 1台で全ノードを動かしていた構成は、実�
 
 ESP32 Micon、UM982 GNSS、後方USBカメラはminiPCに接続する。DroggerとWIT IMUはlaunch定義を残しているが、現在は起動リストから外してあり引数も既定falseである。ゲームパッドはGround PCに接続する。
 
-Nav2 は `minipc_bringup` では既定 `false`。`task1/2/3.launch.py` が params ファイルを選んで起動する。
+Nav2 は `minipc_bringup` が常駐所有する。`active_nav2_profile:=task1|task2|task3`
+で起動時にパラメータファイルを選択する。Mission Manager は実行中にNav2を
+再起動・再設定せず、現在のprofileと異なるtaskは明確に拒否する。Task 2/3は
+collision-monitorの実機sourceとdynamic gate TFを検証するまでregistry上でdisabledである。
 
 ### Ground PC（`ground_pc.launch.py`）
 
@@ -96,7 +99,7 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 1. `NJORD_PROFILE` を `jetson` / `minipc` に決定（CUDA と ZED SDK の両方があれば `jetson`）。既に環境変数で設定済みなら**尊重して上書きしない**
 2. `NJORD_ENABLE_GPU_SENSORS` を export（jetson なら `1`、minipc なら **unset**）
 3. `NJORD_ROLE`、`RMW_IMPLEMENTATION`、`ROS_DOMAIN_ID`、`ROS_LOCALHOST_ONLY` を export
-4. minipc プロファイル時、`src/driver/lidar/Livox-SDK2` と `livox_ros_driver2` に `COLCON_IGNORE` を置く（jetson なら削除する）
+4. minipc プロファイル時、`src/driver/lidar/Livox-SDK2`、`livox_ros_driver2`、および `src/detection/pcl_segmentation` に `COLCON_IGNORE` を置く（jetson なら削除する）
 
 ### 依存の切り替え方
 
@@ -133,10 +136,37 @@ ros2 launch robot jetson_bringup.launch.py
 miniPC:
 ```bash
 source /opt/ros/humble/setup.bash && source scripts/njord_env.sh && source install/setup.bash
-ros2 launch robot task1.launch.py          # role:=minipc が既定
+ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task1
 ```
 
-`task2.launch.py` / `task3.launch.py` も同様。
+Ground PC:
+```bash
+ros2 launch robot ground_pc.launch.py enable_foxglove_bridge:=true
+```
+
+タスクは常駐する Mission Manager の typed API から開始する。起動時は MANUAL / IDLE
+であり、自動目標は送信されない。
+
+```bash
+njord-task list
+njord-task check task1
+njord-task start task1 --auto
+```
+
+Task 2/3は対応するprofile、collision monitor、dynamic gate TFを検証してregistryを
+有効化してから同じMission APIを使う。
+
+`task1.launch.py` / `task2.launch.py` / `task3.launch.py` は非推奨の
+compatibility wrapper で、既定では role bringup、Nav2、waypoint publisher を起動しない。
+歴史的な一括グラフを比較するときだけ、たとえば次のように明示する。
+
+```bash
+ros2 launch robot task1.launch.py \
+  start_role_bringup:=true start_legacy_task_nodes:=true
+```
+
+`task1-1.launch.py` などの番号付き実験launchも `enable_legacy_graph:=true` を
+指定した場合だけ旧ハードウェア/Nav2グラフを起動する。常駐bringupと併用しないこと。
 
 ### systemd による基盤 bringup の常駐化
 
@@ -159,7 +189,8 @@ scripts/install_bringup_service.sh --role minipc --ros-distro humble --domain-id
 
 miniPC service は `enable_nav2:=false` 固定である。Nav2、waypoint publisher、
 autonomy supervisor は task manager が start/stop を管理するタスク層であり、
-常駐 service に含めない。
+常駐 service に含めない。Mission Manager と control_manager は常駐し、Nav2プロファイル
+の互換性を検査してから `/mission/run_task` を受け付ける。
 
 確認・停止・無効化:
 
@@ -180,10 +211,12 @@ sudo systemctl disable --now njord-minipc-bringup.service
 Jetson 1台で分割前と同じ構成を動かす:
 
 ```bash
-ros2 launch robot task1.launch.py role:=standalone
+ros2 launch robot standalone_bringup.launch.py
 ```
 
-`standalone_bringup.launch.py` が `jetson_bringup` と `minipc_bringup` の両方を include する。分割前の `manual_control.launch.py` にあった段階起動（LiDAR 18 秒、カメラ 20 秒）も再現する。
+`standalone_bringup.launch.py` が `jetson_bringup` と `minipc_bringup` の両方を include する。分割前の段階起動を回帰確認する場合は、
+番号付き実験launchに `enable_legacy_graph:=true` を明示して、他のbringupを
+同時に起動しないこと。
 
 `simple_manual/launch/manual_control.launch.py` は従来経路としてそのまま残してある。
 
@@ -204,6 +237,13 @@ ros2 launch robot jetson_bringup.launch.py glim_backend:=cpu
 ### 有線 Ethernet
 
 Jetson と miniPC は有線で直結（またはスイッチ経由）する。Livox MID360S は Jetson 側の別 NIC に繋ぐ（host `192.168.1.5` / LiDAR `192.168.1.114`、`src/robot/config/livox/MID360S_jetson_config.json`）。miniPC から MID360S を起動する場合は `MID360S_minipc_config.json`（host `192.168.1.2`）を使用する。
+
+Wi-Fi を固定IPにしつつ Internet 接続を維持するには、DHCP 接続中の gateway/DNS を引き継ぐ。
+NetworkManager 環境では各機で次を実行する（接続中のSSID/認証情報は維持する）。
+
+```bash
+scripts/configure_static_wifi.sh <wifi-interface> <ipv4/prefix>
+```
 
 ### FastRTPS（既定）
 
