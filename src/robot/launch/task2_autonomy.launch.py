@@ -8,7 +8,8 @@ This overlay consumes the topics already provided by that launch and adds:
 
   /livox/lidar + ego odometry -> Task 2 ship perception -> /other_ship/twist
   ego odometry + opponent + task waypoints -> MPPI -> /planned_path_pruned
-  /planned_path_pruned -> Nav2 FollowPath -> /cmd_vel_nav
+  /planned_path_pruned -> Nav2 FollowPath -> /cmd_vel_smoothed
+  /task2/safety_points -> Collision Monitor -> /cmd_vel_nav
 
 The command_arbiter from manual_control receives /cmd_vel_nav through its
 existing default, and publishes the selected
@@ -56,6 +57,7 @@ def generate_launch_description():
         condition=IfCondition(enable_lidar),
         arguments={
             "enable_cloud_filter": "true",
+            "enable_safety_cloud": "true",
             "enable_opponent_selector": enable_ship_tracking,
             "publish_self_marker": "false",
             "motion_filter_mode": opponent_motion_mode,
@@ -80,7 +82,12 @@ def generate_launch_description():
     mppi = _include(
         "asv_trajectory_planner",
         "planner_real.launch.py",
-        arguments={"own_odom_topic": own_odom_topic},
+        arguments={
+            "own_odom_topic": own_odom_topic,
+            # In the two-machine deployment FollowPath belongs to miniPC,
+            # alongside ControllerServer and the final safety monitor.
+            "enable_follow_path_client": enable_nav2,
+        },
     )
     nav2 = _include(
         "robot",
@@ -105,6 +112,7 @@ def generate_launch_description():
             "action_name": "/follow_path",
             "path_timeout_sec": 2.0,
         }],
+        condition=IfCondition(enable_nav2),
     )
 
     return LaunchDescription([

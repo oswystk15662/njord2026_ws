@@ -21,6 +21,7 @@ simulation.
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -29,6 +30,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     own_odom_topic = LaunchConfiguration("own_odom_topic")
     ignore_other_ship = LaunchConfiguration("ignore_other_ship")
+    enable_follow_path_client = LaunchConfiguration("enable_follow_path_client")
     other_ship_twist_topic = PythonExpression([
         "'/other_ship/twist_ignored' if '", ignore_other_ship,
         "' == 'true' else '/other_ship/twist'",
@@ -138,6 +140,7 @@ def generate_launch_description():
                 "enable_replanning": True,
             }
         ],
+        condition=IfCondition(enable_follow_path_client),
     )
     crm_costmap = Node(
         package="asv_trajectory_planner", executable="crm_costmap_node",
@@ -149,6 +152,13 @@ def generate_launch_description():
         [
             # GLIM publishes /odom on the real vessel (same topic as sim).
             DeclareLaunchArgument("own_odom_topic", default_value="/odom"),
+            DeclareLaunchArgument(
+                "enable_follow_path_client", default_value="true",
+                description=(
+                    "Run the FollowPath client on this host. Set false when "
+                    "MPPI runs on Jetson and Nav2 Controller runs on miniPC."
+                ),
+            ),
             DeclareLaunchArgument(
                 "ignore_other_ship", default_value="false",
                 description="Ignore /other_ship/twist and plan without an opponent",
