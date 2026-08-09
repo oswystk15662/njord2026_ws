@@ -20,7 +20,6 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 from buoy_obstacle_publisher.cardinal_wall_geometry import (
     CARDINAL_DIRECTIONS,
-    is_behind_retirement_frontier,
     wall_points,
 )
 
@@ -75,6 +74,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retirement_frontier_topic', '')
         self.declare_parameter('retirement_margin_m', 0.5)
         self.declare_parameter('retirement_confirmations_required', 3)
+        self.declare_parameter('return_confirmations_required', 3)
         self.declare_parameter('retire_passed_cardinal_walls_from_base_pose', False)
         self.declare_parameter('retirement_heading_topic', '')
         self.declare_parameter('wall_enable_topic', '')
@@ -104,6 +104,8 @@ class CardinalWallPublisher(Node):
         self.retirement_margin = max(0.0, float(self.get_parameter('retirement_margin_m').value))
         self.retirement_confirmations_required = max(
             1, int(self.get_parameter('retirement_confirmations_required').value))
+        self.return_confirmations_required = max(
+            1, int(self.get_parameter('return_confirmations_required').value))
         self.retire_passed_cardinal_walls_from_base_pose = self.get_parameter(
             'retire_passed_cardinal_walls_from_base_pose').value
         self.tracks = []
@@ -217,7 +219,13 @@ class CardinalWallPublisher(Node):
             self.retirement_course_heading_rad = msg.data
 
     def _on_retirement_frontier(self, msg):
-        """Disable walls behind a reached waypoint while retaining their tracks."""
+        """Retain legacy frontier telemetry without permanently retiring tracks.
+
+        Current-position selection is reversible: a vessel that backs up must
+        regain the wall behind it.  A reached-waypoint frontier alone cannot
+        express that reverse movement, so it must not permanently deactivate
+        a track.
+        """
         if not self.walls_enabled:
             return
         point = msg
@@ -227,17 +235,9 @@ class CardinalWallPublisher(Node):
             except TransformException as error:
                 self.get_logger().debug(f'Cannot transform retirement frontier: {error}')
                 return
-        retired = 0
-        for track in self.tracks:
-            behind_frontier = is_behind_retirement_frontier(
-                track['x'], track['y'], point.point.x, point.point.y,
-                self.retirement_course_heading_rad, self.retirement_margin)
-            if behind_frontier and track.get('wall_active', True):
-                track['wall_active'] = False
-                retired += 1
-        if retired:
-            self.get_logger().info(
-                f'Disabled {retired} passed-buoy virtual wall(s); detection tracks are retained')
+        # Keep the transform validation above for diagnostics and compatibility
+        # with existing publishers.  _retire_passed_cardinal_walls_from_base_pose
+        # owns the reversible active/inactive state.
 
     def _on_true_north_heading(self, msg):
         """Estimate map-frame true north from UM982 dual-antenna heading."""
@@ -292,7 +292,7 @@ class CardinalWallPublisher(Node):
             nearest = {
                 'x': x, 'y': y, 'candidate': class_id, 'count': 1,
                 'class_id': None, 'wall_active': True, 'true_north_yaw_rad': None,
-                'passed_samples': 0,
+                'passed_samples': 0, 'return_samples': 0,
             }
             self.tracks.append(nearest)
         elif nearest['class_id'] is None:
@@ -382,11 +382,12 @@ class CardinalWallPublisher(Node):
         return self.retirement_course_heading_rad
 
     def _retire_passed_cardinal_walls_from_base_pose(self):
-        """Retire each buoy wall once the hull crosses its parallel plane.
+        """Toggle each buoy wall from the hull's current side of its plane.
 
         The plane is perpendicular to the GPS3->4 course direction.  This
-        preserves walls for upcoming marks while removing only a passed buoy,
-        even when the boat takes a lateral avoidance path.
+        preserves walls for upcoming marks while removing a passed buoy.  If
+        the hull reverses across the plane, the same track becomes active
+        again after a confirmation window.
         """
         if not self.walls_enabled or not self.retire_passed_cardinal_walls_from_base_pose:
             return
@@ -400,23 +401,35 @@ class CardinalWallPublisher(Node):
         forward_x = math.cos(self.retirement_course_heading_rad)
         forward_y = math.sin(self.retirement_course_heading_rad)
         retired = 0
+        reactivated = 0
         for track in self.tracks:
-            if not track.get('wall_active', True):
-                continue
             passed_distance = ((boat_x - track['x']) * forward_x +
                                (boat_y - track['y']) * forward_y)
             if passed_distance > self.retirement_margin:
                 track['passed_samples'] = track.get('passed_samples', 0) + 1
+                track['return_samples'] = 0
                 if track['passed_samples'] >= self.retirement_confirmations_required:
-                    track['wall_active'] = False
-                    retired += 1
+                    if track.get('wall_active', True):
+                        track['wall_active'] = False
+                        retired += 1
             else:
                 # A one-cycle TF/localization jump must not retire a wall.
                 track['passed_samples'] = 0
+                if not track.get('wall_active', True):
+                    track['return_samples'] = track.get('return_samples', 0) + 1
+                    if track['return_samples'] >= self.return_confirmations_required:
+                        track['wall_active'] = True
+                        reactivated += 1
+                else:
+                    track['return_samples'] = 0
         if retired:
             self.get_logger().info(
                 f'Disabled {retired} passed-buoy wall(s) after '
                 f'{self.retirement_confirmations_required} confirmations')
+        if reactivated:
+            self.get_logger().info(
+                f'Re-enabled {reactivated} behind-hull buoy wall(s) after '
+                f'{self.return_confirmations_required} confirmations')
 
     def _publish_detection_markers(self, stamp, selected_indexes):
         """Visualize confirmed tracks and the exact Nav2 virtual-wall samples.
