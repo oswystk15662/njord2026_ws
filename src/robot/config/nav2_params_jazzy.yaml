@@ -38,6 +38,11 @@ controller_server:
       min_lookahead_dist: 0.5
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
+      # A surface vessel should curve toward the path while it is moving, not
+      # stop and turn back at a waypoint solely to satisfy its final yaw.
+      # PassThroughGoalChecker keeps yaw as the preferred completion condition
+      # and advances after the vessel has passed through the waypoint.
+      use_rotate_to_heading: false
       rotate_to_heading_min_angle: 0.785
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
