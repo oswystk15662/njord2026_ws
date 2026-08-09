@@ -595,10 +595,13 @@ class Task1Orchestrator(Node):
         for idx, (bx, by) in enumerate(self.buoy_positions):
             mark = self.buoy_marks[idx] if idx < len(self.buoy_marks) else "N"
             if mark == "RED":
-                dx, dy = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
+                # Red is a port-hand mark: pass it on starboard.  The arrow
+                # represents the permitted passage side, not the wall side.
+                dx, dy = math.sin(self.course_heading_rad), -math.cos(self.course_heading_rad)
                 rgba = marker_color(1.0, 0.0, 0.0)
             elif mark == "GREEN":
-                dx, dy = math.sin(self.course_heading_rad), -math.cos(self.course_heading_rad)
+                # Green is a starboard-hand mark: pass it on port.
+                dx, dy = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
                 rgba = marker_color(0.0, 0.9, 0.1)
             else:
                 dx, dy = arrow_by_mark.get(mark, (0.0, 1.0))
