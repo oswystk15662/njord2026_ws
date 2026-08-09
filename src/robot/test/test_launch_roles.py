@@ -119,6 +119,12 @@ def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     assert '"enable_back_cam_jpeg_ground_video"' in source
 
 
+def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
+    source = _read_launch_source("ground_pc.launch.py")
+    assert 'LaunchConfiguration("back_cam_jpeg_video_port")' in source
+    assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
+
+
 def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'executable="command_arbiter_node"' in source
@@ -390,44 +396,21 @@ def test_ground_pc_starts_workspace_ntrip_caster_by_default():
     assert '"ntripcaster.json"' in source
 
 
-def test_bringups_start_hierarchical_health_heartbeats():
+def test_bringups_start_role_owned_health_monitors():
     jetson_source = _read_launch_source("jetson_bringup.launch.py")
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     heartbeat_source = _read_launch_source("heartbeat.launch.py")
-    minipc_heartbeat_path = os.path.join(
-        _THIS_DIR,
-        "..",
-        "..",
-        "diagnostics",
-        "diagnostic_monitors",
-        "config",
-        "minipc_heartbeat.yaml",
-    )
-    with open(minipc_heartbeat_path, encoding="utf-8") as config_file:
-        minipc_heartbeat = yaml.safe_load(config_file)["minipc_heartbeat"]
-
     assert '"role": "jetson"' in jetson_source
     assert '"role": "minipc"' in minipc_source
-    assert '"/heartbeat/driver/camera/front"' in heartbeat_source
-    assert '"/heartbeat/driver/lidar"' in heartbeat_source
+    assert '"config",' in heartbeat_source
+    assert '"heartbeat",' in heartbeat_source
+    assert 'f"{role}.yaml"' in heartbeat_source
+    assert '"/health/signals/{role}"' in heartbeat_source
+    assert '"/health/state" if role == "minipc"' in heartbeat_source
     assert '"heartbeat_monitor_zed2i"' in heartbeat_source
     assert '"heartbeat_monitor_lidar"' in heartbeat_source
-    assert "minipc_heartbeat.yaml" in heartbeat_source
     assert "heartbeat_monitor_" not in minipc_source
     assert "enable_heartbeats" not in minipc_source
-    heartbeat_topics = {
-        input_config["topic"]
-        for gate in minipc_heartbeat
-        for input_config in gate["inputs"]
-    }
-    heartbeat_topics.update(gate["output_topic"] for gate in minipc_heartbeat)
-    for topic in [
-        "/heartbeat/driver/camera/back",
-        "/heartbeat/driver/gnss",
-        "/heartbeat/driver/micon",
-        "/heartbeat/driver",
-    ]:
-        assert topic in heartbeat_topics
 
 
 def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():

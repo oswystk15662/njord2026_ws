@@ -288,9 +288,10 @@ class MissionManager(Node):
             )
         self._active_route = route
         self._navigation.set_frame_id(route.frame_id)
-        # A validated route/profile is a task-ready input, but task-specific
-        # runtime requirements must remain false until an executor is running.
-        self._publish_task_readiness(True, False, task.control_policy)
+        # Task 1's only required runtime input is the route just validated
+        # above.  Publish it before requesting AUTO so AUTO admission does not
+        # depend on a Nav2 goal that has not been sent yet.
+        self._publish_task_readiness(True, True, task.control_policy)
         self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                  stage="configure", message="task route validated")
         if request.dry_run:
@@ -304,9 +305,9 @@ class MissionManager(Node):
                 MissionState.WAITING_FOR_AUTO_PERMISSION,
                 execution_id=decision.execution_id,
                 stage="permission",
-                message="starting Nav2 with AUTO output inhibited",
+                message="waiting for AUTO permission before starting Nav2",
             )
-            self._begin_executor(decision.execution_id, task, waiting_for_auto=True)
+            self._pending_start = (decision.execution_id, task)
             self._auto_permission_deadline_ns = (
                 self.get_clock().now().nanoseconds
                 + int(float(self.get_parameter("auto_permission_timeout_sec").value) * 1e9)
@@ -331,16 +332,12 @@ class MissionManager(Node):
         root = self._waypoint_share_path() if task.route_package == "waypoint_publisher" else self._registry_path().parent
         return self._loader.load(root / task.route, task.route_key)
 
-    def _begin_executor(
-        self, execution_id: str, task: TaskDefinition, *, waiting_for_auto: bool = False
-    ) -> None:
+    def _begin_executor(self, execution_id: str, task: TaskDefinition) -> None:
         if not self._machine.is_current(execution_id) or self._active_route is None:
             return
         self._pending_start = None
-        if not waiting_for_auto:
-            self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
-                                     stage="starting", message="starting task executor")
-        self._publish_task_readiness(True, True, task.control_policy)
+        self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
+                                 stage="starting", message="starting task executor")
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
@@ -442,13 +439,10 @@ class MissionManager(Node):
                 if not self._auto_mode_request_sent:
                     self._request_auto_mode()
                 if self._auto_permitted:
-                    self._machine.transition(
-                        MissionState.RUNNING,
-                        execution_id=snapshot.execution_id,
-                        stage="navigate",
-                        message="AUTO permission granted",
-                    )
+                    pending = self._pending_start
                     self._auto_permission_deadline_ns = None
+                    if pending is not None:
+                        self._begin_executor(*pending)
                 elif (
                     self._auto_permission_deadline_ns is not None
                     and self.get_clock().now().nanoseconds >= self._auto_permission_deadline_ns

@@ -465,8 +465,8 @@ def generate_launch_description():
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
-                default_value="false",
-                description="Optional CPU JPEG compatibility stream on UDP 5602.",
+                default_value="true",
+                description="CPU JPEG compatibility stream on UDP 5602.",
             ),
             DeclareLaunchArgument(
                 "back_cam_jpeg_ground_video_host",
