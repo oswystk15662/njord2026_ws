@@ -1,0 +1,12 @@
+# The geographic home configured in home.yaml is the map origin.
+return_home_config:
+  frame_id: map
+  waypoints:
+    - id: home
+      x: 0.0
+      y: 0.0
+      yaw: 1.5707963267948966
+      type: home
+      name: Home
+  stages:
+    return_home: [home]

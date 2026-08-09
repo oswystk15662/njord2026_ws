@@ -27,9 +27,14 @@ INHIBITS = {
 def test_default_policy_is_complete_and_task_requirements_overlay_common():
     policy = load_policy(POLICY)
     requirements = policy.requirements_for("task2")
-    assert requirements["require_nav2_ready"] is True
-    assert requirements["require_collision_monitor"] is False
+    assert requirements["require_ground_station"] is True
+    assert requirements["require_collision_monitor"] is True
     assert policy.nav_command_timeout_sec == 0.5
+
+
+def test_return_home_does_not_require_ground_station_heartbeat():
+    requirements = load_policy(POLICY).requirements_for("return_home")
+    assert requirements["require_ground_station"] is False
 
 
 def test_duplicate_or_unknown_policy_content_is_rejected(tmp_path):
@@ -59,7 +64,7 @@ def test_auto_permission_lists_all_failed_interlocks():
         inhibit_codes=INHIBITS,
     )
     assert not decision.auto_permitted
-    assert [code for code, _ in decision.reasons] == [1, 2, 3, 10]
+    assert [code for code, _ in decision.reasons] == [1, 5, 10]
 
 
 def test_no_task_policy_does_not_evaluate_task_specific_requirements():
@@ -86,7 +91,7 @@ def test_auto_permission_requires_ok_enabled_health_signal():
             nav2_ready=True,
             task_ready=True,
             task_requirements_ready=True,
-            health_states={"driver_heartbeat": 4},
+            health_states={"ground_station_heartbeat": 1, "driver_heartbeat": 4},
         ),
         health_ok_state=1,
         health_disabled_state=5,
@@ -106,6 +111,7 @@ def test_auto_permission_does_not_wait_for_a_navigation_command():
             nav2_ready=True,
             task_ready=True,
             task_requirements_ready=True,
+            health_states={"ground_station_heartbeat": 1},
         ),
         health_ok_state=1,
         health_disabled_state=5,

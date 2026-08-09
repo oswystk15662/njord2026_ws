@@ -1,0 +1,5 @@
+# Canonical map datum. map is ENU: +x East, +y North, and yaw=0 faces East.
+home:
+  latitude: 63.44066402076241
+  longitude: 10.423546644308498
+  yaw: 1.5707963267948966

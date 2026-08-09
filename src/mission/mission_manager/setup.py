@@ -26,6 +26,7 @@ setup(
         "console_scripts": [
             "mission_manager_node = mission_manager.mission_manager_node:main",
             "task2_readiness_adapter_node = mission_manager.task2_readiness_adapter_node:main",
+            "ground_link_return_monitor_node = mission_manager.ground_link_return_node:main",
             "njord-task = mission_manager.njord_task:main",
         ],
     },

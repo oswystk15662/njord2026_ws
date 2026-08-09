@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .task_registry import RegistryError, load_yaml
+from .geodesy import HomeDatum, wgs84_to_enu
 
 
 @dataclass(frozen=True)
@@ -44,6 +45,9 @@ class Route:
 class WaypointConfigLoader:
     """Loads one named route config, without sending any Nav2 goal."""
 
+    def __init__(self, home_datum: HomeDatum | None = None) -> None:
+        self._home_datum = home_datum
+
     def load(self, path: Path, route_key: str) -> Route:
         root = load_yaml(path)
         raw = root.get(route_key)
@@ -70,8 +74,7 @@ class WaypointConfigLoader:
             raise RegistryError(f"route {route_key!r} constraints must be a mapping")
         return Route(frame_id, tuple(waypoints), stages, full_stages, constraints)
 
-    @staticmethod
-    def _waypoints(raw: object, route_key: str) -> list[Waypoint]:
+    def _waypoints(self, raw: object, route_key: str) -> list[Waypoint]:
         if not isinstance(raw, list) or not raw:
             raise RegistryError(f"route {route_key!r} requires non-empty waypoints")
         result = []
@@ -87,13 +90,44 @@ class WaypointConfigLoader:
                 raise RegistryError(f"route {route_key!r} waypoint IDs must be unique")
             seen.add(waypoint_id)
             values = {}
-            for name in ("x", "y", "yaw"):
+            for name in ("yaw",):
                 value = item.get(name)
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                     raise RegistryError(
                         f"route {route_key!r} waypoint {waypoint_id!r} has non-finite {name}"
                     )
                 values[name] = float(value)
+            has_map = "x" in item or "y" in item
+            has_geographic = "latitude" in item or "longitude" in item
+            if has_map == has_geographic:
+                raise RegistryError(
+                    f"route {route_key!r} waypoint {waypoint_id!r} requires exactly one of x/y or latitude/longitude"
+                )
+            if has_map:
+                for name in ("x", "y"):
+                    value = item.get(name)
+                    if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
+                        raise RegistryError(
+                            f"route {route_key!r} waypoint {waypoint_id!r} has non-finite {name}"
+                        )
+                    values[name] = float(value)
+            else:
+                if self._home_datum is None:
+                    raise RegistryError(
+                        f"route {route_key!r} waypoint {waypoint_id!r} uses latitude/longitude but no home datum is configured"
+                    )
+                latitude = item.get("latitude")
+                longitude = item.get("longitude")
+                if (
+                    isinstance(latitude, bool) or isinstance(longitude, bool)
+                    or not isinstance(latitude, (int, float)) or not isinstance(longitude, (int, float))
+                    or not isfinite(latitude) or not isfinite(longitude)
+                    or not -90.0 <= latitude <= 90.0 or not -180.0 <= longitude <= 180.0
+                ):
+                    raise RegistryError(
+                        f"route {route_key!r} waypoint {waypoint_id!r} has invalid latitude/longitude"
+                    )
+                values["x"], values["y"] = wgs84_to_enu(latitude, longitude, self._home_datum)
             name = item.get("name", waypoint_id)
             waypoint_type = item.get("type", "waypoint")
             if not isinstance(name, str) or not isinstance(waypoint_type, str):
