@@ -492,7 +492,8 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
                 default_value="true",
-                description="CPU JPEG compatibility stream on UDP 5602.",
+                description="CPU JPEG compatibility stream on UDP 5602, enabled as a "
+                "fallback alongside H.264/H.265.",
             ),
             DeclareLaunchArgument(
                 "back_cam_jpeg_ground_video_host",

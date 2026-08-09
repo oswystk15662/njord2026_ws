@@ -20,6 +20,7 @@ public:
     timeout_sec_ = declare_parameter<double>("command_timeout_sec", 0.5);
     mode_ = declare_parameter<std::string>("initial_mode", "manual");
     auto_topic_ = declare_parameter<std::string>("auto_topic", "/cmd_vel_nav");
+    require_autonomy_ready_ = declare_parameter<bool>("require_autonomy_ready", true);
     manual_sub_ = create_subscription<geometry_msgs::msg::Twist>(
       "/cmd_vel_manual", 10, [this](geometry_msgs::msg::Twist::SharedPtr message) {
         manual_command_ = *message;
@@ -68,7 +69,8 @@ private:
     if (!emergency_stop_) {
       if (mode_ == "manual" && fresh(manual_received_)) {
         command = manual_command_;
-      } else if (mode_ == "auto" && autonomy_ready_ && fresh(auto_received_)) {
+      } else if (mode_ == "auto" &&
+        (!require_autonomy_ready_ || autonomy_ready_) && fresh(auto_received_)) {
         command = auto_command_;
       }
     }
@@ -80,6 +82,7 @@ private:
   double timeout_sec_{0.5};
   std::string mode_{"manual"};
   std::string auto_topic_{"/cmd_vel_nav"};
+  bool require_autonomy_ready_{true};
   bool emergency_stop_{true};
   bool autonomy_ready_{false};
   geometry_msgs::msg::Twist manual_command_;

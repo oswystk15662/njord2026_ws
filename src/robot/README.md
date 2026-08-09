@@ -197,13 +197,15 @@ ros2 launch robot jetson_bringup.launch.py \
 `ground_video_port` に加え、`ground_video_width` / `ground_video_height` /
 `ground_video_fps` も `zed2i_driver` へ転送する。既定は JPEG 480x360・4 fps。
 
-miniPCのback_camはH.264・VA-API送信が既定で含まれる。送信先を指定して有効化する:
+miniPCのback_camはH.264・VA-API送信と、UDP 5602 の JPEG互換送信が既定で含まれる。
+送信先を指定して有効化する:
 
 ```shell
 ros2 launch robot minipc_bringup.launch.py back_cam_ground_video_host:=192.168.1.2
 ```
 
-`back_cam_ground_video_codec:=h265` でH.265を選択できる。空のhostでは送信ノードは安全に無効化される。
+`back_cam_ground_video_codec:=h265` でH.265を選択できる。陸上PCはH.264/H.265をUDP 5601、
+JPEG互換映像をUDP 5602で受信する。空のhostでは送信ノードは安全に無効化される。
 
 つまずきやすい点:
 
