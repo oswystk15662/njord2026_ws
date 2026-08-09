@@ -80,8 +80,10 @@ opponent_selector:
     motion_filter_mode: "standard"            # standard|straight_line
     straight_min_hit_count: 10                 # 5 Hz -> roughly 2 s history
     straight_max_velocity_stddev_mps: 0.30     # [m/s] largest horizontal std-dev
-    # When LiDAR briefly loses a confirmed vessel, keep publishing this
-    # constant-velocity prediction.  0 disables coasting; expiry is silent.
+    # A confirmed straight vessel is predicted at its last absolute velocity
+    # even after LiDAR loses it. This never applies to an unconfirmed track.
+    straight_continue_after_loss: true
+    # Used only when straight_continue_after_loss is false. 0 disables it.
     straight_coast_timeout_sec: 2.0            # [s]
     # Operator-facing speed gate. Twist output remains SI m/s.
     min_absolute_speed_knots: 2.0              # [kn]

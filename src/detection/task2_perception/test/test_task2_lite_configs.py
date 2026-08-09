@@ -37,4 +37,5 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert tracker["straight_hits_to_confirm"] == 10
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["straight_min_hit_count"] == 10
+    assert selector["straight_continue_after_loss"] is True
     assert selector["straight_coast_timeout_sec"] == 2.0
