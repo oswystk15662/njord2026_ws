@@ -11,9 +11,19 @@
     # Keep the stable by-id path here. The launch file resolves it to the
     # current /dev/videoN path before passing it to usb_cam.
     video_device: /dev/v4l/by-id/usb-Sonix_Technology_Co.__Ltd._Adesso_CyberTrack_H7_SN0001-video-index0
-    image_width: 640
-    image_height: 480
-    framerate: 30.0
+    # This camera is only used for the operator's rear-view display.  Keep
+    # acquisition inexpensive: compared with the former 640x480 at 30 FPS,
+    # this decodes and publishes 24 times fewer pixels per second.  The
+    # H.264 sender uses the same 320x240 geometry, so it does not need to
+    # upscale every outgoing frame.
+    #
+    # If the connected camera does not offer 320x240, retain this 5 FPS limit
+    # and use its lowest advertised 4:3 mode (normally 640x480).  Inspect
+    # formats before changing these values with:
+    #   v4l2-ctl --device=/dev/videoN --list-formats-ext
+    image_width: 320
+    image_height: 240
+    framerate: 5.0
     pixel_format: mjpeg2rgb
     camera_name: back_cam
     frame_id: back_cam_link

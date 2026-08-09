@@ -12,9 +12,11 @@ def generate_launch_description():
         DeclareLaunchArgument('host', default_value=''),
         DeclareLaunchArgument('port', default_value='5601'),
         DeclareLaunchArgument('codec', default_value='h264', choices=['h264', 'h265']),
-        DeclareLaunchArgument('fps', default_value='4.0'),
-        DeclareLaunchArgument('width', default_value='480'),
-        DeclareLaunchArgument('height', default_value='360'),
+        # Keep standalone use aligned with robot/config/back_cam.yaml.  The
+        # miniPC bringup overrides FPS to 3 for lower radio usage.
+        DeclareLaunchArgument('fps', default_value='3.0'),
+        DeclareLaunchArgument('width', default_value='320'),
+        DeclareLaunchArgument('height', default_value='240'),
         DeclareLaunchArgument('bitrate_kbps', default_value='800'),
         DeclareLaunchArgument('keyframe_interval', default_value='5'),
         DeclareLaunchArgument('mtu', default_value='1200'),

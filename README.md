@@ -649,9 +649,16 @@ ros2 run micon_driver_fd serial_writer --ros-args \
 ros2 launch robot localization.launch.py
 ```
 
-背面カメラの解像度・フレームレート・`pixel_format`・コントラストは
-`src/robot/config/back_cam.yaml` で設定する。`contrast` はカメラが受け付ける
-範囲内の整数に変更してから、launch を再起動する。範囲は
+背面カメラはGUIの後方確認だけに使うため、既定では
+`320x240 / 5 FPS`（以前の`640x480 / 30 FPS`に比べて取得・デコード・ROS画像配信の
+画素数が毎秒1/24）にしている。地上局へのH.264配信も`320x240 / 3 FPS`であり、操縦・
+モード切替と同じminiPC資源や無線帯域を圧迫しない設定である。
+
+背面カメラの解像度・フレームレート・`pixel_format`・露出・コントラストは
+`src/robot/config/back_cam.yaml` で設定する。露出とコントラストは起動前にV4L2へ
+適用されるため、この低負荷設定と独立して事前調整できる。カメラが`320x240`を
+サポートしない場合は、`v4l2-ctl --device=/dev/videoN --list-formats-ext`で最小の4:3
+モードを確認し、`640x480 / 5 FPS`へ変更する。コントロールの範囲は
 `v4l2-ctl --device=/dev/videoN --list-ctrls` で確認できる。
 
 白飛びを抑えるには、同ファイルの `autoexposure: false` を維持し、

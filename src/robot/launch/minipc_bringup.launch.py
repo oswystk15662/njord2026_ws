@@ -487,7 +487,10 @@ def generate_launch_description():
                 "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
             ),
             DeclareLaunchArgument("back_cam_ground_video_fps", default_value="3.0"),
-            DeclareLaunchArgument("back_cam_ground_video_width", default_value="360"),
+            # Match robot/config/back_cam.yaml.  Keeping the transport at the
+            # capture geometry avoids an unnecessary resize in the H.26x
+            # sender; this camera is an operator-only rear-view feed.
+            DeclareLaunchArgument("back_cam_ground_video_width", default_value="320"),
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",

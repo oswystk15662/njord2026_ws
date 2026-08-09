@@ -272,7 +272,7 @@ def test_minipc_video_and_glim_feedback_defaults_are_safe():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'default_value="osw-Stealth-14-AI-Studio-A1VGG.local"' in source
     assert '"back_cam_ground_video_fps", default_value="3.0"' in source
-    assert '"back_cam_ground_video_width", default_value="360"' in source
+    assert '"back_cam_ground_video_width", default_value="320"' in source
     assert '"back_cam_ground_video_height", default_value="240"' in source
     assert '"use_glim_fb"' in source
     assert 'default_value="false"' in source
