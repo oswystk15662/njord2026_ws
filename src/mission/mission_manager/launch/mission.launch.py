@@ -11,6 +11,13 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("active_nav2_profile", default_value="task1"),
         Node(
+            package="mission_manager", executable="task3_readiness_adapter_node",
+            name="task3_readiness_adapter", output="screen",
+            condition=IfCondition(PythonExpression([
+                "'", LaunchConfiguration("active_nav2_profile"), "' == 'task3'",
+            ])),
+        ),
+        Node(
             package="mission_manager",
             executable="task2_readiness_adapter_node",
             name="task2_readiness_adapter",
