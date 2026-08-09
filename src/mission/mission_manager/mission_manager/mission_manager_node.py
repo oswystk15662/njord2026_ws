@@ -11,8 +11,10 @@ from typing import Callable, Optional, Sequence
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
+from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
 from nav_msgs.msg import Path as NavPath
+from robot_localization.srv import FromLL
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
@@ -153,6 +155,7 @@ class MissionManager(Node):
         self._active_task: TaskDefinition | None = None
         self._active_route: Route | None = None
         self._pending_start = None
+        self._pending_coordinate_projection = None
         self._auto_permission_deadline_ns: int | None = None
         self._auto_mode_request_sent = False
         self._manual_mode_requested: set[str] = set()
@@ -193,6 +196,7 @@ class MissionManager(Node):
         self._set_task2_enabled(False)
         self._set_task1_cardinal_walls(False)
         self._navigation = _RosNavigationClient(self, self._plan_pub)
+        self._from_ll_client = self.create_client(FromLL, "/fromLL")
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
@@ -336,6 +340,23 @@ class MissionManager(Node):
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
+        if route.projection_points() and not request.dry_run:
+            if not self._from_ll_client.service_is_ready():
+                return self._reject_started(
+                    decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                    "map projection service /fromLL is unavailable",
+                )
+            self._machine.transition(
+                MissionState.CONFIGURING, execution_id=decision.execution_id,
+                stage="project_waypoints", message=f"projecting {route.coordinate_mode} waypoint coordinates",
+            )
+            self._start_coordinate_projection(decision.execution_id, task, route, request)
+            self._publish_status()
+            return decision
+        return self._configure_route(decision, task, route)
+
+    def _configure_route(self, decision, task: TaskDefinition, route: Route):
+        """Finish setup after any YAML GPS coordinates are expressed in map."""
         self._active_route = route
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
@@ -371,6 +392,46 @@ class MissionManager(Node):
         self._publish_status()
         return decision
 
+    def _start_coordinate_projection(
+        self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
+    ) -> None:
+        futures = []
+        for point in route.projection_points():
+            projection_request = FromLL.Request()
+            projection_request.ll_point = GeoPoint(
+                latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
+            )
+            futures.append(self._from_ll_client.call_async(projection_request))
+        self._pending_coordinate_projection = (execution_id, task, route, request, futures)
+        for future in futures:
+            future.add_done_callback(self._finish_coordinate_projection)
+
+    def _finish_coordinate_projection(self, _future) -> None:
+        with self._lock:
+            pending = self._pending_coordinate_projection
+            if pending is None:
+                return
+            execution_id, task, route, request, futures = pending
+            if not all(future.done() for future in futures):
+                return
+            self._pending_coordinate_projection = None
+            if not self._machine.is_current(execution_id):
+                return
+            try:
+                points = tuple(
+                    (float(future.result().map_point.x), float(future.result().map_point.y))
+                    for future in futures
+                )
+                resolved = route.with_projected_points(points)
+            except Exception as exc:
+                self._complete(
+                    execution_id, ResultCode.CONFIGURATION_FAILED,
+                    f"map projection for waypoint coordinates failed: {exc}",
+                )
+                return
+            decision = type("Decision", (), {"execution_id": execution_id})()
+            self._configure_route(decision, task, resolved)
+
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
         self._action_results[execution_id] = (code, message)
@@ -392,6 +453,7 @@ class MissionManager(Node):
         if not self._machine.is_current(execution_id) or self._active_route is None:
             return
         self._pending_start = None
+        self._pending_coordinate_projection = None
         self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
                                  stage="starting", message="starting task executor")
         self._navigation.set_feedback_callback(
@@ -514,6 +576,7 @@ class MissionManager(Node):
         self._set_task1_cardinal_walls(False)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
+        self._pending_coordinate_projection = None
         self._auto_permission_deadline_ns = None
         self._auto_mode_request_sent = False
         if self._active_executor and not was_canceling:
