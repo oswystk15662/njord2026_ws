@@ -24,6 +24,12 @@
 
 task3_1_config:
   frame_id: "map"
+  # === WP座標モード ===
+  # origin_relative_xy: origin（基準GPS）+ 各 waypoint.x/y（東+x、北+y [m]）。
+  # geodetic: 全 waypoint に latitude/longitude を入力し、x/y は削除する。
+  # map_xy: 現在のシミュレーション／旧互換。固定x/yをmap座標として使う。
+  # 実機では以下を origin_relative_xy または geodetic に変更して実測GPSを入力する。
+  coordinate_mode: "map_xy"
   publish_rate_hz: 2.0
   scenario: "normal_docking_rulebook"
 
@@ -162,6 +168,9 @@ task3_1_config:
 # Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
 task3_2_config:
   frame_id: "map"
+  # Task3.1と同じcoordinate_mode仕様。実機GPSを使う場合は、origin_relative_xyなら
+  # origin: {latitude: ..., longitude: ...} を追加し、geodeticなら各WPへGPSを入力する。
+  coordinate_mode: "map_xy"
   publish_rate_hz: 2.0
   scenario: "parallel_docking_standalone"
 

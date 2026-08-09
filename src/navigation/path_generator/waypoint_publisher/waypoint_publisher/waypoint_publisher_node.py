@@ -108,6 +108,13 @@ class WaypointPublisher(Node):
         
         # Load configuration
         self.config = self._load_config()
+        self.coordinate_mode = self.config.get('coordinate_mode', 'map_xy')
+        if self.coordinate_mode not in ('map_xy', 'origin_relative_xy', 'geodetic'):
+            raise ValueError('coordinate_mode must be map_xy, origin_relative_xy, or geodetic')
+        if self.use_geodetic_waypoints and self.coordinate_mode != 'geodetic':
+            self.get_logger().warning(
+                'use_geodetic_waypoints is deprecated; using geodetic mode for this launch')
+            self.coordinate_mode = 'geodetic'
 
         marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.waypoint_marker_pub = self.create_publisher(
@@ -241,7 +248,7 @@ class WaypointPublisher(Node):
             return
         
         self.first_publish = False
-        if self.use_geodetic_waypoints:
+        if self.coordinate_mode != 'map_xy':
             self._start_geodetic_waypoint_conversion()
             return
         
@@ -256,8 +263,28 @@ class WaypointPublisher(Node):
             self._publish_task3_first_stage()
 
     def _start_geodetic_waypoint_conversion(self):
-        """Project all configured GPS waypoints with navsat_transform /fromLL."""
+        """Resolve the YAML coordinate_mode through navsat_transform /fromLL."""
         waypoints = self._active_waypoints()
+        self.geodetic_positions = [
+            (float(wp.get('x', 0.0)), float(wp.get('y', 0.0))) for wp in waypoints]
+        if self.coordinate_mode == 'origin_relative_xy':
+            origin = self.config.get('origin', {})
+            if not isinstance(origin, dict) or 'latitude' not in origin or 'longitude' not in origin:
+                self.get_logger().error('origin_relative_xy requires origin.latitude and origin.longitude')
+                self.first_publish = True
+                return
+            if not self.from_ll_client.service_is_ready():
+                self.get_logger().warning(f'Waiting for map projection service {self.from_ll_service}')
+                self.first_publish = True
+                return
+            request = FromLL.Request()
+            request.ll_point = GeoPoint(
+                latitude=float(origin['latitude']), longitude=float(origin['longitude']),
+                altitude=float(origin.get('altitude', 0.0)))
+            self.geodetic_indices = []
+            self.geodetic_futures = [self.from_ll_client.call_async(request)]
+            return
+
         incomplete = [self._display_waypoint_id(wp, i) for i, wp in enumerate(waypoints)
                       if ('latitude' in wp) != ('longitude' in wp)]
         if incomplete:
@@ -266,8 +293,6 @@ class WaypointPublisher(Node):
             return
         self.geodetic_indices = [i for i, wp in enumerate(waypoints)
                                   if 'latitude' in wp and 'longitude' in wp]
-        self.geodetic_positions = [
-            (float(wp.get('x', 0.0)), float(wp.get('y', 0.0))) for wp in waypoints]
         if self.geodetic_indices and not self.from_ll_client.service_is_ready():
             self.get_logger().warn(f'Waiting for map projection service {self.from_ll_service}')
             self.first_publish = True
@@ -285,9 +310,14 @@ class WaypointPublisher(Node):
         if not all(future.done() for future in self.geodetic_futures):
             return
         try:
-            for index, future in zip(self.geodetic_indices, self.geodetic_futures):
-                self.geodetic_positions[index] = (
-                    future.result().map_point.x, future.result().map_point.y)
+            if self.coordinate_mode == 'origin_relative_xy':
+                origin = self.geodetic_futures[0].result().map_point
+                self.geodetic_positions = [
+                    (origin.x + x, origin.y + y) for x, y in self.geodetic_positions]
+            else:
+                for index, future in zip(self.geodetic_indices, self.geodetic_futures):
+                    self.geodetic_positions[index] = (
+                        future.result().map_point.x, future.result().map_point.y)
         except Exception as error:
             self.get_logger().error(f'GPS waypoint map conversion failed: {error}')
             self.geodetic_futures = None
@@ -301,7 +331,8 @@ class WaypointPublisher(Node):
                  for wp, position in zip(waypoints, self.geodetic_positions)]
         self._publish_cardinal_retirement_heading(waypoints, self.geodetic_positions)
         self._send_navigate_through_poses_goal(poses)
-        self.get_logger().info(f'Published {len(poses)} geodetic waypoints for {self.task_type.value}')
+        self.get_logger().info(
+            f'Published {len(poses)} {self.coordinate_mode} waypoints for {self.task_type.value}')
     
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
