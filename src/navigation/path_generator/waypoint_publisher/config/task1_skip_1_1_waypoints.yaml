@@ -1,24 +1,23 @@
 # Task 1 smoke test: navigate directly from GPS point 1 to GPS point 2.
 #
-# The endpoints below are 46.497 m apart (great-circle distance, calculated
-# from the configured latitude/longitude).  The local test route expresses
-# that distance along the +x axis so Nav2 receives exactly two poses.
+# The endpoints below are 25.473 m apart.  The local route is the ENU offset
+# from GPS point 1 to GPS point 2 (x=east, y=north).
 
 task1_skip_1_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   origin:
-    latitude: 63.44228538325694
-    longitude: 10.42402403234536
+    latitude: 63.440900
+    longitude: 10.423950
     name: "GPS 1 - Start"
   gps_points:
     - id: 1
-      latitude: 63.44228538325694
-      longitude: 10.42402403234536
+      latitude: 63.440900
+      longitude: 10.423950
       name: "GPS 1 - Start"
     - id: 2
-      latitude: 63.44231176593329
-      longitude: 10.424957441038426
+      latitude: 63.440850
+      longitude: 10.423450
       name: "GPS 2 - Goal"
   waypoints:
     - id: 1
@@ -29,9 +28,9 @@ task1_skip_1_1_config:
       name: "GPS 1 - Start"
       tolerance_m: 2.0
     - id: 2
-      x: 46.4970
-      y: 0.0000
-      yaw: 0.0000
+      x: -24.8588
+      y: -5.5598
+      yaw: -2.9216
       type: "goal"
       name: "GPS 2 - Goal"
       tolerance_m: 2.0
