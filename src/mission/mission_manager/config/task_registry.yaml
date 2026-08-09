@@ -49,7 +49,6 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task3
-    features: {dynamic_gate_tf: true}
   task3_2:
     display_name: Task 3-2
     availability: experimental
@@ -60,4 +59,3 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task3
-    features: {dynamic_gate_tf: true}

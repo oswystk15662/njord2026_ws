@@ -66,7 +66,7 @@ class TaskDefinition:
 
 
 # These are live safety inputs.  Route validation cannot prove them.
-RUNTIME_READINESS_FEATURES = frozenset({"buoy_perception", "dynamic_gate_tf"})
+RUNTIME_READINESS_FEATURES = frozenset({"buoy_perception"})
 
 
 def required_runtime_readiness(task: TaskDefinition) -> frozenset[str]:

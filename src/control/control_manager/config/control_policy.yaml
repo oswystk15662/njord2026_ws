@@ -40,4 +40,4 @@ control_policy:
     require_waypoint_plan: true
     require_collision_monitor: true
     require_buoy_perception: false
-    require_dynamic_gate_tf: true
+    require_dynamic_gate_tf: false
