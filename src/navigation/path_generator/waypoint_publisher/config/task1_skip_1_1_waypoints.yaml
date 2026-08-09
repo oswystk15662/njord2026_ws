@@ -11,15 +11,6 @@ task1_skip_1_1_config:
     latitude: 63.44228538325694
     longitude: 10.42402403234536
     name: "GPS 1 - Start"
-  gps_points:
-    - id: 1
-      latitude: 63.44228538325694
-      longitude: 10.42402403234536
-      name: "GPS 1 - Start"
-    - id: 2
-      latitude: 63.44231176593329
-      longitude: 10.424957441038426
-      name: "GPS 2 - Goal"
   waypoints:
     - id: 1
       x: 0.0000

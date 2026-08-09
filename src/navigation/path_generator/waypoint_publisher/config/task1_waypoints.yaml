@@ -45,30 +45,6 @@ task1_config:
     latitude: 34.5456666667
     longitude: 135.5070555556
     name: "GPS 1 - Slalom Start"
-  gps_points:
-    - id: 1
-      latitude: 34.5456666667
-      longitude: 135.5070555556
-      dms: '34°32''44.4"N 135°30''25.4"E'
-      name: "GPS 1 - Slalom Start"
-    - id: 2
-      latitude: 34.5459166667
-      longitude: 135.5074444444
-      dms: '34°32''45.3"N 135°30''26.8"E'
-      name: "GPS 2 - Slalom Finish"
-
-    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
-    # Reference points only; not used as route waypoints (route uses the
-    # Cartesian slalom coordinates below, matching task1_sim/config/task1_params.yaml).
-    - id: 3
-      latitude: 35.6675575459
-      longitude: 139.7933614800
-      name: "GPS 3 - Task1.2 diagonal start (corner C)"
-    - id: 4
-      latitude: 35.6674742121
-      longitude: 139.7938614790
-      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
-
   # Full Task1 route: task1-1's maneuvering waypoints, followed by the
   # cardinal-marker S/N/S slalom. This order matches task1_sim's evaluation
   # sequence (waypoint1_xy, GPS checkpoints, then waypoint2_xy).
@@ -239,30 +215,6 @@ task1_follow_config:
     latitude: 34.5456666667
     longitude: 135.5070555556
     name: "GPS 1 - Survey Start"
-  gps_points:
-    - id: 1
-      latitude: 34.5456666667
-      longitude: 135.5070555556
-      dms: '34°32''44.4"N 135°30''25.4"E'
-      name: "GPS 1 - Slalom Start"
-    - id: 2
-      latitude: 34.5459166667
-      longitude: 135.5074444444
-      dms: '34°32''45.3"N 135°30''26.8"E'
-      name: "GPS 2 - Slalom Finish"
-
-    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
-    # Reference points only; no TaskType/route exists yet for task1-2.
-    # Diagonal A<->C of the legacy pool rectangle; not used by this route.
-    - id: 3
-      latitude: 35.6675575459
-      longitude: 139.7933614800
-      name: "GPS 3 - Task1.2 diagonal start (corner C)"
-    - id: 4
-      latitude: 35.6674742121
-      longitude: 139.7938614790
-      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
-
   # This sequence is expressed in the simulation-local, rotated frame. It
   # contains every required point: GPS 1 -> 1.1--1.10 -> GPS 2 -> GPS 3 ->
   # 3.1--3.3 -> GPS 4.  The previous route began at GPS 2 and consequently

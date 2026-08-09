@@ -21,18 +21,6 @@ task1_follow_config:
     latitude: 35.6677242112
     longitude: 139.7935559245
     name: "GPS 1 - Survey Start"
-  gps_points:
-    - id: 1
-      latitude: 35.6677242112
-      longitude: 139.7935559245
-      dms: '35°40''03.807"N 139°47''36.801"E'
-      name: "GPS 1 - Survey Start"
-    - id: 2
-      latitude: 35.6674242620
-      longitude: 139.7935866822
-      dms: '35°40''02.727"N 139°47''36.912"E'
-      name: "GPS 2 - Survey Finish"
-
   waypoints:
     - id: 1
       x: 0.0000
