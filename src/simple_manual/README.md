@@ -22,7 +22,8 @@ with `enable_detection:=false`.
   and requests `manual` / `auto` on `/system/operating_mode`.
 - `command_arbiter_node` is the sole publisher of `/cmd_vel` and `/system/control_status`.
   It selects manual commands only in `manual` mode, selects `/cmd_vel_nav` only in `auto` mode
-  when `/autonomy/ready` is true, and publishes zero velocity during an emergency stop or when
+  when `/autonomy/ready` is true (unless its `require_autonomy_ready` parameter is set to
+  `false`), and publishes zero velocity during an emergency stop or when
   the selected command is stale (0.5 s).
 - `/soft_emg` uses positive logic: button 0 sends `true` (emergency stop), while its
   normal released state sends `false` (emergency stop released).
@@ -44,6 +45,11 @@ with `enable_detection:=false`.
 The command flags are `bit3=emg`, `bit2=green`, `bit1=yellow`, and `bit0=red`.
 The ESP32 enforces the emergency stop and other safety interlocks. Validate that
 behavior on restrained hardware before operation.
+
+The shipped joystick mapping makes the green (circle) button both request AUTO
+and publish the green indicator request. The miniPC competition bringup sets
+`require_autonomy_ready:=false` so mode selection is not blocked while Nav2 is
+starting; emergency-stop and command-timeout protection remain active.
 
 ```bash
 ros2 launch simple_manual manual_control.launch.py serial_port:=/dev/ttyUSB0

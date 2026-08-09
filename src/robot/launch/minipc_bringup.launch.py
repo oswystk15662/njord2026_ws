@@ -209,7 +209,15 @@ def generate_launch_description():
         executable="command_arbiter_node",
         name="command_arbiter",
         output="screen",
-        parameters=[{"initial_mode": "manual"}],
+        parameters=[
+            {
+                "initial_mode": "manual",
+                # Competition mode selection must not be held up by the
+                # Nav2 readiness publisher.  Emergency stop and stale-command
+                # protection remain enforced by command_arbiter.
+                "require_autonomy_ready": False,
+            }
+        ],
     )
 
     thruster_launch = include_launch(
@@ -445,8 +453,9 @@ def generate_launch_description():
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
-                default_value="false",
-                description="Optional CPU JPEG compatibility stream on UDP 5602.",
+                default_value="true",
+                description="CPU JPEG compatibility stream on UDP 5602, enabled as a "
+                "fallback alongside H.264/H.265.",
             ),
             DeclareLaunchArgument(
                 "back_cam_jpeg_ground_video_host",

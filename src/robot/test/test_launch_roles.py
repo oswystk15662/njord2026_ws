@@ -116,7 +116,17 @@ def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'back_cam_h26x_ground_video.launch.py' in source
     assert 'back_cam_jpeg_ground_video.launch.py' in source
-    assert '"enable_back_cam_jpeg_ground_video"' in source
+    assert (
+        '"enable_back_cam_jpeg_ground_video",\n'
+        '                default_value="true"'
+    ) in source
+
+
+def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'LaunchConfiguration("back_cam_jpeg_video_port")' in source
+    assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
 
 
 def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():

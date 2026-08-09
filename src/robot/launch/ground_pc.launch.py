@@ -23,6 +23,7 @@ def generate_launch_description():
     back_video_jitter_latency_ms = LaunchConfiguration(
         "back_video_jitter_latency_ms"
     )
+    back_cam_jpeg_video_port = LaunchConfiguration("back_cam_jpeg_video_port")
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
 
@@ -41,7 +42,7 @@ def generate_launch_description():
             os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
         ),
         launch_arguments={
-            "port": "5601",
+            "port": back_cam_jpeg_video_port,
             "topic": "/ground_video/back_cam_jpeg/compressed",
         }.items(),
     )
@@ -136,6 +137,7 @@ def generate_launch_description():
                 "front_video_topic", default_value="/ground_video/image/compressed"
             ),
             DeclareLaunchArgument("back_video_port", default_value="5601"),
+            DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602"),
             DeclareLaunchArgument(
                 "back_video_codec", default_value="h264", choices=["h264", "h265"]
             ),

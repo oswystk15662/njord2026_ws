@@ -11,7 +11,9 @@ joy_converter:
       yellow: 2
       red: 3
       manual_mode: 3
-      auto_mode: 2
+      # The green (circle) button requests AUTO and is also the operator's
+      # positive visual confirmation of that request.
+      auto_mode: 1
     scale:
       linear_x: 1.0
       linear_y: 1.0
