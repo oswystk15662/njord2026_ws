@@ -1,4 +1,5 @@
 #include <chrono>
+#include <array>
 #include <cstddef>
 
 #include "rclcpp/rclcpp.hpp"
@@ -8,6 +9,7 @@ namespace
 {
 constexpr size_t kNumThrusters = 4;
 constexpr std::chrono::seconds kHoldDuration{10};
+constexpr std::array<const char *, kNumThrusters> kThrusterIds = {"FR", "FL", "RR", "RL"};
 }  // namespace
 
 class ThrusterIdTest : public rclcpp::Node
@@ -33,7 +35,8 @@ private:
       static_cast<size_t>(elapsed.nanoseconds() / hold_ns) % kNumThrusters;
 
     if (index != last_index_) {
-      RCLCPP_INFO(get_logger(), "Testing thruster index %zu", index);
+      RCLCPP_INFO(
+        get_logger(), "Testing thruster channel %zu (%s)", index, kThrusterIds[index]);
       last_index_ = index;
     }
 

@@ -47,7 +47,8 @@ thruster_driver_node:
       # Measured actuator/body convention: positive allocated surge moves the
       # vessel toward base_link -x. Correct only surge after the ROS-frame
       # velocity error is computed, so feedback remains negative feedback.
-      # Keep sway and yaw positive: reversing yaw makes rotation reverse too.
+      # Keep sway and yaw positive: reversing either mixes a channel-order
+      # error into the observed lateral/yaw response.
       # Order: [surge, sway, yaw].
       wrench_sign: [-1.0, 1.0, 1.0]
 
@@ -64,14 +65,13 @@ thruster_driver_node:
 
     # URDF stores only the fixed pose for these links. Direction, reverse and
     # output mapping stay here so wiring and prop orientation can be changed
-    # without changing the robot model. The ESC channel order is wired as
-    # [FL, FR, RL, RR], so each entry describes the physical thruster driven
-    # by that output index.
+    # without changing the robot model. The ESP32 command channel order is
+    # [FR, FL, RR, RL]; this is also the order used by thruster_id_test.
     thrusters:
-      ids: ["FL", "FR", "RL", "RR"]
-      links: ["thruster_FL", "thruster_FR", "thruster_RL", "thruster_RR"]
-      angle_rad: [-0.785398, 0.785398, -2.356194, 2.356194]
-      reverse: [true, false, true, false]
+      ids: ["FR", "FL", "RR", "RL"]
+      links: ["thruster_FR", "thruster_FL", "thruster_RR", "thruster_RL"]
+      angle_rad: [0.785398, -0.785398, 2.356194, -2.356194]
+      reverse: [false, true, false, true]
       # BlueRobotics T200 @16V max thrust ~51.5N
       max_thrust: [51.5, 51.5, 51.5, 51.5]
 
