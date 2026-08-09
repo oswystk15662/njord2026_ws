@@ -14,6 +14,7 @@
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
+#include "njord_interfaces/msg/control_state.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rcl_interfaces/msg/log.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
@@ -57,6 +58,7 @@ public:
     const auto plan_topic = declare_parameter<std::string>("plan_topic", "/plan");
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
     const auto control_topic = declare_parameter<std::string>("control_status_topic", "/system/control_status");
+    const auto control_state_topic = declare_parameter<std::string>("control_state_topic", "/control/state");
     const auto log_topic = declare_parameter<std::string>("log_topic", "/foxglove_log");
 
     log_pub_ = create_publisher<rcl_interfaces::msg::Log>(log_topic, 10);
@@ -77,6 +79,9 @@ public:
       [this](std_msgs::msg::Float32::SharedPtr msg) {ground_speed_mps_ = msg->data;});
     control_sub_ = create_subscription<std_msgs::msg::String>(control_topic, rclcpp::QoS(1).transient_local(),
       [this](std_msgs::msg::String::SharedPtr msg) {control_status_ = msg->data;});
+    control_state_sub_ = create_subscription<njord_interfaces::msg::ControlState>(
+      control_state_topic, rclcpp::QoS(1).transient_local(),
+      [this](njord_interfaces::msg::ControlState::SharedPtr msg) {control_state_ = *msg;});
 
     const auto period = std::chrono::duration<double>(1.0 / publish_rate_hz);
     timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(period),
@@ -214,6 +219,32 @@ private:
     return "N/A";
   }
 
+  static std::string controlStateName(uint8_t state)
+  {
+    using ControlState = njord_interfaces::msg::ControlState;
+    switch (state) {
+      case ControlState::STATE_BOOTING: return "BOOTING";
+      case ControlState::STATE_MANUAL: return "MANUAL";
+      case ControlState::STATE_AUTO_REQUESTED: return "AUTO_REQUESTED";
+      case ControlState::STATE_AUTO_ARMED: return "AUTO_ARMED";
+      case ControlState::STATE_AUTO_RUNNING: return "AUTO_RUNNING";
+      case ControlState::STATE_AUTO_INHIBITED: return "AUTO_INHIBITED";
+      case ControlState::STATE_EMERGENCY_STOP: return "EMERGENCY_STOP";
+      default: return "UNKNOWN";
+    }
+  }
+
+  static std::string controlSourceName(uint8_t source)
+  {
+    using ControlState = njord_interfaces::msg::ControlState;
+    switch (source) {
+      case ControlState::SOURCE_ZERO: return "ZERO";
+      case ControlState::SOURCE_MANUAL: return "MANUAL";
+      case ControlState::SOURCE_AUTO: return "AUTO";
+      default: return "UNKNOWN";
+    }
+  }
+
   void publishReport()
   {
     std::ostringstream out;
@@ -263,6 +294,24 @@ private:
       out << control_status;
     }
     out << '\n' << "STATUS_COLOR=" << controlStatusColor(control_status);
+    if (control_state_) {
+      out << '\n' << "CTRL_REQUESTED=" <<
+        (control_state_->requested_mode == njord_interfaces::msg::ControlState::MODE_AUTO ? "AUTO" : "MANUAL");
+      out << '\n' << "CTRL_STATE=" << controlStateName(control_state_->state);
+      out << '\n' << "CTRL_SOURCE=" << controlSourceName(control_state_->effective_source);
+      out << '\n' << "CTRL_AUTO_PERMITTED=" << (control_state_->auto_permitted ? "YES" : "NO");
+      out << '\n' << "CTRL_INHIBITS=";
+      if (control_state_->inhibit_reasons.empty()) {
+        out << "NONE";
+      } else {
+        for (std::size_t i = 0; i < control_state_->inhibit_reasons.size(); ++i) {
+          if (i != 0U) {out << "; ";}
+          out << control_state_->inhibit_reasons[i];
+        }
+      }
+    } else {
+      out << '\n' << "CTRL_STATE=N/A";
+    }
     publishLog(LogLevel::kInfo, out.str());
   }
 
@@ -273,6 +322,7 @@ private:
   std::optional<nav_msgs::msg::Path> plan_;
   std::optional<float> ground_speed_mps_;
   std::optional<std::string> control_status_;
+  std::optional<njord_interfaces::msg::ControlState> control_state_;
   std::deque<std::chrono::steady_clock::time_point> buoy_detection_times_;
   std::size_t last_buoy_count_{0};
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cells_sub_;
@@ -283,6 +333,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::ControlState>::SharedPtr control_state_sub_;
   rclcpp::Publisher<rcl_interfaces::msg::Log>::SharedPtr log_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };
