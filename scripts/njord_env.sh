@@ -5,7 +5,7 @@
 # environment for this workspace. It does NOT build anything and does NOT
 # set up RMW config files (fastdds XML / zenoh json5) -- those are added in
 # Stage B. It only decides and exports environment variables, plus toggles
-# COLCON_IGNORE on the Livox submodules depending on the profile.
+# COLCON_IGNORE on the Jetson-only sensor packages depending on the profile.
 #
 # Usage:
 #   source scripts/njord_env.sh
@@ -109,23 +109,30 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-# 6. Toggle COLCON_IGNORE on the Livox submodules based on profile.
+# 6. Toggle COLCON_IGNORE on packages that are not built on the miniPC.
 #    zed2i_driver is intentionally excluded: its CMake auto-falls-back to a
 #    CPU/stub build when the ZED SDK is absent, so it must remain buildable
 #    (and its launch files present) on both profiles.
 # ---------------------------------------------------------------------------
 NJORD_LIVOX_SDK2_DIR="${WS_DIR}/src/driver/lidar/Livox-SDK2"
 NJORD_LIVOX_ROS_DRIVER2_DIR="${WS_DIR}/src/driver/lidar/livox_ros_driver2"
+NJORD_PCL_SEGMENTATION_DIR="${WS_DIR}/src/detection/pcl_segmentation"
 
 if [[ "${NJORD_PROFILE}" == "minipc" ]]; then
-  for _njord_dir in "${NJORD_LIVOX_SDK2_DIR}" "${NJORD_LIVOX_ROS_DRIVER2_DIR}"; do
+  for _njord_dir in \
+    "${NJORD_LIVOX_SDK2_DIR}" \
+    "${NJORD_LIVOX_ROS_DRIVER2_DIR}" \
+    "${NJORD_PCL_SEGMENTATION_DIR}"; do
     if [[ -d "${_njord_dir}" && ! -f "${_njord_dir}/COLCON_IGNORE" ]]; then
       touch "${_njord_dir}/COLCON_IGNORE"
       echo "[njord_env] placed COLCON_IGNORE in ${_njord_dir}"
     fi
   done
 else
-  for _njord_dir in "${NJORD_LIVOX_SDK2_DIR}" "${NJORD_LIVOX_ROS_DRIVER2_DIR}"; do
+  for _njord_dir in \
+    "${NJORD_LIVOX_SDK2_DIR}" \
+    "${NJORD_LIVOX_ROS_DRIVER2_DIR}" \
+    "${NJORD_PCL_SEGMENTATION_DIR}"; do
     if [[ -f "${_njord_dir}/COLCON_IGNORE" ]]; then
       rm -f "${_njord_dir}/COLCON_IGNORE"
       echo "[njord_env] removed COLCON_IGNORE from ${_njord_dir}"

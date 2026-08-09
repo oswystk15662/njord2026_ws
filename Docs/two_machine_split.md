@@ -99,7 +99,7 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 1. `NJORD_PROFILE` を `jetson` / `minipc` に決定（CUDA と ZED SDK の両方があれば `jetson`）。既に環境変数で設定済みなら**尊重して上書きしない**
 2. `NJORD_ENABLE_GPU_SENSORS` を export（jetson なら `1`、minipc なら **unset**）
 3. `NJORD_ROLE`、`RMW_IMPLEMENTATION`、`ROS_DOMAIN_ID`、`ROS_LOCALHOST_ONLY` を export
-4. minipc プロファイル時、`src/driver/lidar/Livox-SDK2` と `livox_ros_driver2` に `COLCON_IGNORE` を置く（jetson なら削除する）
+4. minipc プロファイル時、`src/driver/lidar/Livox-SDK2`、`livox_ros_driver2`、および `src/detection/pcl_segmentation` に `COLCON_IGNORE` を置く（jetson なら削除する）
 
 ### 依存の切り替え方
 

@@ -23,6 +23,10 @@ colcon build --symlink-install
 
 `scripts/build.sh` は上記をまとめたラッパ。
 
+minIPC プロファイルでは `scripts/njord_env.sh` が Livox 関連と
+`pcl_segmentation` に `COLCON_IGNORE` を自動配置するため、通常の
+`colcon build` でこれらはビルドされない。Jetson では同ファイルを自動削除する。
+
 配線図・ノード配置・帯域の注意・ネットワーク設定（FastRTPS / Zenoh）・時刻同期・検証手順は **`Docs/two_machine_split.md`** にまとめてある。
 
 ## 環境構築
