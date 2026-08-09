@@ -48,6 +48,7 @@ def generate_launch_description():
     enable_mid360 = LaunchConfiguration("enable_mid360")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
     enable_glim = LaunchConfiguration("enable_glim")
+    glim_headless = LaunchConfiguration("glim_headless")
     glim_backend = LaunchConfiguration("glim_backend")
     enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
@@ -71,6 +72,7 @@ def generate_launch_description():
             "lidar_model": lidar_model,
             "enable_buoy_detection": enable_pcl_buoy_detection,
             "enable_glim": enable_glim,
+            "glim_headless": glim_headless,
             "glim_backend": glim_backend,
         },
     )
@@ -127,6 +129,11 @@ def generate_launch_description():
                 "enable_glim",
                 default_value="false",
                 description="Load GLIM into the Livox component container",
+            ),
+            DeclareLaunchArgument(
+                "glim_headless",
+                default_value="true",
+                description="Use GLIM's headless configuration without GUI viewer extensions.",
             ),
             DeclareLaunchArgument(
                 "glim_backend",
