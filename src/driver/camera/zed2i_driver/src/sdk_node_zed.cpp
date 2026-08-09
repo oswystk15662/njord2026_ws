@@ -144,6 +144,13 @@ public:
     publish_pointcloud_ = declare_parameter<bool>("publish_pointcloud", true);
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
+    const bool disable_self_calibration = declare_parameter<bool>("disable_self_calibration", true);
+    aec_agc_enable_ = declare_parameter<bool>("aec_agc_enable", true);
+    aec_agc_roi_enable_ = declare_parameter<bool>("aec_agc_roi_enable", true);
+    aec_agc_roi_x_ratio_ = declare_parameter<double>("aec_agc_roi_x_ratio", 0.0);
+    aec_agc_roi_y_ratio_ = declare_parameter<double>("aec_agc_roi_y_ratio", 0.5);
+    aec_agc_roi_width_ratio_ = declare_parameter<double>("aec_agc_roi_width_ratio", 1.0);
+    aec_agc_roi_height_ratio_ = declare_parameter<double>("aec_agc_roi_height_ratio", 0.5);
     engine_path_ = declare_parameter<std::string>("engine_path", "");
     fov_ellipse_enable_ = declare_parameter<bool>("fov_ellipse_enable", false);
     fov_ellipse_cx_ratio_ = declare_parameter<double>("fov_ellipse_cx_ratio", 0.5);
@@ -238,6 +245,7 @@ public:
       return;
     }
     init_params.camera_fps = framerate_;
+    init_params.camera_disable_self_calib = disable_self_calibration;
     init_params.depth_mode = sl::DEPTH_MODE::QUALITY;
     init_params.coordinate_units = sl::UNIT::METER;
 
@@ -260,6 +268,7 @@ public:
     if (baseline_m_ > 10.0) {
       baseline_m_ *= 0.001;
     }
+    configure_auto_exposure_gain();
     ellipse_cx_ = fov_ellipse_cx_ratio_ * width_;
     ellipse_cy_ = fov_ellipse_cy_ratio_ * height_;
     ellipse_a_ = fov_ellipse_a_ratio_ * width_;
@@ -338,6 +347,42 @@ public:
   }
 
 private:
+  void configure_auto_exposure_gain()
+  {
+    const auto aec_agc_error = camera_.setCameraSettings(
+      sl::VIDEO_SETTINGS::AEC_AGC, aec_agc_enable_ ? 1 : 0);
+    if (aec_agc_error != sl::ERROR_CODE::SUCCESS) {
+      RCLCPP_WARN(
+        get_logger(), "Failed to %s ZED automatic exposure/gain: %s",
+        aec_agc_enable_ ? "enable" : "disable", sl::toString(aec_agc_error).c_str());
+      return;
+    }
+
+    if (!aec_agc_enable_ || !aec_agc_roi_enable_) {
+      return;
+    }
+
+    const auto x_ratio = std::clamp(aec_agc_roi_x_ratio_, 0.0, 1.0);
+    const auto y_ratio = std::clamp(aec_agc_roi_y_ratio_, 0.0, 1.0);
+    const auto width_ratio = std::clamp(aec_agc_roi_width_ratio_, 0.0, 1.0 - x_ratio);
+    const auto height_ratio = std::clamp(aec_agc_roi_height_ratio_, 0.0, 1.0 - y_ratio);
+    const int x = static_cast<int>(x_ratio * width_);
+    const int y = static_cast<int>(y_ratio * height_);
+    const int roi_width = std::max(1, static_cast<int>(width_ratio * width_));
+    const int roi_height = std::max(1, static_cast<int>(height_ratio * height_));
+    const sl::Rect roi(x, y, std::min(roi_width, width_ - x), std::min(roi_height, height_ - y));
+    const auto roi_error = camera_.setCameraSettings(sl::VIDEO_SETTINGS::AEC_AGC_ROI, roi);
+    if (roi_error != sl::ERROR_CODE::SUCCESS) {
+      RCLCPP_WARN(
+        get_logger(), "Failed to set ZED automatic exposure/gain ROI: %s",
+        sl::toString(roi_error).c_str());
+      return;
+    }
+    RCLCPP_INFO(
+      get_logger(), "ZED automatic exposure/gain enabled with ROI x=%d y=%d width=%d height=%d",
+      roi.x, roi.y, roi.width, roi.height);
+  }
+
   std::optional<geometry_msgs::msg::PointStamped> lidar_fallback_position(
     const Detection2D & detection, const rclcpp::Time & stamp)
   {
@@ -737,6 +782,12 @@ private:
   bool publish_pointcloud_;
   double depth_min_m_;
   double depth_max_m_;
+  bool aec_agc_enable_{true};
+  bool aec_agc_roi_enable_{true};
+  double aec_agc_roi_x_ratio_{0.0};
+  double aec_agc_roi_y_ratio_{0.5};
+  double aec_agc_roi_width_ratio_{1.0};
+  double aec_agc_roi_height_ratio_{0.5};
   int width_;
   int height_;
   double fx_;

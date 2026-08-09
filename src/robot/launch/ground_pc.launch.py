@@ -23,7 +23,9 @@ def generate_launch_description():
     back_video_jitter_latency_ms = LaunchConfiguration(
         "back_video_jitter_latency_ms"
     )
+    back_cam_jpeg_video_port = LaunchConfiguration("back_cam_jpeg_video_port")
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
+    enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
@@ -41,7 +43,7 @@ def generate_launch_description():
             os.path.join(zed2i_share_path, "launch", "ground_video_receiver.launch.py")
         ),
         launch_arguments={
-            "port": "5601",
+            "port": back_cam_jpeg_video_port,
             "topic": "/ground_video/back_cam_jpeg/compressed",
         }.items(),
     )
@@ -63,7 +65,8 @@ def generate_launch_description():
             PathJoinSubstitution(
                 [FindPackageShare("foxglove_bridge"), "launch", "foxglove_bridge_launch.xml"]
             )
-        )
+        ),
+        condition=IfCondition(enable_foxglove_bridge),
     )
 
     joy_node = Node(
@@ -136,6 +139,7 @@ def generate_launch_description():
                 "front_video_topic", default_value="/ground_video/image/compressed"
             ),
             DeclareLaunchArgument("back_video_port", default_value="5601"),
+            DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602"),
             DeclareLaunchArgument(
                 "back_video_codec", default_value="h264", choices=["h264", "h265"]
             ),
@@ -149,6 +153,11 @@ def generate_launch_description():
                 "Use 0 only for controlled low-latency tests.",
             ),
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_foxglove_bridge",
+                default_value="false",
+                description="Expose mission action/service APIs to a Foxglove GUI.",
+            ),
             DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",
@@ -172,7 +181,7 @@ def generate_launch_description():
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,
-            # foxglove_bridge_launch,
+            foxglove_bridge_launch,
             ntrip_caster,
             networking_launch,
         ]

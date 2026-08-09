@@ -49,25 +49,30 @@ miniPCのreceiverだけがcanonical `/joy`と`/heartbeat/ground_station`をpubli
 Ground/miniPC/JetsonのZenoh bridgeのallow listには、この2 topicを入れない。
 これによりDDS、Zenoh、複数無線から同じtopicが直接流入する構成を避ける。
 
-frameには少なくともprotocol version、sender session ID、stream ID、sequence、
-source monotonic timestamp、payload length、CRCを持たせる。sequenceはstreamごとに
-単調増加させ、sender再起動時はsession IDを変更する。
+frameには少なくともprotocol version、固定source ID、sender session ID、stream ID、sequence、
+source monotonic timestamp、payload length、CRCを持たせる。sequenceはsource・streamごとに
+単調増加させ、sender再起動時はそのsourceのsession IDを変更する。source IDは送信者の
+優先度ではなく、船側で設定済みの操船器を識別するためだけに使う。
 
 receiverの採用規則は「最初に届いた経路」ではなく、次のとおりとする。
 
-1. 現在採用済みのsequenceより新しい正常frameを採用する。
-2. 同じsequenceの複製は、最初に検証を通過した1個だけを採用する。
-3. 採用済みsequenceより古いframeは、後から到着しても破棄する。
-4. session ID変更時は再起動として扱い、古いsessionのframeを再採用しない。
+1. 同じsourceで現在採用済みのsequenceより新しい正常frameを採用する。
+2. 同じsource・session・sequenceの複製は、最初に検証を通過した1個だけを採用する。
+3. 同じsourceで採用済みsequenceより古いframeは、後から到着しても破棄する。
+4. session ID変更時はそのsourceの再起動として扱い、古いsessionのframeを再採用しない。
+5. あるsourceのsession変更は、他sourceのframeを退役させない。
 
-真の最新frameが将来到着するかは待たず、到着時点で既知の最新sequenceを即座に
-publishする。これにより経路優先待ちによる操縦遅延を作らない。
+その後、船側のsource policyが、deadman有効かつ新しいJoyを送った認可済みsourceから
+操船権限を一つ選ぶ。優先度はpacketに含めない。選択済みsourceは正常な間は保持し、
+高優先度sourceの明示的takeover、または選択sourceのtimeout時だけ中立commandを挟んで
+切替える。これにより経路到着順や再接続で操船権限が変わらない。
 
 ## Heartbeats and safety
 
 経路監視用probe/ACKと`/heartbeat/ground_station`は別物として扱う。通信経路が
 生きていてもGround heartbeat sourceが停止していれば、receiverはheartbeatを
-代理生成しない。
+代理生成しない。認可済みsourceの少なくとも一つが新しいGround heartbeatを送った間だけ、
+receiverはcanonical heartbeatをpublishする。
 
 `command_arbiter`のcommand freshness timeoutは現在の0.5秒を維持し、古いJoyで
 推進を継続しない。大会規定に基づき、`thruster_serial`の
@@ -79,13 +84,14 @@ ROS 2 sender/receiver、共通frame、UDP/serial transport、ESP-NOW firmware、
 bringupまでは`critical_link`パッケージとして実装済みである。以下は実機IP、USB device、
 ESP MAC/keyを設定して投入する順序を示す。
 
-1. 共通frame、sequence比較、重複排除をloopback unit testで実装する。
+1. 共通frame、source別sequence比較、重複排除、source priorityをunit testで実装する。
 2. USB Wi-Fiと内蔵Wi-Fiの2経路を、送信元IPへ明示的にbindして試験する。
 3. ESP-NOW gatewayを追加し、ACK、再送、CRC、古いJoyの破棄を試験する。
 4. VPN内のInternet経路を追加し、NAT再接続、長遅延、逆順到着を試験する。
-5. 各単独経路、任意の複数経路断、全経路断、sender/receiver再起動を試験する。
+5. 各単独経路、任意の複数経路断、全経路断、source failover、sender/receiver再起動を試験する。
 6. receiver以外にcanonical topicのpublisherが存在しないことを確認する。
 
-合格条件は、いずれか1経路で最新JoyとGround heartbeatを受信できること、古い経路の
-復帰でcommandが巻き戻らないこと、全経路断でcommand freshness timeoutにより推力が
-ゼロになること、heartbeat timeoutが規定の60秒で作動することである。
+合格条件は、いずれか1経路で選択済みsourceの最新JoyとGround heartbeatを受信できること、
+古い経路の復帰でcommandが巻き戻らないこと、source再接続だけで操船権限が移らないこと、
+全経路断でcommand freshness timeoutにより推力がゼロになること、heartbeat timeoutが
+規定の60秒で作動することである。

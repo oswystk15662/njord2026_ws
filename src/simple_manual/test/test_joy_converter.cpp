@@ -60,13 +60,13 @@ TEST(JoyConversion, DetectsManualAndAutoModeButtons)
   EXPECT_FALSE(output.manual_mode);
   EXPECT_FALSE(output.auto_mode);
 
-  joy.buttons[3] = 1;
+  joy.buttons[4] = 1;
   output = simple_manual::convert_joy(joy, simple_manual::JoyConfig{});
   EXPECT_TRUE(output.manual_mode);
   EXPECT_FALSE(output.auto_mode);
 
-  joy.buttons[3] = 0;
-  joy.buttons[2] = 1;
+  joy.buttons[4] = 0;
+  joy.buttons[5] = 1;
   output = simple_manual::convert_joy(joy, simple_manual::JoyConfig{});
   EXPECT_FALSE(output.manual_mode);
   EXPECT_TRUE(output.auto_mode);
@@ -93,6 +93,6 @@ TEST(JoyConverterParameters, AcceptsValidAndRejectsInvalidValues)
   results = node->set_parameters({rclcpp::Parameter("button.manual_mode", -1)});
   ASSERT_EQ(results.size(), 1U);
   EXPECT_FALSE(results[0].successful);
-  EXPECT_EQ(node->get_parameter("button.manual_mode").as_int(), 3);
+  EXPECT_EQ(node->get_parameter("button.manual_mode").as_int(), 4);
   rclcpp::shutdown();
 }

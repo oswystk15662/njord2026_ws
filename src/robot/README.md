@@ -16,10 +16,29 @@ this pkg is for launch and visualization
 ros2 launch robot jetson_bringup.launch.py
 
 # miniPC
-ros2 launch robot task1.launch.py           # role:=minipc が既定
+ros2 launch robot minipc_bringup.launch.py
+
+# Ground PC (Foxglove is opt-in)
+ros2 launch robot ground_pc.launch.py enable_foxglove_bridge:=true
+
+# miniPC: task selection uses the persistent Mission Manager
+njord-task check task1
+njord-task start task1 --auto
 ```
 
-`task1/2/3.launch.py` は `role` 引数(`minipc` / `standalone`、既定 `minipc`)でどちらの bringup を使うか選ぶ。
+minipc_bringup.launch.py / jetson_bringup.launch.py は各端末で一度だけ起動する。
+タスクの開始・停止・状態確認は njord-task（Mission Manager の typed API）を使い、
+起動時は MANUAL / IDLE のまま自動目標を送らない。
+
+task1.launch.py、task2.launch.py、task3.launch.py は非推奨の回帰比較用
+compatibility wrapper である。既定では role bringup、Nav2、waypoint publisher の
+いずれも起動しないため、常駐bringupとの二重起動を起こさない。歴史的な一括グラフを
+明示的に再現するときだけ、start_role_bringup:=true と
+start_legacy_task_nodes:=true を指定する。
+
+task1-1.launch.py、task1-2.launch.py、task2-1.launch.py、task3-1.launch.py、
+task3-2.launch.py も同様に enable_legacy_graph:=true を指定した場合だけ旧実験
+グラフを起動する。
 
 端末別 bringup は既定で `zenoh-bridge-ros2dds` を起動する。bridgeは端末ごとの
 JSON5設定でROS domainを選ぶため、親の`ROS_DOMAIN_ID`はbridgeプロセスへ引き継がない。
@@ -166,19 +185,27 @@ ros2 launch robot jetson_bringup.launch.py \
   enable_ground_video:=true \
   ground_video_host:=192.168.1.2 \
   ground_video_port:=5600
+
+
+  ros2 launch robot jetson_bringup.launch.py \
+  enable_ground_video:=true \
+  ground_video_host:=100.82.157.125 \
+  ground_video_port:=5600
 ```
 
 `jetson_bringup.launch.py` は `enable_ground_video` / `ground_video_host` /
 `ground_video_port` に加え、`ground_video_width` / `ground_video_height` /
 `ground_video_fps` も `zed2i_driver` へ転送する。既定は JPEG 480x360・4 fps。
 
-miniPCのback_camはH.264・VA-API送信が既定で含まれる。送信先を指定して有効化する:
+miniPCのback_camはH.264・VA-API送信と、UDP 5602 の JPEG互換送信が既定で含まれる。
+送信先を指定して有効化する:
 
 ```shell
 ros2 launch robot minipc_bringup.launch.py back_cam_ground_video_host:=192.168.1.2
 ```
 
-`back_cam_ground_video_codec:=h265` でH.265を選択できる。空のhostでは送信ノードは安全に無効化される。
+`back_cam_ground_video_codec:=h265` でH.265を選択できる。陸上PCはH.264/H.265をUDP 5601、
+JPEG互換映像をUDP 5602で受信する。空のhostでは送信ノードは安全に無効化される。
 
 つまずきやすい点:
 

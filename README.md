@@ -23,6 +23,10 @@ colcon build --symlink-install
 
 `scripts/build.sh` は上記をまとめたラッパ。
 
+minIPC プロファイルでは `scripts/njord_env.sh` が Livox 関連と
+`pcl_segmentation` に `COLCON_IGNORE` を自動配置するため、通常の
+`colcon build` でこれらはビルドされない。Jetson では同ファイルを自動削除する。
+
 配線図・ノード配置・帯域の注意・ネットワーク設定（FastRTPS / Zenoh）・時刻同期・検証手順は **`Docs/two_machine_split.md`** にまとめてある。
 
 ## 環境構築
@@ -276,6 +280,13 @@ sudo tcpdump -ni any udp port 5600 -c 20
 ## YOLOについて
 Jetson Nano + Ubuntu 20.04 + ROS2 Foxy では、ZED/ROS系とYOLO系を同じPython環境に混ぜないでください。
 `numpy` の競合で `cv_bridge` が壊れることがあります。
+
+YOLOノードが使用する ROS メッセージ定義は別途必要である。Humble 環境では、初回に
+次を実行する。
+
+```shell
+sudo apt install ros-humble-vision-msgs
+```
 
 運用ルール:
 * ROS2/ZED ノードはシステム環境（apt + colcon）で実行する
@@ -636,6 +647,30 @@ ros2 launch um982_driver um982.launch.py \
 ros2 run micon_driver_fd serial_writer --ros-args \
   -p serial_port:=/dev/ttyUSB1 -p baud:=115200
 ros2 launch robot localization.launch.py
+```
+
+背面カメラの解像度・フレームレート・`pixel_format`・コントラストは
+`src/robot/config/back_cam.yaml` で設定する。`contrast` はカメラが受け付ける
+範囲内の整数に変更してから、launch を再起動する。範囲は
+`v4l2-ctl --device=/dev/videoN --list-ctrls` で確認できる。
+
+白飛びを抑えるには、同ファイルの `autoexposure: false` を維持し、
+`exposure` を小さくする（Adesso CyberTrack H7 は `1`--`5000`）。まず `50` を
+基準にし、白飛びする場合は `20`、暗すぎる場合は `80` のように調整する。
+`back_cam.launch.py` はこの値を V4L2 の `exposure_time_absolute` へ適用してから
+`usb_cam` を起動する。
+
+別の設定ファイルを使う場合は、次のように指定できる。
+
+```bash
+ros2 launch robot back_cam.launch.py params_file:=/path/to/back_cam.yaml
+```
+
+この PC の内蔵カメラで試すには、`back_cam_pc.yaml` を用いる。
+
+```bash
+ros2 launch robot back_cam.launch.py \
+  params_file:=$(ros2 pkg prefix robot)/share/robot/config/back_cam_pc.yaml
 ```
 
 `enable_buoy_detection:=true`ではLivox driverと点群ブイ検出を同じ

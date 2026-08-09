@@ -12,6 +12,7 @@
 #include <cstring>
 #include <memory>
 #include <mutex>
+#include <limits>
 #include <random>
 #include <stdexcept>
 #include <string>
@@ -62,6 +63,16 @@ public:
       "joy_input_topic", "/critical_link/input/joy");
     heartbeat_topic_ = declare_parameter<std::string>(
       "heartbeat_input_topic", "/critical_link/input/heartbeat");
+    const auto configured_source_id = declare_parameter<int64_t>("source_id", 1);
+    if (configured_source_id <= 0 || configured_source_id > std::numeric_limits<uint32_t>::max()) {
+      throw std::runtime_error("source_id must be an unsigned 32-bit value greater than zero");
+    }
+    source_id_ = static_cast<uint32_t>(configured_source_id);
+    deadman_button_ = declare_parameter<int64_t>("deadman_button", -1);
+    takeover_button_ = declare_parameter<int64_t>("takeover_button", -1);
+    if (deadman_button_ < -1 || takeover_button_ < -1) {
+      throw std::runtime_error("deadman_button and takeover_button must be -1 or a Joy button index");
+    }
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
 
@@ -71,7 +82,7 @@ public:
       const auto spec = parse_udp_sender_spec(text);
       if (!spec) {
         throw std::runtime_error(
-                "invalid udp_paths entry; expected name|bind_ipv4|destination_ipv4|port: " + text);
+                "invalid udp_paths entry; expected name|bind_address|destination_address|port: " + text);
       }
       udp_paths_.push_back(std::make_unique<UdpPath>(*spec));
     }
@@ -82,17 +93,18 @@ public:
     heartbeat_sub_ = create_subscription<std_msgs::msg::Empty>(
       heartbeat_topic_, 10,
       [this](const std_msgs::msg::Empty::SharedPtr) {
-        send(StreamId::kGroundHeartbeat, {});
+        send(StreamId::kGroundHeartbeat, {}, 0U);
       });
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
       "/diagnostics", 10);
     probe_timer_ = create_wall_timer(std::chrono::seconds(1), [this]() {
-          send(StreamId::kLinkProbe, {});
+          send(StreamId::kLinkProbe, {}, 0U);
           publish_diagnostics();
     });
 
     RCLCPP_INFO(
-      get_logger(), "critical-link sender session=%llu udp_paths=%zu serial=%s",
+      get_logger(), "critical-link sender source=%u session=%llu udp_paths=%zu serial=%s",
+      source_id_,
       static_cast<unsigned long long>(session_id_), udp_paths_.size(),
       serial_device_.empty() ? "disabled" : serial_device_.c_str());
   }
@@ -163,14 +175,28 @@ private:
         "rejecting Joy with too many fields or non-finite axis");
       return;
     }
-    send(StreamId::kJoy, *payload);
+    uint16_t flags = 0U;
+    const bool control_active = deadman_button_ < 0 ||
+      (static_cast<size_t>(deadman_button_) < joy.buttons.size() && joy.buttons[deadman_button_] != 0);
+    if (control_active) {
+      flags |= kFlagControlActive;
+    }
+    const bool takeover_pressed = takeover_button_ >= 0 &&
+      static_cast<size_t>(takeover_button_) < joy.buttons.size() && joy.buttons[takeover_button_] != 0;
+    if (takeover_pressed && !takeover_pressed_) {
+      flags |= kFlagTakeoverRequest;
+    }
+    takeover_pressed_ = takeover_pressed;
+    send(StreamId::kJoy, *payload, flags);
   }
 
-  void send(StreamId stream, std::vector<uint8_t> payload)
+  void send(StreamId stream, std::vector<uint8_t> payload, uint16_t flags)
   {
     const size_t index = static_cast<size_t>(stream);
     Frame frame;
     frame.stream = stream;
+    frame.flags = flags;
+    frame.source_id = source_id_;
     frame.session_id = session_id_;
     frame.sequence = ++sequences_[index];
     frame.source_monotonic_ms = steady_milliseconds();
@@ -245,6 +271,10 @@ private:
 
   std::string joy_topic_;
   std::string heartbeat_topic_;
+  uint32_t source_id_{1};
+  int64_t deadman_button_{-1};
+  int64_t takeover_button_{-1};
+  bool takeover_pressed_{false};
   std::string serial_device_;
   int serial_baud_{921600};
   uint64_t session_id_{0};

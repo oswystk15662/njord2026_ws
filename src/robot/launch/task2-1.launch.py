@@ -2,7 +2,8 @@ import os
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, TimerAction
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, LogInfo, TimerAction
+from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
@@ -34,6 +35,11 @@ def generate_launch_description():
     enable_diagnostics_arg = DeclareLaunchArgument(
         "enable_diagnostics", default_value="true",
         description="Launch generic topic heartbeat diagnostics")
+    legacy_graph_arg = DeclareLaunchArgument(
+        "enable_legacy_graph", default_value="false",
+        description=(
+            "Compatibility only: start this historical hardware/Nav2 graph. "
+            "Keep false when persistent role bringup is running."))
 
     driver_delay = LaunchConfiguration("driver_delay")
     nav2_delay = LaunchConfiguration("nav2_delay")
@@ -107,12 +113,13 @@ def generate_launch_description():
         msg="========== Task2-1 (Collision Avoidance) Bringup Started ==========")
 
     return LaunchDescription([
-        startup_message,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,
         enable_diagnostics_arg,
-        sensor_layer_timer,
-        nav2_layer_timer,
-        goal_layer_timer,
+        legacy_graph_arg,
+        GroupAction(
+            condition=IfCondition(LaunchConfiguration("enable_legacy_graph")),
+            actions=[startup_message, sensor_layer_timer, nav2_layer_timer, goal_layer_timer],
+        ),
     ])
