@@ -58,3 +58,16 @@ signals:
     type: std_msgs/msg/Empty
     timeout_sec: 2.0
     expected_frequency_hz: 1.0
+
+# Derived heartbeats are role-owned just like the monitored signals above.
+# They are emitted only while every listed driver data source is fresh, so the
+# aggregate never masks a failed branch with an unconditional timer heartbeat.
+aggregates:
+  driver:
+    output_topic: /heartbeat/driver
+    input_signals:
+      - back_camera
+      - gnss
+      - micon
+    input_timeout_sec: 1.5
+    publish_period_sec: 0.5

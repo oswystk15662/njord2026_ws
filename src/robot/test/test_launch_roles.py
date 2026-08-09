@@ -440,6 +440,8 @@ def test_bringups_start_role_owned_health_monitors():
     assert 'f"{role}.yaml"' in heartbeat_source
     assert '"/health/signals/{role}"' in heartbeat_source
     assert '"/health/state" if role == "minipc"' in heartbeat_source
+    assert 'executable="heartbeat_aggregator_node"' in heartbeat_source
+    assert '"aggregates"' in heartbeat_source
     assert '"heartbeat_monitor_zed2i"' in heartbeat_source
     assert '"heartbeat_monitor_lidar"' in heartbeat_source
     assert "heartbeat_monitor_" not in minipc_source

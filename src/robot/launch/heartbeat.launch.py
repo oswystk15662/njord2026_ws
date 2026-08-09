@@ -64,7 +64,45 @@ def _load_inventory(role):
             raise RuntimeError(f"Signal {name!r} enabled must be boolean")
         if enabled:
             validated.append((name, topic, topic_type, timeout, expected))
-    return validated
+    aggregates = config.get("aggregates", {})
+    if not isinstance(aggregates, Mapping):
+        raise RuntimeError(f"{config_path} aggregates must be a mapping")
+    signal_by_name = {name: (topic, topic_type) for name, topic, topic_type, _, _ in validated}
+    validated_aggregates = []
+    output_topics = set()
+    for name, aggregate in aggregates.items():
+        if not isinstance(name, str) or not name.strip() or not isinstance(aggregate, Mapping):
+            raise RuntimeError(f"Invalid heartbeat aggregate in {config_path}: {name!r}")
+        required = ("output_topic", "input_signals", "input_timeout_sec", "publish_period_sec")
+        missing = [key for key in required if key not in aggregate]
+        if missing:
+            raise RuntimeError(f"Heartbeat aggregate {name!r} in {config_path} misses {missing}")
+        output_topic = aggregate["output_topic"]
+        input_names = aggregate["input_signals"]
+        if not isinstance(output_topic, str) or not output_topic.startswith("/"):
+            raise RuntimeError(f"Heartbeat aggregate {name!r} output_topic must be absolute")
+        if output_topic in output_topics:
+            raise RuntimeError(f"Duplicate heartbeat aggregate output_topic {output_topic!r}")
+        if not isinstance(input_names, list) or not input_names or not all(isinstance(item, str) for item in input_names):
+            raise RuntimeError(f"Heartbeat aggregate {name!r} input_signals must be a non-empty string list")
+        unknown = [item for item in input_names if item not in signal_by_name]
+        if unknown:
+            raise RuntimeError(f"Heartbeat aggregate {name!r} references unknown signals {unknown}")
+        try:
+            timeout = float(aggregate["input_timeout_sec"])
+            period = float(aggregate["publish_period_sec"])
+        except (TypeError, ValueError) as error:
+            raise RuntimeError(f"Heartbeat aggregate {name!r} has invalid timeout/period") from error
+        if timeout <= 0.0 or period <= 0.0:
+            raise RuntimeError(f"Heartbeat aggregate {name!r} timeout/period must be positive")
+        output_topics.add(output_topic)
+        validated_aggregates.append((
+            name, output_topic,
+            [signal_by_name[item][0] for item in input_names],
+            [signal_by_name[item][1] for item in input_names],
+            timeout, period,
+        ))
+    return validated, validated_aggregates
 
 
 def _monitor(role, name, topic, topic_type, timeout, expected):
@@ -91,13 +129,31 @@ def _monitor(role, name, topic, topic_type, timeout, expected):
     )
 
 
+def _aggregate(role, name, output_topic, input_topics, input_types, timeout, period):
+    return Node(
+        package="diagnostic_monitors",
+        executable="heartbeat_aggregator_node",
+        name=f"heartbeat_{role}_{name}",
+        output="screen",
+        parameters=[
+            {
+                "input_topics": input_topics,
+                "input_types": input_types,
+                "output_topic": output_topic,
+                "input_timeout_sec": timeout,
+                "publish_period_sec": period,
+            }
+        ],
+    )
+
+
 def _launch_setup(context, *args, **kwargs):
     del args, kwargs
     role = LaunchConfiguration("role").perform(context).strip().lower()
     if role not in _ROLES:
         raise RuntimeError(f"Unknown heartbeat role: {role!r}")
 
-    signals = _load_inventory(role)
+    signals, aggregates = _load_inventory(role)
     # These arguments remain accepted for compatibility with existing Jetson
     # bringup files.  The inventory still records all signals; disabling a
     # legacy branch only suppresses its monitor process for that launch.
@@ -114,6 +170,10 @@ def _launch_setup(context, *args, **kwargs):
         for name, topic, topic_type, timeout, expected in signals
         if name not in disabled
     ]
+    nodes.extend(
+        _aggregate(role, name, output_topic, input_topics, input_types, timeout, period)
+        for name, output_topic, input_topics, input_types, timeout, period in aggregates
+    )
     # miniPC is the canonical vessel health owner.  Role-local summaries on
     # Jetson and ground-PC remain observable without creating competing
     # publishers of /health/state.
