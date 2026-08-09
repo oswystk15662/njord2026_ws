@@ -461,7 +461,7 @@ class Task1Orchestrator(Node):
             marker.pose.position.y = float(y)
             marker.pose.position.z = float(z)
             marker.pose.orientation.w = 1.0
-            marker.scale.z = 2.40
+            marker.scale.z = 0.45
             marker.color.r, marker.color.g, marker.color.b = rgb
             marker.color.a = 1.0
             marker.text = text
@@ -489,9 +489,9 @@ class Task1Orchestrator(Node):
             half_pi = math.pi / 4.0
             marker.pose.orientation.y = -math.sin(half_pi) if points_up else math.sin(half_pi)
             marker.pose.orientation.w = math.cos(half_pi)
-            marker.scale.x = 1.60
-            marker.scale.y = 1.60
-            marker.scale.z = 1.60
+            marker.scale.x = 0.35
+            marker.scale.y = 0.35
+            marker.scale.z = 0.35
             marker.color.r, marker.color.g, marker.color.b = black
             marker.color.a = 1.0
             marker_array.markers.append(marker)
@@ -503,19 +503,18 @@ class Task1Orchestrator(Node):
                 "task1_red_green_reference_buoys",
                 x,
                 y,
-                2.00,
-                4.00,
+                0.25,
+                0.50,
                 rgb,
             )
-            # Deliberately oversized for a readable course display.
             add_cylinder(
                 marker_id,
                 "task1_red_green_reference_buoy_masts",
                 x,
                 y,
-                5.00,
-                1.10,
-                3.75,
+                1.00,
+                0.16,
+                1.50,
                 rgb,
             )
 
@@ -529,14 +528,14 @@ class Task1Orchestrator(Node):
                 marker_base_id = idx * 10
                 add_reference_buoy(marker_base_id + 1, bx, by, colour)
                 add_text(marker_base_id + 1, "task1_lateral_buoy_labels",
-                         bx, by, 7.60, label, colour)
+                         bx, by, 2.00, label, colour)
                 continue
-            # Preserve the official black/RAL1003 pattern and topmarks, but
-            # deliberately enlarge every visual element for course readability.
+            # Keep the official black/RAL1003 pattern and topmarks at a
+            # physical-size-like scale so they do not obscure the route.
             marker_base_id = idx * 10
             pattern = pattern_by_mark.get(mark, pattern_by_mark["N"])
-            float_diameter = 3.50
-            mast_height = 4.00
+            float_diameter = 0.50
+            mast_height = 1.50
             segment_height = mast_height / len(pattern)
             add_sphere(
                 marker_base_id + 1,
@@ -554,7 +553,7 @@ class Task1Orchestrator(Node):
                     bx,
                     by,
                     float_diameter + (segment_idx + 0.5) * segment_height,
-                    1.10,
+                    0.16,
                     segment_height,
                     rgb,
                 )
@@ -566,11 +565,11 @@ class Task1Orchestrator(Node):
                 "S": (False, False),
                 "W": (True, False),
             }.get(mark, (True, True))
-            add_topmark(marker_base_id + 8, bx, by, 8.40, cone_orientation[0])
-            add_topmark(marker_base_id + 9, bx, by, 9.90, cone_orientation[1])
+            add_topmark(marker_base_id + 8, bx, by, 2.05, cone_orientation[0])
+            add_topmark(marker_base_id + 9, bx, by, 2.38, cone_orientation[1])
             # Make the simulated cardinal direction unambiguous at a glance;
             # the real detection visualizer publishes the same label.
-            add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 11.40, mark, (1.0, 1.0, 1.0))
+            add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 2.85, mark, (1.0, 1.0, 1.0))
 
             # Exactly one lateral reference buoy accompanies each cardinal
             # mark. Its colour identifies the side the route must take: red
@@ -581,14 +580,14 @@ class Task1Orchestrator(Node):
                 "S": (0.0, -1.0), "W": (-1.0, 0.0),
             }.get(mark, (0.0, 1.0))
             is_port = passage_direction[0] * port_x + passage_direction[1] * port_y >= 0.0
-            reference_offset = 7.25
+            reference_offset = 2.0
             reference_x = bx + (port_x if is_port else -port_x) * reference_offset
             reference_y = by + (port_y if is_port else -port_y) * reference_offset
             reference_colour = lateral_red if is_port else lateral_green
             reference_label = "RED / PORT" if is_port else "GREEN / STARBOARD"
             add_reference_buoy(marker_base_id + 5, reference_x, reference_y, reference_colour)
             add_text(marker_base_id + 5, "task1_lateral_buoy_labels",
-                     reference_x, reference_y, 7.60, reference_label, reference_colour)
+                     reference_x, reference_y, 2.00, reference_label, reference_colour)
 
         self.pub_buoy_markers.publish(marker_array)
 
@@ -632,21 +631,20 @@ class Task1Orchestrator(Node):
             marker.pose.orientation.w = 1.0
 
             start = Point()
-            # Offset the direction arrow beyond the buoy sphere so the
-            # cardinal indication remains readable in Foxglove/RViz.
-            display_offset = 10.0
+            # Keep the direction cue adjacent to the physical-size buoy.
+            display_offset = 1.0
             start.x = float(bx + dx * display_offset)
             start.y = float(by + dy * display_offset)
-            start.z = 5.0
+            start.z = 1.25
             end = Point()
-            end.x = float(bx + dx * (display_offset + 15.0))
-            end.y = float(by + dy * (display_offset + 15.0))
-            end.z = 5.0
+            end.x = float(bx + dx * (display_offset + 2.0))
+            end.y = float(by + dy * (display_offset + 2.0))
+            end.z = 1.25
             marker.points = [start, end]
 
-            marker.scale.x = 1.25
-            marker.scale.y = 3.75
-            marker.scale.z = 3.75
+            marker.scale.x = 0.12
+            marker.scale.y = 0.30
+            marker.scale.z = 0.30
             marker.color = rgba
             marker_array.markers.append(marker)
 
