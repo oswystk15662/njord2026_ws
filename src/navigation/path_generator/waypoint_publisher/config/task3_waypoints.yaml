@@ -16,11 +16,9 @@
 #     -> berth1 exit -> mirrored corridor midpoint -> gps9(gate midpoint)
 #     -> berth2 approach -> berth2 -> gps10(finish)
 #
-# Field geometry (point-symmetric about origin):
-#   Normal dock (3.1):   x=19~21, y=±2.0  (boat enters from west, heading=0)
-#   Parallel dock (3.2): x=-19~-21, y=±2.0 (boat enters from east, heading=π)
-#   Gate buoys 3.1:      x≈18, y=10  (red/green midpoint)
-#   Gate buoys 3.2:      x≈-18, y=-10 (red/green midpoint)
+# Enter every waypoint as WGS84 latitude/longitude.  `/fromLL` projects them
+# to map at run time.  The values below are sample course data and must be
+# replaced with the surveyed Task3 points before field operation.
 
 task3_1_config:
   frame_id: "map"
@@ -30,8 +28,8 @@ task3_1_config:
   waypoints:
     # GPS 7: start (origin)
     - id: 7
-      x: 0.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5070555556
       yaw: 0.0
       type: "start"
       name: "GPS 7 - Start"
@@ -39,8 +37,8 @@ task3_1_config:
 
     # GPS 8: gate center between b31_red_gate and b31_green_gate
     - id: 8
-      x: 18.0
-      y: 10.0
+      latitude: 34.5457564978
+      longitude: 135.5072518662
       yaw: 1.5708        # heading north (π/2)
       type: "gate"
       name: "GPS 8 - Normal Dock Gate"
@@ -52,8 +50,8 @@ task3_1_config:
     # Midpoint of the deepest pair in the first three buoy sets.
     # This keeps the global plan inside the red/green buoy corridor.
     - id: "b31_corridor_gate"
-      x: 12.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5071864293
       yaw: 0.0
       type: "corridor_gate"
       name: "Task3.1 Buoy Corridor Gate"
@@ -61,8 +59,8 @@ task3_1_config:
 
     # Safe mouth point before entering the normal dock slot.
     - id: "berth1_approach"
-      x: 18.25
-      y: 1.065
+      latitude: 34.5456762337
+      longitude: 135.5072545927
       yaw: 0.0
       type: "dock_approach"
       name: "Berth 1 - Approach"
@@ -70,8 +68,8 @@ task3_1_config:
 
     # Berth 1: normal docking (center berth, heading east into dock)
     - id: "berth1"
-      x: 20.0
-      y: 1.065
+      latitude: 34.5456762337
+      longitude: 135.5072736785
       yaw: 0.0           # heading east (into normal dock)
       type: "dock"
       name: "Berth 1 - Normal Dock"
@@ -80,8 +78,8 @@ task3_1_config:
 
     # Back out to the mouth before navigating away from the dock.
     - id: "berth1_exit"
-      x: 18.25
-      y: 1.065
+      latitude: 34.5456762337
+      longitude: 135.5072545927
       yaw: 3.14159
       type: "undock_exit"
       name: "Berth 1 - Exit"
@@ -89,8 +87,8 @@ task3_1_config:
 
     # GPS 9: gate center between b32_red_gate and b32_green_gate
     - id: 9
-      x: -18.0
-      y: -10.0
+      latitude: 34.5455768356
+      longitude: 135.5068592450
       yaw: -1.5708       # heading south toward parallel dock gate
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
@@ -101,8 +99,8 @@ task3_1_config:
 
     # Point-symmetric corridor gate for Task3.2.
     - id: "b32_corridor_gate"
-      x: -12.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5069246819
       yaw: 3.14159
       type: "corridor_gate"
       name: "Task3.2 Buoy Corridor Gate"
@@ -110,8 +108,8 @@ task3_1_config:
 
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
-      x: -18.25
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5068565185
       yaw: 3.14159
       type: "dock_approach"
       name: "Berth 2 - Approach"
@@ -119,8 +117,8 @@ task3_1_config:
 
     # Berth 2: parallel docking (heading west into parallel dock)
     - id: "berth2"
-      x: -20.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5068374327
       yaw: 3.14159       # heading west (into parallel dock, π)
       type: "dock"
       name: "Berth 2 - Parallel Dock"
@@ -129,8 +127,8 @@ task3_1_config:
 
     # GPS 10: finish point (exit parallel dock, go south)
     - id: 10
-      x: -18.0
-      y: -11.0
+      latitude: 34.5455678525
+      longitude: 135.5068592450
       yaw: -1.5708       # heading south
       type: "goal"
       name: "GPS 10 - Finish"
@@ -168,8 +166,8 @@ task3_2_config:
   waypoints:
     # Start at origin
     - id: 9
-      x: 0.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5070555556
       yaw: 3.14159       # heading west
       type: "start"
       name: "GPS 9 - Start (standalone)"
@@ -177,8 +175,8 @@ task3_2_config:
 
     # Gate for parallel dock, centered between b32_red_gate and b32_green_gate
     - id: "9_gate"
-      x: -18.0
-      y: -10.0
+      latitude: 34.5455768356
+      longitude: 135.5068592450
       yaw: -1.5708
       type: "gate"
       name: "GPS 9 - Parallel Dock Gate"
@@ -189,8 +187,8 @@ task3_2_config:
 
     # Midpoint of the deepest pair in the first three mirrored buoy sets.
     - id: "b32_corridor_gate"
-      x: -12.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5069246819
       yaw: 3.14159
       type: "corridor_gate"
       name: "Task3.2 Buoy Corridor Gate"
@@ -198,8 +196,8 @@ task3_2_config:
 
     # Safe mouth point before entering the parallel dock.
     - id: "berth2_approach"
-      x: -18.25
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5068565185
       yaw: 3.14159
       type: "dock_approach"
       name: "Berth 2 - Approach"
@@ -207,8 +205,8 @@ task3_2_config:
 
     # Berth 2: parallel docking
     - id: "berth2"
-      x: -20.0
-      y: 0.0
+      latitude: 34.5456666667
+      longitude: 135.5068374327
       yaw: 3.14159
       type: "dock"
       name: "Berth 2 - Parallel Dock"
@@ -217,8 +215,8 @@ task3_2_config:
 
     # GPS 10: finish
     - id: 10
-      x: -18.0
-      y: -11.0
+      latitude: 34.5455678525
+      longitude: 135.5068592450
       yaw: -1.5708
       type: "goal"
       name: "GPS 10 - Finish"
