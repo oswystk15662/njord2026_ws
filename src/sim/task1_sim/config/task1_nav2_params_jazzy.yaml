@@ -33,6 +33,9 @@ controller_server:
       max_lookahead_dist: 4.0
       lookahead_time: 2.0
       rotate_to_heading_at_start: false
+      # Keep moving through a waypoint.  Its yaw remains a preferred goal
+      # checker condition, but must not trigger a turn-back maneuver.
+      use_rotate_to_heading: false
       # Costmaps and collision_monitor handle the simulator's virtual walls.
       # Keep RPP from aborting FollowPath into a recovery loop.
       use_collision_detection: false
