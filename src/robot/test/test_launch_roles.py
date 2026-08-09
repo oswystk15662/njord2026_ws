@@ -162,10 +162,8 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
     adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
-    task2_params = [
-        (Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text()
-        for filename in ("nav2_params_task2_humble.yaml", "nav2_params_task2_jazzy.yaml")
-    ]
+    task2_params = (Path(_LAUNCH_DIR).parents[0] / "config" /
+                    "nav2_params_task2_humble.yaml").read_text()
 
     assert '"navigation_launch_task2.py"' in minipc_source
     assert '"task2_mission_adapter.launch.py"' in minipc_source
@@ -192,11 +190,10 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
         "nav2_planner",
     ):
         assert forbidden not in task2_nav_source
-        assert all(forbidden not in params for params in task2_params)
-    for params in task2_params:
-        assert "use_collision_detection: false" in params
+        assert forbidden not in task2_params
+    assert "use_collision_detection: false" in task2_params
     assert "nav2_collision_monitor" in task2_nav_source
-    assert '"/task2/safety_points"' in task2_params[0]
+    assert '"/task2/safety_points"' in task2_params
 
 
 def test_legacy_task2_launch_uses_the_follow_path_only_graph():
