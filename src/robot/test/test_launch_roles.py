@@ -125,10 +125,14 @@ def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
     assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
 
 
-def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
+def test_minipc_bringup_uses_canonical_control_manager_by_default():
     source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"control_manager"' in source
+    assert '"control.launch.py"' in source
+    assert '"enable_control_manager"' in source
     assert 'executable="command_arbiter_node"' in source
     assert 'name="command_arbiter"' in source
+    assert 'condition=UnlessCondition(enable_control_manager)' in source
     assert 'package="twist_mux"' not in source
 
 

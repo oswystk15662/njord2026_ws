@@ -12,7 +12,7 @@ from rclpy.action import ActionClient
 from rclpy.node import Node
 
 from njord_interfaces.action import RunTask
-from njord_interfaces.srv import GetMissionStatus, ListTasks, StartTask, StopTask
+from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
 
 class TaskClient(Node):
@@ -22,6 +22,7 @@ class TaskClient(Node):
         self.status_client = self.create_client(GetMissionStatus, "/mission/get_status")
         self.start_client = self.create_client(StartTask, "/mission/start_task")
         self.stop_client = self.create_client(StopTask, "/mission/stop_task")
+        self.set_mode_client = self.create_client(SetControlMode, "/control/set_mode")
         self.run_client = ActionClient(self, RunTask, "/mission/run_task")
 
     def call(self, client, request, timeout: float = 5.0):
@@ -47,6 +48,7 @@ def _parser() -> argparse.ArgumentParser:
     start.add_argument("--dry-run", action="store_true")
     stop = commands.add_parser("stop")
     stop.add_argument("--execution-id", default="", help="defaults to the current mission execution")
+    commands.add_parser("manual", help="request MANUAL through the canonical control manager")
     return parser
 
 
@@ -91,8 +93,15 @@ def main(argv=None) -> int:
                 return 2
             request = StopTask.Request()
             request.execution_id = execution_id
-            request.return_to_manual = False
+            request.return_to_manual = True
             response = client.call(client.stop_client, request)
+            print(response.message)
+            return 0 if response.accepted else 2
+        if args.command == "manual":
+            request = SetControlMode.Request()
+            request.requested_mode = SetControlMode.Request.MODE_MANUAL
+            request.request_id = f"njord-task-manual-{uuid.uuid4()}"
+            response = client.call(client.set_mode_client, request)
             print(response.message)
             return 0 if response.accepted else 2
     except RuntimeError as exc:
