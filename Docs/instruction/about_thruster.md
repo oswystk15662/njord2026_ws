@@ -6,7 +6,7 @@
 
 thruster_id_check手順
 1. jetsonで ```ros2 launch simple_manual thruster_id_test.launch.py```
-2. 10secおきに、FR, FL, RR, RLの順で正転するか確認
+2. 10secおきに、RR, RL, FR, FLの順で正転するか確認
 
 できなかったときの確認
 - [ ] コントローラーをBluetoothでつないでいるか

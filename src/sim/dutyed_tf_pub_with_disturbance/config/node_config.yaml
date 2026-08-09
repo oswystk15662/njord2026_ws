@@ -12,7 +12,7 @@ dutyed_tf_pub_with_disturbance_node:
     map_offset_xyyaw: [0.0, 0.0, 0.0]
     odom_offset_xyyaw: [0.0, 0.0, 0.0]
 
-    # /thruster_command is Float32MultiArray[FR, FL, RR, RL] in Newton.
+    # /thruster_command is Float32MultiArray[RR, RL, FR, FL] in Newton.
     # Match thruster_driver.thrusters.reverse: the two port-side actuators
     # are electrically reversed, so their command signs must be converted
     # back before they are applied as physical forces in the simulator.

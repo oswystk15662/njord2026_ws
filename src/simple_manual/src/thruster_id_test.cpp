@@ -9,7 +9,7 @@ namespace
 {
 constexpr size_t kNumThrusters = 4;
 constexpr std::chrono::seconds kHoldDuration{10};
-constexpr std::array<const char *, kNumThrusters> kThrusterIds = {"FR", "FL", "RR", "RL"};
+constexpr std::array<const char *, kNumThrusters> kThrusterIds = {"RR", "RL", "FR", "FL"};
 }  // namespace
 
 class ThrusterIdTest : public rclcpp::Node
