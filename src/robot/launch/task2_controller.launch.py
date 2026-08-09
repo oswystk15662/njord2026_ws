@@ -54,6 +54,20 @@ def generate_launch_description():
             "enable_replanning": True,
         }],
     )
+    safety_gate = Node(
+        package="asv_trajectory_planner",
+        executable="safety_cloud_gate_node",
+        name="task2_safety_cloud_gate",
+        output="screen",
+        parameters=[{
+            "safety_topic": "/task2/safety_points",
+            "cmd_vel_in_topic": "/cmd_vel_collision_checked",
+            "cmd_vel_out_topic": "/cmd_vel_nav",
+            "safety_timeout_sec": 1.0,
+            "command_timeout_sec": 0.5,
+            "publish_rate_hz": 20.0,
+        }],
+    )
     autonomy_ready = Node(
         package="asv_trajectory_planner",
         executable="task2_autonomy_ready_node",
@@ -75,5 +89,6 @@ def generate_launch_description():
         ),
         nav2,
         follow_path,
+        safety_gate,
         autonomy_ready,
     ])

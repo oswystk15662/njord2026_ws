@@ -47,6 +47,7 @@ def test_task2_two_machine_split_keeps_controller_and_stop_on_minipc():
     assert '"navigation_launch_task2.py"' in controller
     assert 'executable="follow_path_client_node"' in controller
     assert 'executable="task2_autonomy_ready_node"' in controller
+    assert 'executable="safety_cloud_gate_node"' in controller
     assert "command_arbiter" not in controller
     assert '"enable_safety_cloud"' in perception
     assert '"output_topic": "/task2/safety_points"' in perception
@@ -55,3 +56,5 @@ def test_task2_two_machine_split_keeps_controller_and_stop_on_minipc():
     ).read_text()
     assert 'topic: /task2/safety_points' in humble_params
     assert 'action_type: "stop"' in humble_params
+    assert 'cmd_vel_out_topic: "/cmd_vel_collision_checked"' in humble_params
+    assert 'max_points: 3' in humble_params

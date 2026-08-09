@@ -41,8 +41,10 @@ ros2 launch robot task2_controller.launch.py
 Jetson は `/livox/lidar` を外部へそのまま出さず、MPPI の
 `/planned_path_pruned` と、12 m以内・0.20 mボクセルの
 `/task2/safety_points` だけを miniPC へ渡します。miniPC はその経路を
-`FollowPath → velocity_smoother → Collision Monitor → /cmd_vel_nav → command_arbiter`
-として実行します。Collision Monitor は近傍点群が停止領域に入ると停止指令を出します。
+`FollowPath → velocity_smoother → Collision Monitor → safety-cloud gate → /cmd_vel_nav → command_arbiter`
+として実行します。Collision Monitor は近傍点群が停止領域に入ると停止指令を出し、
+safety-cloud gate はJetsonからの安全点群またはCollision Monitor出力が1秒／0.5秒以内に
+更新されなければ、`/cmd_vel_nav` にゼロ速度だけを出します。
 
 `/task2/safety_points` の空・欠落・遅延時の実機挙動は、必ず係留した状態で確認してから
 auto modeへ移行してください。これはソフトウェアの近傍停止であり、物理非常停止や操縦者の
