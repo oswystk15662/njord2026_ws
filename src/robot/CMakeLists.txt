@@ -10,7 +10,11 @@ find_package(ament_cmake REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
+find_package(rclcpp_lifecycle REQUIRED)
 find_package(sensor_msgs REQUIRED)
+find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
+find_package(pluginlib REQUIRED)
 
 add_executable(localization_input_guard src/localization_input_guard.cpp)
 ament_target_dependencies(localization_input_guard
@@ -23,6 +27,23 @@ ament_target_dependencies(localization_input_guard
 install(TARGETS localization_input_guard
   DESTINATION lib/${PROJECT_NAME}
 )
+
+add_library(pass_through_goal_checker SHARED
+  src/pass_through_goal_checker.cpp
+)
+set_target_properties(pass_through_goal_checker PROPERTIES
+  INTERPROCEDURAL_OPTIMIZATION OFF
+)
+ament_target_dependencies(pass_through_goal_checker
+  geometry_msgs nav2_core nav2_costmap_2d pluginlib rclcpp rclcpp_lifecycle
+)
+pluginlib_export_plugin_description_file(nav2_core goal_checker_plugin.xml)
+install(TARGETS pass_through_goal_checker
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
+install(FILES goal_checker_plugin.xml DESTINATION share/${PROJECT_NAME})
 
 install(DIRECTORY
   launch config urdf

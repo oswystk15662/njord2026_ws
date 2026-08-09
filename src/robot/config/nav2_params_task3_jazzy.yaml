@@ -89,10 +89,10 @@ controller_server:
       GoalDist.scale: 24.0
 
     general_goal_checker:
-      stateful: True
-      plugin: "nav2_controller::SimpleGoalChecker"
+      plugin: "robot::PassThroughGoalChecker"
       xy_goal_tolerance: 0.8
       yaw_goal_tolerance: 3.14
+      exit_margin_m: 0.05
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths
