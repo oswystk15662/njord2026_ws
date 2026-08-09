@@ -47,7 +47,11 @@ normal operating states.
 
 ## Configuration and diagnostics
 
-Canonical input, blink-period, and driver output topics are in `config/alert_lamp.yaml`.
+Canonical inputs, the topic-condition-to-pattern table, named display patterns,
+and driver output topics are in `config/alert_lamp.yaml`.  The `topic_rules`
+section makes the relationship explicit as `topic condition -> alert state ->
+pattern`; its priority matches the safety evaluator.  The `patterns` section is
+read by the manager at runtime, so colors and timing are configuration values.
 Both nodes publish standard ROS 2
 diagnostics on `/diagnostics` named `Alert Lamp Manager` and `Alert Lamp Driver`.
 

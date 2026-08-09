@@ -25,6 +25,8 @@ private:
   void onTimer();
   void updateDiagnostic(diagnostic_updater::DiagnosticStatusWrapper & stat);
   SystemStatus collectStatus(const rclcpp::Time & now) const;
+  LampDisplay displayFor(AlertState state, const SystemStatus & status) const;
+  LampDisplay loadDisplay(const std::string & name, const LampDisplay & defaults);
 
   StatusEvaluator evaluator_;
   bool control_received_{false};
@@ -42,10 +44,13 @@ private:
   rclcpp::Publisher<msg::AlertLampCommand>::SharedPtr command_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
   diagnostic_updater::Updater updater_;
-  float green_period_{1.0F};
-  float yellow_period_{1.0F};
-  float red_period_{0.5F};
-  float duty_ratio_{0.5F};
+  LampDisplay initializing_display_;
+  LampDisplay manual_normal_display_;
+  LampDisplay auto_normal_display_;
+  LampDisplay autonomy_not_ready_display_;
+  LampDisplay ground_link_lost_auto_display_;
+  LampDisplay ground_link_lost_manual_display_;
+  LampDisplay critical_fault_display_;
 };
 
 }  // namespace alert_lamp
