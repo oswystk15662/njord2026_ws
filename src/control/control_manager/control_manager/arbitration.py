@@ -23,6 +23,13 @@ class State(IntEnum):
     EMERGENCY_STOP = 6
 
 
+def compatibility_control_status(*, emergency_stop: bool, requested_mode: int) -> str:
+    """Return the legacy Foxglove status without making it a control input."""
+    if emergency_stop:
+        return "emergency_stop"
+    return "auto" if requested_mode == 1 else "manual"
+
+
 def derive_control_state(
     *, emergency_stop: bool, auto_requested: bool, auto_permitted: bool,
     manual_command_fresh: bool, nav_command_fresh: bool,

@@ -1,6 +1,14 @@
 import pytest
 
-from control_manager.arbitration import State, Source, derive_control_state, select_source
+from control_manager.arbitration import (
+    State, Source, compatibility_control_status, derive_control_state, select_source,
+)
+
+
+def test_compatibility_control_status_uses_requested_mode_except_emergency_stop():
+    assert compatibility_control_status(emergency_stop=False, requested_mode=0) == "manual"
+    assert compatibility_control_status(emergency_stop=False, requested_mode=1) == "auto"
+    assert compatibility_control_status(emergency_stop=True, requested_mode=1) == "emergency_stop"
 
 
 @pytest.mark.parametrize(
