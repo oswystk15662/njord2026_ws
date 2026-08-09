@@ -64,6 +64,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('point_spacing_m', 0.1)
         self.declare_parameter('marker_merge_radius_m', 2.0)
         self.declare_parameter('confirmations_required', 2)
+        self.declare_parameter('max_confirmed_tracks', 0)
         self.declare_parameter('publish_rate_hz', 2.0)
         self.declare_parameter('course_heading_rad', 0.0)
         self.declare_parameter('true_north_heading_topic', '')
@@ -90,6 +91,7 @@ class CardinalWallPublisher(Node):
         self.spacing = max(0.02, float(self.get_parameter('point_spacing_m').value))
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
+        self.max_confirmed_tracks = max(0, int(self.get_parameter('max_confirmed_tracks').value))
         self.course_heading_rad = float(self.get_parameter('course_heading_rad').value)
         retirement_heading = float(self.get_parameter('retirement_course_heading_rad').value)
         self.retirement_course_heading_rad = (
@@ -110,6 +112,7 @@ class CardinalWallPublisher(Node):
         # unchanged.
         self._marker_reset_pending = True
         self._published_marker_ids = set()
+        self._track_capacity_warning_emitted = False
         self.preview_tracks = self._load_preview_tracks(
             self.get_parameter('preview_buoy_positions').value,
             self.get_parameter('preview_buoy_marks').value)
@@ -206,6 +209,7 @@ class CardinalWallPublisher(Node):
             # next run before its GPS3 gate is crossed.
             self.walls_enabled = False
             self.tracks.clear()
+            self._track_capacity_warning_emitted = False
             self.get_logger().info('Task1 wall gate reset: cleared prior virtual-wall tracks')
 
     def _on_retirement_heading(self, msg):
@@ -299,6 +303,14 @@ class CardinalWallPublisher(Node):
                 nearest['candidate'] = class_id
                 nearest['count'] = 1
         if nearest['class_id'] is None and nearest['count'] >= self.required_confirmations:
+            confirmed_count = sum(track['class_id'] is not None for track in self.tracks)
+            if self.max_confirmed_tracks and confirmed_count >= self.max_confirmed_tracks:
+                if not self._track_capacity_warning_emitted:
+                    self.get_logger().warn(
+                        f'Ignoring new buoy wall track: Task1 limit is '
+                        f'{self.max_confirmed_tracks} confirmed tracks')
+                    self._track_capacity_warning_emitted = True
+                return
             nearest['class_id'] = nearest['candidate']
             nearest['true_north_yaw_rad'] = self.true_north_yaw_rad
             self.get_logger().info(
