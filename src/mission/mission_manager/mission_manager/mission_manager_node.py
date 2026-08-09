@@ -348,7 +348,7 @@ class MissionManager(Node):
                 )
             self._machine.transition(
                 MissionState.CONFIGURING, execution_id=decision.execution_id,
-                stage="project_waypoints", message=f"projecting {route.coordinate_mode} waypoint coordinates",
+                stage="project_waypoints", message="projecting latitude/longitude waypoint coordinates",
             )
             self._start_coordinate_projection(decision.execution_id, task, route, request)
             self._publish_status()

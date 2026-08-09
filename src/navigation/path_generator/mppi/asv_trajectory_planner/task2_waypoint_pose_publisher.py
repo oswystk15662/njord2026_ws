@@ -67,7 +67,7 @@ class Task2WaypointPosePublisher(Node):
         publish_frequency = self.get_parameter("publish_frequency").value
         timer_period = 1.0 / max(publish_frequency, 1e-6)
 
-        self.coordinate_mode, self.origin, self.start_wp, self.goal_wp = self._load_waypoints(
+        self.start_wp, self.goal_wp = self._load_waypoints(
             config_package=config_package,
             config_file=config_file,
             config_key=config_key,
@@ -130,10 +130,7 @@ class Task2WaypointPosePublisher(Node):
             waypoints[-1],
         )
 
-        mode = config.get("coordinate_mode", "map_xy")
-        if mode not in ("map_xy", "origin_relative_xy", "geodetic"):
-            raise ValueError("coordinate_mode must be map_xy, origin_relative_xy, or geodetic")
-        return mode, config.get("origin"), start_wp, goal_wp
+        return start_wp, goal_wp
 
     @staticmethod
     def _request(point):
@@ -146,19 +143,14 @@ class Task2WaypointPosePublisher(Node):
     def _resolve_coordinates(self):
         if self.waypoint1_xy is not None:
             return
-        if self.coordinate_mode == "map_xy":
-            self.waypoint1_xy = (float(self.start_wp["x"]), float(self.start_wp["y"]))
-            self.waypoint2_xy = (float(self.goal_wp["x"]), float(self.goal_wp["y"]))
-            return
         if not self.from_ll_client.service_is_ready():
             self.get_logger().warning("Waiting for /fromLL to resolve Task2 GPS waypoints.", throttle_duration_sec=2.0)
             return
         if self.projection_futures is None:
             try:
-                points = ([self.origin] if self.coordinate_mode == "origin_relative_xy"
-                          else [self.start_wp, self.goal_wp])
+                points = [self.start_wp, self.goal_wp]
                 if any(not isinstance(point, dict) or "latitude" not in point or "longitude" not in point for point in points):
-                    raise ValueError(f"{self.coordinate_mode} requires the documented latitude/longitude fields")
+                    raise ValueError("each Task2 waypoint requires latitude and longitude")
                 self.projection_futures = [self.from_ll_client.call_async(self._request(point)) for point in points]
             except Exception as error:
                 self.get_logger().error(f"Invalid Task2 waypoint GPS configuration: {error}")
@@ -168,13 +160,8 @@ class Task2WaypointPosePublisher(Node):
         try:
             positions = [(future.result().map_point.x, future.result().map_point.y)
                          for future in self.projection_futures]
-            if self.coordinate_mode == "origin_relative_xy":
-                ox, oy = positions[0]
-                self.waypoint1_xy = (ox + float(self.start_wp["x"]), oy + float(self.start_wp["y"]))
-                self.waypoint2_xy = (ox + float(self.goal_wp["x"]), oy + float(self.goal_wp["y"]))
-            else:
-                self.waypoint1_xy, self.waypoint2_xy = positions
-            self.get_logger().info(f"Resolved Task2 {self.coordinate_mode} waypoints in map frame.")
+            self.waypoint1_xy, self.waypoint2_xy = positions
+            self.get_logger().info("Resolved Task2 latitude/longitude waypoints in map frame.")
         except Exception as error:
             self.projection_futures = None
             self.get_logger().error(f"Task2 GPS waypoint projection failed: {error}")

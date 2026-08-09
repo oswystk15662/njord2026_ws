@@ -78,7 +78,6 @@ def generate_launch_description():
             # waypoint projection all share this frame.
             'frame_id': 'map',
             'publish_rate_hz': '2.0',
-            'use_geodetic_waypoints': LaunchConfiguration('use_geodetic_waypoints'),
         },
         condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )
@@ -156,11 +155,6 @@ def generate_launch_description():
                 'task1: full course; task1_skip_1_1: omit the Task1-1 '
                 'maneuvering section and run the GPS point 1-to-2 smoke test.'
             ),
-        ),
-        DeclareLaunchArgument(
-            'use_geodetic_waypoints',
-            default_value='true',
-            description='Use latitude/longitude on every waypoint and project them to map via /fromLL.',
         ),
         DeclareLaunchArgument(
             'lidar_start_delay',

@@ -1,9 +1,6 @@
 # Task 1: Maneuvering and Path Finding
-# The Task1 simulation coordinates below use the same rotated local frame as
-# task1_sim/config/task1_params.yaml.  In particular, x points along the
-# course and y is the lateral axis.  Do not publish the raw ENU follow-test
-# points here: their unrotated end point (35.66, 27.83) is outside the Task1
-# simulated course (y = -40 .. 15).
+# Every waypoint is entered as WGS84 latitude/longitude and projected to map
+# through /fromLL.  Replace the sample coordinates with surveyed course data.
 #
 # `task1_config` is the official NJORD 2026 Task1 competition scenario: a
 # Cartesian sim approximation of the "4 GPS point -> cardinal marker slalom"
@@ -24,35 +21,17 @@
 
 task1_config:
   frame_id: "map"
-  # Mission Manager (`njord-task start task1 --auto`) の座標指定方法:
-  #
-  # 1) origin_relative_xy（実機の推奨）:
-  #    origin に基準点GPS（例: GPS1）を入れる。waypoints の x,y は基準点から
-  #    東を+x、北を+y とするメートル値。origin は /fromLL で実行時mapへ投影される。
-  #
-  # 2) geodetic:
-  #    下の各 waypoint から x,y を削除し、代わりに latitude, longitude を全点へ書く。
-  #    例: {id: 2, competition_id: "1.1", latitude: 34.5, longitude: 135.5, yaw: 0.0}
-  #
-  # 3) map_xy（旧互換）:
-  #    x,y を既にmap座標として使う。origin/GPS値は走行位置に使わない。
-  #
-  # GPS3/GPS4の competition_id はどのモードでも残すこと。GPS3通過後の仮想壁
+  # GPS3/GPS4の competition_id は残すこと。GPS3通過後の仮想壁
   # 有効化と、GPS3→GPS4の方位算出に使う。
-  coordinate_mode: "origin_relative_xy"
   publish_rate_hz: 2.0
-  origin:
-    latitude: 34.5456666667
-    longitude: 135.5070555556
-    name: "GPS 1 - Slalom Start"
   # Full Task1 route: task1-1's maneuvering waypoints, followed by the
   # cardinal-marker S/N/S slalom. This order matches task1_sim's evaluation
   # sequence (waypoint1_xy, GPS checkpoints, then waypoint2_xy).
   waypoints:
     - id: 1
       competition_id: "1"
-      x: 0.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5070555556
       yaw: 0.4636
       type: "start"
       name: "GPS 1"
@@ -60,8 +39,8 @@ task1_config:
 
     - id: 2
       competition_id: "1.1"
-      x: 10.0000
-      y: 5.0000
+      latitude: 34.5457115823
+      longitude: 135.5071646170
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.1"
@@ -69,8 +48,8 @@ task1_config:
 
     - id: 3
       competition_id: "1.2"
-      x: 13.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5071973355
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.2"
@@ -78,8 +57,8 @@ task1_config:
 
     - id: 4
       competition_id: "1.3"
-      x: 16.0000
-      y: -5.0000
+      latitude: 34.5456217511
+      longitude: 135.5072300539
       yaw: 0.9828
       type: "waypoint"
       name: "GPS 1.3"
@@ -87,8 +66,8 @@ task1_config:
 
     - id: 5
       competition_id: "1.4"
-      x: 19.0000
-      y: -0.5000
+      latitude: 34.5456621751
+      longitude: 135.5072627723
       yaw: 1.1384
       type: "waypoint"
       name: "GPS 1.4"
@@ -96,8 +75,8 @@ task1_config:
 
     - id: 6
       competition_id: "1.5"
-      x: 22.0000
-      y: 6.0000
+      latitude: 34.5457205654
+      longitude: 135.5072954907
       yaw: -1.1071
       type: "waypoint"
       name: "GPS 1.5"
@@ -105,8 +84,8 @@ task1_config:
 
     - id: 7
       competition_id: "1.6"
-      x: 25.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5073282092
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.6"
@@ -114,8 +93,8 @@ task1_config:
 
     - id: 8
       competition_id: "1.7"
-      x: 28.0000
-      y: -5.0000
+      latitude: 34.5456217511
+      longitude: 135.5073609276
       yaw: 0.9273
       type: "waypoint"
       name: "GPS 1.7"
@@ -123,8 +102,8 @@ task1_config:
 
     - id: 9
       competition_id: "1.8"
-      x: 31.0000
-      y: -1.0000
+      latitude: 34.5456576836
+      longitude: 135.5073936460
       yaw: 0.7854
       type: "waypoint"
       name: "GPS 1.8"
@@ -132,8 +111,8 @@ task1_config:
 
     - id: 10
       competition_id: "1.9"
-      x: 34.0000
-      y: 2.0000
+      latitude: 34.5456846329
+      longitude: 135.5074263645
       yaw: -0.3218
       type: "waypoint"
       name: "GPS 1.9"
@@ -141,8 +120,8 @@ task1_config:
 
     - id: 11
       competition_id: "1.10"
-      x: 40.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5074918013
       yaw: 0.0000
       type: "waypoint"
       name: "GPS 1.10"
@@ -150,8 +129,8 @@ task1_config:
 
     - id: 12
       competition_id: "2"
-      x: 50.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5076008628
       yaw: -1.5708
       type: "transit"
       name: "GPS 2"
@@ -159,8 +138,8 @@ task1_config:
 
     - id: 13
       competition_id: "3"
-      x: 50.0000
-      y: -25.0000
+      latitude: 34.5454420889
+      longitude: 135.5076008628
       yaw: -2.7744
       type: "start"
       name: "GPS 3"
@@ -168,8 +147,8 @@ task1_config:
 
     - id: 14
       competition_id: "3.1"
-      x: 24.0000
-      y: -35.0000
+      latitude: 34.5453522578
+      longitude: 135.5073173030
       yaw: 1.9937
       type: "turn"
       name: "GPS 3.1"
@@ -177,8 +156,8 @@ task1_config:
 
     - id: 15
       competition_id: "3.2"
-      x: 15.0000
-      y: -15.0000
+      latitude: 34.5455319200
+      longitude: 135.5072191477
       yaw: -1.9075
       type: "turn"
       name: "GPS 3.2"
@@ -186,8 +165,8 @@ task1_config:
 
     - id: 16
       competition_id: "3.3"
-      x: 8.0000
-      y: -35.0000
+      latitude: 34.5453522578
+      longitude: 135.5071428047
       yaw: 2.2455
       type: "turn"
       name: "GPS 3.3"
@@ -195,8 +174,8 @@ task1_config:
 
     - id: 17
       competition_id: "4"
-      x: 0.0000
-      y: -25.0000
+      latitude: 34.5454420889
+      longitude: 135.5070555556
       yaw: 2.2455
       type: "goal"
       name: "GPS 4"

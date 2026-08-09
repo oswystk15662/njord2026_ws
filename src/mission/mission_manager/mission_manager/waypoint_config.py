@@ -47,8 +47,6 @@ class Route:
     stages: Mapping[str, tuple[str, ...]]
     full_sequence_stages: Mapping[str, tuple[str, ...]]
     constraints: Mapping[str, object]
-    coordinate_mode: str = "map_xy"
-    origin: GeodeticPoint | None = None
 
     def stage(self, name: str, *, full_sequence: bool = False) -> tuple[Waypoint, ...]:
         stage_set = self.full_sequence_stages if full_sequence else self.stages
@@ -58,11 +56,6 @@ class Route:
 
     def projection_points(self) -> tuple[GeodeticPoint, ...]:
         """GPS points which must be converted by navsat_transform /fromLL."""
-        if self.coordinate_mode == "map_xy":
-            return ()
-        if self.coordinate_mode == "origin_relative_xy":
-            assert self.origin is not None
-            return (self.origin,)
         return tuple(
             GeodeticPoint(w.latitude, w.longitude, w.altitude)
             for w in self.waypoints
@@ -70,20 +63,12 @@ class Route:
 
     def with_projected_points(self, points: tuple[tuple[float, float], ...]) -> "Route":
         """Return map-coordinate waypoints after /fromLL conversion."""
-        if self.coordinate_mode == "map_xy":
-            return self
-        if self.coordinate_mode == "origin_relative_xy":
-            if len(points) != 1:
-                raise RegistryError("origin_relative_xy requires one projected origin")
-            ox, oy = points[0]
-            waypoints = tuple(replace(w, x=ox + w.x, y=oy + w.y) for w in self.waypoints)
-        else:
-            if len(points) != len(self.waypoints):
-                raise RegistryError("geodetic requires one projected point per waypoint")
-            waypoints = tuple(
-                replace(w, x=position[0], y=position[1])
-                for w, position in zip(self.waypoints, points)
-            )
+        if len(points) != len(self.waypoints):
+            raise RegistryError("latitude/longitude requires one projected point per waypoint")
+        waypoints = tuple(
+            replace(w, x=position[0], y=position[1])
+            for w, position in zip(self.waypoints, points)
+        )
         return replace(self, waypoints=waypoints)
 
 
@@ -96,8 +81,7 @@ class WaypointConfigLoader:
         if not isinstance(raw, dict):
             raise RegistryError(f"route key {route_key!r} is absent from {path}")
         allowed = {
-            "frame_id", "publish_rate_hz", "origin", "gps_points", "waypoints", "constraints",
-            "coordinate_mode",
+            "frame_id", "publish_rate_hz", "waypoints", "constraints",
             "scenario", "stages", "full_sequence_stages",
         }
         unknown = set(raw).difference(allowed)
@@ -106,16 +90,7 @@ class WaypointConfigLoader:
         frame_id = raw.get("frame_id")
         if not isinstance(frame_id, str) or not frame_id:
             raise RegistryError(f"route {route_key!r} requires a non-empty frame_id")
-        coordinate_mode = raw.get("coordinate_mode", "map_xy")
-        if coordinate_mode not in {"map_xy", "origin_relative_xy", "geodetic"}:
-            raise RegistryError(
-                f"route {route_key!r} coordinate_mode must be map_xy, "
-                "origin_relative_xy, or geodetic"
-            )
-        origin = self._geodetic_point(raw.get("origin"), route_key, "origin", required=False)
-        if coordinate_mode == "origin_relative_xy" and origin is None:
-            raise RegistryError(f"route {route_key!r} origin_relative_xy requires origin latitude/longitude")
-        waypoints = self._waypoints(raw.get("waypoints"), route_key, coordinate_mode)
+        waypoints = self._waypoints(raw.get("waypoints"), route_key)
         ids = {waypoint.waypoint_id for waypoint in waypoints}
         stages = self._stages(raw.get("stages", {}), ids, route_key, "stages")
         full_stages = self._stages(
@@ -126,7 +101,6 @@ class WaypointConfigLoader:
             raise RegistryError(f"route {route_key!r} constraints must be a mapping")
         return Route(
             frame_id, tuple(waypoints), stages, full_stages, constraints,
-            coordinate_mode=coordinate_mode, origin=origin,
         )
 
     @staticmethod
@@ -153,7 +127,7 @@ class WaypointConfigLoader:
         return GeodeticPoint(values["latitude"], values["longitude"], float(altitude))
 
     @classmethod
-    def _waypoints(cls, raw: object, route_key: str, coordinate_mode: str) -> list[Waypoint]:
+    def _waypoints(cls, raw: object, route_key: str) -> list[Waypoint]:
         if not isinstance(raw, list) or not raw:
             raise RegistryError(f"route {route_key!r} requires non-empty waypoints")
         result = []
@@ -169,8 +143,7 @@ class WaypointConfigLoader:
                 raise RegistryError(f"route {route_key!r} waypoint IDs must be unique")
             seen.add(waypoint_id)
             values = {}
-            required_position_names = ("x", "y") if coordinate_mode != "geodetic" else ()
-            for name in (*required_position_names, "yaw"):
+            for name in ("yaw",):
                 value = item.get(name)
                 if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value):
                     raise RegistryError(
@@ -187,7 +160,7 @@ class WaypointConfigLoader:
                     f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
                 )
             geodetic = cls._geodetic_point(
-                item, route_key, f"waypoint {waypoint_id!r}", required=coordinate_mode == "geodetic"
+                item, route_key, f"waypoint {waypoint_id!r}", required=True
             )
             result.append(Waypoint(
                 waypoint_id, values.get("x", 0.0), values.get("y", 0.0), values["yaw"],
