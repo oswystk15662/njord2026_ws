@@ -24,6 +24,10 @@ class Waypoint:
     name: str
     waypoint_type: str
     gate_pair: object = None
+    # Competition checkpoint identity is distinct from the sequential YAML
+    # id (for example, sequential id 13 is competition GPS3).  Mission
+    # Manager needs this metadata to apply Task1 stage safety behavior.
+    competition_id: str = ""
 
 
 @dataclass(frozen=True)
@@ -98,9 +102,14 @@ class WaypointConfigLoader:
             waypoint_type = item.get("type", "waypoint")
             if not isinstance(name, str) or not isinstance(waypoint_type, str):
                 raise RegistryError(f"route {route_key!r} waypoint {waypoint_id!r} has invalid metadata")
+            competition_id = item.get("competition_id", waypoint_id)
+            if isinstance(competition_id, bool) or not isinstance(competition_id, (str, int, float)):
+                raise RegistryError(
+                    f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
+                )
             result.append(
                 Waypoint(waypoint_id, values["x"], values["y"], values["yaw"], name, waypoint_type,
-                         item.get("gate_pair"))
+                         item.get("gate_pair"), str(competition_id))
             )
         return result
 

@@ -181,6 +181,13 @@ class CardinalWallPublisher(Node):
         if msg.data and not self.walls_enabled:
             self.walls_enabled = True
             self.get_logger().info('GPS3 reached: enabling confirmed buoy virtual walls')
+        elif not msg.data and self.walls_enabled:
+            # A new Mission Manager execution starts with false.  Do not let
+            # confirmed positions from a previous run become obstacles in the
+            # next run before its GPS3 gate is crossed.
+            self.walls_enabled = False
+            self.tracks.clear()
+            self.get_logger().info('Task1 wall gate reset: cleared prior virtual-wall tracks')
 
     def _on_retirement_heading(self, msg):
         """Accept the map-frame GPS3->4 heading calculated from route points."""

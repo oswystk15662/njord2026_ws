@@ -478,16 +478,17 @@ class Task1Orchestrator(Node):
             marker.header.stamp = stamp
             marker.ns = "task1_cardinal_topmark"
             marker.id = marker_id
-            marker.type = Marker.CONE
+            # visualization_msgs/Marker has no CONE primitive.  ARROW is a
+            # supported primitive with a conical head and keeps the paired
+            # topmark visible without requiring an external mesh asset.
+            marker.type = Marker.ARROW
             marker.action = Marker.ADD
             marker.pose.position.x = float(x)
             marker.pose.position.y = float(y)
             marker.pose.position.z = float(z)
-            if points_up:
-                marker.pose.orientation.w = 1.0
-            else:
-                marker.pose.orientation.x = 1.0
-                marker.pose.orientation.w = 0.0
+            half_pi = math.pi / 4.0
+            marker.pose.orientation.y = -math.sin(half_pi) if points_up else math.sin(half_pi)
+            marker.pose.orientation.w = math.cos(half_pi)
             marker.scale.x = 1.60
             marker.scale.y = 1.60
             marker.scale.z = 1.60

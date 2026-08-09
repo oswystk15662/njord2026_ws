@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -16,7 +17,7 @@ from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalRespons
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Float64, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
@@ -57,6 +58,7 @@ class _RosNavigationClient:
         self._goal_handle = None
         self._callbacks = None
         self._frame_id = "map"
+        self._feedback_callback = None
 
     def send(self, poses: Sequence[Waypoint], accepted, completed) -> None:
         self._callbacks = (accepted, completed)
@@ -67,10 +69,15 @@ class _RosNavigationClient:
         self._publish_path(messages)
         goal = NavigateThroughPoses.Goal()
         goal.poses = messages
-        self._client.send_goal_async(goal).add_done_callback(self._on_goal_response)
+        self._client.send_goal_async(goal, feedback_callback=self._on_feedback).add_done_callback(
+            self._on_goal_response
+        )
 
     def set_frame_id(self, frame_id: str) -> None:
         self._frame_id = frame_id
+
+    def set_feedback_callback(self, callback) -> None:
+        self._feedback_callback = callback
 
     def cancel(self) -> None:
         if self._goal_handle is not None:
@@ -125,6 +132,10 @@ class _RosNavigationClient:
         except Exception as exc:
             callbacks[1](ExecutorStatus.NAVIGATION_FAILED, f"Nav2 result failed: {exc}")
 
+    def _on_feedback(self, feedback_msg) -> None:
+        if self._feedback_callback is not None:
+            self._feedback_callback(feedback_msg.feedback)
+
 
 class MissionManager(Node):
     """Thread-safe adapter around the serialized :class:`MissionStateMachine`."""
@@ -171,7 +182,16 @@ class MissionManager(Node):
             String, "/mission/active_control_policy", _STATUS_QOS
         )
         self._task2_enabled_pub = self.create_publisher(Bool, "/mission/task2/enabled", _STATUS_QOS)
+        self._task1_cardinal_wall_enable_pub = self.create_publisher(
+            Bool, "/task1/cardinal_wall_enable", _STATUS_QOS
+        )
+        self._task1_cardinal_heading_pub = self.create_publisher(
+            Float64, "/task1/gps3_to_gps4_heading", _STATUS_QOS
+        )
+        self._task1_wall_enable_after_remaining: int | None = None
+        self._task1_walls_enabled = False
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._navigation = _RosNavigationClient(self, self._plan_pub)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
@@ -319,6 +339,7 @@ class MissionManager(Node):
         self._active_route = route
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
+        self._configure_task1_cardinal_walls(task, route)
         # Task 1's only required runtime input is the route just validated
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
@@ -357,6 +378,7 @@ class MissionManager(Node):
         self._machine.reset_to_idle(execution_id)
         self._active_task = None
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._publish_task_readiness(False, False, "")
         self._publish_status()
         return type("Decision", (), {"accepted": False, "result_code": code, "message": message,
@@ -372,6 +394,9 @@ class MissionManager(Node):
         self._pending_start = None
         self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
                                  stage="starting", message="starting task executor")
+        self._navigation.set_feedback_callback(
+            self._on_task1_navigation_feedback if task.features.get("cardinal_walls") is True else None
+        )
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
@@ -394,6 +419,39 @@ class MissionManager(Node):
 
     def _set_task2_enabled(self, enabled: bool) -> None:
         self._task2_enabled_pub.publish(Bool(data=enabled))
+
+    def _configure_task1_cardinal_walls(self, task: TaskDefinition, route: Route) -> None:
+        """Prepare the Task1 GPS3 stage gate from the validated route."""
+        self._set_task1_cardinal_walls(False)
+        self._task1_wall_enable_after_remaining = None
+        if task.features.get("cardinal_walls") is not True:
+            return
+        by_competition_id = {waypoint.competition_id: waypoint for waypoint in route.waypoints}
+        gps3 = by_competition_id.get("3")
+        gps4 = by_competition_id.get("4")
+        if gps3 is None or gps4 is None:
+            self.get_logger().error("Task1 route has no GPS3/GPS4; cardinal walls remain disabled")
+            return
+        dx, dy = gps4.x - gps3.x, gps4.y - gps3.y
+        if dx * dx + dy * dy < 1.0e-8:
+            self.get_logger().error("Task1 GPS3 and GPS4 coincide; cardinal walls remain disabled")
+            return
+        gps3_index = route.waypoints.index(gps3)
+        self._task1_wall_enable_after_remaining = len(route.waypoints) - gps3_index
+        self._task1_cardinal_heading_pub.publish(Float64(data=math.atan2(dy, dx)))
+
+    def _on_task1_navigation_feedback(self, feedback) -> None:
+        """Latch virtual walls only after Nav2 reports competition GPS3 passed."""
+        threshold = self._task1_wall_enable_after_remaining
+        if self._task1_walls_enabled or threshold is None:
+            return
+        if int(feedback.number_of_poses_remaining) < threshold:
+            self._set_task1_cardinal_walls(True)
+            self.get_logger().info("GPS3 reached: enabled cardinal virtual walls")
+
+    def _set_task1_cardinal_walls(self, enabled: bool) -> None:
+        self._task1_walls_enabled = enabled
+        self._task1_cardinal_wall_enable_pub.publish(Bool(data=enabled))
 
     def _activate_task_readiness(self, execution_id: str, task: TaskDefinition) -> None:
         if self._machine.is_current(execution_id):
@@ -453,6 +511,7 @@ class MissionManager(Node):
         was_canceling = self._machine.snapshot.state == MissionState.CANCELING
         self._machine.begin_cancel(execution_id)
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
         self._auto_permission_deadline_ns = None
@@ -490,6 +549,8 @@ class MissionManager(Node):
         self._active_executor = None
         self._active_task = None
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
+        self._navigation.set_feedback_callback(None)
         self._publish_status()
         self._publish_task_readiness(False, False, "")
         self._machine.reset_to_idle(execution_id)
