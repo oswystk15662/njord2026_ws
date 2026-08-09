@@ -144,6 +144,7 @@ public:
     publish_pointcloud_ = declare_parameter<bool>("publish_pointcloud", true);
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
+    const bool disable_self_calibration = declare_parameter<bool>("disable_self_calibration", true);
     engine_path_ = declare_parameter<std::string>("engine_path", "");
     fov_ellipse_enable_ = declare_parameter<bool>("fov_ellipse_enable", false);
     fov_ellipse_cx_ratio_ = declare_parameter<double>("fov_ellipse_cx_ratio", 0.5);
@@ -234,6 +235,7 @@ public:
       return;
     }
     init_params.camera_fps = framerate_;
+    init_params.camera_disable_self_calib = disable_self_calibration;
     init_params.depth_mode = sl::DEPTH_MODE::QUALITY;
     init_params.coordinate_units = sl::UNIT::METER;
 
