@@ -14,7 +14,9 @@ anything, and so it works the same way in CI.
 
 import importlib.util
 import os
+import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 import yaml
@@ -26,9 +28,12 @@ _GPU_ONLY_PACKAGES = ["glim_ros", "livox_ros_driver2", "glim_config"]
 _MINIPC_ONLY_PACKAGES = ["robot_localization", "thruster_driver", "micon_driver_fd", "joy_node"]
 
 _GENERATE_LAUNCH_DESCRIPTION_FILES = [
+    "glim_um982_localization.launch.py",
     "minipc_bringup.launch.py",
     "task1.launch.py",
+    "task2.launch.py",
     "task3.launch.py",
+    "networking.launch.py",
 ]
 
 
@@ -112,14 +117,93 @@ def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'back_cam_h26x_ground_video.launch.py' in source
     assert 'back_cam_jpeg_ground_video.launch.py' in source
-    assert '"enable_back_cam_jpeg_ground_video"' in source
+    assert (
+        '"enable_back_cam_jpeg_ground_video",\n'
+        '                default_value="true"'
+    ) in source
 
 
-def test_minipc_bringup_uses_the_command_arbiter_as_the_only_cmd_vel_selector():
+def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'LaunchConfiguration("back_cam_jpeg_video_port")' in source
+    assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
+
+
+def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
+    source = _read_launch_source("ground_pc.launch.py")
+    assert 'LaunchConfiguration("back_cam_jpeg_video_port")' in source
+    assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
+
+
+def test_minipc_bringup_uses_canonical_control_manager_by_default():
     source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"control_manager"' in source
+    assert '"control.launch.py"' in source
+    assert '"enable_control_manager"' in source
     assert 'executable="command_arbiter_node"' in source
     assert 'name="command_arbiter"' in source
+    assert 'condition=UnlessCondition(enable_control_manager)' in source
     assert 'package="twist_mux"' not in source
+
+
+def test_resident_nav2_profile_is_selected_by_role_bringup():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    nav2_source = _read_launch_source("nav2.launch.py")
+
+    assert '"profile": LaunchConfiguration("active_nav2_profile")' in minipc_source
+    assert "'task1': 'nav2_params_humble.yaml'" in nav2_source
+    assert "'task2': 'nav2_params_task2_humble.yaml'" in nav2_source
+    assert "'task3': 'nav2_params_task3_humble.yaml'" in nav2_source
+    assert "changed by Mission Manager" in nav2_source
+
+
+def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    task2_nav_source = _read_launch_source("navigation_launch_task2.py")
+    adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
+    task2_params = [
+        (Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text()
+        for filename in ("nav2_params_task2_humble.yaml", "nav2_params_task2_jazzy.yaml")
+    ]
+
+    assert '"navigation_launch_task2.py"' in minipc_source
+    assert '"task2_mission_adapter.launch.py"' in minipc_source
+    assert "' == 'task2'" in minipc_source
+    assert "' != 'task2'" in minipc_source
+    assert 'executable="autonomy_supervisor_node"' in minipc_source
+    assert '"task2_autonomy_ready_node"' in adapter_source
+    assert '"follow_path_client_node"' in adapter_source
+    assert '"mission_gate_required": True' in adapter_source
+    assert '"preprocessing.launch.py"' not in adapter_source
+    assert '"planner_real.launch.py"' not in adapter_source
+    assert "nav2_controller" in task2_nav_source
+    assert "nav2_velocity_smoother" in task2_nav_source
+    assert "nav2_lifecycle_manager" in task2_nav_source
+    assert '"controller_server", "velocity_smoother", "collision_monitor"' in task2_nav_source
+    assert "/cmd_vel_nav" in task2_nav_source
+    assert "root_key=None" in task2_nav_source
+    for forbidden in (
+        "nav2_planner",
+        "nav2_smoother",
+        "nav2_behaviors",
+        "nav2_bt_navigator",
+        "nav2_waypoint_follower",
+        "nav2_planner",
+    ):
+        assert forbidden not in task2_nav_source
+        assert all(forbidden not in params for params in task2_params)
+    for params in task2_params:
+        assert "use_collision_detection: false" in params
+    assert "nav2_collision_monitor" in task2_nav_source
+    assert '"/task2/safety_points"' in task2_params[0]
+
+
+def test_legacy_task2_launch_uses_the_follow_path_only_graph():
+    source = _read_launch_source("task2.launch.py")
+
+    assert "'navigation_launch_task2.py'" in source
+    assert "'nav2.launch.py'" not in source
 
 
 def test_minipc_joy_converter_does_not_publish_physical_lamp_topics():
@@ -136,7 +220,7 @@ def test_minipc_bringup_starts_the_autonomy_supervisor_once():
     assert 'executable="autonomy_supervisor_node"' in minipc_source
     assert '"enable_autonomy_supervisor",' in minipc_source
 
-    for filename in ["task1.launch.py", "task3.launch.py"]:
+    for filename in ["task1.launch.py", "task2.launch.py", "task3.launch.py"]:
         assert "autonomy_supervisor_node" not in _read_launch_source(filename)
 
 
@@ -214,6 +298,8 @@ def test_standalone_does_not_restore_removed_or_unsafe_defaults():
     assert '"enable_glim",\n                default_value="false"' in source
     assert '"enable_pcl_buoy_detection", default_value="false"' in source
     assert '"enable_ground_video", default_value="true"' in source
+    assert '"enable_zenoh_bridge", default_value="false"' in source
+    assert '"enable_critical_link", default_value="false"' in source
 
 
 def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
@@ -231,6 +317,31 @@ def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
         True, True, True,
         True, True, True,
     ]
+
+
+def test_global_ekf_uses_only_guarded_continuous_inputs():
+    config_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_global.yaml")
+    )
+    with open(config_path, "r") as stream:
+        params = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+
+    assert params["odom0"] == "/odometry/gps/um982"
+    assert params["pose0"] == "/sensor/vehicle_gnss/compass/validated"
+    assert params["imu0"] == "/livox/imu/validated"
+    assert params["imu0_config"] == [
+        False, False, False,
+        False, False, False,
+        False, False, False,
+        False, False, True,
+        True, True, False,
+    ]
+
+
+def test_localization_launch_guards_navsat_output_before_global_ekf():
+    source = _read_launch_source("localization.launch.py")
+    assert 'executable="localization_input_guard"' in source
+    assert '("odometry/gps", "/odometry/gps/um982/raw")' in source
 
 
 def test_camera_frames_match_measured_mounting_geometry():
@@ -289,7 +400,67 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
-@pytest.mark.parametrize("filename", ["task1.launch.py", "task3.launch.py"])
+def test_task1_tf_authorities_and_local_virtual_wall_contract():
+    """Keep Task 1's map-frame walls transformable into the local costmap."""
+    robot_config_dir = os.path.normpath(os.path.join(_THIS_DIR, "..", "config"))
+    with open(os.path.join(robot_config_dir, "ekf_global.yaml"), encoding="utf-8") as stream:
+        global_ekf = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+    with open(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "localization",
+            "um982_feedback_filter",
+            "config",
+            "um982_feedback_ekf.yaml",
+        ),
+        encoding="utf-8",
+    ) as stream:
+        local_ekf = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
+    with open(os.path.join(robot_config_dir, "nav2_params_humble.yaml"), encoding="utf-8") as stream:
+        nav2 = yaml.safe_load(stream)
+
+    assert global_ekf["publish_tf"] is True
+    assert global_ekf["world_frame"] == "map"
+    assert global_ekf["map_frame"] == "map"
+    assert global_ekf["odom_frame"] == "odom"
+    assert local_ekf["publish_tf"] is True
+    assert local_ekf["world_frame"] == "odom"
+    assert local_ekf["odom_frame"] == "odom"
+    assert local_ekf["base_link_frame"] == "base_link"
+
+    local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
+    assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
+    assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
+def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
+    launch_source = _read_launch_source("glim_um982_localization.launch.py")
+    assert '"feedback_frame_id": "map"' in launch_source
+    assert '"ekf_glim_local.yaml"' in launch_source
+    assert '"ekf_um982_map.yaml"' in launch_source
+
+    local_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_glim_local.yaml")
+    )
+    global_path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "config", "ekf_um982_map.yaml")
+    )
+    with open(local_path, "r") as stream:
+        local = yaml.safe_load(stream)["ekf_filter_node_glim_local"]["ros__parameters"]
+    with open(global_path, "r") as stream:
+        global_ = yaml.safe_load(stream)["ekf_filter_node_um982_map"]["ros__parameters"]
+
+    assert local["publish_tf"] is True
+    assert local["world_frame"] == "odom"
+    assert local["odom0"] == "/odom"
+    assert global_["publish_tf"] is True
+    assert global_["world_frame"] == "map"
+    assert global_["odom0"] == "/odometry/feedback"
+
+
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
 def test_task_launch_files_declare_role_argument(filename):
     source = _read_launch_source(filename)
     assert "'role'" in source or '"role"' in source
@@ -298,6 +469,35 @@ def test_task_launch_files_declare_role_argument(filename):
         or 'choices=["minipc", "standalone"]' in source
     )
     assert "default_value='minipc'" in source or 'default_value="minipc"' in source
+
+
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
+def test_legacy_task_launches_disable_persistent_managers(filename):
+    source = _read_launch_source(filename)
+    # Compatibility launches own their historical graph and must not start a
+    # second resident Nav2/control/mission graph from role bringup.
+    assert "'enable_nav2': 'false'" in source
+    assert "'enable_mission_manager': 'false'" in source
+    assert "'enable_control_manager': 'false'" in source
+
+
+@pytest.mark.parametrize("filename", ["task1.launch.py", "task2.launch.py", "task3.launch.py"])
+def test_legacy_task_wrappers_are_opt_in(filename):
+    source = _read_launch_source(filename)
+    assert re.search(r"['\"]start_role_bringup['\"].*default_value=['\"]false", source, re.S)
+    assert re.search(r"['\"]start_legacy_task_nodes['\"].*default_value=['\"]false", source, re.S)
+    assert "LaunchConfiguration('start_legacy_task_nodes')" in source
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["task1-1.launch.py", "task1-2.launch.py", "task2-1.launch.py",
+     "task3-1.launch.py", "task3-2.launch.py"],
+)
+def test_numbered_legacy_task_launches_are_opt_in(filename):
+    source = _read_launch_source(filename)
+    assert '"enable_legacy_graph", default_value="false"' in source
+    assert 'LaunchConfiguration("enable_legacy_graph")' in source
 
 
 def test_ground_pc_keeps_front_and_back_video_receivers_separate():
@@ -323,42 +523,23 @@ def test_ground_pc_starts_workspace_ntrip_caster_by_default():
     assert '"ntripcaster.json"' in source
 
 
-def test_bringups_start_hierarchical_health_heartbeats():
+def test_bringups_start_role_owned_health_monitors():
     jetson_source = _read_launch_source("jetson_bringup.launch.py")
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     heartbeat_source = _read_launch_source("heartbeat.launch.py")
-    minipc_heartbeat_path = os.path.join(
-        _THIS_DIR,
-        "..",
-        "..",
-        "diagnostics",
-        "diagnostic_monitors",
-        "config",
-        "minipc_heartbeat.yaml",
-    )
-    with open(minipc_heartbeat_path, encoding="utf-8") as config_file:
-        minipc_heartbeat = yaml.safe_load(config_file)["minipc_heartbeat"]
-
     assert '"role": "jetson"' in jetson_source
     assert '"role": "minipc"' in minipc_source
+    assert '"config",' in heartbeat_source
+    assert '"heartbeat",' in heartbeat_source
+    assert 'f"{role}.yaml"' in heartbeat_source
+    assert '"/health/signals/{role}"' in heartbeat_source
+    assert '"/health/state" if role == "minipc"' in heartbeat_source
+    assert 'executable="heartbeat_aggregator_node"' in heartbeat_source
+    assert '"aggregates"' in heartbeat_source
     assert '"heartbeat_monitor_zed2i"' in heartbeat_source
     assert '"heartbeat_monitor_lidar"' in heartbeat_source
-    assert '"heartbeat",' in heartbeat_source
     assert "heartbeat_monitor_" not in minipc_source
     assert "enable_heartbeats" not in minipc_source
-    heartbeat_topics = {
-        input_config["topic"]
-        for gate in minipc_heartbeat
-        for input_config in gate["inputs"]
-    }
-    heartbeat_topics.update(gate["output_topic"] for gate in minipc_heartbeat)
-    for topic in [
-        "/heartbeat/driver/camera/back",
-        "/heartbeat/driver/gnss",
-        "/heartbeat/driver/micon",
-        "/heartbeat/driver",
-    ]:
-        assert topic in heartbeat_topics
 
 
 def test_back_camera_sender_defaults_match_front_ground_video_rate_and_size():
@@ -394,7 +575,37 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
     assert '"/livox/lidar"' not in source
 
 
-def test_zenoh_excludes_critical_link_topics_from_dds_bridges():
+def test_task1_safety_cloud_is_compacted_on_jetson_and_bridged_to_minipc():
+    jetson_source = _read_launch_source("jetson_bringup.launch.py")
+    assert 'name="task1_safety_points"' in jetson_source
+    assert '"input_topic": "/zed2i/points"' in jetson_source
+    assert '"output_topic": "/task1/safety_points"' in jetson_source
+    assert '"max_range_m": 8.0' in jetson_source
+    assert '"min_valid_input_points": 0' in jetson_source
+    assert '"publish_empty_on_invalid_input": True' in jetson_source
+    assert '"voxel_leaf_size_m": 0.25' in jetson_source
+    assert '"process_rate_hz": 5.0' in jetson_source
+
+    zed_config = os.path.normpath(
+        os.path.join(
+            _THIS_DIR, "..", "..", "driver", "camera", "zed2i_driver",
+            "config", "zed2i_jetson_orin_nano.yaml",
+        )
+    )
+    with open(zed_config, "r") as stream:
+        zed_source = stream.read()
+    assert "publish_pointcloud: true" in zed_source
+    assert "pointcloud_stride: 4" in zed_source
+
+    for filename in ("bridge_jetson.json5", "bridge_minipc.json5"):
+        path = os.path.normpath(
+            os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", filename)
+        )
+        with open(path, "r") as stream:
+            assert '"/task1/safety_points"' in stream.read()
+
+
+def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
     zenoh_dir = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
     )
@@ -408,6 +619,38 @@ def test_zenoh_excludes_critical_link_topics_from_dds_bridges():
             sources[filename] = stream.read()
 
     for topic in ('"/joy"', '"/heartbeat/ground_station"'):
-        assert topic not in sources["bridge_groundpc.json5"]
-        assert topic not in sources["bridge_minipc.json5"]
-        assert topic not in sources["bridge_jetson.json5"]
+        for source in sources.values():
+            allow_lists = re.sub(r"//.*$", "", source, flags=re.MULTILINE)
+            assert topic not in allow_lists
+
+
+def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '("/joy", "/critical_link/input/joy")' in source
+    assert '"topic": "/critical_link/input/heartbeat"' in source
+    assert '"topic": "/heartbeat/ground_station"' not in source
+
+
+def test_terminal_bringups_include_role_specific_networking():
+    for filename, role in (
+        ("ground_pc.launch.py", "groundpc"),
+        ("jetson_bringup.launch.py", "jetson"),
+        ("minipc_bringup.launch.py", "minipc"),
+    ):
+        source = _read_launch_source(filename)
+        assert '"networking.launch.py"' in source
+        assert f'"role": "{role}"' in source
+
+
+def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
+    source = _read_launch_source("networking.launch.py")
+
+    assert '"zenoh-bridge-ros2dds"' in source
+    assert '"env", "-u", "ROS_DOMAIN_ID"' in source
+    assert "bridge_" in source
+    assert ".json5" in source
+    assert '"ground_sender.launch.py"' in source
+    assert '"vessel_receiver.launch.py"' in source
+    assert '_role_condition("groundpc")' in source
+    assert '_role_condition("minipc")' in source

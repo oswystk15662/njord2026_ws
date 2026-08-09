@@ -5,7 +5,6 @@ Starts ONLY the nodes needed on the real vessel:
       waypoint_publisher config; see that node's docstring for the
       waypoint-source decision)
     - planner_node (MPPI, parameters from config/mppi_params.yaml)
-    - path_pruner_node
     - follow_path_client_node
 
 NO simulation bridge nodes are started here (task2_gps_waypoint_publisher and
@@ -13,10 +12,8 @@ opponent_twist_from_tf_node are sim-only; on the real vessel /other_ship/twist
 and the map->opponent_vessel TF come from the task2_perception /
 ship_perception_bringup pipeline).
 
-Topic wiring intentionally mirrors planner_with_follow_path.launch.py:
-planner_node publishes directly to /planned_path_pruned (path_pruner_node is
-kept running but effectively bypassed), preserving the wiring validated in
-simulation.
+planner_node publishes directly to /planned_path_pruned, so no path-pruner
+process is needed in the real-vessel launch.
 """
 
 from launch import LaunchDescription
@@ -30,7 +27,9 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     own_odom_topic = LaunchConfiguration("own_odom_topic")
     ignore_other_ship = LaunchConfiguration("ignore_other_ship")
-    enable_follow_path_client = LaunchConfiguration("enable_follow_path_client")
+    mission_gate_required = LaunchConfiguration("mission_gate_required")
+    start_follow_path_client = LaunchConfiguration("start_follow_path_client")
+    start_waypoint_pose_publisher = LaunchConfiguration("start_waypoint_pose_publisher")
     other_ship_twist_topic = PythonExpression([
         "'/other_ship/twist_ignored' if '", ignore_other_ship,
         "' == 'true' else '/other_ship/twist'",
@@ -60,6 +59,7 @@ def generate_launch_description():
                 "publish_frequency": 2.0,
             }
         ],
+        condition=IfCondition(start_waypoint_pose_publisher),
     )
 
     planner_node = Node(
@@ -104,24 +104,6 @@ def generate_launch_description():
         ],
     )
 
-    path_pruner_node = Node(
-        package="asv_trajectory_planner",
-        executable="path_pruner_node",
-        name="path_pruner_node",
-        output="screen",
-        parameters=[
-            {
-                "input_path_topic": "/planned_path",
-                "output_path_topic": "/planned_path_pruned",
-                "skip_points_after_closest": 0,
-                "prepend_current_pose": True,
-                "min_output_points": 3,
-                "min_point_spacing_m": 0.5,
-                "odom_topic": own_odom_topic,
-            }
-        ],
-    )
-
     follow_path_client_node = Node(
         package="asv_trajectory_planner",
         executable="follow_path_client_node",
@@ -138,9 +120,11 @@ def generate_launch_description():
                 # goalを送り直しすぎるとNav2がabortしやすいので抑制
                 "send_frequency": 1.0,
                 "enable_replanning": True,
+                "enabled_topic": "/mission/task2/enabled",
+                "mission_gate_required": mission_gate_required,
             }
         ],
-        condition=IfCondition(enable_follow_path_client),
+        condition=IfCondition(start_follow_path_client),
     )
     crm_costmap = Node(
         package="asv_trajectory_planner", executable="crm_costmap_node",
@@ -153,11 +137,16 @@ def generate_launch_description():
             # GLIM publishes /odom on the real vessel (same topic as sim).
             DeclareLaunchArgument("own_odom_topic", default_value="/odom"),
             DeclareLaunchArgument(
-                "enable_follow_path_client", default_value="true",
-                description=(
-                    "Run the FollowPath client on this host. Set false when "
-                    "MPPI runs on Jetson and Nav2 Controller runs on miniPC."
-                ),
+                "mission_gate_required", default_value="false",
+                description="Require Mission Manager's /mission/task2/enabled gate before FollowPath goals.",
+            ),
+            DeclareLaunchArgument(
+                "start_follow_path_client", default_value="true",
+                description="Run FollowPath on this host; false when miniPC owns Nav2.",
+            ),
+            DeclareLaunchArgument(
+                "start_waypoint_pose_publisher", default_value="true",
+                description="Run GPS /fromLL conversion on this host.",
             ),
             DeclareLaunchArgument(
                 "ignore_other_ship", default_value="false",
@@ -165,7 +154,6 @@ def generate_launch_description():
             ),
             task2_waypoint_pose_publisher,
             planner_node,
-            path_pruner_node,
             follow_path_client_node,
             crm_costmap,
         ]

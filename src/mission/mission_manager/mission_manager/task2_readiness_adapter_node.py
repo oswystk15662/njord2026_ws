@@ -1,4 +1,4 @@
-"""Publish Task 2 perception readiness from the filtered LiDAR cloud."""
+"""Publish Task 2 perception readiness from Jetson's compact safety cloud."""
 
 from __future__ import annotations
 
@@ -28,7 +28,7 @@ def _stamp_seconds(stamp) -> Optional[float]:
 class Task2ReadinessAdapter(Node):
     def __init__(self) -> None:
         super().__init__("task2_readiness_adapter")
-        self.declare_parameter("filtered_cloud_topic", "/task2/points_filtered")
+        self.declare_parameter("filtered_cloud_topic", "/task2/safety_points")
         self.declare_parameter("timeout_sec", 1.0)
         self.declare_parameter("publish_period_sec", 0.1)
         self._observed_at: Optional[float] = None
