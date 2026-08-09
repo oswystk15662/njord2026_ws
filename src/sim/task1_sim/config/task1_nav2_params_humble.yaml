@@ -21,10 +21,10 @@ controller_server:
     controller_plugins: ["FollowPath"]
     goal_checker_plugins: ["general_goal_checker"]
     general_goal_checker:
-      plugin: "nav2_controller::SimpleGoalChecker"
+      plugin: "robot::PassThroughGoalChecker"
       xy_goal_tolerance: 2.0
       yaw_goal_tolerance: 0.785
-      stateful: true
+      exit_margin_m: 0.05
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       # The MMG vessel needs a longer horizon than a wheeled robot: a short
