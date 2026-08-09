@@ -45,8 +45,9 @@ thruster_driver_node:
     allocation:
       regularization_lambda: 1.0e-4
       # Measured actuator/body convention: positive allocated surge moves the
-      # vessel toward base_link -x. Correct that mapping after the ROS-frame
+      # vessel toward base_link -x. Correct only surge after the ROS-frame
       # velocity error is computed, so feedback remains negative feedback.
+      # Keep sway and yaw positive: reversing yaw makes rotation reverse too.
       # Order: [surge, sway, yaw].
       wrench_sign: [-1.0, 1.0, 1.0]
 
