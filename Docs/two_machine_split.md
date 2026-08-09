@@ -238,6 +238,13 @@ ros2 launch robot jetson_bringup.launch.py glim_backend:=cpu
 
 Jetson と miniPC は有線で直結（またはスイッチ経由）する。Livox MID360S は Jetson 側の別 NIC に繋ぐ（host `192.168.1.5` / LiDAR `192.168.1.114`、`src/robot/config/livox/MID360S_jetson_config.json`）。miniPC から MID360S を起動する場合は `MID360S_minipc_config.json`（host `192.168.1.2`）を使用する。
 
+Wi-Fi を固定IPにしつつ Internet 接続を維持するには、DHCP 接続中の gateway/DNS を引き継ぐ。
+NetworkManager 環境では各機で次を実行する（接続中のSSID/認証情報は維持する）。
+
+```bash
+scripts/configure_static_wifi.sh <wifi-interface> <ipv4/prefix>
+```
+
 ### FastRTPS（既定）
 
 ```bash
