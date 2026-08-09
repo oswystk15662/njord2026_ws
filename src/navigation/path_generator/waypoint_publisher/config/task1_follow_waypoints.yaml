@@ -17,118 +17,114 @@
 task1_follow_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  origin:
-    latitude: 35.6677242112
-    longitude: 139.7935559245
-    name: "GPS 1 - Survey Start"
   waypoints:
     - id: 1
-      x: 0.0000
-      y: 0.0000
+      latitude: 35.6677242112
+      longitude: 139.7935559245
       yaw: -0.7889
       type: "start"
       name: "GPS 1 - Survey Start"
       tolerance_m: 2.0
 
     - id: 2
-      x: 17.6150
-      y: -17.7401
+      latitude: 35.6675648499
+      longitude: 139.7937506994
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 1 - Lane 1 End"
       tolerance_m: 2.0
 
     - id: 3
-      x: 15.1427
-      y: -20.3485
+      latitude: 35.6675414184
+      longitude: 139.7937233624
       yaw: 2.3527
       type: "turn"
       name: "Waypoint 2 - Lane 2 Start"
       tolerance_m: 2.0
 
     - id: 4
-      x: -2.4723
-      y: -2.6083
+      latitude: 35.6677007805
+      longitude: 139.7935285875
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 3 - Lane 2 End"
       tolerance_m: 2.0
 
     - id: 5
-      x: -4.9445
-      y: -5.2167
+      latitude: 35.6676773490
+      longitude: 139.7935012515
       yaw: -0.7889
       type: "turn"
       name: "Waypoint 4 - Lane 3 Start"
       tolerance_m: 2.0
 
     - id: 6
-      x: 12.6705
-      y: -22.9568
+      latitude: 35.6675179877
+      longitude: 139.7936960264
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 5 - Lane 3 End"
       tolerance_m: 2.0
 
     - id: 7
-      x: 10.1983
-      y: -25.5651
+      latitude: 35.6674945570
+      longitude: 139.7936686905
       yaw: 2.3527
       type: "turn"
       name: "Waypoint 6 - Lane 4 Start"
       tolerance_m: 2.0
 
     - id: 8
-      x: -7.4167
-      y: -7.8250
+      latitude: 35.6676539184
+      longitude: 139.7934739156
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 7 - Lane 4 End"
       tolerance_m: 2.0
 
     - id: 9
-      x: -9.8889
-      y: -10.4334
+      latitude: 35.6676304868
+      longitude: 139.7934465796
       yaw: -0.7889
       type: "turn"
       name: "Waypoint 8 - Lane 5 Start"
       tolerance_m: 2.0
 
     - id: 10
-      x: 7.7261
-      y: -28.1735
+      latitude: 35.6674711255
+      longitude: 139.7936413546
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 9 - Lane 5 End"
       tolerance_m: 2.0
 
     - id: 11
-      x: 5.2538
-      y: -30.7818
+      latitude: 35.6674476949
+      longitude: 139.7936140175
       yaw: 2.3527
       type: "turn"
       name: "Waypoint 10 - Lane 6 Start"
       tolerance_m: 2.0
 
     - id: 12
-      x: -12.3612
-      y: -13.0417
+      latitude: 35.6676070562
+      longitude: 139.7934192426
       yaw: -2.3294
       type: "turn"
       name: "Waypoint 11 - Lane 6 End"
       tolerance_m: 2.0
 
     - id: 13
-      x: -14.8334
-      y: -15.6501
+      latitude: 35.6675836246
+      longitude: 139.7933919066
       yaw: -0.7889
       type: "turn"
       name: "Waypoint 12 - Lane 7 Start"
       tolerance_m: 2.0
 
     - id: 14
-      x: 2.7816
-      y: -33.3902
+      latitude: 35.6674242633
+      longitude: 139.7935866816
       yaw: -0.7889
       type: "goal"
       name: "GPS 2 - Survey Finish"
