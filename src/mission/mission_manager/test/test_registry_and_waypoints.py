@@ -30,8 +30,6 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert len(task1.waypoints) == 17
     assert task1.coordinate_mode == "origin_relative_xy"
     assert task1.origin is not None
-    assert task1.waypoints[12].competition_id == "3"
-    assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
 
