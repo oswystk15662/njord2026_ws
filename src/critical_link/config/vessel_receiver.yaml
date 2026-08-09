@@ -14,7 +14,7 @@ critical_link_receiver:
     takeover_request_timeout_sec: 0.5
     source_publish_period_sec: 0.05
     heartbeat_publish_period_sec: 1.0
-    # Format: name|miniPC bind IPv4|UDP port
+    # Format: name|miniPC bind IPv4 or hostname|UDP port
     udp_paths:
       - "usb_wifi|192.168.122.210|45100"
       - "builtin_wifi|192.168.122.22|45101"

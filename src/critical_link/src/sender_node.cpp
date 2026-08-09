@@ -82,7 +82,7 @@ public:
       const auto spec = parse_udp_sender_spec(text);
       if (!spec) {
         throw std::runtime_error(
-                "invalid udp_paths entry; expected name|bind_ipv4|destination_ipv4|port: " + text);
+                "invalid udp_paths entry; expected name|bind_address|destination_address|port: " + text);
       }
       udp_paths_.push_back(std::make_unique<UdpPath>(*spec));
     }
