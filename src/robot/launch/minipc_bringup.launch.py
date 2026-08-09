@@ -21,7 +21,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
 
@@ -87,6 +87,7 @@ def generate_launch_description():
         "back_cam_jpeg_ground_video_fps"
     )
     enable_nav2 = LaunchConfiguration("enable_nav2")
+    active_nav2_profile = LaunchConfiguration("active_nav2_profile")
     enable_control_manager = LaunchConfiguration("enable_control_manager")
     enable_mission_manager = LaunchConfiguration("enable_mission_manager")
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
@@ -228,7 +229,13 @@ def generate_launch_description():
         "mission_manager",
         ["launch", "mission.launch.py"],
         IfCondition(enable_mission_manager),
-        {"active_nav2_profile": LaunchConfiguration("active_nav2_profile")},
+        {"active_nav2_profile": active_nav2_profile},
+    )
+
+    task2_mission_adapter_launch = include_launch(
+        "robot",
+        ["launch", "task2_mission_adapter.launch.py"],
+        IfCondition(PythonExpression(["'", active_nav2_profile, "' == 'task2'"])),
     )
 
     thruster_launch = include_launch(
@@ -344,8 +351,24 @@ def generate_launch_description():
     nav2_launch = include_launch(
         "robot",
         ["launch", "nav2.launch.py"],
-        IfCondition(enable_nav2),
+        IfCondition(PythonExpression([
+            "'", enable_nav2, "' == 'true' and '", active_nav2_profile, "' != 'task2'",
+        ])),
         {"profile": LaunchConfiguration("active_nav2_profile")},
+    )
+
+    task2_nav2_launch = include_launch(
+        "robot",
+        ["launch", "navigation_launch_task2.py"],
+        IfCondition(PythonExpression([
+            "'", enable_nav2, "' == 'true' and '", active_nav2_profile, "' == 'task2'",
+        ])),
+        {
+            "params_file": PathJoinSubstitution(
+                [FindPackageShare("robot"), "config", "nav2_params_task2_humble.yaml"]
+            ),
+            "use_sim_time": use_sim_time,
+        },
     )
 
     # The supervisor owns the readiness and liveness signals consumed by the
@@ -356,7 +379,10 @@ def generate_launch_description():
         executable="autonomy_supervisor_node",
         name="autonomy_supervisor",
         output="screen",
-        condition=IfCondition(enable_autonomy_supervisor),
+        condition=IfCondition(PythonExpression([
+            "'", enable_autonomy_supervisor, "' == 'true' and '",
+            active_nav2_profile, "' != 'task2'",
+        ])),
     )
 
     heartbeat_launch = include_launch(
@@ -557,6 +583,7 @@ def generate_launch_description():
             command_arbiter,
             control_manager_launch,
             mission_manager_launch,
+            task2_mission_adapter_launch,
             thruster_launch,
             thruster_serial,
             bms_serial,
@@ -568,6 +595,7 @@ def generate_launch_description():
             back_cam_ground_video_launch,
             back_cam_jpeg_ground_video_launch,
             nav2_launch,
+            task2_nav2_launch,
             autonomy_supervisor,
             heartbeat_launch,
             networking_launch,

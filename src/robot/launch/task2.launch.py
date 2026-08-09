@@ -54,10 +54,9 @@ def generate_launch_description():
     )
     nav2 = _include(
         'robot',
-        'nav2.launch.py',
+        'navigation_launch_task2.py',
         {
             'params_file': os.path.join(robot_share, 'config', 'nav2_params_task2_humble.yaml'),
-            'enable_diagnostics': LaunchConfiguration('enable_nav2_diagnostics'),
         },
     )
     waypoints = _include(

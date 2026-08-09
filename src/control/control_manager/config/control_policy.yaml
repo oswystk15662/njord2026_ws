@@ -1,10 +1,7 @@
-# 今北産業
 # 1. ここが AUTO を許可するか否かを決める唯一の場所。true の項目が1つでも満たされなければ AUTO は出ない。
 # 2. false にしても監視は止まらない。信号の一覧と閾値は diagnostic_monitors/config/heartbeat/*.yaml が持つ。
 # 3. キーの過不足・型違い・重複キー・health_signals に無い信号の要求は、すべて起動時エラーで落ちる。
 #
-# This is the sole AUTO inhibition policy.  Signal inventory remains in
-# diagnostic_monitors; enabled requirements below select only from this list.
 control_policy:
   # このポリシーが参照してよい health signal 名。heartbeat inventory に実在する名前のみ。
   health_signals:
