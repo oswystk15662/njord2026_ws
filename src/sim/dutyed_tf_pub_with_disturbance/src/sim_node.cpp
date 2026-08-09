@@ -122,7 +122,7 @@ void SimNode::commandCallback(const std_msgs::msg::Float32MultiArray::SharedPtr 
       this->get_logger(),
       *this->get_clock(),
       2000,
-      "thruster_command requires four force values [FR, FL, RR, RL]");
+      "thruster_command requires four force values [RR, RL, FR, FL]");
     return;
   }
 
@@ -187,10 +187,10 @@ void SimNode::onTimer()
   if (latest_forces_.size() == 4U) {
     const std::vector<SimThrusterGeometry> geometry = {
       // Match robot.urdf.xacro / robot.urdf_modified.urdf.
-      {0.1803, -0.2500, 0.785398},
-      {0.1803, 0.2500, -0.785398},
       {-0.1803, -0.2500, 2.35619},
-      {-0.1803, 0.2500, -2.35619}};
+      {-0.1803, 0.2500, -2.35619},
+      {0.1803, -0.2500, 0.785398},
+      {0.1803, 0.2500, -0.785398}};
     input = forcesToPlanarInput(latest_forces_, geometry);
   }
 

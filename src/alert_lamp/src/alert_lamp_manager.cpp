@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 #include <functional>
+#include <stdexcept>
 #include <sstream>
 
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
@@ -39,6 +40,26 @@ bool hasInhibit(const njord_interfaces::msg::ControlState & state, uint16_t code
   return std::find(state.inhibit_reason_codes.begin(), state.inhibit_reason_codes.end(), code) !=
          state.inhibit_reason_codes.end();
 }
+
+LampColor parseColor(const std::string & color)
+{
+  if (color == "off") {return LampColor::OFF;}
+  if (color == "green") {return LampColor::GREEN;}
+  if (color == "yellow") {return LampColor::YELLOW;}
+  if (color == "red") {return LampColor::RED;}
+  if (color == "green_yellow") {return LampColor::GREEN_YELLOW;}
+  if (color == "green_red") {return LampColor::GREEN_RED;}
+  if (color == "yellow_red") {return LampColor::YELLOW_RED;}
+  throw std::invalid_argument("unknown alert-lamp color: " + color);
+}
+
+LampPattern parsePattern(const std::string & pattern)
+{
+  if (pattern == "off") {return LampPattern::OFF;}
+  if (pattern == "solid") {return LampPattern::SOLID;}
+  if (pattern == "blink") {return LampPattern::BLINK;}
+  throw std::invalid_argument("unknown alert-lamp pattern: " + pattern);
+}
 }  // namespace
 
 AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
@@ -65,10 +86,27 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
       health_received_ = true;
     });
 
-  green_period_ = static_cast<float>(declare_parameter<double>("lamp.green_blink_period_sec", 0.1));
-  yellow_period_ = static_cast<float>(declare_parameter<double>("lamp.yellow_blink_period_sec", 0.1));
-  red_period_ = static_cast<float>(declare_parameter<double>("lamp.red_blink_period_sec", 0.05));
-  duty_ratio_ = static_cast<float>(declare_parameter<double>("lamp.duty_ratio", 0.5));
+  initializing_display_ = loadDisplay(
+    "initializing", {LampColor::RED, LampPattern::BLINK, 0.5F, 0.5F, "initializing"});
+  manual_normal_display_ = loadDisplay(
+    "manual_normal", {LampColor::YELLOW, LampPattern::SOLID, 0.0F, 0.5F,
+      "manual mode normal"});
+  auto_normal_display_ = loadDisplay(
+    "auto_normal", {LampColor::GREEN, LampPattern::BLINK, 1.0F, 0.5F,
+      "automatic mode normal"});
+  autonomy_not_ready_display_ = loadDisplay(
+    "autonomy_not_ready",
+    {LampColor::GREEN_YELLOW, LampPattern::BLINK, 1.0F, 0.5F,
+      "autonomy not ready"});
+  ground_link_lost_auto_display_ = loadDisplay(
+    "ground_link_lost_auto", {LampColor::GREEN_RED, LampPattern::SOLID, 0.0F, 0.5F,
+      "ground station communication lost in automatic mode"});
+  ground_link_lost_manual_display_ = loadDisplay(
+    "ground_link_lost_manual", {LampColor::YELLOW_RED, LampPattern::SOLID, 0.0F, 0.5F,
+      "ground station communication lost in manual mode"});
+  critical_fault_display_ = loadDisplay(
+    "critical_fault", {LampColor::RED, LampPattern::BLINK, 0.5F, 0.5F,
+      "critical fault or unknown state"});
   command_pub_ = create_publisher<msg::AlertLampCommand>(
     declare_parameter<std::string>("topics.alert_command", "/alert_lamp/command"), 10);
   updater_.setHardwareID("alert_lamp_manager");
@@ -76,6 +114,55 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
   timer_ = create_wall_timer(
     std::chrono::duration<double>(1.0 / std::max(1.0, rate)),
     std::bind(&AlertLampManager::onTimer, this));
+}
+
+LampDisplay AlertLampManager::loadDisplay(const std::string & name, const LampDisplay & defaults)
+{
+  const auto prefix = "patterns." + name + ".";
+  LampDisplay display = defaults;
+  display.color = parseColor(
+    declare_parameter<std::string>(
+      prefix + "color", [&defaults]() {
+        switch (defaults.color) {
+          case LampColor::OFF: return std::string("off");
+          case LampColor::GREEN: return std::string("green");
+          case LampColor::YELLOW: return std::string("yellow");
+          case LampColor::RED: return std::string("red");
+          case LampColor::GREEN_YELLOW: return std::string("green_yellow");
+          case LampColor::GREEN_RED: return std::string("green_red");
+          case LampColor::YELLOW_RED: return std::string("yellow_red");
+        }
+        return std::string("red");
+      }()));
+  display.pattern = parsePattern(
+    declare_parameter<std::string>(
+      prefix + "mode",
+      defaults.pattern == LampPattern::SOLID ? "solid" :
+      defaults.pattern == LampPattern::OFF ? "off" : "blink"));
+  display.period =
+    static_cast<float>(declare_parameter<double>(prefix + "period_sec", defaults.period));
+  display.duty_ratio =
+    static_cast<float>(declare_parameter<double>(prefix + "duty_ratio", defaults.duty_ratio));
+  display.reason = declare_parameter<std::string>(prefix + "reason", defaults.reason);
+  if (display.period < 0.0F || display.duty_ratio <= 0.0F || display.duty_ratio > 1.0F) {
+    throw std::invalid_argument("invalid alert-lamp pattern parameters for " + name);
+  }
+  return display;
+}
+
+LampDisplay AlertLampManager::displayFor(AlertState state, const SystemStatus & status) const
+{
+  switch (state) {
+    case AlertState::INITIALIZING: return initializing_display_;
+    case AlertState::MANUAL_NORMAL: return manual_normal_display_;
+    case AlertState::AUTO_NORMAL: return auto_normal_display_;
+    case AlertState::AUTONOMY_NOT_READY: return autonomy_not_ready_display_;
+    case AlertState::GROUND_COMMUNICATION_LOST:
+      return status.mode == OperatingMode::MANUAL ?
+             ground_link_lost_manual_display_ : ground_link_lost_auto_display_;
+    case AlertState::CRITICAL_FAULT: return critical_fault_display_;
+  }
+  return critical_fault_display_;
 }
 
 SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
@@ -114,7 +201,8 @@ SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
   if (mission_received_ && status.mode == OperatingMode::AUTO) {
     const auto waiting = mission_status_.state ==
       njord_interfaces::msg::MissionStatus::STATE_WAITING_FOR_READINESS ||
-      mission_status_.state == njord_interfaces::msg::MissionStatus::STATE_WAITING_FOR_AUTO_PERMISSION ||
+      mission_status_.state ==
+      njord_interfaces::msg::MissionStatus::STATE_WAITING_FOR_AUTO_PERMISSION ||
       mission_status_.state == njord_interfaces::msg::MissionStatus::STATE_VALIDATING ||
       mission_status_.state == njord_interfaces::msg::MissionStatus::STATE_CONFIGURING ||
       mission_status_.state == njord_interfaces::msg::MissionStatus::STATE_REJECTED ||
@@ -142,8 +230,7 @@ void AlertLampManager::onTimer()
   const auto current = now();
   const auto status = collectStatus(current);
   const auto state = evaluator_.evaluate(status);
-  const auto display = evaluator_.displayFor(
-    state, green_period_, yellow_period_, red_period_, duty_ratio_, status);
+  const auto display = displayFor(state, status);
   msg::AlertLampCommand command;
   command.header.stamp = current;
   command.color = colorValue(display.color);
@@ -166,8 +253,7 @@ void AlertLampManager::updateDiagnostic(diagnostic_updater::DiagnosticStatusWrap
 {
   const auto status = collectStatus(now());
   const auto state = evaluator_.evaluate(status);
-  const auto display = evaluator_.displayFor(
-    state, green_period_, yellow_period_, red_period_, duty_ratio_, status);
+  const auto display = displayFor(state, status);
   stat.summary(
     state == AlertState::CRITICAL_FAULT ? diagnostic_msgs::msg::DiagnosticStatus::ERROR :
     state == AlertState::MANUAL_NORMAL || state == AlertState::AUTO_NORMAL ?

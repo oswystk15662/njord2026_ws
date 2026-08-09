@@ -23,21 +23,34 @@ control_policy:
     require_rtk_fix: false                # gnss が OK であること
     require_no_critical_health_fault: false  # 重大 health fault が出ていないこと
 
-  # タスク別の追加要求。4キーすべてを各タスクに明記する（省略不可）。
+  # タスク別の追加要求。ground station requirementと4つのタスク要件を
+  # 各ポリシーに明記する（省略不可）。
   task1:
+    require_ground_station: true
     require_waypoint_plan: true       # 有効なウェイポイント経路が読み込まれていること
     require_collision_monitor: false  # Nav2 Collision Monitor が有効であること
     require_buoy_perception: false    # ブイ認識が出力していること
     require_dynamic_gate_tf: false    # 動的ゲート中点の TF が出ていること
 
   task2:
+    require_ground_station: true
     require_waypoint_plan: true
     require_collision_monitor: true
     require_buoy_perception: true
     require_dynamic_gate_tf: false
 
   task3:
+    require_ground_station: true
     require_waypoint_plan: true
     require_collision_monitor: true
     require_buoy_perception: false
     require_dynamic_gate_tf: true
+
+  # Ground link loss cannot permit normal AUTO continuation.  This dedicated
+  # policy is used only after the timed GNSS/compass return-home failsafe gate.
+  return_home:
+    require_ground_station: false
+    require_waypoint_plan: true
+    require_collision_monitor: false
+    require_buoy_perception: false
+    require_dynamic_gate_tf: false

@@ -1,7 +1,7 @@
 # Legacy waypoint files remain the source of route coordinates during Phase 3.
 # Runtime Nav2 profile switching is deliberately unsupported in this slice.
 nav2_profiles: [task1, task2, task3]
-control_policies: [task1, task2, task3]
+control_policies: [task1, task2, task3, return_home]
 tasks:
   task1:
     display_name: Task 1
@@ -47,3 +47,13 @@ tasks:
     display_name: Task 3-2
     availability: disabled
     reason: Nav2 profile and dynamic gate TF readiness are not verified
+  return_home:
+    display_name: Ground-link failsafe return home
+    availability: experimental
+    executor: waypoint_sequence
+    route: return_home_waypoints.yaml
+    route_key: return_home_config
+    frame_id: map
+    # Mission Manager permits this task from any active Nav2 profile.
+    nav2_profile: task1
+    control_policy: return_home

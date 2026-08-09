@@ -12,6 +12,12 @@ def generate_launch_description():
         DeclareLaunchArgument("active_nav2_profile", default_value="task1"),
         Node(
             package="mission_manager",
+            executable="ground_link_return_monitor_node",
+            name="ground_link_return_monitor",
+            output="screen",
+        ),
+        Node(
+            package="mission_manager",
             executable="task2_readiness_adapter_node",
             name="task2_readiness_adapter",
             output="screen",

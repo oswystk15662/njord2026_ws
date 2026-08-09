@@ -15,19 +15,19 @@ constexpr double kPi = 3.14159265358979323846;
 std::vector<njord::thruster_driver::ThrusterGeometry> driverGeometry()
 {
   return {
-    {0.1803, -0.2500, kPi / 4.0, 51.5, false},
-    {0.1803, 0.2500, -kPi / 4.0, 51.5, true},
     {-0.1803, -0.2500, 3.0 * kPi / 4.0, 51.5, false},
-    {-0.1803, 0.2500, -3.0 * kPi / 4.0, 51.5, true}};
+    {-0.1803, 0.2500, -3.0 * kPi / 4.0, 51.5, true},
+    {0.1803, -0.2500, kPi / 4.0, 51.5, false},
+    {0.1803, 0.2500, -kPi / 4.0, 51.5, true}};
 }
 
 std::vector<njord::sim::SimThrusterGeometry> simulatorGeometry()
 {
   return {
-    {0.1803, -0.2500, kPi / 4.0},
-    {0.1803, 0.2500, -kPi / 4.0},
     {-0.1803, -0.2500, 3.0 * kPi / 4.0},
-    {-0.1803, 0.2500, -3.0 * kPi / 4.0}};
+    {-0.1803, 0.2500, -3.0 * kPi / 4.0},
+    {0.1803, -0.2500, kPi / 4.0},
+    {0.1803, 0.2500, -kPi / 4.0}};
 }
 
 std::vector<double> restorePhysicalForces(

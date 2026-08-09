@@ -50,6 +50,7 @@ TASK_BOOLEAN_REQUIREMENTS = frozenset(
         "require_dynamic_gate_tf",
     }
 )
+TASK_POLICY_REQUIREMENTS = TASK_BOOLEAN_REQUIREMENTS | {"require_ground_station"}
 HEALTH_REQUIREMENT_SIGNALS = {
     "require_ground_station": "ground_station_heartbeat",
     "require_driver_heartbeat": "driver_heartbeat",
@@ -108,9 +109,9 @@ def load_policy(path: Path) -> ControlPolicy:
     if set(root) != {"control_policy"}:
         raise PolicyError("policy root must contain only 'control_policy'")
     policy = _mapping(root["control_policy"], "control_policy")
-    if set(policy) != {"common", "task1", "task2", "task3", "health_signals"}:
+    if set(policy) != {"common", "task1", "task2", "task3", "return_home", "health_signals"}:
         raise PolicyError(
-            "control_policy must contain exactly common, task1, task2, task3, and health_signals"
+            "control_policy must contain exactly common, task1, task2, task3, return_home, and health_signals"
         )
 
     common_raw = _mapping(policy["common"], "control_policy.common")
@@ -143,9 +144,9 @@ def load_policy(path: Path) -> ControlPolicy:
             )
 
     tasks = {
-        name: _bools(_mapping(policy[name], f"control_policy.{name}"), TASK_BOOLEAN_REQUIREMENTS,
+        name: _bools(_mapping(policy[name], f"control_policy.{name}"), TASK_POLICY_REQUIREMENTS,
                      f"control_policy.{name}")
-        for name in ("task1", "task2", "task3")
+        for name in ("task1", "task2", "task3", "return_home")
     }
     return ControlPolicy(common, tasks, float(timeout), signal_set)
 

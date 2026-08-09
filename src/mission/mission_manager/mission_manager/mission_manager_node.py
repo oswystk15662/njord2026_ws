@@ -16,7 +16,7 @@ from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalRespons
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool, String
+from std_msgs.msg import Bool, Empty, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
@@ -29,6 +29,7 @@ from .executors import (
     Task2MppiExecutor,
     WaypointSequenceExecutor,
 )
+from .geodesy import load_home_datum
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
 from .task_registry import (
     RUNTIME_READINESS_FEATURES,
@@ -137,7 +138,7 @@ class MissionManager(Node):
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
-        self._loader = WaypointConfigLoader()
+        self._loader = WaypointConfigLoader(load_home_datum(self._home_file_path()))
         self._active_executor = None
         self._active_task: TaskDefinition | None = None
         self._active_route: Route | None = None
@@ -156,6 +157,8 @@ class MissionManager(Node):
         self._task_requirements_ready = False
         self._active_control_policy = ""
         self._runtime_readiness = {name: False for name in RUNTIME_READINESS_FEATURES}
+        self._pending_failsafe_return = False
+        self._failsafe_return_count = 0
 
         registry_path = self._registry_path()
         shares = {"waypoint_publisher": self._waypoint_share_path()}
@@ -175,6 +178,10 @@ class MissionManager(Node):
         self._navigation = _RosNavigationClient(self, self._plan_pub)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
+            callback_group=self._cb_group,
+        )
+        self.create_subscription(
+            Empty, "/mission/failsafe/return_home", self._on_failsafe_return, _STATUS_QOS,
             callback_group=self._cb_group,
         )
         for name in RUNTIME_READINESS_FEATURES:
@@ -214,6 +221,10 @@ class MissionManager(Node):
         if configured:
             return Path(configured)
         return Path(__file__).resolve().parents[1] / "config" / "task_registry.yaml"
+
+    @staticmethod
+    def _home_file_path() -> Path:
+        return Path(__file__).resolve().parents[1] / "config" / "home.yaml"
 
     @staticmethod
     def _waypoint_share_path() -> Path:
@@ -301,7 +312,7 @@ class MissionManager(Node):
         if request.dry_run and not task.supports_dry_run:
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support dry run")
         active_profile = str(self.get_parameter("active_nav2_profile").value)
-        if task.nav2_profile != active_profile:
+        if task.task_id != "return_home" and task.nav2_profile != active_profile:
             return self._reject_started(
                 decision.execution_id,
                 ResultCode.CONFIGURATION_FAILED,
@@ -502,6 +513,16 @@ class MissionManager(Node):
             self._effective_source = message.effective_source
             self._inhibit_reasons = list(message.inhibit_reasons)
 
+    def _on_failsafe_return(self, _message: Empty) -> None:
+        """Preempt one active task, then start the home route through the normal owner."""
+        with self._lock:
+            if self._active_task is not None and self._active_task.task_id == "return_home":
+                return
+            self._pending_failsafe_return = True
+            snapshot = self._machine.snapshot
+            if self._machine.active:
+                self._stop(snapshot.execution_id, return_to_manual=False)
+
     def _on_runtime_readiness(self, name: str, message: Bool) -> None:
         with self._lock:
             self._runtime_readiness[name] = message.data
@@ -533,6 +554,15 @@ class MissionManager(Node):
                         ResultCode.SAFETY_INHIBITED,
                         "AUTO permission timed out: " + "; ".join(self._inhibit_reasons),
                     )
+            if self._pending_failsafe_return and not self._machine.active:
+                self._pending_failsafe_return = False
+                self._failsafe_return_count += 1
+                decision = self._start(StartRequest(
+                    "return_home", request_auto_mode=True, dry_run=False,
+                    request_id=f"failsafe-return-home-{self._failsafe_return_count}",
+                ))
+                if not decision.accepted:
+                    self.get_logger().error(f"return-home start rejected: {decision.message}")
             self._publish_status()
 
     def _publish_status(self) -> None:
