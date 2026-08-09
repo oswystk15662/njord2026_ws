@@ -16,6 +16,7 @@ import importlib.util
 import os
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 import yaml
@@ -145,6 +146,55 @@ def test_resident_nav2_profile_is_selected_by_role_bringup():
     assert "'task2': 'nav2_params_task2_humble.yaml'" in nav2_source
     assert "'task3': 'nav2_params_task3_humble.yaml'" in nav2_source
     assert "changed by Mission Manager" in nav2_source
+
+
+def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
+    minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    task2_nav_source = _read_launch_source("navigation_launch_task2.py")
+    adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
+    task2_params = [
+        (Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text()
+        for filename in ("nav2_params_task2_humble.yaml", "nav2_params_task2_jazzy.yaml")
+    ]
+
+    assert '"navigation_launch_task2.py"' in minipc_source
+    assert '"task2_mission_adapter.launch.py"' in minipc_source
+    assert "' == 'task2'" in minipc_source
+    assert "' != 'task2'" in minipc_source
+    assert 'executable="autonomy_supervisor_node"' in minipc_source
+    assert '"task2_autonomy_ready_node"' in adapter_source
+    assert '"preprocessing.launch.py"' in adapter_source
+    assert '"segmentation.launch.py"' in adapter_source
+    assert '"tracker.launch.py"' in adapter_source
+    assert '"ego_odom_topic": own_odom_topic' in adapter_source
+    assert '"planner_real.launch.py"' in adapter_source
+    assert '"mission_gate_required": "true"' in adapter_source
+    assert "nav2_controller" in task2_nav_source
+    assert "nav2_velocity_smoother" in task2_nav_source
+    assert "nav2_lifecycle_manager" in task2_nav_source
+    assert '"controller_server", "velocity_smoother"' in task2_nav_source
+    assert "/cmd_vel_nav" in task2_nav_source
+    assert "root_key=None" in task2_nav_source
+    for forbidden in (
+        "nav2_planner",
+        "nav2_smoother",
+        "nav2_behaviors",
+        "nav2_bt_navigator",
+        "nav2_waypoint_follower",
+        "nav2_collision_monitor",
+        "pointcloud",
+    ):
+        assert forbidden not in task2_nav_source
+        assert all(forbidden not in params for params in task2_params)
+    for params in task2_params:
+        assert "use_collision_detection: false" in params
+
+
+def test_legacy_task2_launch_uses_the_follow_path_only_graph():
+    source = _read_launch_source("task2.launch.py")
+
+    assert "'navigation_launch_task2.py'" in source
+    assert "'nav2.launch.py'" not in source
 
 
 def test_minipc_joy_converter_does_not_publish_physical_lamp_topics():

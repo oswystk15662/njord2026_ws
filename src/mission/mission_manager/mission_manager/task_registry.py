@@ -65,6 +65,16 @@ class TaskDefinition:
         return self.availability in {"available", "experimental"}
 
 
+# These are live safety inputs.  Route validation cannot prove them.
+RUNTIME_READINESS_FEATURES = frozenset({"buoy_perception"})
+
+
+def required_runtime_readiness(task: TaskDefinition) -> frozenset[str]:
+    return frozenset(
+        name for name in RUNTIME_READINESS_FEATURES if task.features.get(name) is True
+    )
+
+
 class TaskRegistry:
     """Validated task definitions plus the reasons non-runnable tasks remain visible."""
 
@@ -161,7 +171,7 @@ def _parse_task(
             raise RegistryError(f"non-runnable task {task_id!r} requires a reason")
         return TaskDefinition(task_id, display_name, availability, reason=reason)
     executor = _required_string(raw, "executor", task_id)
-    if executor not in {"dummy", "waypoint_sequence", "staged_docking"}:
+    if executor not in {"dummy", "waypoint_sequence", "staged_docking", "task2_mppi"}:
         raise RegistryError(f"task {task_id!r} references unknown executor {executor!r}")
     route_package = _optional_string(raw, "route_package")
     route = _required_string(raw, "route", task_id)

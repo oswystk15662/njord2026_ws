@@ -1,4 +1,6 @@
-from mission_manager.executors import ExecutorStatus, StagedDockingExecutor, WaypointSequenceExecutor
+from mission_manager.executors import (
+    ExecutorStatus, StagedDockingExecutor, Task2MppiExecutor, WaypointSequenceExecutor,
+)
 from mission_manager.waypoint_config import Route, Waypoint
 
 
@@ -53,4 +55,14 @@ def test_staged_docking_cancels_wait_timer_and_ignores_late_callback():
     assert nav.cancelled
     assert canceled
     timers[0]()
+    assert results[0].status == ExecutorStatus.CANCELED
+
+
+def test_task2_mppi_withdraws_its_gate_before_reporting_canceled():
+    enabled = []
+    results = []
+    executor = Task2MppiExecutor(enabled.append)
+    executor.start("execution", _route(), lambda *_: None, results.append)
+    executor.cancel("execution")
+    assert enabled == [True, False]
     assert results[0].status == ExecutorStatus.CANCELED
