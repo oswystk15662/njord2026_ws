@@ -386,7 +386,7 @@ class Task1Orchestrator(Node):
         self.pub_boundary_markers.publish(marker_array)
 
     def publish_buoy_markers(self):
-        """Publish official cardinal marks plus nearby red/green reference buoys."""
+        """Publish only the buoys represented by the Task1 simulation state."""
         marker_array = MarkerArray()
         clear_marker = Marker()
         clear_marker.action = Marker.DELETEALL
@@ -496,7 +496,7 @@ class Task1Orchestrator(Node):
             marker.color.a = 1.0
             marker_array.markers.append(marker)
 
-        def add_reference_buoy(marker_id, x, y, rgb):
+        def add_lateral_buoy(marker_id, x, y, rgb):
             """Add a coloured floating buoy and its visible cylindrical mast."""
             add_sphere(
                 marker_id,
@@ -526,7 +526,7 @@ class Task1Orchestrator(Node):
                 colour = lateral_red if mark == "RED" else lateral_green
                 label = "RED / PORT" if mark == "RED" else "GREEN / STARBOARD"
                 marker_base_id = idx * 10
-                add_reference_buoy(marker_base_id + 1, bx, by, colour)
+                add_lateral_buoy(marker_base_id + 1, bx, by, colour)
                 add_text(marker_base_id + 1, "task1_lateral_buoy_labels",
                          bx, by, 2.00, label, colour)
                 continue
@@ -570,24 +570,6 @@ class Task1Orchestrator(Node):
             # Make the simulated cardinal direction unambiguous at a glance;
             # the real detection visualizer publishes the same label.
             add_text(marker_base_id, "task1_cardinal_direction_labels", bx, by, 2.85, mark, (1.0, 1.0, 1.0))
-
-            # Exactly one lateral reference buoy accompanies each cardinal
-            # mark. Its colour identifies the side the route must take: red
-            # for port, green for starboard, relative to the main course.
-            port_x, port_y = -math.sin(self.course_heading_rad), math.cos(self.course_heading_rad)
-            passage_direction = {
-                "N": (0.0, 1.0), "E": (1.0, 0.0),
-                "S": (0.0, -1.0), "W": (-1.0, 0.0),
-            }.get(mark, (0.0, 1.0))
-            is_port = passage_direction[0] * port_x + passage_direction[1] * port_y >= 0.0
-            reference_offset = 2.0
-            reference_x = bx + (port_x if is_port else -port_x) * reference_offset
-            reference_y = by + (port_y if is_port else -port_y) * reference_offset
-            reference_colour = lateral_red if is_port else lateral_green
-            reference_label = "RED / PORT" if is_port else "GREEN / STARBOARD"
-            add_reference_buoy(marker_base_id + 5, reference_x, reference_y, reference_colour)
-            add_text(marker_base_id + 5, "task1_lateral_buoy_labels",
-                     reference_x, reference_y, 2.00, reference_label, reference_colour)
 
         self.pub_buoy_markers.publish(marker_array)
 
