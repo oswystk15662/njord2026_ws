@@ -24,9 +24,21 @@
 
 task1_config:
   frame_id: "map"
-  # map_xy: YAML x/y are already map coordinates.
-  # origin_relative_xy: add each x/y (east/north metres) to this origin GPS.
-  # geodetic: write latitude/longitude on every waypoint instead of x/y.
+  # Mission Manager (`njord-task start task1 --auto`) の座標指定方法:
+  #
+  # 1) origin_relative_xy（実機の推奨）:
+  #    origin に基準点GPS（例: GPS1）を入れる。waypoints の x,y は基準点から
+  #    東を+x、北を+y とするメートル値。origin は /fromLL で実行時mapへ投影される。
+  #
+  # 2) geodetic:
+  #    下の各 waypoint から x,y を削除し、代わりに latitude, longitude を全点へ書く。
+  #    例: {id: 2, competition_id: "1.1", latitude: 34.5, longitude: 135.5, yaw: 0.0}
+  #
+  # 3) map_xy（旧互換）:
+  #    x,y を既にmap座標として使う。origin/GPS値は走行位置に使わない。
+  #
+  # GPS3/GPS4の competition_id はどのモードでも残すこと。GPS3通過後の仮想壁
+  # 有効化と、GPS3→GPS4の方位算出に使う。
   coordinate_mode: "origin_relative_xy"
   publish_rate_hz: 2.0
   origin:
