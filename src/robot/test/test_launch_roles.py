@@ -173,16 +173,14 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "' != 'task2'" in minipc_source
     assert 'executable="autonomy_supervisor_node"' in minipc_source
     assert '"task2_autonomy_ready_node"' in adapter_source
-    assert '"preprocessing.launch.py"' in adapter_source
-    assert '"segmentation.launch.py"' in adapter_source
-    assert '"tracker.launch.py"' in adapter_source
-    assert '"ego_odom_topic": own_odom_topic' in adapter_source
-    assert '"planner_real.launch.py"' in adapter_source
-    assert '"mission_gate_required": "true"' in adapter_source
+    assert '"follow_path_client_node"' in adapter_source
+    assert '"mission_gate_required": True' in adapter_source
+    assert '"preprocessing.launch.py"' not in adapter_source
+    assert '"planner_real.launch.py"' not in adapter_source
     assert "nav2_controller" in task2_nav_source
     assert "nav2_velocity_smoother" in task2_nav_source
     assert "nav2_lifecycle_manager" in task2_nav_source
-    assert '"controller_server", "velocity_smoother"' in task2_nav_source
+    assert '"controller_server", "velocity_smoother", "collision_monitor"' in task2_nav_source
     assert "/cmd_vel_nav" in task2_nav_source
     assert "root_key=None" in task2_nav_source
     for forbidden in (
@@ -191,13 +189,14 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
         "nav2_behaviors",
         "nav2_bt_navigator",
         "nav2_waypoint_follower",
-        "nav2_collision_monitor",
-        "pointcloud",
+        "nav2_planner",
     ):
         assert forbidden not in task2_nav_source
         assert all(forbidden not in params for params in task2_params)
     for params in task2_params:
         assert "use_collision_detection: false" in params
+    assert "nav2_collision_monitor" in task2_nav_source
+    assert '"/task2/safety_points"' in task2_params[0]
 
 
 def test_legacy_task2_launch_uses_the_follow_path_only_graph():
