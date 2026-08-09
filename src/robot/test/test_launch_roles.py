@@ -579,10 +579,22 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
 def test_task1_safety_cloud_is_compacted_on_jetson_and_bridged_to_minipc():
     jetson_source = _read_launch_source("jetson_bringup.launch.py")
     assert 'name="task1_safety_points"' in jetson_source
+    assert '"input_topic": "/zed2i/points"' in jetson_source
     assert '"output_topic": "/task1/safety_points"' in jetson_source
     assert '"max_range_m": 8.0' in jetson_source
     assert '"voxel_leaf_size_m": 0.25' in jetson_source
     assert '"process_rate_hz": 10.0' in jetson_source
+
+    zed_config = os.path.normpath(
+        os.path.join(
+            _THIS_DIR, "..", "..", "driver", "camera", "zed2i_driver",
+            "config", "zed2i_jetson_orin_nano.yaml",
+        )
+    )
+    with open(zed_config, "r") as stream:
+        zed_source = stream.read()
+    assert "publish_pointcloud: true" in zed_source
+    assert "pointcloud_stride: 4" in zed_source
 
     for filename in ("bridge_jetson.json5", "bridge_minipc.json5"):
         path = os.path.normpath(

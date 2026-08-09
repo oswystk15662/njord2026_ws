@@ -85,7 +85,9 @@
     connect_same_color_buoys: true
     same_color_wall_max_gap_m: 12.0
     same_color_wall_point_spacing_m: 0.2
-    publish_pointcloud: false
-    pointcloud_stride: 2
+    # Task1 safety points subscribe to this local depth cloud and downsample
+    # it again before transferring the compact result to the miniPC.
+    publish_pointcloud: true
+    pointcloud_stride: 4
     num_disparities: 128
     block_size: 5

@@ -109,16 +109,16 @@ def generate_launch_description():
         },
     )
 
-    # Do not forward the raw MID360 cloud to the miniPC.  This compact,
-    # base_link-frame near-field cloud is the only LiDAR obstacle feed sent
-    # across the two-machine link for Task 1 safety monitoring.
+    # Do not forward raw depth or LiDAR clouds to the miniPC. This compact,
+    # base_link-frame cloud is generated from the ZED2i depth point cloud and
+    # is the only near-field obstacle feed sent across the link for Task 1.
     task1_safety_points = Node(
         package="task2_perception",
         executable="task2_cloud_filter_node",
         name="task1_safety_points",
         output="screen",
         parameters=[{
-            "input_topic": "/livox/lidar",
+            "input_topic": "/zed2i/points",
             "output_topic": "/task1/safety_points",
             "visual_output_topic": "/task1/safety_points_visual",
             "publish_visual_z_mirror": False,

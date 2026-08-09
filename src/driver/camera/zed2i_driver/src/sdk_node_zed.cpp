@@ -142,6 +142,8 @@ public:
     depth_frame_id_ = declare_parameter<std::string>("depth_frame_id", left_frame_id_);
     framerate_ = declare_parameter<int>("framerate", 15);
     publish_pointcloud_ = declare_parameter<bool>("publish_pointcloud", true);
+    pointcloud_stride_ = std::max(
+      1, static_cast<int>(declare_parameter<int>("pointcloud_stride", 2)));
     depth_min_m_ = declare_parameter<double>("depth_min_m", 0.3);
     depth_max_m_ = declare_parameter<double>("depth_max_m", 20.0);
     const bool disable_self_calibration = declare_parameter<bool>("disable_self_calibration", true);
@@ -770,7 +772,8 @@ private:
       }
       pointcloud_pub_->publish(
         depth_to_point_cloud_msg(
-          depth_m, fx_, fy_, cx_, cy_, 1, depth_min_m_, depth_max_m_, depth_frame_id_, stamp));
+          depth_m, fx_, fy_, cx_, cy_, pointcloud_stride_, depth_min_m_, depth_max_m_,
+          depth_frame_id_, stamp));
     }
   }
 
@@ -780,6 +783,7 @@ private:
   std::string depth_frame_id_;
   int framerate_;
   bool publish_pointcloud_;
+  int pointcloud_stride_;
   double depth_min_m_;
   double depth_max_m_;
   bool aec_agc_enable_{true};
