@@ -104,6 +104,12 @@ class CardinalWallPublisher(Node):
         self.retire_passed_cardinal_walls_from_base_pose = self.get_parameter(
             'retire_passed_cardinal_walls_from_base_pose').value
         self.tracks = []
+        # DELETEALL is safe only once on node startup, to remove stale
+        # markers from an older publisher.  Per-cycle deletion makes
+        # Foxglove/RViz visibly flicker even when the obstacle cloud is
+        # unchanged.
+        self._marker_reset_pending = True
+        self._published_marker_ids = set()
         self.preview_tracks = self._load_preview_tracks(
             self.get_parameter('preview_buoy_positions').value,
             self.get_parameter('preview_buoy_marks').value)
@@ -375,65 +381,18 @@ class CardinalWallPublisher(Node):
                 f'{self.retirement_confirmations_required} confirmations')
 
     def _publish_detection_markers(self, stamp):
-        """Visualize every confirmed buoy in the map frame.
+        """Visualize confirmed tracks and the exact Nav2 virtual-wall samples.
 
-        This is intentionally driven by the same fused tracks as the virtual
-        walls, so Foxglove/RViz shows the class that planning is actually
-        using on the vessel, rather than a separate simulator-only annotation.
+        Ground-truth preview walls are deliberately excluded: this topic must
+        not claim that Nav2 sees an obstacle which is absent from
+        /virtual_obstacles.
         """
         markers = MarkerArray()
-        clear = Marker()
-        clear.action = Marker.DELETEALL
-        markers.markers.append(clear)
-        for index, (x, y, class_id) in enumerate(self.preview_tracks):
-            # A confirmed track replaces its nearby ground-truth preview.
-            confirmed = any(
-                track.get('class_id') == class_id
-                and math.hypot(track['x'] - x, track['y'] - y) <= self.merge_radius
-                for track in self.tracks)
-            if confirmed:
-                continue
-
-            if self.walls_enabled:
-                preview_wall = Marker()
-                preview_wall.header.frame_id = self.map_frame
-                preview_wall.header.stamp = stamp
-                preview_wall.ns = 'preview_virtual_obstacle_wall'
-                preview_wall.id = index
-                preview_wall.type = Marker.POINTS
-                preview_wall.action = Marker.ADD
-                preview_wall.pose.orientation.w = 1.0
-                preview_wall.scale.x = self.wall_width + 0.04
-                preview_wall.scale.y = self.wall_width + 0.04
-                preview_wall.color.r = 0.65
-                preview_wall.color.g = 0.20
-                preview_wall.color.b = 0.85
-                preview_wall.color.a = 0.22
-                for px, py, pz in wall_points(
-                        self.bounds, self.wall_width, self.spacing, x, y,
-                        class_id, self._wall_heading(class_id)):
-                    preview_wall.points.append(Point(x=px, y=py, z=pz + 0.04))
-                markers.markers.append(preview_wall)
-
-            preview_text = Marker()
-            preview_text.header.frame_id = self.map_frame
-            preview_text.header.stamp = stamp
-            preview_text.ns = 'preview_cardinal_buoy_label'
-            preview_text.id = index
-            preview_text.type = Marker.TEXT_VIEW_FACING
-            preview_text.action = Marker.ADD
-            preview_text.pose.position.x = x
-            preview_text.pose.position.y = y
-            preview_text.pose.position.z = 1.10
-            preview_text.pose.orientation.w = 1.0
-            preview_text.scale.z = 0.30
-            preview_text.color.r = 0.85
-            preview_text.color.g = 0.85
-            preview_text.color.b = 0.85
-            preview_text.color.a = 0.55
-            state = 'NOT DETECTED' if self.walls_enabled else 'WAITING GPS3'
-            preview_text.text = f'{CLASS_LABELS[class_id]} / {state}'
-            markers.markers.append(preview_text)
+        if self._marker_reset_pending:
+            clear = Marker()
+            clear.action = Marker.DELETEALL
+            markers.markers.append(clear)
+            self._marker_reset_pending = False
 
         for index, track in enumerate(self.tracks):
             class_id = track.get('class_id')
@@ -508,6 +467,21 @@ class CardinalWallPublisher(Node):
             text.color.a = 1.0
             text.text = label
             markers.markers.append(text)
+
+        current_marker_ids = {
+            (marker.ns, marker.id)
+            for marker in markers.markers
+            if marker.action == Marker.ADD
+        }
+        for namespace, marker_id in self._published_marker_ids - current_marker_ids:
+            remove = Marker()
+            remove.header.frame_id = self.map_frame
+            remove.header.stamp = stamp
+            remove.ns = namespace
+            remove.id = marker_id
+            remove.action = Marker.DELETE
+            markers.markers.append(remove)
+        self._published_marker_ids = current_marker_ids
         self.marker_pub.publish(markers)
 
 
