@@ -82,7 +82,10 @@ class CardinalPerceptionSim(Node):
         self.declare_parameter("odom_topic", "/odom")
         self.declare_parameter("cardinal_mark_topic", "/sim/cardinal_mark")
         self.declare_parameter("detection_topic", "/buoy_detections_3d")
-        self.declare_parameter("output_frame", "base_link")
+        # buoy_position_xy is authored in the Task1 map frame.  Publishing
+        # this simulator-only ground truth in map avoids combining /odom
+        # coordinates with map->base_link TF a second time.
+        self.declare_parameter("output_frame", "map")
         self.declare_parameter("buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]")
         self.declare_parameter("buoy_marks", "[]")
         self.declare_parameter("publish_rate_hz", 5.0)
@@ -260,10 +263,18 @@ class CardinalPerceptionSim(Node):
                 detection = BuoyDetection()
                 detection.class_id = CARDINAL_CLASS_BY_MARK[mark]
                 detection.confidence = float(confidence)
-                # Marker position expressed in output_frame (base_link),
-                # matching the real driver's `output_frame` contract.
-                detection.position.x = dx * math.cos(yaw) + dy * math.sin(yaw)
-                detection.position.y = -dx * math.sin(yaw) + dy * math.cos(yaw)
+                if self.output_frame == "map":
+                    # The scenario's buoy coordinates are already map-frame
+                    # ground truth.  Do not transform them through /odom and
+                    # base_link: map->odom drift would create a new wall track
+                    # for every observation of the same buoy.
+                    detection.position.x = bx
+                    detection.position.y = by
+                else:
+                    # Retain the real-driver-compatible base_link output for
+                    # explicit non-map test configurations.
+                    detection.position.x = dx * math.cos(yaw) + dy * math.sin(yaw)
+                    detection.position.y = -dx * math.sin(yaw) + dy * math.cos(yaw)
                 detection.position.z = 0.0
                 detection.position_source = BuoyDetection.POSITION_LIDAR_FUSED
                 array.detections.append(detection)

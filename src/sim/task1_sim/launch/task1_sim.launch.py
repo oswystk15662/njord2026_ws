@@ -80,7 +80,10 @@ def launch_cardinal_perception_sim(context):
             "odom_topic": "/odom",
             "cardinal_mark_topic": "/sim/cardinal_mark",
             "detection_topic": "/buoy_detections_3d",
-            "output_frame": "base_link",
+            # buoy_position_xy is map-frame simulator ground truth.  Keeping
+            # the output in map avoids creating duplicate wall tracks when
+            # map and odom diverge during the simulated run.
+            "output_frame": "map",
             "buoy_position_xy": buoy_position_xy,
             "buoy_marks": buoy_marks,
             "recognition_range_m": 100.0,
