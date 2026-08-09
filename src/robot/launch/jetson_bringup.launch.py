@@ -125,6 +125,7 @@ def generate_launch_description():
             "output_frame": "base_link",
             "min_range_m": 0.5,
             "max_range_m": 8.0,
+            "min_valid_input_points": 100,
             "voxel_leaf_size_m": 0.25,
             "accumulation_frames": 1,
             "process_rate_hz": 10.0,
