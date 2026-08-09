@@ -9,7 +9,7 @@ This overlay consumes the topics already provided by that launch and adds:
   /livox/lidar + ego odometry -> Task 2 ship perception -> /other_ship/twist
   ego odometry + opponent + task waypoints -> MPPI -> /planned_path_pruned
   /planned_path_pruned -> Nav2 FollowPath -> /cmd_vel_smoothed
-  /task2/safety_points -> Collision Monitor -> /cmd_vel_nav
+  /task2/safety_points -> Collision Monitor -> safety-cloud gate -> /cmd_vel_nav
 
 The command_arbiter from manual_control receives /cmd_vel_nav through its
 existing default, and publishes the selected
@@ -102,6 +102,21 @@ def generate_launch_description():
             "auto_cmd_vel_topic": "/cmd_vel_nav",
         },
     )
+    safety_gate = Node(
+        package="asv_trajectory_planner",
+        executable="safety_cloud_gate_node",
+        name="task2_safety_cloud_gate",
+        output="screen",
+        parameters=[{
+            "safety_topic": "/task2/safety_points",
+            "cmd_vel_in_topic": "/cmd_vel_collision_checked",
+            "cmd_vel_out_topic": "/cmd_vel_nav",
+            "safety_timeout_sec": 1.0,
+            "command_timeout_sec": 0.5,
+            "publish_rate_hz": 20.0,
+        }],
+        condition=IfCondition(enable_nav2),
+    )
     autonomy_ready = Node(
         package="asv_trajectory_planner",
         executable="task2_autonomy_ready_node",
@@ -132,5 +147,6 @@ def generate_launch_description():
         ship_tracking,
         mppi,
         nav2,
+        safety_gate,
         autonomy_ready,
     ])
