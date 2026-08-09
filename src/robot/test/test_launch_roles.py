@@ -582,7 +582,8 @@ def test_task1_safety_cloud_is_compacted_on_jetson_and_bridged_to_minipc():
     assert '"input_topic": "/zed2i/points"' in jetson_source
     assert '"output_topic": "/task1/safety_points"' in jetson_source
     assert '"max_range_m": 8.0' in jetson_source
-    assert '"min_valid_input_points": 100' in jetson_source
+    assert '"min_valid_input_points": 0' in jetson_source
+    assert '"publish_empty_on_invalid_input": True' in jetson_source
     assert '"voxel_leaf_size_m": 0.25' in jetson_source
     assert '"process_rate_hz": 5.0' in jetson_source
 
