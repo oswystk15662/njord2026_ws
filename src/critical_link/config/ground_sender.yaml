@@ -2,14 +2,6 @@ critical_link_sender:
   ros__parameters:
     joy_input_topic: /critical_link/input/joy
     heartbeat_input_topic: /critical_link/input/heartbeat
-    # Immutable identity of this operator station.  It must match a vessel
-    # source_specs entry; priority is deliberately not configured here.
-    source_id: 100
-    # -1 keeps the legacy always-active behaviour.  Set a Joy button index on
-    # real multi-operator deployments to require a deadman switch.
-    deadman_button: -1
-    # A rising edge requests takeover from a lower-priority selected source.
-    takeover_button: -1
     # Format: name|Ground-PC bind IPv4|miniPC destination IPv4|UDP port
     # Example paths after assigning static/VPN addresses:
     # udp_paths:
@@ -17,8 +9,8 @@ critical_link_sender:
     #   - "builtin_wifi|192.168.20.1|192.168.20.2|45101"
     #   - "internet_vpn|10.20.0.1|10.20.0.2|45103"
     udp_paths:
-      - "usb_wifi|192.168.122.107|192.168.122.210|45100"
-      - "builtin_wifi|192.168.122.107|192.168.122.22|45101"
+      - "usb_wifi|192.168.212.107|192.168.212.210|45100"
+      - "builtin_wifi|192.168.212.107|192.168.212.22|45101"
       - "v1_internet_vpn|100.123.47.2|100.82.157.125|45103"
     # Use a stable /dev/serial/by-id path for the Ground ESP32.
     serial_device: ""

@@ -5,11 +5,13 @@
   //   従来どおりRTP/UDP専用経路を使う。
   mode: "peer",
 
-  // miniPCへの到達経路は運用時の名前解決または固定IPで与える。
+  // miniPCへの到達経路は固定IPで指定する。実運用の無線経路では mDNS
+  // hostname の解決待ち／誤解決により bridge 接続が遅延することがあるため、
+  // miniPC の USB Wi-Fi 側固定アドレスを使う。
   // スマートフォンInternet経路を使う場合も7447をInternetへ直接公開せず、
   // WireGuard等のVPN内アドレスをendpointにする。
   connect: {
-    endpoints: ["tcp/gembu-EliteMini-Series:7447"],
+    endpoints: ["tcp/192.168.212.210:7447"],
   },
 
   scouting: {
