@@ -13,7 +13,7 @@ def test_visualization_uses_incremental_track_markers_without_preview_walls():
     assert "preview_virtual_obstacle_wall" not in source
 
 
-def test_task1_launches_cap_confirmed_wall_tracks_at_four():
+def test_task1_launches_nearest_active_wall_track_limit_at_four():
     repo_root = PACKAGE_ROOT.parents[2]
     sim_launch = (repo_root / "src" / "sim" / "task1_sim" / "launch" / "task1_sim.launch.py").read_text(
         encoding="utf-8"
@@ -21,5 +21,5 @@ def test_task1_launches_cap_confirmed_wall_tracks_at_four():
     minipc_launch = (repo_root / "src" / "robot" / "launch" / "minipc_bringup.launch.py").read_text(
         encoding="utf-8"
     )
-    assert '"max_confirmed_tracks": 4' in sim_launch
-    assert '"max_confirmed_tracks": 4' in minipc_launch
+    assert '"max_active_wall_tracks": 4' in sim_launch
+    assert '"max_active_wall_tracks": 4' in minipc_launch

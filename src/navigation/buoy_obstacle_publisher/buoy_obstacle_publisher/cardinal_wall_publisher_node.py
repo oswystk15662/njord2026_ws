@@ -64,7 +64,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('point_spacing_m', 0.1)
         self.declare_parameter('marker_merge_radius_m', 2.0)
         self.declare_parameter('confirmations_required', 2)
-        self.declare_parameter('max_confirmed_tracks', 0)
+        self.declare_parameter('max_active_wall_tracks', 0)
         self.declare_parameter('publish_rate_hz', 2.0)
         self.declare_parameter('course_heading_rad', 0.0)
         self.declare_parameter('true_north_heading_topic', '')
@@ -91,7 +91,8 @@ class CardinalWallPublisher(Node):
         self.spacing = max(0.02, float(self.get_parameter('point_spacing_m').value))
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
-        self.max_confirmed_tracks = max(0, int(self.get_parameter('max_confirmed_tracks').value))
+        self.max_active_wall_tracks = max(
+            0, int(self.get_parameter('max_active_wall_tracks').value))
         self.course_heading_rad = float(self.get_parameter('course_heading_rad').value)
         retirement_heading = float(self.get_parameter('retirement_course_heading_rad').value)
         self.retirement_course_heading_rad = (
@@ -112,7 +113,6 @@ class CardinalWallPublisher(Node):
         # unchanged.
         self._marker_reset_pending = True
         self._published_marker_ids = set()
-        self._track_capacity_warning_emitted = False
         self.preview_tracks = self._load_preview_tracks(
             self.get_parameter('preview_buoy_positions').value,
             self.get_parameter('preview_buoy_marks').value)
@@ -209,7 +209,6 @@ class CardinalWallPublisher(Node):
             # next run before its GPS3 gate is crossed.
             self.walls_enabled = False
             self.tracks.clear()
-            self._track_capacity_warning_emitted = False
             self.get_logger().info('Task1 wall gate reset: cleared prior virtual-wall tracks')
 
     def _on_retirement_heading(self, msg):
@@ -303,14 +302,6 @@ class CardinalWallPublisher(Node):
                 nearest['candidate'] = class_id
                 nearest['count'] = 1
         if nearest['class_id'] is None and nearest['count'] >= self.required_confirmations:
-            confirmed_count = sum(track['class_id'] is not None for track in self.tracks)
-            if self.max_confirmed_tracks and confirmed_count >= self.max_confirmed_tracks:
-                if not self._track_capacity_warning_emitted:
-                    self.get_logger().warn(
-                        f'Ignoring new buoy wall track: Task1 limit is '
-                        f'{self.max_confirmed_tracks} confirmed tracks')
-                    self._track_capacity_warning_emitted = True
-                return
             nearest['class_id'] = nearest['candidate']
             nearest['true_north_yaw_rad'] = self.true_north_yaw_rad
             self.get_logger().info(
@@ -321,10 +312,11 @@ class CardinalWallPublisher(Node):
         # boat position must not retire future course walls.
         if self.walls_enabled:
             self._retire_passed_cardinal_walls_from_base_pose()
+        selected_indexes = self._select_active_wall_track_indexes()
         points = []
-        for track in self.tracks:
-            if (self.walls_enabled and track['class_id'] is not None
-                    and track.get('wall_active', True)):
+        for index in selected_indexes:
+            track = self.tracks[index]
+            if self.walls_enabled:
                 wall_heading = self._wall_heading(track['class_id'], track)
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
@@ -346,7 +338,41 @@ class CardinalWallPublisher(Node):
         msg.is_dense = True
         msg.data = b''.join(struct.pack('fff', *point) for point in points)
         self.pub.publish(msg)
-        self._publish_detection_markers(msg.header.stamp)
+        self._publish_detection_markers(msg.header.stamp, selected_indexes)
+
+    def _select_active_wall_track_indexes(self):
+        """Return the nearest not-yet-passed tracks along the GPS3->GPS4 axis."""
+        candidates = [
+            (index, track)
+            for index, track in enumerate(self.tracks)
+            if track.get('class_id') is not None and track.get('wall_active', True)
+        ]
+        if not self.walls_enabled:
+            return set()
+        if not self.max_active_wall_tracks:
+            return {index for index, _track in candidates}
+        try:
+            transform = self.tf_buffer.lookup_transform(
+                self.map_frame, self.base_frame_id, Time(), timeout=Duration(seconds=0.05))
+        except TransformException:
+            # Without a map-frame vessel position, selecting arbitrary walls
+            # is less safe than publishing none; Nav2 itself also requires
+            # this TF chain before it can navigate.
+            return set()
+        boat_x = transform.transform.translation.x
+        boat_y = transform.transform.translation.y
+        forward_x = math.cos(self.retirement_course_heading_rad)
+        forward_y = math.sin(self.retirement_course_heading_rad)
+        ahead = []
+        for index, track in candidates:
+            distance = ((track['x'] - boat_x) * forward_x +
+                        (track['y'] - boat_y) * forward_y)
+            # Behind the hull is already passed, even during the brief
+            # retirement confirmation window.
+            if distance >= -self.retirement_margin:
+                ahead.append((distance, index))
+        ahead.sort()
+        return {index for _distance, index in ahead[:self.max_active_wall_tracks]}
 
     def _wall_heading(self, class_id, track=None):
         """Return the reference direction used by planning and visualization."""
@@ -392,7 +418,7 @@ class CardinalWallPublisher(Node):
                 f'Disabled {retired} passed-buoy wall(s) after '
                 f'{self.retirement_confirmations_required} confirmations')
 
-    def _publish_detection_markers(self, stamp):
+    def _publish_detection_markers(self, stamp, selected_indexes):
         """Visualize confirmed tracks and the exact Nav2 virtual-wall samples.
 
         Ground-truth preview walls are deliberately excluded: this topic must
@@ -418,8 +444,10 @@ class CardinalWallPublisher(Node):
                 label = f'{label} / WAITING GPS3'
             if not track.get('wall_active', True):
                 label = f'{label} / WALL RETIRED'
+            elif self.walls_enabled and index not in selected_indexes:
+                label = f'{label} / WALL QUEUED'
 
-            if self.walls_enabled and track.get('wall_active', True):
+            if self.walls_enabled and index in selected_indexes:
                 # /virtual_obstacles itself is PointCloud2, which is not
                 # shown by default in Foxglove/RViz. Mirror the exact wall
                 # samples as a thick magenta POINTS marker so the obstacle

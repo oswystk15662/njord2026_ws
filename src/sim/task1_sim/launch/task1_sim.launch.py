@@ -40,9 +40,9 @@ def launch_cardinal_walls(context):
             "wall_width_m": 0.2,
             "point_spacing_m": 0.05,
             "confirmations_required": 2,
-            # Competition scenario: one red reference buoy plus S/N/S.
-            # Keep a bad detection from creating unbounded wall tracks.
-            "max_confirmed_tracks": 4,
+            # Keep the nearest four not-yet-passed marks in the GPS3->GPS4
+            # direction; newly detected marks are re-ranked immediately.
+            "max_active_wall_tracks": 4,
             # Main Task1.2 direction: GPS waypoint 3 -> 4 (west in this map).
             "course_heading_rad": 3.141592653589793,
             "retirement_course_heading_rad": 3.141592653589793,
