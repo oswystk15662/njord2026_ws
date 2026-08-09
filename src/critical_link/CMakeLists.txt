@@ -19,7 +19,6 @@ add_library(critical_link_protocol
   src/io.cpp
   src/joy_codec.cpp
   src/protocol.cpp
-  src/source_arbiter.cpp
 )
 target_compile_features(critical_link_protocol PUBLIC cxx_std_17)
 target_include_directories(critical_link_protocol PUBLIC

@@ -7,7 +7,7 @@
 #if __has_include("critical_link_config.h")
 #include "critical_link_config.h"
 #else
-#error "Copy critical_link_config.example.h to critical_link_config.h and configure role, peers, channel, PMK and LMKs"
+#error "Copy critical_link_config.example.h to critical_link_config.h and configure role, peer MAC, channel, PMK and LMK"
 #endif
 
 namespace
@@ -15,8 +15,8 @@ namespace
 
 constexpr uint8_t kFrameMagic[4] = {'N', 'C', 'L', '1'};
 constexpr uint8_t kAckMagic[4] = {'N', 'C', 'A', 'K'};
-constexpr uint8_t kProtocolVersion = 2;
-constexpr size_t kHeaderSize = 34;
+constexpr uint8_t kProtocolVersion = 1;
+constexpr size_t kHeaderSize = 30;
 constexpr size_t kCrcSize = 4;
 constexpr size_t kMaxPayloadSize = 200;
 constexpr size_t kMaxFrameSize = kHeaderSize + kMaxPayloadSize + kCrcSize;
@@ -26,7 +26,6 @@ constexpr size_t kSerialBufferSize = 512;
 struct RadioPacket
 {
   uint16_t size;
-  uint8_t source_mac[6];
   uint8_t data[kMaxFrameSize];
 };
 
@@ -105,7 +104,7 @@ bool validate_frame(const uint8_t * data, size_t size)
       data[4] != kProtocolVersion || data[5] < 1 || data[5] > 3) {
     return false;
   }
-  const size_t payload_size = read_u16(data + 32);
+  const size_t payload_size = read_u16(data + 28);
   return payload_size <= kMaxPayloadSize &&
          size == kHeaderSize + payload_size + kCrcSize &&
          read_u32(data + size - kCrcSize) == crc32_ieee(data, size - kCrcSize);
@@ -118,26 +117,16 @@ bool validate_ack(const uint8_t * data, size_t size)
          read_u32(data + kAckSize - kCrcSize) == crc32_ieee(data, kAckSize - kCrcSize);
 }
 
-const CriticalLinkPeerConfig * peer_for_mac(const uint8_t * mac)
-{
-  for (size_t index = 0; index < CRITICAL_LINK_PEER_COUNT; ++index) {
-    if (memcmp(CRITICAL_LINK_PEERS[index].mac, mac, sizeof(CRITICAL_LINK_PEERS[index].mac)) == 0) {
-      return &CRITICAL_LINK_PEERS[index];
-    }
-  }
-  return nullptr;
-}
-
 void send_ack(const RadioPacket & packet)
 {
   uint8_t ack[kAckSize]{};
   memcpy(ack, kAckMagic, sizeof(kAckMagic));
   ack[4] = kProtocolVersion;
   ack[5] = packet.data[5];
-  write_u64(ack + 8, read_u64(packet.data + 12));
-  write_u32(ack + 16, read_u32(packet.data + 20));
+  write_u64(ack + 8, read_u64(packet.data + 8));
+  write_u32(ack + 16, read_u32(packet.data + 16));
   write_u32(ack + 20, crc32_ieee(ack, 20));
-  esp_now_send(packet.source_mac, ack, sizeof(ack));
+  esp_now_send(CRITICAL_LINK_PEER_MAC, ack, sizeof(ack));
 }
 
 void queue_pending(const uint8_t * data, size_t size)
@@ -147,18 +136,15 @@ void queue_pending(const uint8_t * data, size_t size)
     return;
   }
   auto & slot = pending[stream];
-  if (read_u32(data + 8) != CRITICAL_LINK_SOURCE_ID) {
-    return;
-  }
   slot.active = true;
   slot.stream = stream;
   slot.attempts = 1;
   slot.size = static_cast<uint16_t>(size);
-  slot.session = read_u64(data + 12);
-  slot.sequence = read_u32(data + 20);
+  slot.session = read_u64(data + 8);
+  slot.sequence = read_u32(data + 16);
   slot.last_send_ms = millis();
   memcpy(slot.data, data, size);
-  esp_now_send(CRITICAL_LINK_PEERS[0].mac, slot.data, slot.size);
+  esp_now_send(CRITICAL_LINK_PEER_MAC, slot.data, slot.size);
 }
 
 void accept_ack(const uint8_t * data)
@@ -174,44 +160,34 @@ void accept_ack(const uint8_t * data)
   }
 }
 
-void handle_radio_receive(const uint8_t * source_mac, const uint8_t * data, int length)
+void handle_radio_receive(const uint8_t * data, int length)
 {
-  const auto * peer = peer_for_mac(source_mac);
-  if (peer == nullptr) {
-    return;
-  }
 #if CRITICAL_LINK_ROLE_GROUND
   if (length == static_cast<int>(kAckSize) && validate_ack(data, kAckSize)) {
     RadioPacket packet{};
     packet.size = static_cast<uint16_t>(length);
-    memcpy(packet.source_mac, source_mac, sizeof(packet.source_mac));
     memcpy(packet.data, data, packet.size);
     xQueueSend(receive_queue, &packet, 0);
   }
 #else
   if (length <= 0 || length > static_cast<int>(kMaxFrameSize) ||
-      !validate_frame(data, static_cast<size_t>(length)) || read_u32(data + 8) != peer->source_id) {
+      !validate_frame(data, static_cast<size_t>(length))) {
     return;
   }
   RadioPacket packet{};
   packet.size = static_cast<uint16_t>(length);
-  memcpy(packet.source_mac, source_mac, sizeof(packet.source_mac));
   memcpy(packet.data, data, packet.size);
   xQueueSend(receive_queue, &packet, 0);
 #endif
 }
 
 #if ESP_ARDUINO_VERSION_MAJOR >= 3
-void on_data_received(const esp_now_recv_info_t * info, const uint8_t * data, int length)
+void on_data_received(const esp_now_recv_info_t *, const uint8_t * data, int length)
 #else
-void on_data_received(const uint8_t * mac, const uint8_t * data, int length)
+void on_data_received(const uint8_t *, const uint8_t * data, int length)
 #endif
 {
-#if ESP_ARDUINO_VERSION_MAJOR >= 3
-  handle_radio_receive(info->src_addr, data, length);
-#else
-  handle_radio_receive(mac, data, length);
-#endif
+  handle_radio_receive(data, length);
 }
 
 void process_serial()
@@ -240,7 +216,7 @@ void process_serial()
     if (serial_size < kHeaderSize) {
       return;
     }
-    const size_t payload_size = read_u16(serial_buffer + 32);
+    const size_t payload_size = read_u16(serial_buffer + 28);
     if (payload_size > kMaxPayloadSize) {
       memmove(serial_buffer, serial_buffer + 1, --serial_size);
       continue;
@@ -276,7 +252,7 @@ void retry_pending()
     }
     ++slot.attempts;
     slot.last_send_ms = now;
-    esp_now_send(CRITICAL_LINK_PEERS[0].mac, slot.data, slot.size);
+    esp_now_send(CRITICAL_LINK_PEER_MAC, slot.data, slot.size);
   }
 #endif
 }
@@ -328,17 +304,15 @@ void setup()
     stop_with_error("esp_now_set_pmk failed", result);
   }
 
-  for (size_t index = 0; index < CRITICAL_LINK_PEER_COUNT; ++index) {
-    esp_now_peer_info_t peer{};
-    memcpy(peer.peer_addr, CRITICAL_LINK_PEERS[index].mac, sizeof(peer.peer_addr));
-    memcpy(peer.lmk, CRITICAL_LINK_PEERS[index].lmk, sizeof(peer.lmk));
-    peer.channel = CRITICAL_LINK_ESPNOW_CHANNEL;
-    peer.ifidx = WIFI_IF_STA;
-    peer.encrypt = true;
-    result = esp_now_add_peer(&peer);
-    if (result != ESP_OK && result != ESP_ERR_ESPNOW_EXIST) {
-      stop_with_error("esp_now_add_peer failed", result);
-    }
+  esp_now_peer_info_t peer{};
+  memcpy(peer.peer_addr, CRITICAL_LINK_PEER_MAC, sizeof(peer.peer_addr));
+  memcpy(peer.lmk, CRITICAL_LINK_LMK, sizeof(peer.lmk));
+  peer.channel = CRITICAL_LINK_ESPNOW_CHANNEL;
+  peer.ifidx = WIFI_IF_STA;
+  peer.encrypt = true;
+  result = esp_now_add_peer(&peer);
+  if (result != ESP_OK && result != ESP_ERR_ESPNOW_EXIST) {
+    stop_with_error("esp_now_add_peer failed", result);
   }
   receive_queue = xQueueCreate(8, sizeof(RadioPacket));
   if (receive_queue == nullptr) {
@@ -347,10 +321,9 @@ void setup()
   esp_now_register_recv_cb(on_data_received);
 
   Serial.printf(
-    "critical-link role=%s mac=%s channel=%u peers=%u max_frame=%u\n",
+    "critical-link role=%s mac=%s channel=%u max_frame=%u\n",
     CRITICAL_LINK_ROLE_GROUND ? "ground" : "vessel",
     WiFi.macAddress().c_str(), CRITICAL_LINK_ESPNOW_CHANNEL,
-    static_cast<unsigned int>(CRITICAL_LINK_PEER_COUNT),
     static_cast<unsigned int>(kMaxFrameSize));
 }
 
