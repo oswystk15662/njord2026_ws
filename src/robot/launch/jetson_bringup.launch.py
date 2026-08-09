@@ -128,7 +128,7 @@ def generate_launch_description():
             "min_valid_input_points": 100,
             "voxel_leaf_size_m": 0.25,
             "accumulation_frames": 1,
-            "process_rate_hz": 10.0,
+            "process_rate_hz": 5.0,
             "waterline_z_m": 0.0,
             "water_remove_min_z_m": -0.3,
             "water_remove_max_z_m": 0.15,
