@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <unistd.h>
+
 #include "critical_link/io.hpp"
 
 namespace critical_link
@@ -31,6 +33,14 @@ TEST(IoConfig, RejectsInvalidPaths)
   EXPECT_FALSE(parse_udp_sender_spec("missing-fields").has_value());
   EXPECT_FALSE(parse_udp_sender_spec("x|127.0.0.1|127.0.0.1|70000").has_value());
   EXPECT_FALSE(parse_udp_receiver_spec("x|127.0.0.1|0").has_value());
+}
+
+TEST(IoConfig, ResolvesHostnameForUdp)
+{
+  const UdpSenderSpec spec{"loopback", "localhost", "localhost", 45100};
+  const int fd = open_udp_sender(spec);
+  ASSERT_GE(fd, 0);
+  close(fd);
 }
 
 }  // namespace

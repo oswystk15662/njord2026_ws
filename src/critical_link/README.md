@@ -20,16 +20,17 @@ Joy payloadは最大32 axesと64 buttonsです。NaN/Inf、壊れたbutton、過
 UDP sender path:
 
 ```text
-name|ground_bind_ipv4|vessel_destination_ipv4|port
+name|ground_bind_ipv4_or_hostname|vessel_destination_ipv4_or_hostname|port
 ```
 
 UDP receiver path:
 
 ```text
-name|vessel_bind_ipv4|port
+name|vessel_bind_ipv4_or_hostname|port
 ```
 
-NIC名やdefault routeに依存せず、各socketを経路固有の送信元/受信先IPv4へbindします。
+NIC名やdefault routeに依存せず、各socketを経路固有の送信元/受信先IPv4へbindします。Avahi
+（mDNS）が使える環境では`.local` hostnameも指定できます。
 船載スマートフォンはminiPCへUSB tetherし、WireGuard/Tailscale等のVPN内IPv4を4本目の
 pathに指定してください。public InternetへUDP portやZenoh 7447を直接公開しません。
 

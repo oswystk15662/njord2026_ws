@@ -1,7 +1,7 @@
 #include "critical_link/io.hpp"
 
-#include <arpa/inet.h>
 #include <fcntl.h>
+#include <netdb.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <termios.h>
@@ -42,10 +42,17 @@ std::optional<uint16_t> parse_port(const std::string & text)
 
 bool fill_address(const std::string & address, uint16_t port, sockaddr_in & output)
 {
-  output = {};
-  output.sin_family = AF_INET;
+  addrinfo hints{};
+  hints.ai_family = AF_INET;
+  hints.ai_socktype = SOCK_DGRAM;
+  addrinfo * results = nullptr;
+  if (getaddrinfo(address.c_str(), nullptr, &hints, &results) != 0) {
+    return false;
+  }
+  output = *reinterpret_cast<const sockaddr_in *>(results->ai_addr);
   output.sin_port = htons(port);
-  return inet_pton(AF_INET, address.c_str(), &output.sin_addr) == 1;
+  freeaddrinfo(results);
+  return true;
 }
 
 std::optional<speed_t> baud_flag(int baud)
