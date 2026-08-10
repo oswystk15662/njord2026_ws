@@ -111,17 +111,21 @@ public:
       throw std::runtime_error("goal checker lifecycle node expired");
     }
     node->declare_parameter(plugin_name + ".xy_goal_tolerance", 0.5);
+    node->declare_parameter(plugin_name + ".position_only_xy_goal_tolerance", 1.5);
     node->declare_parameter(plugin_name + ".yaw_goal_tolerance", 0.5);
     node->declare_parameter(plugin_name + ".heading_required_goal_xs", std::vector<double>{});
     node->declare_parameter(plugin_name + ".heading_required_goal_ys", std::vector<double>{});
     node->declare_parameter(plugin_name + ".heading_required_goal_tolerance", 0.2);
     xy_tolerance_ = node->get_parameter(plugin_name + ".xy_goal_tolerance").as_double();
+    position_only_xy_tolerance_ = node->get_parameter(
+      plugin_name + ".position_only_xy_goal_tolerance").as_double();
     yaw_tolerance_ = node->get_parameter(plugin_name + ".yaw_goal_tolerance").as_double();
     required_xs_ = node->get_parameter(plugin_name + ".heading_required_goal_xs").as_double_array();
     required_ys_ = node->get_parameter(plugin_name + ".heading_required_goal_ys").as_double_array();
     required_tolerance_ = node->get_parameter(
       plugin_name + ".heading_required_goal_tolerance").as_double();
-    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || required_tolerance_ < 0.0 ||
+    if (xy_tolerance_ <= 0.0 || position_only_xy_tolerance_ < xy_tolerance_ ||
+      yaw_tolerance_ < 0.0 || required_tolerance_ < 0.0 ||
       required_xs_.size() != required_ys_.size())
     {
       throw std::runtime_error("invalid selective heading goal checker parameters");
@@ -137,11 +141,11 @@ public:
   {
     const double dx = query_pose.position.x - goal_pose.position.x;
     const double dy = query_pose.position.y - goal_pose.position.y;
+    if (!requires_heading(goal_pose)) {
+      return std::hypot(dx, dy) <= position_only_xy_tolerance_;
+    }
     if (std::hypot(dx, dy) > xy_tolerance_) {
       return false;
-    }
-    if (!requires_heading(goal_pose)) {
-      return true;
     }
     return std::abs(shortest_angle(yaw(query_pose), yaw(goal_pose))) <= yaw_tolerance_;
   }
@@ -190,6 +194,7 @@ private:
   }
 
   double xy_tolerance_{0.5};
+  double position_only_xy_tolerance_{1.5};
   double yaw_tolerance_{0.5};
   std::vector<double> required_xs_;
   std::vector<double> required_ys_;

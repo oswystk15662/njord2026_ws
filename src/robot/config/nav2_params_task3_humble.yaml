@@ -91,10 +91,11 @@ controller_server:
       RotateToGoal.lookahead_time: -1.0
 
     general_goal_checker:
-      # Only the dock mouth and berth require heading. GPS/gate/corridor/exit
-      # points, including GPS10, complete by position alone.
+      # Only the dock mouth and berth require strict position/heading. All
+      # outside points (GPS/gate/corridor/exit/GPS10) complete within 1.5 m.
       plugin: "robot::SelectiveHeadingGoalChecker"
       xy_goal_tolerance: 0.8
+      position_only_xy_goal_tolerance: 1.5
       # 20 degrees: tight enough to face the berth, tolerant of on-water yaw noise.
       yaw_goal_tolerance: 0.35
       heading_required_goal_xs: [18.25, 20.0, -18.25, -20.0]

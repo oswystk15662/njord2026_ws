@@ -168,8 +168,18 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert "RotateToGoal" in follow_path["critics"]
     assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
     assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
+    assert checker["position_only_xy_goal_tolerance"] == pytest.approx(1.5)
     assert checker["heading_required_goal_xs"] == [18.25, 20.0, -18.25, -20.0]
     assert checker["heading_required_goal_ys"] == [1.065, 1.065, 0.0, 0.0]
+
+
+def test_task3_uses_its_relaxed_waypoint_behavior_tree():
+    source = _read_launch_source("nav2.launch.py")
+    task3_bt = (Path(_LAUNCH_DIR).parents[0] / "config" /
+                "navigate_through_poses_task3_w_replanning_and_recovery.xml").read_text()
+
+    assert "navigate_through_poses_task3_w_replanning_and_recovery.xml" in source
+    assert 'RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="1.5"' in task3_bt
 
 
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
