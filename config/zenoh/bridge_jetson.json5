@@ -36,16 +36,20 @@
 
       allow: {
         publishers: [
-          "/odom", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/livox/imu",
           "/task1/safety_points",
+          "/task2/safety_points", "/planned_path_pruned",
+          "/waypoint1_pose", "/waypoint2_pose",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/foxglove_log",
         ],
         subscribers: [
-          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/tf", "/tf_static", "/livox/imu",
           "/task1/safety_points",
+          "/task2/safety_points", "/planned_path_pruned",
+          "/waypoint1_pose", "/waypoint2_pose",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

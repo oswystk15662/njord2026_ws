@@ -220,6 +220,7 @@ class MissionManager(Node):
             String, "/mission/active_control_policy", _STATUS_QOS
         )
         self._task2_enabled_pub = self.create_publisher(Bool, "/mission/task2/enabled", _STATUS_QOS)
+        self.create_subscription(Bool, "/mission/task2/goal_reached", self._on_task2_goal_reached, _STATUS_QOS)
         self._task1_cardinal_wall_enable_pub = self.create_publisher(
             Bool, "/task1/cardinal_wall_enable", _STATUS_QOS
         )
@@ -524,6 +525,13 @@ class MissionManager(Node):
 
     def _set_task2_enabled(self, enabled: bool) -> None:
         self._task2_enabled_pub.publish(Bool(data=enabled))
+
+    def _on_task2_goal_reached(self, message: Bool) -> None:
+        if not message.data:
+            return
+        with self._lock:
+            if isinstance(self._active_executor, Task2MppiExecutor):
+                self._active_executor.goal_reached()
 
     def _configure_task1_cardinal_walls(self, task: TaskDefinition, route: Route) -> None:
         """Prepare the Task1 GPS3 stage gate from the validated route."""

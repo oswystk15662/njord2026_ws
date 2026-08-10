@@ -27,6 +27,7 @@ setup(
     entry_points={
         "console_scripts": [
             "waypoint_publisher_node = waypoint_publisher.waypoint_publisher_node:main",
+            "ground_waypoint_geo_publisher = waypoint_publisher.ground_waypoint_geo_publisher:main",
         ],
     },
 )

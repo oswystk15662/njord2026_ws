@@ -5,9 +5,11 @@ from copy import deepcopy
 import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 from nav_msgs.msg import Path
 from nav2_msgs.action import FollowPath
+from action_msgs.msg import GoalStatus
 from std_msgs.msg import Bool
 
 
@@ -27,6 +29,7 @@ class FollowPathClientNode(Node):
         self.declare_parameter("enable_replanning", True)
         self.declare_parameter("enabled_topic", "/mission/task2/enabled")
         self.declare_parameter("mission_gate_required", False)
+        self.declare_parameter("goal_reached_topic", "/mission/task2/goal_reached")
 
         # goal active中にFollowPath goalを投げ直す最短間隔。
         # 短すぎるとcontroller_serverがabortしやすい。
@@ -45,6 +48,7 @@ class FollowPathClientNode(Node):
         self.active_replan_interval_s = float(
             self.get_parameter("active_replan_interval_s").value
         )
+        self.goal_reached_topic = str(self.get_parameter("goal_reached_topic").value)
 
         self.latest_path = None
         self.last_sent_path = None
@@ -52,6 +56,15 @@ class FollowPathClientNode(Node):
         self.enabled = not self.mission_gate_required
         self.goal_handle = None
         self.last_goal_send_time = None
+        self.goal_completed = False
+        self.goal_generation = 0
+
+        status_qos = QoSProfile(
+            depth=1, reliability=ReliabilityPolicy.RELIABLE,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self.goal_reached_pub = self.create_publisher(Bool, self.goal_reached_topic, status_qos)
+        self.goal_reached_pub.publish(Bool(data=False))
 
         self.path_sub = self.create_subscription(
             Path,
@@ -97,7 +110,10 @@ class FollowPathClientNode(Node):
         if self.enabled == msg.data:
             return
         self.enabled = msg.data
+        self.goal_completed = False
+        self.goal_reached_pub.publish(Bool(data=False))
         if not self.enabled:
+            self.goal_generation += 1
             self.latest_path = None
             if self.goal_handle is not None:
                 self.goal_handle.cancel_goal_async()
@@ -132,7 +148,7 @@ class FollowPathClientNode(Node):
         return False
 
     def timer_callback(self):
-        if not self.enabled or self.latest_path is None:
+        if not self.enabled or self.goal_completed or self.latest_path is None:
             return
 
         if not self.action_client.wait_for_server(timeout_sec=0.0):
@@ -171,15 +187,21 @@ class FollowPathClientNode(Node):
         self.last_sent_path = deepcopy(path)
         self.last_goal_send_time = self.get_clock().now()
 
+        self.goal_generation += 1
+        generation = self.goal_generation
         send_goal_future = self.action_client.send_goal_async(
             goal_msg,
             feedback_callback=self.feedback_callback,
         )
-        send_goal_future.add_done_callback(self.goal_response_callback)
+        send_goal_future.add_done_callback(
+            lambda future: self.goal_response_callback(future, generation)
+        )
 
         self.goal_active = True
 
-    def goal_response_callback(self, future):
+    def goal_response_callback(self, future, generation):
+        if generation != self.goal_generation:
+            return
         goal_handle = future.result()
 
         if not goal_handle.accepted:
@@ -198,13 +220,17 @@ class FollowPathClientNode(Node):
         self.goal_handle = goal_handle
 
         result_future = goal_handle.get_result_async()
-        result_future.add_done_callback(self.get_result_callback)
+        result_future.add_done_callback(
+            lambda future: self.get_result_callback(future, generation)
+        )
 
     def feedback_callback(self, feedback_msg):
         # 必要ならdebug表示
         _ = feedback_msg.feedback
 
-    def get_result_callback(self, future):
+    def get_result_callback(self, future, generation):
+        if generation != self.goal_generation:
+            return
         result_msg = future.result()
         status = result_msg.status
         result = result_msg.result
@@ -220,6 +246,13 @@ class FollowPathClientNode(Node):
 
         self.goal_active = False
         self.goal_handle = None
+        if self.enabled and status == GoalStatus.STATUS_SUCCEEDED:
+            # This is the exact Nav2 FollowPath goal-checker success used for
+            # normal waypoint completion.  Mission Manager consumes it as the
+            # Task 2 completion event.
+            self.goal_completed = True
+            self.goal_reached_pub.publish(Bool(data=True))
+            self.get_logger().info("Task 2 goal reached; reported to Mission Manager")
 
 
 def main(args=None):

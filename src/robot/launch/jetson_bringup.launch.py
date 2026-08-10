@@ -65,6 +65,7 @@ def generate_launch_description():
     heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
     heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
     enable_task1_safety_points = LaunchConfiguration("enable_task1_safety_points")
+    enable_task2_autonomy = LaunchConfiguration("enable_task2_autonomy")
 
     mid360_launch = include_launch(
         "robot",
@@ -142,6 +143,12 @@ def generate_launch_description():
         condition=IfCondition(enable_task1_safety_points),
     )
 
+    task2_autonomy = include_launch(
+        "robot", ["launch", "task2_jetson_autonomy.launch.py"],
+        IfCondition(enable_task2_autonomy),
+        {"own_odom_topic": "/odometry/filtered/global", "enable_ship_tracking": "true"},
+    )
+
     networking_launch = include_launch(
         "robot",
         ["launch", "networking.launch.py"],
@@ -210,6 +217,10 @@ def generate_launch_description():
                 ),
             ),
             DeclareLaunchArgument(
+                "enable_task2_autonomy", default_value="false",
+                description="Run Task 2 LiDAR perception, tracking and MPPI on Jetson.",
+            ),
+            DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",
                 description="Start the Jetson zenoh-bridge-ros2dds process.",
@@ -241,6 +252,7 @@ def generate_launch_description():
                 actions=[zed2i_launch],
             ),
             task1_safety_points,
+            task2_autonomy,
             heartbeat_launch,
             networking_launch,
         ]

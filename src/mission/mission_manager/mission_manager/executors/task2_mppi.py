@@ -38,6 +38,13 @@ class Task2MppiExecutor:
             self._set_enabled(False)
             self._finished = True
 
+    def goal_reached(self) -> None:
+        """Finish with the same success condition as Nav2 FollowPath."""
+        if self._finished:
+            return
+        self._set_enabled(False)
+        self._finish(ExecutorStatus.SUCCEEDED, "Task 2 FollowPath goal reached")
+
     def _finish(self, status: ExecutorStatus, message: str) -> None:
         if self._finished:
             return

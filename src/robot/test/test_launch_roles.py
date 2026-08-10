@@ -162,10 +162,8 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
     adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
-    task2_params = [
-        (Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text()
-        for filename in ("nav2_params_task2_humble.yaml", "nav2_params_task2_jazzy.yaml")
-    ]
+    task2_params = (Path(_LAUNCH_DIR).parents[0] / "config" /
+                    "nav2_params_task2_humble.yaml").read_text()
 
     assert '"navigation_launch_task2.py"' in minipc_source
     assert '"task2_mission_adapter.launch.py"' in minipc_source
@@ -173,16 +171,14 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "' != 'task2'" in minipc_source
     assert 'executable="autonomy_supervisor_node"' in minipc_source
     assert '"task2_autonomy_ready_node"' in adapter_source
-    assert '"preprocessing.launch.py"' in adapter_source
-    assert '"segmentation.launch.py"' in adapter_source
-    assert '"tracker.launch.py"' in adapter_source
-    assert '"ego_odom_topic": own_odom_topic' in adapter_source
-    assert '"planner_real.launch.py"' in adapter_source
-    assert '"mission_gate_required": "true"' in adapter_source
+    assert '"follow_path_client_node"' in adapter_source
+    assert '"mission_gate_required": True' in adapter_source
+    assert '"preprocessing.launch.py"' not in adapter_source
+    assert '"planner_real.launch.py"' not in adapter_source
     assert "nav2_controller" in task2_nav_source
     assert "nav2_velocity_smoother" in task2_nav_source
     assert "nav2_lifecycle_manager" in task2_nav_source
-    assert '"controller_server", "velocity_smoother"' in task2_nav_source
+    assert '"controller_server", "velocity_smoother", "collision_monitor"' in task2_nav_source
     assert "/cmd_vel_nav" in task2_nav_source
     assert "root_key=None" in task2_nav_source
     for forbidden in (
@@ -191,13 +187,13 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
         "nav2_behaviors",
         "nav2_bt_navigator",
         "nav2_waypoint_follower",
-        "nav2_collision_monitor",
-        "pointcloud",
+        "nav2_planner",
     ):
         assert forbidden not in task2_nav_source
-        assert all(forbidden not in params for params in task2_params)
-    for params in task2_params:
-        assert "use_collision_detection: false" in params
+        assert forbidden not in task2_params
+    assert "use_collision_detection: false" in task2_params
+    assert "nav2_collision_monitor" in task2_nav_source
+    assert '"/task2/safety_points"' in task2_params
 
 
 def test_legacy_task2_launch_uses_the_follow_path_only_graph():
@@ -247,6 +243,29 @@ def test_ground_pc_publishes_the_actual_route_marker_from_shared_tf():
     assert '"marker_topic": "/actual_path_marker"' in source
     assert '"parent_frame": "odom"' in source
     assert '"child_frame": "base_link"' in source
+
+
+def test_ground_pc_enables_foxglove_by_default_for_waypoint_visualization():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '"enable_foxglove_bridge",\n                default_value="true"' in source
+
+
+def test_ground_pc_reads_the_active_mission_waypoint_yaml_locally():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'executable="ground_waypoint_geo_publisher"' in source
+    assert '"waypoint_task_type"' not in source
+
+
+def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():
+    root = Path(_LAUNCH_DIR).parents[2]
+    ground = (root / "config" / "zenoh" / "bridge_groundpc.json5").read_text()
+    minipc = (root / "config" / "zenoh" / "bridge_minipc.json5").read_text()
+
+    assert '"/mission/status"' in ground
+    assert '"/mission/status"' in minipc
+    assert '"/waypoint_markers"' not in ground
 
 
 def test_disabled_minipc_serial_drivers_default_to_false():

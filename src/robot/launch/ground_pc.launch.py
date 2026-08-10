@@ -106,6 +106,13 @@ def generate_launch_description():
         ],
     )
 
+    ground_waypoints = Node(
+        package="waypoint_publisher",
+        executable="ground_waypoint_geo_publisher",
+        name="ground_waypoint_geo_publisher",
+        output="screen",
+    )
+
     ntrip_caster = ExecuteProcess(
         cmd=[
             PathJoinSubstitution(
@@ -155,8 +162,8 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
             DeclareLaunchArgument(
                 "enable_foxglove_bridge",
-                default_value="false",
-                description="Expose mission action/service APIs to a Foxglove GUI.",
+                default_value="true",
+                description="Expose vessel telemetry and waypoint markers to the Ground PC Foxglove GUI.",
             ),
             DeclareLaunchArgument(
                 "enable_zenoh_bridge",
@@ -178,6 +185,7 @@ def generate_launch_description():
             joy_node,
             ground_station_heartbeat,
             actual_route,
+            ground_waypoints,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,
