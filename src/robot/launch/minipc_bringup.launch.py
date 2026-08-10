@@ -321,6 +321,7 @@ def generate_launch_description():
             "detection_topic": "/buoy_detections_3d",
             "output_topic": "/virtual_obstacles",
             "map_frame": "map",
+            "max_wall_length_m": 13.0,
             "max_active_wall_tracks": 4,
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
             "true_north_confirmations_required": 10,

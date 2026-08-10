@@ -51,6 +51,13 @@ def test_red_and_green_block_opposite_sides_of_the_course():
     assert max(y for _, y, _ in green) == 4.0
 
 
+def test_wall_length_is_limited_to_13m_before_the_course_boundary():
+    points = wall_points(
+        [-100.0, 100.0, -100.0, 100.0], 0.2, 0.1, 0.0, 0.0, 2, math.pi / 2.0)
+    assert math.isclose(min(y for _, y, _ in points), -13.0)
+    assert math.isclose(max(y for _, y, _ in points), 0.0, abs_tol=1.0e-9)
+
+
 def test_reached_next_waypoint_retires_only_cardinal_marks_behind_it():
     # The Task1.2 main course heads west (WP3 -> WP4). Once the next
     # waypoint is reached at x=24, the marker at x=28 has been passed, while

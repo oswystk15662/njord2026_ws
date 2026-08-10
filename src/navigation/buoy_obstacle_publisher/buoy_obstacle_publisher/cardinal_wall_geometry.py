@@ -77,8 +77,14 @@ def is_behind_retirement_frontier(marker_x, marker_y, frontier_x, frontier_y,
     ) < -max(0.0, margin_m)
 
 
-def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0):
-    """Return a filled wall from a marker to its forbidden course edge."""
+def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0,
+                max_length_m=13.0):
+    """Return a filled wall from a marker toward its forbidden course edge.
+
+    The wall stops at the course boundary or ``max_length_m``, whichever is
+    closer.  This prevents a single confirmed buoy from blocking an entire
+    Task 1 course width after GPS3.
+    """
     direction = direction_for_class(class_id, course_heading_rad)
     if direction is None:
         return []
@@ -86,6 +92,11 @@ def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=
     length = math.hypot(dx, dy)
     dx, dy = dx / length, dy / length
     end_x, end_y = _ray_end(bounds, x, y, dx, dy)
+    max_length_m = max(0.0, max_length_m)
+    boundary_distance = math.hypot(end_x - x, end_y - y)
+    if boundary_distance > max_length_m:
+        end_x = x + max_length_m * dx
+        end_y = y + max_length_m * dy
 
     spacing = max(0.02, spacing)
     longitudinal_steps = max(1, math.ceil(math.hypot(end_x - x, end_y - y) / spacing))

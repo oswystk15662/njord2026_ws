@@ -60,6 +60,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('map_frame', 'map')
         self.declare_parameter('course_bounds', [-100.0, 100.0, -100.0, 100.0])
         self.declare_parameter('wall_width_m', 0.2)
+        self.declare_parameter('max_wall_length_m', 13.0)
         self.declare_parameter('point_spacing_m', 0.1)
         self.declare_parameter('marker_merge_radius_m', 2.0)
         self.declare_parameter('confirmations_required', 2)
@@ -88,6 +89,7 @@ class CardinalWallPublisher(Node):
         if len(self.bounds) != 4 or self.bounds[0] >= self.bounds[1] or self.bounds[2] >= self.bounds[3]:
             raise ValueError('course_bounds must be [min_x, max_x, min_y, max_y]')
         self.wall_width = max(0.01, float(self.get_parameter('wall_width_m').value))
+        self.max_wall_length = max(0.0, float(self.get_parameter('max_wall_length_m').value))
         self.spacing = max(0.02, float(self.get_parameter('point_spacing_m').value))
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
@@ -321,7 +323,7 @@ class CardinalWallPublisher(Node):
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
                     track['x'], track['y'], track['class_id'],
-                    wall_heading))
+                    wall_heading, self.max_wall_length))
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame
