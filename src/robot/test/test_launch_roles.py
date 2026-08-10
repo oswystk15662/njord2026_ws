@@ -560,6 +560,23 @@ def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
             assert topic not in allow_lists
 
 
+def test_ground_zenoh_bridge_can_request_mission_manager_tasks():
+    path = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", "bridge_groundpc.json5")
+    )
+    with open(path, "r") as stream:
+        source = stream.read()
+
+    for endpoint in (
+        '"/mission/list_tasks"',
+        '"/mission/get_status"',
+        '"/mission/start_task"',
+        '"/mission/stop_task"',
+        '"/mission/run_task"',
+    ):
+        assert endpoint in source
+
+
 def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
     source = _read_launch_source("ground_pc.launch.py")
 

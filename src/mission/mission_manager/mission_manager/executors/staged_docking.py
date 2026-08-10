@@ -86,7 +86,17 @@ class StagedDockingExecutor(TaskExecutor):
         self._navigation.send(poses, accepted, completed)
 
     def _needs_berth_wait(self) -> bool:
-        return self._stage_names[self._stage_index] in {"stage_1", "stage_2"}
+        """Wait only after a stage which actually ends at a docking berth.
+
+        ``stage_2`` is the second berth only in the optional continuous Task
+        3.1 sequence; in the normal Task 3.1 route it is the undocking/exit
+        stage and must not incur another berth wait.
+        """
+        if self._route is None:
+            return False
+        stage_name = self._stage_names[self._stage_index]
+        poses = self._route.stage(stage_name, full_sequence=self._full_sequence)
+        return bool(poses and poses[-1].waypoint_type == "dock")
 
     def _start_wait(self) -> None:
         if self._route is None:

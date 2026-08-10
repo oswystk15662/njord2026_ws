@@ -32,8 +32,19 @@
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/joy/set_feedback", "/foxglove_log", "/gui/battery_percent",
         ],
-        service_servers: [], service_clients: [],
-        action_servers: [], action_clients: [],
+        // The ground operator is a client of the miniPC-owned Mission Manager.
+        // Task selection is carried in StartTask/RunTask requests, so no
+        // task-specific Zenoh topic is needed for task3_1 or task3_2.
+        service_servers: [],
+        service_clients: [
+          "/mission/list_tasks",
+          "/mission/get_status",
+          "/mission/start_task",
+          "/mission/stop_task",
+          "/control/set_mode",
+        ],
+        action_servers: [],
+        action_clients: ["/mission/run_task"],
       },
     },
   },

@@ -17,6 +17,10 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     )
     assert registry.get("task1").runnable
     assert registry.get("task2").executor == "task2_mppi"
+    assert registry.get("task3_1").runnable
+    assert registry.get("task3_1").executor == "staged_docking"
+    assert registry.get("task3_2").runnable
+    assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("return_home").runnable
     assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
@@ -31,6 +35,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert len(task1.waypoints) == 17
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1_exit", "8"]
 
 
 def test_duplicate_yaml_keys_are_rejected(tmp_path):
