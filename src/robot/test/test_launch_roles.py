@@ -320,6 +320,11 @@ def test_local_ekf_uses_livox_rates_and_acceleration_not_orientation():
     ]
 
 
+def test_back_camera_optional_v4l2_controls_do_not_abort_bringup():
+    source = _read_launch_source("back_cam.launch.py")
+    assert "subprocess.run(command, check=False)" in source
+
+
 def test_global_ekf_uses_only_guarded_continuous_inputs():
     config_path = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "config", "ekf_global.yaml")
