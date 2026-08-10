@@ -5,8 +5,8 @@ critical_link_receiver:
     diagnostic_stale_after_sec: 3.0
     # Format: name|miniPC bind IPv4 or hostname|UDP port
     udp_paths:
-      - "usb_wifi|192.168.212.210|45100"
-      - "builtin_wifi|192.168.212.22|45101"
+      - "usb_wifi|192.168.180.210|45100"
+      # - "builtin_wifi|10.211.172.22|45101"
       - "v1_internet_vpn|100.82.157.125|45103"
     # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""

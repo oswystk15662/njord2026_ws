@@ -99,6 +99,25 @@ def test_staged_docking_cancels_wait_timer_and_ignores_late_callback():
     assert results[0].status == ExecutorStatus.CANCELED
 
 
+def test_staged_docking_does_not_wait_after_an_undocking_stage():
+    nav = FakeNavigation()
+    timers = []
+    results = []
+    executor = StagedDockingExecutor(nav, lambda _seconds, callback: timers.append(callback) or callback,
+                                     lambda _timer: None)
+    executor.start("execution", _route(), lambda *_: None, results.append)
+
+    # Gate then berth.  The berth wait advances to the exit stage.
+    nav.sent[0][2](ExecutorStatus.SUCCEEDED, "gate")
+    nav.sent[1][2](ExecutorStatus.SUCCEEDED, "dock")
+    timers[0]()
+    assert len(nav.sent) == 3
+
+    # stage_2 ends at an exit waypoint, so it completes immediately.
+    nav.sent[2][2](ExecutorStatus.SUCCEEDED, "exit")
+    assert results[0].status == ExecutorStatus.SUCCEEDED
+
+
 def test_task2_mppi_withdraws_its_gate_before_reporting_canceled():
     enabled = []
     results = []

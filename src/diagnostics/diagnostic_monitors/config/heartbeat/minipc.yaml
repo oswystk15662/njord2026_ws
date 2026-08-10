@@ -11,11 +11,11 @@ signals:
     timeout_sec: 1.0
     expected_frequency_hz: 20.0
 
-  back_camera:
-    topic: /back_cam/image_raw
-    type: sensor_msgs/msg/Image
-    timeout_sec: 1.0
-    expected_frequency_hz: 30.0
+  # back_camera:
+  #   topic: /back_cam/image_raw
+  #   type: sensor_msgs/msg/Image
+  #   timeout_sec: 1.0
+  #   expected_frequency_hz: 30.0
 
   micon:
     topic: /micon/bms_cells
@@ -44,8 +44,11 @@ signals:
   ground_station_heartbeat:
     topic: /heartbeat/ground_station
     type: std_msgs/msg/Empty
-    timeout_sec: 2.0
-    expected_frequency_hz: 1.0
+    # Ground link has unavoidable radio/bridge jitter.  Keep the nominal
+    # 1 Hz sender rate, but regard a message every two seconds as healthy and
+    # wait through short transmission gaps before declaring the link unhealthy.
+    timeout_sec: 5.0
+    expected_frequency_hz: 0.5
 
   manual_control_heartbeat:
     topic: /heartbeat/manual_control
@@ -66,7 +69,7 @@ aggregates:
   driver:
     output_topic: /heartbeat/driver
     input_signals:
-      - back_camera
+      # - back_camera
       - gnss
       - micon
     input_timeout_sec: 1.5

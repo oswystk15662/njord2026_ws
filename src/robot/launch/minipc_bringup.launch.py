@@ -1,11 +1,13 @@
 """miniPC-side bringup: vessel control and non-GPU sensors.
 
 x86_64 Ubuntu 22.04 / ROS 2 Humble, no CUDA / no ZED SDK. Owns every USB
-serial device that is enabled here (Micon and UM982 by default), localization
+serial device that is enabled here (Micon and UM982 by default), the CPU-only
+ZED 2i driver and its H.264 ground-video path, localization
 (robot_state_publisher, TF, the selected local filter, global EKF, and navsat_transform via
 localization.launch.py), thrusters, and the back camera. The joy pad and
-Foxglove bridge live on the ground PC. GLIM/MID360S/ZED 2i live on the
-Jetson side (jetson_bringup.launch.py) and must not be duplicated here.
+Foxglove bridge live on the ground PC. GLIM/MID360S and the SDK-backed ZED 2i
+mode live on the Jetson side (jetson_bringup.launch.py) and must not be
+duplicated here.
 """
 
 import os
@@ -67,6 +69,17 @@ def generate_launch_description():
     enable_bms = LaunchConfiguration("enable_bms")
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
+    enable_zed2i_cpu = LaunchConfiguration("enable_zed2i_cpu")
+    enable_zed2i_h264_ground_video = LaunchConfiguration(
+        "enable_zed2i_h264_ground_video"
+    )
+    zed2i_h264_ground_video_host = LaunchConfiguration("zed2i_h264_ground_video_host")
+    zed2i_h264_ground_video_port = LaunchConfiguration("zed2i_h264_ground_video_port")
+    zed2i_h264_ground_video_fps = LaunchConfiguration("zed2i_h264_ground_video_fps")
+    zed2i_h264_ground_video_width = LaunchConfiguration("zed2i_h264_ground_video_width")
+    zed2i_h264_ground_video_height = LaunchConfiguration(
+        "zed2i_h264_ground_video_height"
+    )
     enable_back_cam_ground_video = LaunchConfiguration("enable_back_cam_ground_video")
     back_cam_ground_video_host = LaunchConfiguration("back_cam_ground_video_host")
     back_cam_ground_video_port = LaunchConfiguration("back_cam_ground_video_port")
@@ -342,6 +355,30 @@ def generate_launch_description():
         IfCondition(enable_back_cam),
     )
 
+    zed2i_cpu_launch = include_launch(
+        "zed2i_driver",
+        ["launch", "zed2i_cpu.launch.py"],
+        IfCondition(enable_zed2i_cpu),
+    )
+
+    # The CPU ZED driver publishes the left image only when this streamer is
+    # subscribed.  Reuse the miniPC VA-API RTP sender so the ground PC's H.264
+    # receiver can consume the ZED stream directly, without DDS video traffic.
+    zed2i_h264_ground_video_launch = include_launch(
+        "zed2i_driver",
+        ["launch", "back_cam_h26x_ground_video.launch.py"],
+        IfCondition(enable_zed2i_h264_ground_video),
+        {
+            "image_topic": "/zed2i/left/image_rect",
+            "host": zed2i_h264_ground_video_host,
+            "port": zed2i_h264_ground_video_port,
+            "codec": "h264",
+            "fps": zed2i_h264_ground_video_fps,
+            "width": zed2i_h264_ground_video_width,
+            "height": zed2i_h264_ground_video_height,
+        },
+    )
+
     # The miniPC has a Radeon 780M VA-API encoder.  This is intentionally a
     # separate H.26x route from the Jetson's JPEG-only ground video path.
     back_cam_ground_video_launch = include_launch(
@@ -454,7 +491,7 @@ def generate_launch_description():
             DeclareLaunchArgument("um982_protocol", default_value="uart"),
             DeclareLaunchArgument(
                 "enable_um982_rtk",
-                default_value="true",
+                default_value="false",
                 description="Stream RTCM3 corrections from 192.168.1.72:2101 to UM982.",
             ),
             DeclareLaunchArgument(
@@ -495,8 +532,27 @@ def generate_launch_description():
                 description="Start the miniPC-connected rear USB camera.",
             ),
             DeclareLaunchArgument(
-                "enable_back_cam_ground_video",
+                "enable_zed2i_cpu",
                 default_value="true",
+                description="Start the miniPC CPU-only ZED 2i stereo driver.",
+            ),
+            DeclareLaunchArgument(
+                "enable_zed2i_h264_ground_video",
+                default_value="true",
+                description="Send the CPU ZED 2i left image to the ground station as RTP/H.264.",
+            ),
+            DeclareLaunchArgument(
+                "zed2i_h264_ground_video_host",
+                default_value="192.168.180.107",
+                description="Ground-station IPv4 address for the CPU ZED 2i H.264 stream.",
+            ),
+            DeclareLaunchArgument("zed2i_h264_ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("zed2i_h264_ground_video_fps", default_value="2.0"),
+            DeclareLaunchArgument("zed2i_h264_ground_video_width", default_value="360"),
+            DeclareLaunchArgument("zed2i_h264_ground_video_height", default_value="240"),
+            DeclareLaunchArgument(
+                "enable_back_cam_ground_video",
+                default_value="false",
                 description="Use the miniPC VA-API H.264/H.265 back-camera stream. "
                 "An empty host leaves the stream inactive.",
             ),
@@ -510,12 +566,12 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
             ),
-            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="2.0"),
             DeclareLaunchArgument("back_cam_ground_video_width", default_value="360"),
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
-                default_value="false",
+                default_value="true",
                 description="CPU JPEG compatibility stream on UDP 5602, enabled as a "
                 "fallback alongside H.264/H.265.",
             ),
@@ -527,7 +583,7 @@ def generate_launch_description():
                 "back_cam_jpeg_ground_video_port", default_value="5602"
             ),
             DeclareLaunchArgument(
-                "back_cam_jpeg_ground_video_fps", default_value="4.0"
+                "back_cam_jpeg_ground_video_fps", default_value="2.0"
             ),
             DeclareLaunchArgument(
                 "use_glim_fb",
@@ -594,7 +650,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "thruster_use_velocity_feedback",
-                default_value="true",
+                default_value="false",
                 description="Use measured local odometry velocity in thruster control.",
             ),
             localization_launch,
@@ -618,6 +674,8 @@ def generate_launch_description():
             buoy_obstacle_launch,
             cardinal_wall_publisher,
             back_cam_launch,
+            zed2i_cpu_launch,
+            zed2i_h264_ground_video_launch,
             back_cam_ground_video_launch,
             back_cam_jpeg_ground_video_launch,
             nav2_launch,
