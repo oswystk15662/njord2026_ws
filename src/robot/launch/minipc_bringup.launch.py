@@ -533,7 +533,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "enable_zed2i_cpu",
-                default_value="true",
+                default_value="false",
                 description="Start the miniPC CPU-only ZED 2i stereo driver.",
             ),
             DeclareLaunchArgument(

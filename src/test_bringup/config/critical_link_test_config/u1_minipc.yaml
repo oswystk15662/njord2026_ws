@@ -5,6 +5,8 @@ critical_link_receiver:
     heartbeat_output_topic: /heartbeat/ground_station
     diagnostic_stale_after_sec: 3.0
     # - "u1_usb_wifi|<MINIPC_USB_WIFI_IP>|45100"
-    udp_paths: []
+    udp_paths:
+      - "usb_wifi|192.168.233.210|45100"
     serial_device: ""
     serial_baud: 921600
+    key_file: /etc/njord/critical_link.key
