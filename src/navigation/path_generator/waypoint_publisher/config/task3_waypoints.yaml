@@ -146,15 +146,17 @@ task3_1_config:
 
   stages:
     stage_1_gate: [7, "b31_corridor_gate", 8]
-    stage_1: ["berth1_approach", "berth1"]
-    stage_2: ["berth1_exit", 8]
-    stage_3: []
+    stage_1: ["berth1_approach"]
+    stage_2: ["berth1"]
+    stage_3: ["berth1_exit", 8]
 
   full_sequence_stages:
     stage_1_gate: [7, "b31_corridor_gate", 8]
-    stage_1: ["berth1_approach", "berth1"]
-    stage_2: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach", "berth2"]
-    stage_3: [10]
+    stage_1: ["berth1_approach"]
+    stage_2: ["berth1"]
+    stage_3: ["berth1_exit", "b32_corridor_gate", 9, "berth2_approach"]
+    stage_4: ["berth2"]
+    stage_5: [10]
 
 
 # Task 3.2 only config (standalone point-symmetric run, robot starts from rest)
@@ -233,8 +235,8 @@ task3_2_config:
 
   stages:
     stage_1_gate: [9, "b32_corridor_gate", "9_gate"]
-    stage_1: ["berth2_approach", "berth2"]
-    stage_2: []
+    stage_1: ["berth2_approach"]
+    stage_2: ["berth2"]
     stage_3: [10]
 
 

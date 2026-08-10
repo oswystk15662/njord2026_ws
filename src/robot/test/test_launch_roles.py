@@ -168,7 +168,8 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert "RotateToGoal" in follow_path["critics"]
     assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
     assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
-    assert (checker["heading_optional_goal_x"], checker["heading_optional_goal_y"]) == (-18.0, -11.0)
+    assert checker["heading_required_goal_xs"] == [18.25, 20.0, -18.25, -20.0]
+    assert checker["heading_required_goal_ys"] == [1.065, 1.065, 0.0, 0.0]
 
 
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():

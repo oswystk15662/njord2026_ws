@@ -4,6 +4,6 @@
     <description>Completes a waypoint after heading alignment or one radius crossing.</description>
   </class>
   <class type="robot::SelectiveHeadingGoalChecker" base_class_type="nav2_core::GoalChecker">
-    <description>Requires goal heading except at one configured position-only finish goal.</description>
+    <description>Requires goal heading only at configured docking approach and berth goals.</description>
   </class>
 </library>

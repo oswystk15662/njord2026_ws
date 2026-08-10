@@ -3,6 +3,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "geometry_msgs/msg/twist.hpp"
 #include "nav2_core/goal_checker.hpp"
@@ -111,19 +112,17 @@ public:
     }
     node->declare_parameter(plugin_name + ".xy_goal_tolerance", 0.5);
     node->declare_parameter(plugin_name + ".yaw_goal_tolerance", 0.5);
-    node->declare_parameter(
-      plugin_name + ".heading_optional_goal_x", std::numeric_limits<double>::quiet_NaN());
-    node->declare_parameter(
-      plugin_name + ".heading_optional_goal_y", std::numeric_limits<double>::quiet_NaN());
-    node->declare_parameter(plugin_name + ".heading_optional_goal_tolerance", 0.2);
+    node->declare_parameter(plugin_name + ".heading_required_goal_xs", std::vector<double>{});
+    node->declare_parameter(plugin_name + ".heading_required_goal_ys", std::vector<double>{});
+    node->declare_parameter(plugin_name + ".heading_required_goal_tolerance", 0.2);
     xy_tolerance_ = node->get_parameter(plugin_name + ".xy_goal_tolerance").as_double();
     yaw_tolerance_ = node->get_parameter(plugin_name + ".yaw_goal_tolerance").as_double();
-    optional_x_ = node->get_parameter(plugin_name + ".heading_optional_goal_x").as_double();
-    optional_y_ = node->get_parameter(plugin_name + ".heading_optional_goal_y").as_double();
-    optional_tolerance_ = node->get_parameter(
-      plugin_name + ".heading_optional_goal_tolerance").as_double();
-    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || optional_tolerance_ < 0.0 ||
-      std::isfinite(optional_x_) != std::isfinite(optional_y_))
+    required_xs_ = node->get_parameter(plugin_name + ".heading_required_goal_xs").as_double_array();
+    required_ys_ = node->get_parameter(plugin_name + ".heading_required_goal_ys").as_double_array();
+    required_tolerance_ = node->get_parameter(
+      plugin_name + ".heading_required_goal_tolerance").as_double();
+    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || required_tolerance_ < 0.0 ||
+      required_xs_.size() != required_ys_.size())
     {
       throw std::runtime_error("invalid selective heading goal checker parameters");
     }
@@ -141,13 +140,7 @@ public:
     if (std::hypot(dx, dy) > xy_tolerance_) {
       return false;
     }
-    // GPS10 is a finish-line position, not a docking pose.  Its configured
-    // coordinate opts out of yaw completion while all other Task 3 goals
-    // require their commanded heading.
-    if (std::isfinite(optional_x_) &&
-      std::hypot(goal_pose.position.x - optional_x_, goal_pose.position.y - optional_y_) <=
-      optional_tolerance_)
-    {
+    if (!requires_heading(goal_pose)) {
       return true;
     }
     return std::abs(shortest_angle(yaw(query_pose), yaw(goal_pose))) <= yaw_tolerance_;
@@ -183,11 +176,24 @@ private:
     return std::atan2(std::sin(to - from), std::cos(to - from));
   }
 
+  bool requires_heading(const geometry_msgs::msg::Pose & goal_pose) const
+  {
+    for (size_t index = 0; index < required_xs_.size(); ++index) {
+      if (std::hypot(
+          goal_pose.position.x - required_xs_[index],
+          goal_pose.position.y - required_ys_[index]) <= required_tolerance_)
+      {
+        return true;
+      }
+    }
+    return false;
+  }
+
   double xy_tolerance_{0.5};
   double yaw_tolerance_{0.5};
-  double optional_x_{std::numeric_limits<double>::quiet_NaN()};
-  double optional_y_{std::numeric_limits<double>::quiet_NaN()};
-  double optional_tolerance_{0.2};
+  std::vector<double> required_xs_;
+  std::vector<double> required_ys_;
+  double required_tolerance_{0.2};
 };
 
 }  // namespace robot

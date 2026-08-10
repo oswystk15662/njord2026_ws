@@ -30,7 +30,7 @@ class StagedDockingExecutor(TaskExecutor):
         self._route = route
         self._full_sequence = full_sequence
         stage_set = route.full_sequence_stages if full_sequence else route.stages
-        self._stage_names = [name for name in ("stage_1_gate", "stage_1", "stage_2", "stage_3")
+        self._stage_names = [name for name in ("stage_1_gate", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5")
                              if stage_set.get(name)]
         self._stage_index = 0
         self._retry_count = 0
@@ -86,14 +86,19 @@ class StagedDockingExecutor(TaskExecutor):
         self._navigation.send(poses, accepted, completed)
 
     def _needs_berth_wait(self) -> bool:
-        return self._stage_names[self._stage_index] in {"stage_1", "stage_2"}
+        if self._route is None:
+            return False
+        stage = self._stage_names[self._stage_index]
+        return bool(self._route.stage(stage, full_sequence=self._full_sequence) and
+                    self._route.stage(stage, full_sequence=self._full_sequence)[-1].waypoint_type == "dock")
 
     def _start_wait(self) -> None:
         if self._route is None:
             self._finish(ExecutorStatus.INTERNAL_ERROR, "missing route during berth wait")
             return
         stage = self._stage_names[self._stage_index]
-        seconds_key = "second_wait_time_s" if stage == "stage_2" else "wait_time_s"
+        final_waypoint = self._route.stage(stage, full_sequence=self._full_sequence)[-1]
+        seconds_key = "second_wait_time_s" if final_waypoint.waypoint_id == "berth2" else "wait_time_s"
         seconds = self._route.constraints.get(seconds_key, self._route.constraints.get("wait_time_s", 0.0))
         seconds = float(seconds) if isinstance(seconds, (int, float)) else 0.0
         self._report(f"{stage}_wait", (self._stage_index + 0.5) / len(self._stage_names),

@@ -33,6 +33,8 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["berth1_approach"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1"]
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):
