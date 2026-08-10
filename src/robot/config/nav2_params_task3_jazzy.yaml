@@ -80,19 +80,22 @@ controller_server:
       short_circuit_trajectory_evaluation: true
       stateful: true
 
-      # Keep the boat near the path/goal without forcing heading alignment.
-      # Heading-heavy critics make the ASV rotate into the path and hide the
-      # benefit of the 4-thruster sway axis.
-      critics: ["Oscillation", "BaseObstacle", "PathDist", "GoalDist"]
+      # Use holonomic sway while approaching, then rotate in place at each
+      # Task 3 stage's final gate/dock/exit pose to meet its requested yaw.
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
       PathDist.scale: 32.0
       GoalDist.scale: 24.0
+      RotateToGoal.scale: 32.0
+      RotateToGoal.slowing_factor: 5.0
+      RotateToGoal.lookahead_time: -1.0
 
     general_goal_checker:
-      plugin: "robot::PassThroughGoalChecker"
+      # PassThroughGoalChecker allows a waypoint crossing to complete without
+      # heading alignment. Docking needs the commanded pose orientation.
+      plugin: "nav2_controller::SimpleGoalChecker"
       xy_goal_tolerance: 0.8
-      yaw_goal_tolerance: 3.14
-      exit_margin_m: 0.05
+      yaw_goal_tolerance: 0.15
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths

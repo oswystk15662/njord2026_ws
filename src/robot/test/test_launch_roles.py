@@ -158,6 +158,18 @@ def test_resident_nav2_profile_is_selected_by_role_bringup():
     assert "changed by Mission Manager" in nav2_source
 
 
+@pytest.mark.parametrize("filename", ["nav2_params_task3_humble.yaml", "nav2_params_task3_jazzy.yaml"])
+def test_task3_requires_goal_heading_alignment(filename):
+    params = yaml.safe_load((Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text())
+    controller = params["controller_server"]["ros__parameters"]
+    follow_path = controller["FollowPath"]
+    checker = controller["general_goal_checker"]
+
+    assert "RotateToGoal" in follow_path["critics"]
+    assert checker["plugin"] == "nav2_controller::SimpleGoalChecker"
+    assert checker["yaw_goal_tolerance"] == pytest.approx(0.15)
+
+
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
