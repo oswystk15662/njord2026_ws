@@ -51,6 +51,7 @@ const PANEL_CSS = `
 .gnss-telemetry{position:absolute;right:12px;top:12px;z-index:1100;min-width:225px;padding:10px 12px;border:1px solid #526375;border-radius:6px;background:rgba(12,18,28,.92);color:#f4f7fb;font:14px/1.5 system-ui,sans-serif;pointer-events:none}
 .gnss-telemetry-title{color:#a9c7e8;font-size:12px;font-weight:700;letter-spacing:.06em}.gnss-telemetry-separator{border-top:1px solid #526375;margin-top:5px;padding-top:5px}
 .gnss-map-error{display:none;position:absolute;left:50%;bottom:34px;z-index:1100;transform:translateX(-50%);padding:7px 10px;border-radius:4px;background:rgba(137,28,28,.92);color:#fff;font:13px system-ui,sans-serif;pointer-events:none}.gnss-map-error.visible{display:block}
+.waypoint-order-tooltip{padding:1px 4px;border:1px solid #00e5ff;border-radius:3px;background:rgba(5,25,35,.88);color:#fff;font:600 11px/1.3 system-ui,sans-serif;box-shadow:none;white-space:nowrap}
 	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{fill:#00cceb;stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
 	.vessel-dot{display:none;position:absolute;left:13px;top:13px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
 	`;
@@ -183,6 +184,7 @@ function initGnssMapTelemetry(context) {
   const transforms = new Map();
   const waypointMarkers = new Map();
   let marker;
+  let waypointRoute;
   let centered = false;
   let waypointSignature = "";
 
@@ -203,6 +205,8 @@ function initGnssMapTelemetry(context) {
       if (waypoint.action === 3) {
         for (const marker of waypointMarkers.values()) map.removeLayer(marker);
         waypointMarkers.clear();
+        if (waypointRoute) map.removeLayer(waypointRoute);
+        waypointRoute = undefined;
         continue;
       }
       if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
@@ -215,12 +219,24 @@ function initGnssMapTelemetry(context) {
       if (!waypointMarker) {
         waypointMarker = L.circleMarker(position, {
           radius: 7, color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 0.9, weight: 2,
-        }).bindTooltip(waypoint.text || `WP ${Number(waypoint.id) + 1}`, {direction: "top", offset: [0, -7]});
+        }).bindTooltip(
+          `${String(Number(waypoint.id) + 1).padStart(2, "0")} · ${waypoint.text || "WP"}`,
+          {permanent: true, direction: "top", offset: [0, -7], className: "waypoint-order-tooltip"},
+        );
         waypointMarker.addTo(map);
         waypointMarkers.set(id, waypointMarker);
       } else {
         waypointMarker.setLatLng(position);
       }
+    }
+    const orderedWaypoints = [...waypointMarkers.entries()]
+      .sort(([left], [right]) => Number(left) - Number(right));
+    if (waypointRoute) map.removeLayer(waypointRoute);
+    if (orderedWaypoints.length > 1) {
+      waypointRoute = L.polyline(
+        orderedWaypoints.map(([, item]) => item.getLatLng()),
+        {color: "#00e5ff", weight: 2, opacity: 0.8, dashArray: "6 5", interactive: false},
+      ).addTo(map);
     }
     const nextWaypointSignature = [...waypointMarkers.entries()].map(([id, item]) => {
       const position = item.getLatLng();
