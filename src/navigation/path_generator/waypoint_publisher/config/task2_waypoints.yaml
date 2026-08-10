@@ -11,7 +11,7 @@ task2_config:
     - id: 5
       latitude: "34°32′44.40″ N"
       longitude: "135°30′25.40″ E"
-      yaw: 0.6627
+      yaw: 0.6559
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
@@ -19,7 +19,7 @@ task2_config:
     - id: "gate_1"
       latitude: "34°32′44.70″ N"
       longitude: "135°30′25.87″ E"
-      yaw: 0.6627
+      yaw: 0.6663
       type: "gate"
       name: "Entry Gate"
       gate_pair: ["red", "green"]
@@ -29,7 +29,7 @@ task2_config:
     - id: "gate_2"
       latitude: "34°32′45.00″ N"
       longitude: "135°30′26.33″ E"
-      yaw: 0.6627
+      yaw: 0.6559
       type: "gate"
       name: "Exit Gate"
       gate_pair: ["red", "green"]
@@ -39,7 +39,7 @@ task2_config:
     - id: 6
       latitude: "34°32′45.30″ N"
       longitude: "135°30′26.80″ E"
-      yaw: 0.6627
+      yaw: 0.6559
       type: "goal"
       name: "GPS 6 - Goal"
       tolerance_m: 2.0
