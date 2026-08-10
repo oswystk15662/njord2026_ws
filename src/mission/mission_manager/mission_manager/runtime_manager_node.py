@@ -28,6 +28,7 @@ class RuntimeManager(Node):
         self.declare_parameter("sigterm_timeout_sec", 5.0)
         self.declare_parameter("nav2_ready_timeout_sec", 30.0)
         self.declare_parameter("nav2_ready_poll_sec", 0.5)
+        self.declare_parameter("nav2_lifecycle_query_timeout_sec", 3.0)
         self._process = None
         self._profile = ""
         self._lock = threading.Lock()
@@ -83,8 +84,9 @@ class RuntimeManager(Node):
         """
         timeout = float(self.get_parameter("nav2_ready_timeout_sec").value)
         poll = float(self.get_parameter("nav2_ready_poll_sec").value)
-        if timeout <= 0.0 or poll <= 0.0:
-            raise ValueError("nav2_ready_timeout_sec and nav2_ready_poll_sec must be positive")
+        query_timeout = float(self.get_parameter("nav2_lifecycle_query_timeout_sec").value)
+        if timeout <= 0.0 or poll <= 0.0 or query_timeout <= 0.0:
+            raise ValueError("Nav2 lifecycle readiness timeouts and poll interval must be positive")
 
         deadline = time.monotonic() + timeout
         last_output = "lifecycle state is not available yet"
@@ -92,11 +94,16 @@ class RuntimeManager(Node):
             if self._process is None or self._process.poll() is not None:
                 raise RuntimeError("Nav2 runtime exited before bt_navigator became active")
             try:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    break
                 result = subprocess.run(
                     ["ros2", "lifecycle", "get", "/bt_navigator"],
                     capture_output=True,
                     text=True,
-                    timeout=poll,
+                    # Starting a ROS CLI participant and discovering a service
+                    # regularly takes longer than the polling interval.
+                    timeout=min(query_timeout, remaining),
                     check=False,
                 )
                 output = (result.stdout + result.stderr).strip()
@@ -107,7 +114,7 @@ class RuntimeManager(Node):
                     last_output = output
             except subprocess.TimeoutExpired:
                 last_output = "timed out querying /bt_navigator lifecycle state"
-            time.sleep(poll)
+            time.sleep(min(poll, max(0.0, deadline - time.monotonic())))
 
         raise RuntimeError(
             f"timed out after {timeout:g}s waiting for /bt_navigator to become active: {last_output}"
