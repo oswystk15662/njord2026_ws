@@ -1,24 +1,24 @@
 # Task 2: Collision Avoidance
-# Enter every waypoint as WGS84 latitude/longitude. Mission Manager and Task2
+# Enter every waypoint as Excel-copyable WGS84 DMS latitude/longitude. Mission Manager and Task2
 # MPPI project these values through /fromLL at run time; coordinate modes and
 # x/y waypoint input are intentionally unsupported.
 
 task2_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  # Replace only latitude/longitude below with surveyed course values.
+  # Paste values such as `63°26′26.89″ N` directly from the survey sheet.
   waypoints:
     - id: 5
-      latitude: 34.5456666667
-      longitude: 135.5070555556
+      latitude: "34°32′44.40″ N"
+      longitude: "135°30′25.40″ E"
       yaw: 0.6627
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
 
     - id: "gate_1"
-      latitude: 34.5457500000
-      longitude: 135.5071851354
+      latitude: "34°32′44.70″ N"
+      longitude: "135°30′25.87″ E"
       yaw: 0.6627
       type: "gate"
       name: "Entry Gate"
@@ -27,8 +27,8 @@ task2_config:
       tolerance_m: 2.0
 
     - id: "gate_2"
-      latitude: 34.5458333333
-      longitude: 135.5073147142
+      latitude: "34°32′45.00″ N"
+      longitude: "135°30′26.33″ E"
       yaw: 0.6627
       type: "gate"
       name: "Exit Gate"
@@ -37,8 +37,8 @@ task2_config:
       tolerance_m: 2.0
 
     - id: 6
-      latitude: 34.5459166689
-      longitude: 135.5074442940
+      latitude: "34°32′45.30″ N"
+      longitude: "135°30′26.80″ E"
       yaw: 0.6627
       type: "goal"
       name: "GPS 6 - Goal"
