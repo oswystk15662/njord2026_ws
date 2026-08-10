@@ -51,13 +51,29 @@ public:
     reset();
   }
 
-  void reset() override { entered_radius_ = false; }
+  void reset() override
+  {
+    entered_radius_ = false;
+    last_goal_x_ = std::numeric_limits<double>::quiet_NaN();
+    last_goal_y_ = std::numeric_limits<double>::quiet_NaN();
+  }
 
   bool isGoalReached(
     const geometry_msgs::msg::Pose & query_pose,
     const geometry_msgs::msg::Pose & goal_pose,
     const geometry_msgs::msg::Twist &) override
   {
+    // NavigateThroughPoses may replace the FollowPath goal without resetting
+    // this plugin.  A pass-through observation belongs only to that exact
+    // waypoint: carrying it to the next pose would immediately complete the
+    // next waypoint as soon as the vessel is more than the exit margin away.
+    if (!std::isfinite(last_goal_x_) || !std::isfinite(last_goal_y_) ||
+      goal_pose.position.x != last_goal_x_ || goal_pose.position.y != last_goal_y_)
+    {
+      entered_radius_ = false;
+      last_goal_x_ = goal_pose.position.x;
+      last_goal_y_ = goal_pose.position.y;
+    }
     const double dx = query_pose.position.x - goal_pose.position.x;
     const double dy = query_pose.position.y - goal_pose.position.y;
     const double distance = std::hypot(dx, dy);
@@ -121,6 +137,8 @@ private:
   double yaw_tolerance_{0.5};
   double exit_margin_{0.05};
   bool entered_radius_{false};
+  double last_goal_x_{std::numeric_limits<double>::quiet_NaN()};
+  double last_goal_y_{std::numeric_limits<double>::quiet_NaN()};
   std::vector<double> required_xs_;
   std::vector<double> required_ys_;
   double required_tolerance_{0.2};
