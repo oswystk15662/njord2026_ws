@@ -6,7 +6,14 @@ import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    LogInfo,
+    OpaqueFunction,
+    SetEnvironmentVariable,
+    TimerAction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -358,9 +365,9 @@ def generate_launch_description():
             "broadcast_utm_transform": False,
             "publish_filtered_gps": False,
             "use_odometry_yaw": True,
-            # Keep /fromLL in the task1monday ENU frame, whose origin is GPS1.
-            "wait_for_datum": True,
-            "datum": [63.4408027778, 10.4233944444, 0.0],
+            # The simulator starts at GPS1, so navsat can establish the
+            # task1monday map origin directly from the initial GNSS fix.
+            "wait_for_datum": False,
         }],
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
@@ -510,6 +517,11 @@ def generate_launch_description():
     startup_message = LogInfo(msg="========== Task1 Sim Bringup Started ==========")
 
     return LaunchDescription([
+        # Fast DDS shared-memory ports can remain locked by unrelated ROS
+        # sessions, which leaves Nav2's lifecycle bringup stuck before the
+        # NavigateThroughPoses action exists.  Cyclone DDS avoids that shared
+        # memory transport and is installed with the Humble workspace.
+        SetEnvironmentVariable("RMW_IMPLEMENTATION", "rmw_cyclonedds_cpp"),
         use_dynamics_arg,
         use_nav2_arg,
         use_thruster_driver_arg,

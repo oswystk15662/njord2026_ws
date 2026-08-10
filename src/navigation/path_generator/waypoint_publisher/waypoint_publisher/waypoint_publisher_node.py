@@ -130,6 +130,8 @@ class WaypointPublisher(Node):
         self.geodetic_futures = None
         self.geodetic_indices = []
         self.geodetic_positions = []
+        self.geodetic_request_started_ns = None
+        self.geodetic_current_index = None
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -266,31 +268,54 @@ class WaypointPublisher(Node):
             self.get_logger().warn(f'Waiting for map projection service {self.from_ll_service}')
             self.first_publish = True
             return
-        self.geodetic_futures = []
-        for index in self.geodetic_indices:
-            waypoint = waypoints[index]
-            request = FromLL.Request()
-            request.ll_point = GeoPoint(latitude=float(waypoint['latitude']),
-                                        longitude=float(waypoint['longitude']),
-                                        altitude=float(waypoint.get('altitude', 0.0)))
-            self.geodetic_futures.append(self.from_ll_client.call_async(request))
+        self.geodetic_positions = []
+        self.get_logger().info(
+            f'Converting {len(self.geodetic_indices)} GPS waypoints through {self.from_ll_service}')
+        self._request_next_geodetic_waypoint(waypoints)
+
+    def _request_next_geodetic_waypoint(self, waypoints):
+        """Project one point at a time; navsat's service is serial on Humble."""
+        self.geodetic_current_index = self.geodetic_indices.pop(0)
+        waypoint = waypoints[self.geodetic_current_index]
+        request = FromLL.Request()
+        request.ll_point = GeoPoint(latitude=float(waypoint['latitude']),
+                                    longitude=float(waypoint['longitude']),
+                                    altitude=float(waypoint.get('altitude', 0.0)))
+        self.geodetic_futures = [self.from_ll_client.call_async(request)]
+        self.geodetic_request_started_ns = self.get_clock().now().nanoseconds
 
     def _finish_geodetic_waypoint_conversion(self):
-        if not all(future.done() for future in self.geodetic_futures):
+        future = self.geodetic_futures[0]
+        if not future.done():
+            elapsed_ns = self.get_clock().now().nanoseconds - self.geodetic_request_started_ns
+            if elapsed_ns < 5_000_000_000:
+                return
+            self.get_logger().warn(
+                f'GPS waypoint projection timed out after {elapsed_ns / 1.0e9:.1f}s; retrying')
+            self.geodetic_indices.insert(0, self.geodetic_current_index)
+            self._request_next_geodetic_waypoint(self._active_waypoints())
             return
         try:
-            self.geodetic_positions = [
-                (future.result().map_point.x, future.result().map_point.y)
-                for future in self.geodetic_futures
-            ]
+            result = future.result()
+            self.geodetic_positions.append((result.map_point.x, result.map_point.y))
         except Exception as error:
             self.get_logger().error(f'GPS waypoint map conversion failed: {error}')
             self.geodetic_futures = None
             self.geodetic_indices = []
+            self.geodetic_positions = []
+            self.geodetic_current_index = None
+            self.geodetic_request_started_ns = None
             self.first_publish = True
             return
-        self.geodetic_futures = None
+
         waypoints = self._active_waypoints()
+        if self.geodetic_indices:
+            self._request_next_geodetic_waypoint(waypoints)
+            return
+
+        self.geodetic_futures = None
+        self.geodetic_current_index = None
+        self.geodetic_request_started_ns = None
         self._publish_waypoint_markers(self.geodetic_positions)
         poses = [self._pose_from_waypoint(wp, position)
                  for wp, position in zip(waypoints, self.geodetic_positions)]

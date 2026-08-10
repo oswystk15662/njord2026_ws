@@ -33,8 +33,7 @@ def test_task1_launch_starts_navsat_projection_for_gps_waypoints():
     assert 'executable="navsat_transform_node"' in launch
     assert '"use_navsat"' in launch
     assert '("odometry/gps", "/odometry/gps/navsat")' in launch
-    assert '"wait_for_datum": True' in launch
-    assert '"datum": [63.4408027778, 10.4233944444, 0.0]' in launch
+    assert '"wait_for_datum": False' in launch
 
 
 def test_task1_launch_starts_at_gps1_and_heads_to_first_surveyed_waypoint():
@@ -49,3 +48,9 @@ def test_task1_navigation_allows_navsat_and_nav2_to_start_together():
     launch = (PARAMS_PATH.parents[1] / "launch" / "task1_navigation.launch.py").read_text(
         encoding="utf-8")
     assert '"bond_timeout": 10.0' in launch
+
+
+def test_task1_uses_cyclone_dds_to_avoid_stale_fastdds_shared_memory_locks():
+    launch = (PARAMS_PATH.parents[1] / "launch" / "task1_sim.launch.py").read_text(
+        encoding="utf-8")
+    assert 'SetEnvironmentVariable("RMW_IMPLEMENTATION", "rmw_cyclonedds_cpp")' in launch
