@@ -34,6 +34,8 @@ def generate_launch_description():
             "enabled_topic": "/mission/task2/enabled",
             "mission_gate_required": True,
             "goal_reached_topic": "/mission/task2/goal_reached",
+            "final_goal_pose_topic": "/waypoint2_pose",
+            "final_goal_endpoint_tolerance_m": 1.0,
         }],
     )
     ready = Node(

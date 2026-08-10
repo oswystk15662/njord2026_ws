@@ -7,6 +7,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from nav2_msgs.action import FollowPath
 from action_msgs.msg import GoalStatus
@@ -30,6 +31,8 @@ class FollowPathClientNode(Node):
         self.declare_parameter("enabled_topic", "/mission/task2/enabled")
         self.declare_parameter("mission_gate_required", False)
         self.declare_parameter("goal_reached_topic", "/mission/task2/goal_reached")
+        self.declare_parameter("final_goal_pose_topic", "/waypoint2_pose")
+        self.declare_parameter("final_goal_endpoint_tolerance_m", 1.0)
 
         # goal active中にFollowPath goalを投げ直す最短間隔。
         # 短すぎるとcontroller_serverがabortしやすい。
@@ -49,6 +52,10 @@ class FollowPathClientNode(Node):
             self.get_parameter("active_replan_interval_s").value
         )
         self.goal_reached_topic = str(self.get_parameter("goal_reached_topic").value)
+        self.final_goal_pose_topic = str(self.get_parameter("final_goal_pose_topic").value)
+        self.final_goal_endpoint_tolerance_m = float(
+            self.get_parameter("final_goal_endpoint_tolerance_m").value
+        )
 
         self.latest_path = None
         self.last_sent_path = None
@@ -58,6 +65,7 @@ class FollowPathClientNode(Node):
         self.last_goal_send_time = None
         self.goal_completed = False
         self.goal_generation = 0
+        self.final_goal_pose = None
 
         status_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -74,6 +82,9 @@ class FollowPathClientNode(Node):
         )
         self.enabled_sub = self.create_subscription(
             Bool, self.enabled_topic, self.enabled_callback, 10
+        )
+        self.final_goal_sub = self.create_subscription(
+            PoseStamped, self.final_goal_pose_topic, self.final_goal_callback, 10
         )
 
         self.action_client = ActionClient(
@@ -96,6 +107,10 @@ class FollowPathClientNode(Node):
             f"({self.enabled_topic})"
         )
         self.get_logger().info(f"active interval: {self.active_replan_interval_s}")
+        self.get_logger().info(
+            f"Task 2 final goal: {self.final_goal_pose_topic} "
+            f"(endpoint tolerance {self.final_goal_endpoint_tolerance_m:.2f} m)"
+        )
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
@@ -103,6 +118,9 @@ class FollowPathClientNode(Node):
             return
 
         self.latest_path = deepcopy(msg)
+
+    def final_goal_callback(self, msg: PoseStamped):
+        self.final_goal_pose = deepcopy(msg)
 
     def enabled_callback(self, msg: Bool):
         if not self.mission_gate_required:
@@ -247,12 +265,30 @@ class FollowPathClientNode(Node):
         self.goal_active = False
         self.goal_handle = None
         if self.enabled and status == GoalStatus.STATUS_SUCCEEDED:
+            if not self._path_ends_at_final_goal():
+                # MPPI publishes a rolling horizon while avoiding an obstacle.
+                # Completing such an intermediate FollowPath must not end Task2
+                # or remove its Mission gate before GPS6 is reached.
+                self.get_logger().info(
+                    "FollowPath reached an intermediate MPPI horizon; "
+                    "waiting for a path terminating at Task2 GPS6"
+                )
+                return
             # This is the exact Nav2 FollowPath goal-checker success used for
-            # normal waypoint completion.  Mission Manager consumes it as the
-            # Task 2 completion event.
+            # final waypoint completion, and its endpoint was verified against
+            # Task2 GPS6. Mission Manager consumes it as the completion event.
             self.goal_completed = True
             self.goal_reached_pub.publish(Bool(data=True))
             self.get_logger().info("Task 2 goal reached; reported to Mission Manager")
+
+    def _path_ends_at_final_goal(self) -> bool:
+        if self.last_sent_path is None or not self.last_sent_path.poses or self.final_goal_pose is None:
+            return False
+        endpoint = self.last_sent_path.poses[-1].pose.position
+        goal = self.final_goal_pose.pose.position
+        return math.hypot(endpoint.x - goal.x, endpoint.y - goal.y) <= (
+            self.final_goal_endpoint_tolerance_m
+        )
 
 
 def main(args=None):
