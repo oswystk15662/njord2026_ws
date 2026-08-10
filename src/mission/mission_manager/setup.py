@@ -29,6 +29,7 @@ setup(
             "ground_link_return_monitor_node = mission_manager.ground_link_return_node:main",
             "runtime_manager_node = mission_manager.runtime_manager_node:main",
             "njord-task = mission_manager.njord_task:main",
+            "njord-critical = mission_manager.njord_critical:main",
         ],
     },
 )
