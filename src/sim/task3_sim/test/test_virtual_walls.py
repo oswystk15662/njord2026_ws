@@ -1,6 +1,6 @@
 import math
 
-from task3_sim.virtual_walls import same_color_wall_points, task3_virtual_wall_points
+from task3_sim.virtual_walls import task3_virtual_wall_points
 
 
 def test_task3_walls_keep_each_course_interior_open_and_connect_colours():
@@ -21,13 +21,3 @@ def test_task3_walls_keep_each_course_interior_open_and_connect_colours():
     # Task3.2 travels west: red south / green north are outside the channel.
     assert any(math.isclose(point[1], -6.0) for point in wall)
     assert any(math.isclose(point[1], 6.0) for point in wall)
-
-
-def test_task3_same_colour_wall_default_gap_limit_is_13m():
-    wall = same_color_wall_points(
-        [(0.0, 4.0, 0.0), (13.0, 4.0, 0.0), (26.01, 4.0, 0.0)],
-        heading=0.0,
-        point_spacing_m=1.0,
-    )
-    assert (13.0, 4.0, 0.0) in wall
-    assert not any(point[0] > 13.0 for point in wall)

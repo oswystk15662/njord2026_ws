@@ -34,7 +34,7 @@ class Task3Orchestrator(Node):
         self.declare_parameter("boundary_marker_step", 4.0)
         self.declare_parameter("enable_virtual_walls", True)
         self.declare_parameter("virtual_wall_radius_m", 2.0)
-        self.declare_parameter("same_color_wall_max_gap_m", 13.0)
+        self.declare_parameter("same_color_wall_max_gap_m", 12.0)
         self.declare_parameter("same_color_wall_point_spacing_m", 0.2)
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value

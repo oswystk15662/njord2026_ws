@@ -45,6 +45,6 @@ std::vector<WallPoint> virtual_wall_points(
 // continuous Nav2 obstacle without joining detections across a large gap.
 std::vector<WallPoint> same_color_wall_points(
   const std::vector<WallPoint> & buoy_positions, float channel_heading_rad,
-  float max_gap_m = 13.0F, float point_spacing_m = 0.2F);
+  float max_gap_m = 12.0F, float point_spacing_m = 0.2F);
 
 }  // namespace zed2i_driver
