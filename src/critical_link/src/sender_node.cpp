@@ -307,8 +307,8 @@ private:
   int serial_baud_{921600};
   SharedKey key_{};
   uint64_t session_id_{0};
-  std::array<uint32_t, 4> sequences_{};
-  std::array<uint64_t, 4> generated_{};
+  std::array<uint32_t, static_cast<size_t>(StreamId::kOperatorResponse) + 1U> sequences_{};
+  std::array<uint64_t, static_cast<size_t>(StreamId::kOperatorResponse) + 1U> generated_{};
   std::vector<std::unique_ptr<UdpPath>> udp_paths_;
   std::mutex serial_mutex_;
   int serial_fd_{-1};
