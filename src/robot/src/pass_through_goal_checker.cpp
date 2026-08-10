@@ -30,10 +30,22 @@ public:
     node->declare_parameter(plugin_name_ + ".xy_goal_tolerance", 0.5);
     node->declare_parameter(plugin_name_ + ".yaw_goal_tolerance", 0.5);
     node->declare_parameter(plugin_name_ + ".exit_margin_m", 0.05);
+    node->declare_parameter(plugin_name_ + ".heading_required_goal_xs", std::vector<double>{});
+    node->declare_parameter(plugin_name_ + ".heading_required_goal_ys", std::vector<double>{});
+    node->declare_parameter(plugin_name_ + ".heading_required_goal_tolerance", 0.2);
+    node->declare_parameter(plugin_name_ + ".heading_required_xy_goal_tolerance", 2.0);
+    node->declare_parameter(plugin_name_ + ".heading_required_yaw_tolerance", 0.35);
     xy_tolerance_ = node->get_parameter(plugin_name_ + ".xy_goal_tolerance").as_double();
     yaw_tolerance_ = node->get_parameter(plugin_name_ + ".yaw_goal_tolerance").as_double();
     exit_margin_ = node->get_parameter(plugin_name_ + ".exit_margin_m").as_double();
-    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || exit_margin_ < 0.0) {
+    required_xs_ = node->get_parameter(plugin_name_ + ".heading_required_goal_xs").as_double_array();
+    required_ys_ = node->get_parameter(plugin_name_ + ".heading_required_goal_ys").as_double_array();
+    required_tolerance_ = node->get_parameter(plugin_name_ + ".heading_required_goal_tolerance").as_double();
+    required_xy_tolerance_ = node->get_parameter(plugin_name_ + ".heading_required_xy_goal_tolerance").as_double();
+    required_yaw_tolerance_ = node->get_parameter(plugin_name_ + ".heading_required_yaw_tolerance").as_double();
+    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || exit_margin_ < 0.0 ||
+      required_tolerance_ < 0.0 || required_xy_tolerance_ <= 0.0 ||
+      required_yaw_tolerance_ < 0.0 || required_xs_.size() != required_ys_.size()) {
       throw std::runtime_error("goal checker tolerances must be non-negative and xy positive");
     }
     reset();
@@ -49,6 +61,10 @@ public:
     const double dx = query_pose.position.x - goal_pose.position.x;
     const double dy = query_pose.position.y - goal_pose.position.y;
     const double distance = std::hypot(dx, dy);
+    if (requires_heading(goal_pose)) {
+      return distance <= required_xy_tolerance_ &&
+        std::abs(shortest_angle(yaw(query_pose), yaw(goal_pose))) <= required_yaw_tolerance_;
+    }
     const bool inside = distance <= xy_tolerance_;
     if (inside) {
       entered_radius_ = true;
@@ -91,11 +107,25 @@ private:
     return std::atan2(std::sin(to - from), std::cos(to - from));
   }
 
+  bool requires_heading(const geometry_msgs::msg::Pose & goal_pose) const
+  {
+    for (size_t index = 0; index < required_xs_.size(); ++index) {
+      if (std::hypot(goal_pose.position.x - required_xs_[index],
+          goal_pose.position.y - required_ys_[index]) <= required_tolerance_) return true;
+    }
+    return false;
+  }
+
   std::string plugin_name_;
   double xy_tolerance_{0.5};
   double yaw_tolerance_{0.5};
   double exit_margin_{0.05};
   bool entered_radius_{false};
+  std::vector<double> required_xs_;
+  std::vector<double> required_ys_;
+  double required_tolerance_{0.2};
+  double required_xy_tolerance_{2.0};
+  double required_yaw_tolerance_{0.35};
 };
 
 class SelectiveHeadingGoalChecker : public nav2_core::GoalChecker

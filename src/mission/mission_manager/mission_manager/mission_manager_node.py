@@ -363,18 +363,20 @@ class MissionManager(Node):
         return self._configure_route(decision, task, route, request)
 
     def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
-        """Set Task 3's projected strict goals before activating its route."""
-        if task.nav2_profile != "task3" or request.dry_run:
+        """Set projected heading-critical goals before activating a route."""
+        if task.nav2_profile not in {"task1", "task3"} or request.dry_run:
             return self._finish_configure_route(decision, task, route, request)
         if not self._task3_goal_checker_client.service_is_ready():
             return self._reject_started(
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
-                "Task 3 goal checker parameter service is unavailable",
+                "goal checker parameter service is unavailable",
             )
-        strict = [
-            waypoint for waypoint in route.waypoints
-            if waypoint.waypoint_type in {"dock_approach", "dock"}
-        ]
+        strict = (
+            [waypoint for waypoint in route.waypoints if waypoint.competition_id == "3"]
+            if task.nav2_profile == "task1"
+            else [waypoint for waypoint in route.waypoints
+                  if waypoint.waypoint_type in {"dock_approach", "dock"}]
+        )
         parameter_request = SetParameters.Request()
         parameter_request.parameters = [
             Parameter(
@@ -415,7 +417,7 @@ class MissionManager(Node):
             except Exception as exc:
                 self._reject_started(
                     decision.execution_id, ResultCode.CONFIGURATION_FAILED,
-                    f"unable to configure Task 3 strict goals: {exc}",
+                    f"unable to configure heading-critical goals: {exc}",
                 )
                 return
             self._finish_configure_route(decision, task, route, request)
