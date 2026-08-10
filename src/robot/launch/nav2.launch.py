@@ -77,12 +77,18 @@ def _launch_nav2(context, pkg_robot):
                 configured_nav_to_pose_bt_xml,
             'bt_navigator.ros__parameters.default_nav_through_poses_bt_xml':
                 configured_nav_through_poses_bt_xml,
-            # Collision Monitor remains in Nav2's standard velocity pipeline. Disable
-            # both its worker and LiDAR source together: disabling only the worker
-            # still makes an absent LiDAR source trigger its fail-safe stop.
+            # The LiDAR point cloud includes the vessel itself. Keep Collision
+            # Monitor as a cmd_vel relay, but disable every obstacle source so
+            # a self-return cannot trigger an autonomous stop.
             'collision_monitor.ros__parameters.enabled':
                 LaunchConfiguration('enable_collision_monitor'),
             'collision_monitor.ros__parameters.livox.enabled':
+                LaunchConfiguration('enable_collision_monitor'),
+            'collision_monitor.ros__parameters.safety_points.enabled':
+                LaunchConfiguration('enable_collision_monitor'),
+            'collision_monitor.ros__parameters.virtual_wall.enabled':
+                LaunchConfiguration('enable_collision_monitor'),
+            'collision_monitor.ros__parameters.pointcloud.enabled':
                 LaunchConfiguration('enable_collision_monitor'),
         },
         convert_types=True,
@@ -155,10 +161,11 @@ def generate_launch_description():
     )
     enable_collision_monitor_arg = DeclareLaunchArgument(
         'enable_collision_monitor',
-        default_value='true',
+        default_value='false',
         description=(
-            'Enable Collision Monitor obstacle processing. When false, its LiDAR '
-            'source and actions are disabled while it remains as a cmd_vel passthrough.'
+            'Enable Collision Monitor obstacle processing. Disabled by default because '
+            'the live point cloud can contain the vessel itself; it otherwise remains '
+            'a cmd_vel passthrough.'
         ),
     )
 

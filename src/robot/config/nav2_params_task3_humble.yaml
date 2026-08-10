@@ -250,6 +250,7 @@ velocity_smoother:
 
 collision_monitor:
   ros__parameters:
+    enabled: false
     use_sim_time: false
     base_frame_id: "base_link"
     odom_frame_id: "odom"
@@ -277,7 +278,7 @@ collision_monitor:
       min_height: -0.5
       max_height: 2.0
       use_global_height: false
-      enabled: true
+      enabled: false
 
 smoother_server:
   ros__parameters:

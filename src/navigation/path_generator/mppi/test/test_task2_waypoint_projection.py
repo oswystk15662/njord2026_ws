@@ -27,9 +27,8 @@ def test_task2_final_completion_requires_a_path_ending_at_gps6():
     assert "waiting for a path terminating at Task2 GPS6" in source
 
 
-def test_task2_autonomy_readiness_requires_an_active_collision_monitor():
+def test_task2_autonomy_readiness_requires_path_and_follow_path_only():
     source = (Path(__file__).parents[1] / "asv_trajectory_planner" /
               "task2_autonomy_ready_node.py").read_text(encoding="utf-8")
-    assert "GetState" in source
-    assert "State.PRIMARY_STATE_ACTIVE" in source
-    assert "and self.collision_monitor_active" in source
+    assert "path_fresh and self.follow_path_client.server_is_ready()" in source
+    assert "collision_monitor_active" not in source
