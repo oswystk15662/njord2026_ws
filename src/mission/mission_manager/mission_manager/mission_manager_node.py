@@ -473,34 +473,55 @@ class MissionManager(Node):
     def _start_coordinate_projection(
         self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
     ) -> None:
-        futures = []
-        for point in route.projection_points():
-            projection_request = FromLL.Request()
-            projection_request.ll_point = GeoPoint(
-                latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
-            )
-            futures.append(self._from_ll_client.call_async(projection_request))
-        self._pending_coordinate_projection = (execution_id, task, route, request, futures)
-        for future in futures:
-            future.add_done_callback(self._finish_coordinate_projection)
+        # navsat_transform's /fromLL service is serial on the target ROS 2
+        # stack.  Sending a full route concurrently can leave every future
+        # pending, so project in route order one point at a time.
+        self._pending_coordinate_projection = (
+            execution_id, task, route, request, route.projection_points(), []
+        )
+        self._request_next_coordinate_projection()
+
+    def _request_next_coordinate_projection(self) -> None:
+        pending = self._pending_coordinate_projection
+        if pending is None:
+            return
+        _execution_id, _task, _route, _request, points, resolved = pending
+        point = points[len(resolved)]
+        projection_request = FromLL.Request()
+        projection_request.ll_point = GeoPoint(
+            latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
+        )
+        self._from_ll_client.call_async(projection_request).add_done_callback(
+            self._finish_coordinate_projection
+        )
 
     def _finish_coordinate_projection(self, _future) -> None:
         with self._lock:
             pending = self._pending_coordinate_projection
             if pending is None:
                 return
-            execution_id, task, route, request, futures = pending
-            if not all(future.done() for future in futures):
-                return
-            self._pending_coordinate_projection = None
+            execution_id, task, route, request, points, resolved = pending
             if not self._machine.is_current(execution_id):
+                self._pending_coordinate_projection = None
                 return
             try:
-                points = tuple(
-                    (float(future.result().map_point.x), float(future.result().map_point.y))
-                    for future in futures
+                result = _future.result().map_point
+                resolved.append((float(result.x), float(result.y)))
+            except Exception as exc:
+                self._pending_coordinate_projection = None
+                self._complete(
+                    execution_id, ResultCode.CONFIGURATION_FAILED,
+                    f"map projection for waypoint coordinates failed: {exc}",
                 )
-                resolved = route.with_projected_points(points)
+                return
+
+            if len(resolved) < len(points):
+                self._request_next_coordinate_projection()
+                return
+
+            self._pending_coordinate_projection = None
+            try:
+                projected_route = route.with_projected_points(tuple(resolved))
             except Exception as exc:
                 self._complete(
                     execution_id, ResultCode.CONFIGURATION_FAILED,
@@ -508,7 +529,7 @@ class MissionManager(Node):
                 )
                 return
             decision = type("Decision", (), {"execution_id": execution_id})()
-            self._configure_route(decision, task, resolved, request)
+            self._configure_route(decision, task, projected_route, request)
 
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
