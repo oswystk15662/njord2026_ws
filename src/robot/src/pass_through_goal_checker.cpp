@@ -113,17 +113,20 @@ public:
     node->declare_parameter(plugin_name + ".xy_goal_tolerance", 0.5);
     node->declare_parameter(plugin_name + ".position_only_xy_goal_tolerance", 1.5);
     node->declare_parameter(plugin_name + ".yaw_goal_tolerance", 0.5);
-    node->declare_parameter(plugin_name + ".heading_required_goal_yaws", std::vector<double>{});
-    node->declare_parameter(plugin_name + ".heading_required_goal_yaw_tolerance", 0.01);
+    node->declare_parameter(plugin_name + ".heading_required_goal_xs", std::vector<double>{});
+    node->declare_parameter(plugin_name + ".heading_required_goal_ys", std::vector<double>{});
+    node->declare_parameter(plugin_name + ".heading_required_goal_tolerance", 0.2);
     xy_tolerance_ = node->get_parameter(plugin_name + ".xy_goal_tolerance").as_double();
     position_only_xy_tolerance_ = node->get_parameter(
       plugin_name + ".position_only_xy_goal_tolerance").as_double();
     yaw_tolerance_ = node->get_parameter(plugin_name + ".yaw_goal_tolerance").as_double();
-    required_yaws_ = node->get_parameter(plugin_name + ".heading_required_goal_yaws").as_double_array();
-    required_yaw_tolerance_ = node->get_parameter(
-      plugin_name + ".heading_required_goal_yaw_tolerance").as_double();
+    required_xs_ = node->get_parameter(plugin_name + ".heading_required_goal_xs").as_double_array();
+    required_ys_ = node->get_parameter(plugin_name + ".heading_required_goal_ys").as_double_array();
+    required_tolerance_ = node->get_parameter(
+      plugin_name + ".heading_required_goal_tolerance").as_double();
     if (xy_tolerance_ <= 0.0 || position_only_xy_tolerance_ < xy_tolerance_ ||
-      yaw_tolerance_ < 0.0 || required_yaw_tolerance_ < 0.0)
+      yaw_tolerance_ < 0.0 || required_tolerance_ < 0.0 ||
+      required_xs_.size() != required_ys_.size())
     {
       throw std::runtime_error("invalid selective heading goal checker parameters");
     }
@@ -179,9 +182,11 @@ private:
 
   bool requires_heading(const geometry_msgs::msg::Pose & goal_pose) const
   {
-    const double goal_yaw = yaw(goal_pose);
-    for (const double required_yaw : required_yaws_) {
-      if (std::abs(shortest_angle(goal_yaw, required_yaw)) <= required_yaw_tolerance_) {
+    for (size_t index = 0; index < required_xs_.size(); ++index) {
+      if (std::hypot(
+          goal_pose.position.x - required_xs_[index],
+          goal_pose.position.y - required_ys_[index]) <= required_tolerance_)
+      {
         return true;
       }
     }
@@ -191,8 +196,9 @@ private:
   double xy_tolerance_{0.5};
   double position_only_xy_tolerance_{1.5};
   double yaw_tolerance_{0.5};
-  std::vector<double> required_yaws_;
-  double required_yaw_tolerance_{0.01};
+  std::vector<double> required_xs_;
+  std::vector<double> required_ys_;
+  double required_tolerance_{0.2};
 };
 
 }  // namespace robot

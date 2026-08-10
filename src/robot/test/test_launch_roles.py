@@ -169,8 +169,9 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
     assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
     assert checker["position_only_xy_goal_tolerance"] == pytest.approx(1.5)
-    assert checker["heading_required_goal_yaws"] == [-1.6572, 2.9104]
-    assert checker["heading_required_goal_yaw_tolerance"] == pytest.approx(0.01)
+    assert checker["heading_required_goal_xs"] == []
+    assert checker["heading_required_goal_ys"] == []
+    assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
 
 
 def test_task3_uses_its_relaxed_waypoint_behavior_tree():

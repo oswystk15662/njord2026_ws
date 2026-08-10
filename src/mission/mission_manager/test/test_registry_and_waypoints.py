@@ -35,16 +35,16 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["8"]
-    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["9"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_3")] == ["8"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_4")] == ["9"]
     assert [(waypoint.waypoint_id, waypoint.latitude, waypoint.longitude) for waypoint in task3.waypoints] == [
         ("7", 63.4409750000, 10.4237833333),
         ("8", 63.4409333333, 10.4240611111),
+        ("berth1", 63.4409400000, 10.4240929000),
         ("9", 63.4408472222, 10.4240444444),
-        ("10", 63.4411333333, 10.4242305556),
-        ("11", 63.4410138889, 10.4241472222),
-        ("12", 63.4410361111, 10.4239361111),
     ]
-    assert [waypoint.waypoint_id for waypoint in task3_2.waypoints] == ["10", "11", "12"]
+    assert [waypoint.waypoint_id for waypoint in task3_2.waypoints] == ["10", "11", "berth2", "12"]
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):

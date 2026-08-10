@@ -14,6 +14,8 @@ from geometry_msgs.msg import PoseStamped
 from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
 from nav_msgs.msg import Path as NavPath
+from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
 from robot_localization.srv import FromLL
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
@@ -156,6 +158,7 @@ class MissionManager(Node):
         self._active_route: Route | None = None
         self._pending_start = None
         self._pending_coordinate_projection = None
+        self._pending_task3_goal_checker = None
         self._auto_permission_deadline_ns: int | None = None
         self._auto_mode_request_sent = False
         self._manual_mode_requested: set[str] = set()
@@ -198,6 +201,9 @@ class MissionManager(Node):
         self._set_task1_cardinal_walls(False)
         self._navigation = _RosNavigationClient(self, self._plan_pub)
         self._from_ll_client = self.create_client(FromLL, "/fromLL")
+        self._task3_goal_checker_client = self.create_client(
+            SetParameters, "/controller_server/set_parameters"
+        )
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
@@ -354,9 +360,67 @@ class MissionManager(Node):
             self._start_coordinate_projection(decision.execution_id, task, route, request)
             self._publish_status()
             return decision
-        return self._configure_route(decision, task, route)
+        return self._configure_route(decision, task, route, request)
 
-    def _configure_route(self, decision, task: TaskDefinition, route: Route):
+    def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
+        """Set Task 3's projected strict goals before activating its route."""
+        if task.nav2_profile != "task3" or request.dry_run:
+            return self._finish_configure_route(decision, task, route, request)
+        if not self._task3_goal_checker_client.service_is_ready():
+            return self._reject_started(
+                decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                "Task 3 goal checker parameter service is unavailable",
+            )
+        strict = [
+            waypoint for waypoint in route.waypoints
+            if waypoint.waypoint_type in {"dock_approach", "dock"}
+        ]
+        parameter_request = SetParameters.Request()
+        parameter_request.parameters = [
+            Parameter(
+                name="general_goal_checker.heading_required_goal_xs",
+                value=ParameterValue(
+                    type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                    double_array_value=[waypoint.x for waypoint in strict],
+                ),
+            ),
+            Parameter(
+                name="general_goal_checker.heading_required_goal_ys",
+                value=ParameterValue(
+                    type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                    double_array_value=[waypoint.y for waypoint in strict],
+                ),
+            ),
+        ]
+        self._pending_task3_goal_checker = (decision, task, route, request)
+        self._task3_goal_checker_client.call_async(parameter_request).add_done_callback(
+            self._finish_task3_goal_checker_configuration
+        )
+        return decision
+
+    def _finish_task3_goal_checker_configuration(self, future) -> None:
+        with self._lock:
+            pending = self._pending_task3_goal_checker
+            self._pending_task3_goal_checker = None
+            if pending is None:
+                return
+            decision, task, route, request = pending
+            if not self._machine.is_current(decision.execution_id):
+                return
+            try:
+                response = future.result()
+                if not all(result.successful for result in response.results):
+                    reason = next(result.reason for result in response.results if not result.successful)
+                    raise RuntimeError(reason or "controller rejected Task 3 strict-goal parameters")
+            except Exception as exc:
+                self._reject_started(
+                    decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                    f"unable to configure Task 3 strict goals: {exc}",
+                )
+                return
+            self._finish_configure_route(decision, task, route, request)
+
+    def _finish_configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Finish setup after any YAML GPS coordinates are expressed in map."""
         self._active_route = route
         self._active_task = task
@@ -431,7 +495,7 @@ class MissionManager(Node):
                 )
                 return
             decision = type("Decision", (), {"execution_id": execution_id})()
-            self._configure_route(decision, task, resolved)
+            self._configure_route(decision, task, resolved, request)
 
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)

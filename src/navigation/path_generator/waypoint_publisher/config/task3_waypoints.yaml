@@ -1,120 +1,49 @@
 # Task 3 docking route surveyed in "GPS points for tasks.xlsx".
-#
-# Task 3.1: GPS7 (start) -> GPS8 (berth 1 mouth) -> GPS9 (berth 1 goal)
-# Task 3.2: GPS10 (start) -> GPS11 (berth 2 mouth) -> GPS12 (berth 2 goal)
-#
-# GPS8/GPS11 and GPS9/GPS12 are the heading-critical points.  The actual
-# position and yaw completion policy is configured in nav2_params_task3_*.yaml.
+# Task 3.1: GPS7 -> GPS8 -> berth 1 -> GPS8 -> GPS9 (final goal)
+# Task 3.2: GPS10 -> GPS11 -> berth 2 -> GPS11 -> GPS12 (final goal)
 
 task3_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   scenario: "normal_docking_surveyed"
-
   waypoints:
-    - id: 7
-      latitude: 63.4409750000
-      longitude: 10.4237833333
-      yaw: -0.3237
-      type: "start"
-      name: "GPS 7 - Task 3.1 Start"
-      tolerance_m: 1.5
-    - id: 8
-      latitude: 63.4409333333
-      longitude: 10.4240611111
-      yaw: -1.6572
-      type: "dock_approach"
-      name: "GPS 8 - Berth 1 Approach"
-      tolerance_m: 0.8
-    - id: 9
-      latitude: 63.4408472222
-      longitude: 10.4240444444
-      yaw: -1.6572
-      type: "dock"
-      name: "GPS 9 - Berth 1 Goal"
-      tolerance_m: 0.8
-      dock_type: "normal"
-    # Included for the optional continuous Task 3.1 -> Task 3.2 run.
-    - id: 10
-      latitude: 63.4411333333
-      longitude: 10.4242305556
-      yaw: -1.8732
-      type: "start"
-      name: "GPS 10 - Task 3.2 Start"
-      tolerance_m: 1.5
-    - id: 11
-      latitude: 63.4410138889
-      longitude: 10.4241472222
-      yaw: 2.9104
-      type: "dock_approach"
-      name: "GPS 11 - Berth 2 Approach"
-      tolerance_m: 0.8
-    - id: 12
-      latitude: 63.4410361111
-      longitude: 10.4239361111
-      yaw: 2.9104
-      type: "dock"
-      name: "GPS 12 - Berth 2 Goal"
-      tolerance_m: 0.8
-      dock_type: "parallel"
-
+    - {id: 7, latitude: 63.4409750000, longitude: 10.4237833333, yaw: -0.3216, type: "start", name: "GPS 7 - Task 3.1 Start", tolerance_m: 1.5}
+    # GPS7 -> GPS8 heading.
+    - {id: 8, latitude: 63.4409333333, longitude: 10.4240611111, yaw: -0.3216, type: "dock_approach", name: "GPS 8 - Berth 1 Approach", tolerance_m: 0.8}
+    - {id: "berth1", latitude: 63.4409400000, longitude: 10.4240929000, yaw: -0.3216, type: "dock", name: "Berth 1 - Inside Dock", tolerance_m: 0.8, dock_type: "normal"}
+    # GPS8 -> GPS9 heading; GPS9 is the Task 3.1 final goal.
+    - {id: 9, latitude: 63.4408472222, longitude: 10.4240444444, yaw: -1.6577, type: "goal", name: "GPS 9 - Final Goal", tolerance_m: 1.5}
   constraints:
     impact_minimization: true
     wait_time_s: 10
-    second_wait_time_s: 5
     wait_condition: "after_docking_stationary"
     attempts: 2
-
   stages:
     stage_1_gate: [7]
     stage_1: [8]
-    stage_2: [9]
-
-  full_sequence_stages:
-    stage_1_gate: [7]
-    stage_1: [8]
-    stage_2: [9]
-    stage_3: [10]
-    stage_4: [11]
-    stage_5: [12]
-
+    stage_2: ["berth1"]
+    stage_3: [8]
+    stage_4: [9]
 
 task3_2_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   scenario: "parallel_docking_surveyed"
-
   waypoints:
-    - id: 10
-      latitude: 63.4411333333
-      longitude: 10.4242305556
-      yaw: -1.8732
-      type: "start"
-      name: "GPS 10 - Task 3.2 Start"
-      tolerance_m: 1.5
-    - id: 11
-      latitude: 63.4410138889
-      longitude: 10.4241472222
-      yaw: 2.9104
-      type: "dock_approach"
-      name: "GPS 11 - Berth 2 Approach"
-      tolerance_m: 0.8
-    - id: 12
-      latitude: 63.4410361111
-      longitude: 10.4239361111
-      yaw: 2.9104
-      type: "dock"
-      name: "GPS 12 - Berth 2 Goal"
-      tolerance_m: 0.8
-      dock_type: "parallel"
-
+    - {id: 10, latitude: 63.4411333333, longitude: 10.4242305556, yaw: -1.8732, type: "start", name: "GPS 10 - Task 3.2 Start", tolerance_m: 1.5}
+    # GPS11 -> GPS12 heading.
+    - {id: 11, latitude: 63.4410138889, longitude: 10.4241472222, yaw: 2.9119, type: "dock_approach", name: "GPS 11 - Berth 2 Approach", tolerance_m: 0.8}
+    - {id: "berth2", latitude: 63.4409890500, longitude: 10.4241208500, yaw: 2.9119, type: "dock", name: "Berth 2 - Inside Dock", tolerance_m: 0.8, dock_type: "parallel"}
+    # GPS12 is the Task 3.2 final goal.
+    - {id: 12, latitude: 63.4410361111, longitude: 10.4239361111, yaw: 2.9119, type: "goal", name: "GPS 12 - Final Goal", tolerance_m: 1.5}
   constraints:
     impact_minimization: true
     wait_time_s: 5
     wait_condition: "after_docking_stationary"
     attempts: 2
-
   stages:
     stage_1_gate: [10]
     stage_1: [11]
-    stage_2: [12]
+    stage_2: ["berth2"]
+    stage_3: [11]
+    stage_4: [12]
