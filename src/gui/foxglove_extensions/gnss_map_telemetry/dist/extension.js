@@ -146,7 +146,7 @@ function vesselIcon() {
     className: "",
     iconSize: [40, 40],
     iconAnchor: [20, 20],
-    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><defs><linearGradient id="vessel-hull-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="52%" stop-color="#00b4cf"/><stop offset="100%" stop-color="#07586a"/></linearGradient></defs><path class="vessel-body" fill="url(#vessel-hull-gradient)" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
+    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><defs><linearGradient id="vessel-hull-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="48%" stop-color="#008ca5"/><stop offset="100%" stop-color="#022f3a"/></linearGradient></defs><path class="vessel-body" fill="url(#vessel-hull-gradient)" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
   });
 }
 

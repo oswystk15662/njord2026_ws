@@ -17,7 +17,7 @@ after the operator starts a task; it shows no stale WPs while idle.
 Waypoint labels show their route order and competition label, and a dashed cyan
 line connects the route in that order. The legend identifies the Mission
 Manager-selected task. Install
-[gnss-map-telemetry-0.2.9.foxe](gnss-map-telemetry-0.2.9.foxe) by dragging it
+[gnss-map-telemetry-0.3.0.foxe](gnss-map-telemetry-0.3.0.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The catamaran's bright cyan bow and darker stern point along the `base_link` +X
