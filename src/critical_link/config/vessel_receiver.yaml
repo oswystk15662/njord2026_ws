@@ -9,7 +9,7 @@ critical_link_receiver:
       # - "usb_wifi|192.168.212.210|45100"
       # - "builtin_wifi|192.168.212.22|45101"
       # - "v1_internet_vpn|100.82.157.125|45103"
-      - "v1_internet_vpn|100.123.47.2|45103"
+      - "v1_internet_vpn|100.82.157.125|45103"
     # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""
     serial_baud: 921600
