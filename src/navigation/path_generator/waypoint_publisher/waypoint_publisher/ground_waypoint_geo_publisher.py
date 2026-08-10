@@ -19,6 +19,7 @@ _CONFIGS = {
     "task2": ("task2_waypoints.yaml", "task2_config"),
     "task3_1": ("task3_waypoints.yaml", "task3_1_config"),
     "task3_2": ("task3_waypoints.yaml", "task3_2_config"),
+    "task4": ("task4_waypoints.yaml", "task4_config"),
 }
 
 

@@ -11,6 +11,7 @@ the ASV track against the planned route.
 - `task2`: collision-avoidance route
 - `task3_1`: normal docking sequence
 - `task3_2`: parallel docking sequence
+- `task4`: temporary surprise-task waypoint baseline (currently mirrors Task 1)
 
 ## Interfaces
 

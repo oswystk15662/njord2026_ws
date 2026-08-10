@@ -371,12 +371,23 @@ class MissionManager(Node):
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
                 "goal checker parameter service is unavailable",
             )
-        strict = (
-            [waypoint for waypoint in route.waypoints if waypoint.competition_id == "3"]
-            if task.nav2_profile == "task1"
-            else [waypoint for waypoint in route.waypoints
-                  if waypoint.waypoint_type in {"dock_approach", "dock"}]
-        )
+        if task.nav2_profile == "task1":
+            required_ids = task.features.get("heading_required_competition_ids", [])
+            if not isinstance(required_ids, list) or not all(
+                isinstance(item, str) for item in required_ids
+            ):
+                self._reject_started(
+                    decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                    "heading_required_competition_ids must be a list of strings",
+                )
+                return decision
+            strict = [waypoint for waypoint in route.waypoints
+                      if waypoint.competition_id in required_ids]
+        else:
+            strict = [waypoint for waypoint in route.waypoints
+                      if waypoint.waypoint_type in {"dock_approach", "dock"}]
+        if not strict:
+            return self._finish_configure_route(decision, task, route, request)
         parameter_request = SetParameters.Request()
         parameter_request.parameters = [
             Parameter(

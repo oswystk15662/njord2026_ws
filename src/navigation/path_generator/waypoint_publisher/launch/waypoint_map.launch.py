@@ -13,7 +13,7 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "task_type",
             default_value="task1",
-            choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task3_1", "task3_2"],
+            choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task3_1", "task3_2", "task4"],
             description="Waypoint YAML to display; no Mission Manager or Nav2 task is started.",
         ),
         DeclareLaunchArgument(

@@ -17,6 +17,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     )
     assert registry.get("task1").runnable
     assert registry.get("task2").executor == "task2_mppi"
+    assert registry.get("task4").executor == "waypoint_sequence"
+    assert registry.get("task4").features["cardinal_walls"] is False
     assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
@@ -28,6 +30,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task2 = loader.load(WAYPOINT_ROOT / "config/task2_waypoints.yaml", "task2_config")
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
     task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
+    task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
     assert len(task1.waypoints) == 13
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[7].competition_id == "3"
@@ -45,6 +48,8 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
         ("9", 63.4408472222, 10.4240444444),
     ]
     assert [waypoint.waypoint_id for waypoint in task3_2.waypoints] == ["10", "11", "berth2", "12"]
+    assert len(task4.waypoints) == len(task1.waypoints)
+    assert task4.constraints["temporary_route"] is True
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):

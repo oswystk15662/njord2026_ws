@@ -19,6 +19,7 @@ setup(
             "config/task1_follow_waypoints.yaml",
             "config/task2_waypoints.yaml",
             "config/task3_waypoints.yaml",
+            "config/task4_waypoints.yaml",
         ]),
     ],
     install_requires=["setuptools"],

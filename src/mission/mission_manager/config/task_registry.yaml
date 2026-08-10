@@ -13,7 +13,7 @@ tasks:
     frame_id: map
     nav2_profile: task1
     control_policy: task1
-    features: {cardinal_walls: true}
+    features: {cardinal_walls: true, heading_required_competition_ids: ["3"]}
   task1_skip_1_1:
     display_name: Task 1 GPS smoke test
     availability: experimental
@@ -59,3 +59,19 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task3
+  # Surprise-task baseline: common waypoint execution over the temporary
+  # Task1-derived route.  Every optional behavior is explicit and off.
+  task4:
+    display_name: Task 4 (temporary waypoint baseline)
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task4_waypoints.yaml
+    route_key: task4_config
+    frame_id: map
+    nav2_profile: task1
+    control_policy: task1
+    features:
+      cardinal_walls: false
+      buoy_perception: false
+      heading_required_competition_ids: []
