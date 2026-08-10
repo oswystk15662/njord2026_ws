@@ -223,8 +223,12 @@ function initGnssMapTelemetry(context) {
         waypointMarker.setLatLng(position);
       }
     }
-    if (!waypointsCentered && waypointMarkers.size && marker) {
-      const positions = [marker.getLatLng(), ...[...waypointMarkers.values()].map((item) => item.getLatLng())];
+    if (!waypointsCentered && waypointMarkers.size) {
+      // Waypoint-only inspection intentionally runs without a vessel GNSS
+      // fix.  Center on the route itself in that case; include the vessel when
+      // it is available so the normal ground-station view is unchanged.
+      const positions = [...waypointMarkers.values()].map((item) => item.getLatLng());
+      if (marker) positions.unshift(marker.getLatLng());
       map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
       waypointsCentered = true;
     }

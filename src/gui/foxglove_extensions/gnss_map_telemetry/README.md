@@ -4,8 +4,9 @@ Foxglove custom Map panel with a fixed top-right legend for latitude, longitude,
 base_link heading, and speed over ground. It consumes
 `/sensor/vehicle_gnss/fix/raw`, `/gui/ground_speed_mps`, `/tf`, and `/tf_static`.
 The panel renders OpenStreetMap tiles with its bundled Leaflet 1.9.4 runtime.
-After centering on the first valid fix, the map remains under manual pan and zoom
-control while the vessel arrow moves and rotates.  It also consumes the
+After centering on the first valid fix (or on the waypoint set when no fix is
+available), the map remains under manual pan and zoom control while the vessel
+arrow moves and rotates.  It also consumes the
 transient-local `/ground_waypoint_markers` `visualization_msgs/msg/MarkerArray`
 from the Ground PC's local `waypoint_publisher` configuration and overlays each
 configured WP.  This marker list is generated from the installed waypoint YAML;
@@ -13,7 +14,7 @@ it does not depend on waypoint-marker traffic from the vessel.  The ground PC
 selects the YAML from the lightweight `/mission/status.task_id` value published
 after the operator starts a task; it shows no stale WPs while idle.
 
-Install [gnss-map-telemetry-0.2.4.foxe](gnss-map-telemetry-0.2.4.foxe) by dragging it
+Install [gnss-map-telemetry-0.2.5.foxe](gnss-map-telemetry-0.2.5.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The cyan catamaran's bow points along the `base_link` +X axis. Its orientation is
