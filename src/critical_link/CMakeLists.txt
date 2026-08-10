@@ -20,6 +20,7 @@ find_package(OpenSSL REQUIRED)
 add_library(critical_link_protocol
   src/io.cpp
   src/joy_codec.cpp
+  src/operator_codec.cpp
   src/protocol.cpp
 )
 target_compile_features(critical_link_protocol PUBLIC cxx_std_17)
@@ -27,7 +28,7 @@ target_include_directories(critical_link_protocol PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>
 )
-ament_target_dependencies(critical_link_protocol sensor_msgs)
+ament_target_dependencies(critical_link_protocol njord_interfaces sensor_msgs)
 target_link_libraries(critical_link_protocol OpenSSL::Crypto)
 
 add_executable(critical_link_sender src/sender_node.cpp)

@@ -1,8 +1,10 @@
 #include "critical_link/io.hpp"
 #include "critical_link/joy_codec.hpp"
+#include "critical_link/operator_codec.hpp"
 #include "critical_link/protocol.hpp"
 
 #include <sys/socket.h>
+#include <netinet/in.h>
 #include <unistd.h>
 
 #include <array>
@@ -22,7 +24,6 @@
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "rclcpp/serialization.hpp"
 #include "njord_interfaces/msg/operator_command.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "std_msgs/msg/empty.hpp"
@@ -89,6 +90,9 @@ public:
     joy_pub_ = create_publisher<sensor_msgs::msg::Joy>(joy_output_topic_, 10);
     heartbeat_pub_ = create_publisher<std_msgs::msg::Empty>(heartbeat_output_topic_, 10);
     command_pub_ = create_publisher<njord_interfaces::msg::OperatorCommand>(command_output_topic_, 10);
+    response_sub_ = create_subscription<njord_interfaces::msg::OperatorResponse>(
+      "/critical_link/operator_response", 10,
+      [this](const njord_interfaces::msg::OperatorResponse::SharedPtr response) { send_response(*response); });
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
       "/diagnostics", 10);
 
@@ -128,10 +132,13 @@ private:
     UdpReceiverSpec spec;
     std::thread thread;
     std::atomic<bool> open{false};
+    int fd{-1};
     std::atomic<uint64_t> received{0};
     std::atomic<uint64_t> invalid{0};
     std::atomic<uint64_t> last_receive_ms{0};
     std::atomic<int> last_errno{0};
+    sockaddr_in last_peer{};
+    bool has_peer{false};
   };
 
   void udp_loop(ReceivePath & path)
@@ -145,10 +152,16 @@ private:
         std::this_thread::sleep_for(std::chrono::seconds(1));
         continue;
       }
+      path.fd = fd;
       path.open = true;
       while (running_) {
-        const ssize_t size = recv(fd, buffer.data(), buffer.size(), 0);
+        sockaddr_in peer{};
+        socklen_t peer_size = sizeof(peer);
+        const ssize_t size = recvfrom(fd, buffer.data(), buffer.size(), 0,
+          reinterpret_cast<sockaddr *>(&peer), &peer_size);
         if (size > 0) {
+          path.last_peer = peer;
+          path.has_peer = true;
           path.last_receive_ms = steady_milliseconds();
           ++path.received;
           if (!handle_datagram(buffer.data(), static_cast<size_t>(size))) {
@@ -160,6 +173,7 @@ private:
         }
       }
       path.open = false;
+      path.fd = -1;
       close(fd);
     }
   }
@@ -220,17 +234,8 @@ private:
         return;
       }
     } else if (frame.stream == StreamId::kOperatorCommand) {
-      try {
-        rclcpp::SerializedMessage serialized(frame.payload.size());
-        auto & raw = serialized.get_rcl_serialized_message();
-        std::memcpy(raw.buffer, frame.payload.data(), frame.payload.size());
-        raw.buffer_length = frame.payload.size();
-        command.emplace();
-        rclcpp::Serialization<njord_interfaces::msg::OperatorCommand>().deserialize_message(
-          &serialized, &*command);
-      } catch (const std::exception &) {
-        ++invalid_payload_;
-      }
+      command = decode_operator_command(frame.payload);
+      if (!command) { ++invalid_payload_; return; }
     } else if (!frame.payload.empty()) {
       ++invalid_payload_;
       return;
@@ -258,6 +263,22 @@ private:
       last_probe_ms_ = steady_milliseconds();
     } else if (frame.stream == StreamId::kOperatorCommand && command) {
       command_pub_->publish(*command);
+    }
+  }
+
+  void send_response(const njord_interfaces::msg::OperatorResponse & response)
+  {
+    Frame frame;
+    frame.stream = StreamId::kOperatorResponse;
+    frame.session_id = response.request_id;
+    frame.sequence = ++response_sequence_;
+    frame.source_unix_ms = unix_milliseconds();
+    frame.payload = encode_operator_response(response);
+    const auto bytes = encode_frame(frame, key_);
+    for (const auto & path : udp_paths_) {
+      const sockaddr_in peer{path->last_peer};
+      if (path->has_peer) sendto(path->fd, bytes.data(), bytes.size(), 0,
+        reinterpret_cast<const sockaddr *>(&peer), sizeof(peer));
     }
   }
 
@@ -338,9 +359,11 @@ private:
   std::atomic<uint64_t> last_joy_ms_{0};
   std::atomic<uint64_t> last_heartbeat_ms_{0};
   std::atomic<uint64_t> last_probe_ms_{0};
+  uint32_t response_sequence_{0};
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr joy_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
   rclcpp::Publisher<njord_interfaces::msg::OperatorCommand>::SharedPtr command_pub_;
+  rclcpp::Subscription<njord_interfaces::msg::OperatorResponse>::SharedPtr response_sub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
 };

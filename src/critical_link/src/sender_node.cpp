@@ -1,5 +1,6 @@
 #include "critical_link/io.hpp"
 #include "critical_link/joy_codec.hpp"
+#include "critical_link/operator_codec.hpp"
 #include "critical_link/protocol.hpp"
 
 #include <sys/socket.h>
@@ -21,7 +22,6 @@
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "rclcpp/rclcpp.hpp"
-#include "rclcpp/serialization.hpp"
 #include "njord_interfaces/msg/operator_command.hpp"
 #include "njord_interfaces/msg/operator_response.hpp"
 #include "sensor_msgs/msg/joy.hpp"
@@ -103,7 +103,7 @@ public:
       });
     command_sub_ = create_subscription<njord_interfaces::msg::OperatorCommand>(
       command_topic_, 10, [this](const njord_interfaces::msg::OperatorCommand::SharedPtr message) {
-        send_message(StreamId::kOperatorCommand, *message);
+        send(StreamId::kOperatorCommand, encode_operator_command(*message));
       });
     response_pub_ = create_publisher<njord_interfaces::msg::OperatorResponse>(response_topic_, 10);
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
@@ -189,16 +189,6 @@ private:
     send(StreamId::kJoy, *payload);
   }
 
-  template<typename MessageT>
-  void send_message(StreamId stream, const MessageT & message)
-  {
-    rclcpp::Serialization<MessageT> serializer;
-    rclcpp::SerializedMessage serialized;
-    serializer.serialize_message(&message, &serialized);
-    const auto & raw = serialized.get_rcl_serialized_message();
-    send(stream, std::vector<uint8_t>(raw.buffer, raw.buffer + raw.buffer_length));
-  }
-
   void poll_responses()
   {
     std::array<uint8_t, kMaxFrameSize> buffer{};
@@ -210,13 +200,7 @@ private:
         const auto frame = decode_frame(buffer.data(), static_cast<size_t>(received), key_, unix_milliseconds());
         if (!frame || frame->stream != StreamId::kOperatorResponse) continue;
         try {
-          rclcpp::SerializedMessage serialized(frame->payload.size());
-          auto & raw = serialized.get_rcl_serialized_message();
-          std::memcpy(raw.buffer, frame->payload.data(), frame->payload.size());
-          raw.buffer_length = frame->payload.size();
-          njord_interfaces::msg::OperatorResponse response;
-          rclcpp::Serialization<njord_interfaces::msg::OperatorResponse>().deserialize_message(&serialized, &response);
-          response_pub_->publish(response);
+          if (auto response = decode_operator_response(frame->payload)) response_pub_->publish(*response);
         } catch (const std::exception &) {}
       }
     }
