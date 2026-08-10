@@ -1,0 +1,32 @@
+# Template route from the launch inlet to the map origin.
+# Replace these provisional coordinates with surveyed GPS point 0-1 and 0-2-1
+# before operating on the water.  All points are converted through /fromLL.
+move_to_exam_field_config:
+  frame_id: map
+  waypoints:
+    - id: gps_0_1
+      latitude: 63.44228538325694
+      longitude: 10.42402403234536
+      yaw: 0.0
+      type: start
+      name: GPS point 0-1 (launch inlet)
+    - id: waypoint_1
+      latitude: 63.44228538325694
+      longitude: 10.42433463269300
+      yaw: 0.0
+      type: waypoint
+      name: Transit waypoint 1
+    - id: waypoint_2
+      latitude: 63.44228538325694
+      longitude: 10.42464523304062
+      yaw: 0.0
+      type: waypoint
+      name: Transit waypoint 2
+    - id: gps_0_2_1
+      latitude: 63.44228538325694
+      longitude: 10.42495583338823
+      yaw: 0.0
+      type: goal
+      name: GPS point 0-2-1 (map origin)
+  stages:
+    move_to_exam_field: [gps_0_1, waypoint_1, waypoint_2, gps_0_2_1]

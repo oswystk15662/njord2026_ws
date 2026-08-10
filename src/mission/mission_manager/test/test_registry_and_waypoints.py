@@ -22,6 +22,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("return_home").runnable
+    assert registry.get("move_to_exam_field").runnable
+    assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
     assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
@@ -39,6 +41,10 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1_exit", "8"]
+    exam_field = loader.load(PACKAGE_ROOT / "config" / "move_to_exam_field_waypoints.yaml", "move_to_exam_field_config")
+    assert [waypoint.waypoint_id for waypoint in exam_field.waypoints] == [
+        "gps_0_1", "waypoint_1", "waypoint_2", "gps_0_2_1",
+    ]
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):
