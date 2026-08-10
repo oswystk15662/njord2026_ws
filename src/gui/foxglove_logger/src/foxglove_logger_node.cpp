@@ -1,16 +1,19 @@
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <deque>
 #include <iomanip>
 #include <limits>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <stdexcept>
 #include <utility>
 #include <vector>
 
+#include "action_msgs/msg/goal_status_array.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
@@ -59,6 +62,8 @@ public:
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
     const auto control_topic = declare_parameter<std::string>("control_status_topic", "/system/control_status");
     const auto control_state_topic = declare_parameter<std::string>("control_state_topic", "/control/state");
+    const auto nav2_status_topic = declare_parameter<std::string>(
+      "nav2_status_topic", "/navigate_through_poses/_action/status");
     const auto log_topic = declare_parameter<std::string>("log_topic", "/foxglove_log");
 
     log_pub_ = create_publisher<rcl_interfaces::msg::Log>(log_topic, 10);
@@ -82,6 +87,8 @@ public:
     control_state_sub_ = create_subscription<njord_interfaces::msg::ControlState>(
       control_state_topic, rclcpp::QoS(1).transient_local(),
       [this](njord_interfaces::msg::ControlState::SharedPtr msg) {control_state_ = *msg;});
+    nav2_status_sub_ = create_subscription<action_msgs::msg::GoalStatusArray>(nav2_status_topic, 10,
+      [this](action_msgs::msg::GoalStatusArray::SharedPtr msg) {onNav2Status(*msg);});
 
     const auto period = std::chrono::duration<double>(1.0 / publish_rate_hz);
     timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(period),
@@ -141,6 +148,31 @@ private:
     last_buoy_count_ = msg.detections.size();
   }
 
+  void onNav2Status(const action_msgs::msg::GoalStatusArray & msg)
+  {
+    for (const auto & status : msg.status_list) {
+      if (status.status != action_msgs::msg::GoalStatus::STATUS_ABORTED) {
+        continue;
+      }
+      const auto & goal_id = status.goal_info.goal_id.uuid;
+      if (aborted_goal_ids_.insert(goal_id).second) {
+        publishLog(LogLevel::kError, "NAV2_ABORT navigate_through_poses");
+      }
+    }
+  }
+
+  std::optional<double> targetDistance() const
+  {
+    if (!odometry_ || !plan_ || plan_->poses.empty() ||
+      (!plan_->header.frame_id.empty() && plan_->header.frame_id != odometry_->header.frame_id))
+    {
+      return std::nullopt;
+    }
+    const auto & target = plan_->poses.back().pose.position;
+    const auto & position = odometry_->pose.pose.position;
+    return std::hypot(target.x - position.x, target.y - position.y);
+  }
+
   std::string buoyText()
   {
     const auto now = std::chrono::steady_clock::now();
@@ -185,10 +217,8 @@ private:
     const auto & orientation = odometry_->pose.pose.orientation;
     const double sin_yaw = 2.0 * (orientation.w * orientation.z + orientation.x * orientation.y);
     const double cos_yaw = 1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z);
-    double degrees = std::atan2(sin_yaw, cos_yaw) * 180.0 / kPi;
-    while (degrees > 180.0) {degrees -= 360.0;}
-    while (degrees <= -180.0) {degrees += 360.0;}
-    return degrees;
+    const double yaw_degrees = std::atan2(sin_yaw, cos_yaw) * 180.0 / kPi;
+    return std::fmod(90.0 - yaw_degrees + 360.0, 360.0);
   }
 
   std::optional<double> speedMps() const
@@ -284,6 +314,16 @@ private:
     } else {
       out << "N/A";
     }
+    out << '\n' << "NAV_TARGET=";
+    if (plan_ && !plan_->poses.empty()) {
+      const auto & target = plan_->poses.back().pose.position;
+      out << plan_->header.frame_id << " (" << target.x << ',' << target.y << ')';
+      const auto distance = targetDistance();
+      out << " DIST=" << (distance ? std::to_string(*distance) : "N/A") << "m";
+    } else {
+      out << "N/A";
+    }
+    out << '\n' << "NAV2_ABORT_COUNT=" << aborted_goal_ids_.size();
     const std::string control_status = control_status_.value_or("N/A");
     out << '\n' << "CTRL_MODE=";
     if (control_status == "auto") {
@@ -323,6 +363,7 @@ private:
   std::optional<float> ground_speed_mps_;
   std::optional<std::string> control_status_;
   std::optional<njord_interfaces::msg::ControlState> control_state_;
+  std::set<std::array<uint8_t, 16>> aborted_goal_ids_;
   std::deque<std::chrono::steady_clock::time_point> buoy_detection_times_;
   std::size_t last_buoy_count_{0};
   rclcpp::Subscription<std_msgs::msg::Float32MultiArray>::SharedPtr cells_sub_;
@@ -334,6 +375,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
   rclcpp::Subscription<njord_interfaces::msg::ControlState>::SharedPtr control_state_sub_;
+  rclcpp::Subscription<action_msgs::msg::GoalStatusArray>::SharedPtr nav2_status_sub_;
   rclcpp::Publisher<rcl_interfaces::msg::Log>::SharedPtr log_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };

@@ -1,7 +1,33 @@
 from mission_manager.executors import (
     ExecutorStatus, StagedDockingExecutor, Task2MppiExecutor, WaypointSequenceExecutor,
 )
+from mission_manager.mission_manager_node import _RosNavigationClient
 from mission_manager.waypoint_config import Route, Waypoint
+from geometry_msgs.msg import PoseStamped
+
+
+class _MarkerPublisher:
+    def __init__(self):
+        self.messages = []
+
+    def publish(self, message):
+        self.messages.append(message)
+
+
+class _MarkerNode:
+    class _Clock:
+        class _Now:
+            @staticmethod
+            def to_msg():
+                return PoseStamped().header.stamp
+
+        @staticmethod
+        def now():
+            return _MarkerNode._Clock._Now()
+
+    @staticmethod
+    def get_clock():
+        return _MarkerNode._Clock()
 
 
 class FakeNavigation:
@@ -35,6 +61,21 @@ def test_sequence_maps_nav_success_to_result():
     accepted(True)
     completed(ExecutorStatus.SUCCEEDED, "ok")
     assert results[0].status == ExecutorStatus.SUCCEEDED
+
+
+def test_navigation_client_publishes_waypoint_markers():
+    client = object.__new__(_RosNavigationClient)
+    client._node = _MarkerNode()
+    client._frame_id = "map"
+    client._marker_publisher = _MarkerPublisher()
+    poses = [PoseStamped(), PoseStamped()]
+    poses[1].pose.position.x = 2.0
+
+    client._publish_markers(poses)
+
+    route, points = client._marker_publisher.messages[0].markers
+    assert route.type == route.LINE_STRIP
+    assert [(point.x, point.y) for point in points.points] == [(0.0, 0.0), (2.0, 0.0)]
 
 
 def test_staged_docking_cancels_wait_timer_and_ignores_late_callback():

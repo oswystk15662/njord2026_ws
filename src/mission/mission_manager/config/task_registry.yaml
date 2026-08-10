@@ -69,3 +69,12 @@ tasks:
     # Mission Manager permits this task from any active Nav2 profile.
     nav2_profile: task1
     control_policy: return_home
+  move_to_exam_field:
+    display_name: Move to exam field
+    availability: experimental
+    executor: waypoint_sequence
+    route: move_to_exam_field_waypoints.yaml
+    route_key: move_to_exam_field_config
+    frame_id: map
+    nav2_profile: task1
+    control_policy: task1

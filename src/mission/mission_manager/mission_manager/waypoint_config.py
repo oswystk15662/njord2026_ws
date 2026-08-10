@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Mapping
 
 from .task_registry import RegistryError, load_yaml
+from .geodesy import HomeDatum, wgs84_to_enu
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,9 @@ class Route:
 class WaypointConfigLoader:
     """Loads one named route config, without sending any Nav2 goal."""
 
+    def __init__(self, home_datum: HomeDatum | None = None) -> None:
+        self._home_datum = home_datum
+
     def load(self, path: Path, route_key: str) -> Route:
         root = load_yaml(path)
         raw = root.get(route_key)
@@ -126,8 +130,7 @@ class WaypointConfigLoader:
             raise RegistryError(f"route {route_key!r} {label} has invalid altitude")
         return GeodeticPoint(values["latitude"], values["longitude"], float(altitude))
 
-    @classmethod
-    def _waypoints(cls, raw: object, route_key: str) -> list[Waypoint]:
+    def _waypoints(self, raw: object, route_key: str) -> list[Waypoint]:
         if not isinstance(raw, list) or not raw:
             raise RegistryError(f"route {route_key!r} requires non-empty waypoints")
         result = []
@@ -159,11 +162,14 @@ class WaypointConfigLoader:
                 raise RegistryError(
                     f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
                 )
-            geodetic = cls._geodetic_point(
+            geodetic = self._geodetic_point(
                 item, route_key, f"waypoint {waypoint_id!r}", required=True
             )
+            x, y = 0.0, 0.0
+            if self._home_datum is not None:
+                x, y = wgs84_to_enu(geodetic.latitude, geodetic.longitude, self._home_datum)
             result.append(Waypoint(
-                waypoint_id, values.get("x", 0.0), values.get("y", 0.0), values["yaw"],
+                waypoint_id, x, y, values["yaw"],
                 name, waypoint_type, item.get("gate_pair"), str(competition_id),
                 latitude=None if geodetic is None else geodetic.latitude,
                 longitude=None if geodetic is None else geodetic.longitude,

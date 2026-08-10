@@ -14,6 +14,9 @@
         "/path": {
           "visible": false
         },
+        "/mission/waypoint_markers": {
+          "visible": true
+        },
         "/livox/lidar": {
           "visible": true,
           "colorField": "intensity",

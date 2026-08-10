@@ -10,7 +10,7 @@ from typing import Callable, Optional, Sequence
 
 import rclpy
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import Point, PoseStamped
 from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
 from nav_msgs.msg import Path as NavPath
@@ -22,6 +22,7 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Empty, Float64, String
+from visualization_msgs.msg import Marker, MarkerArray
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
@@ -55,9 +56,10 @@ _STATUS_QOS = QoSProfile(
 class _RosNavigationClient:
     """Converts typed waypoints to Nav2 messages and keeps one active goal."""
 
-    def __init__(self, node: Node, path_publisher) -> None:
+    def __init__(self, node: Node, path_publisher, marker_publisher) -> None:
         self._node = node
         self._path_publisher = path_publisher
+        self._marker_publisher = marker_publisher
         self._client = ActionClient(node, NavigateThroughPoses, "/navigate_through_poses")
         self._goal_handle = None
         self._callbacks = None
@@ -71,6 +73,7 @@ class _RosNavigationClient:
             return
         messages = [self._pose(waypoint) for waypoint in poses]
         self._publish_path(messages)
+        self._publish_markers(messages)
         goal = NavigateThroughPoses.Goal()
         goal.poses = messages
         self._client.send_goal_async(goal, feedback_callback=self._on_feedback).add_done_callback(
@@ -105,6 +108,33 @@ class _RosNavigationClient:
         path.header.stamp = self._node.get_clock().now().to_msg()
         path.poses = poses
         self._path_publisher.publish(path)
+
+    def _publish_markers(self, poses: list[PoseStamped]) -> None:
+        if not poses:
+            return
+        stamp = self._node.get_clock().now().to_msg()
+        markers = MarkerArray()
+        route = Marker()
+        route.header.frame_id, route.header.stamp = self._frame_id, stamp
+        route.ns, route.id, route.type, route.action = (
+            "mission_waypoint_route", 0, Marker.LINE_STRIP, Marker.ADD
+        )
+        route.pose.orientation.w, route.scale.x = 1.0, 0.12
+        route.color.r, route.color.g, route.color.b, route.color.a = 0.1, 0.9, 1.0, 0.9
+        points = Marker()
+        points.header.frame_id, points.header.stamp = self._frame_id, stamp
+        points.ns, points.id, points.type, points.action = (
+            "mission_waypoints", 0, Marker.SPHERE_LIST, Marker.ADD
+        )
+        points.pose.orientation.w = 1.0
+        points.scale.x = points.scale.y = points.scale.z = 0.35
+        points.color.g, points.color.b, points.color.a = 0.95, 1.0, 1.0
+        for pose in poses:
+            point = Point(x=pose.pose.position.x, y=pose.pose.position.y, z=0.18)
+            route.points.append(point)
+            points.points.append(point)
+        markers.markers = [route, points]
+        self._marker_publisher.publish(markers)
 
     def _on_goal_response(self, future) -> None:
         callbacks = self._callbacks
@@ -182,6 +212,9 @@ class MissionManager(Node):
 
         self._status_pub = self.create_publisher(MissionStatus, "/mission/status", _STATUS_QOS)
         self._plan_pub = self.create_publisher(NavPath, "/task/plan", _STATUS_QOS)
+        self._waypoint_markers_pub = self.create_publisher(
+            MarkerArray, "/mission/waypoint_markers", _STATUS_QOS
+        )
         self._task_ready_pub = self.create_publisher(Bool, "/mission/task_ready", _STATUS_QOS)
         self._task_requirements_ready_pub = self.create_publisher(
             Bool, "/mission/task_requirements_ready", _STATUS_QOS
@@ -201,7 +234,9 @@ class MissionManager(Node):
         self._task1_walls_enabled = False
         self._set_task2_enabled(False)
         self._set_task1_cardinal_walls(False)
-        self._navigation = _RosNavigationClient(self, self._plan_pub)
+        self._navigation = _RosNavigationClient(
+            self, self._plan_pub, self._waypoint_markers_pub
+        )
         self._from_ll_client = self.create_client(FromLL, "/fromLL")
         self._task3_goal_checker_client = self.create_client(
             SetParameters, "/controller_server/set_parameters"

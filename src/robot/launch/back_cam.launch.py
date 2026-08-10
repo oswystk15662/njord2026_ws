@@ -38,7 +38,11 @@ def configure_v4l2_controls(video_device, params):
         )
 
     for command in commands:
-        subprocess.run(command, check=True)
+        # Camera controls differ by USB camera/driver.  A rejected optional
+        # control must not abort the whole vessel bringup.
+        result = subprocess.run(command, check=False)
+        if result.returncode:
+            print(f"[back_cam] optional V4L2 control failed ({result.returncode}): {' '.join(command)}")
 
 
 def launch_setup(context, *args, **kwargs):

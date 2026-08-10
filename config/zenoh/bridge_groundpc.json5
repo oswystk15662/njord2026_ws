@@ -11,7 +11,7 @@
   // スマートフォンInternet経路を使う場合も7447をInternetへ直接公開せず、
   // WireGuard等のVPN内アドレスをendpointにする。
   connect: {
-    endpoints: ["tcp/192.168.212.210:7447"],
+    endpoints: ["tcp/gembu-EliteMini-Series:7447"],
   },
 
   scouting: {
@@ -30,7 +30,8 @@
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
-          "/joy/set_feedback", "/foxglove_log", "/gui/battery_percent",
+          "/joy/set_feedback", "/foxglove_log", "/mission/waypoint_markers",
+          "/gui/battery_percent",
         ],
         // The ground operator is a client of the miniPC-owned Mission Manager.
         // Task selection is carried in StartTask/RunTask requests, so no

@@ -1,8 +1,8 @@
 # GNSS Map Telemetry
 
 Foxglove custom Map panel with a fixed top-right legend for latitude, longitude,
-base_link heading, and speed over ground. It consumes
-`/sensor/vehicle_gnss/fix/raw`, `/gui/ground_speed_mps`, `/tf`, and `/tf_static`.
+base_link heading, and speed over ground. It consumes `/foxglove_log`, `/tf`, and
+`/tf_static`.
 The panel renders OpenStreetMap tiles with its bundled Leaflet 1.9.4 runtime.
 After centering on the first valid fix, the map remains under manual pan and zoom
 control while the vessel arrow moves and rotates.  It also consumes the

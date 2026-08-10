@@ -92,7 +92,9 @@ source scripts/njord_env.sh      # プロファイル判定と環境変数の ex
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 ```
 
-`scripts/build.sh` は上記をまとめたラッパ。
+`scripts/build.sh` は上記をまとめたラッパ。成果物は
+`build/<ROS_DISTRO>/<profile>` と `install/<ROS_DISTRO>/<profile>` に分離されるため、
+ビルド後は `source install/$ROS_DISTRO/$NJORD_PROFILE/setup.bash` を使う。
 
 `scripts/njord_env.sh` がやること:
 
@@ -129,13 +131,13 @@ ZED SDK の探索は、`zed-config.cmake` に記録された CUDA メジャー�
 
 Jetson:
 ```bash
-source /opt/ros/$ROS_DISTRO/setup.bash && source scripts/njord_env.sh && source install/setup.bash
+source /opt/ros/$ROS_DISTRO/setup.bash && source scripts/njord_env.sh && source install/$ROS_DISTRO/$NJORD_PROFILE/setup.bash
 ros2 launch robot jetson_bringup.launch.py
 ```
 
 miniPC:
 ```bash
-source /opt/ros/humble/setup.bash && source scripts/njord_env.sh && source install/setup.bash
+source /opt/ros/humble/setup.bash && source scripts/njord_env.sh && source install/$ROS_DISTRO/$NJORD_PROFILE/setup.bash
 ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task1
 ```
 

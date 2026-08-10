@@ -69,7 +69,7 @@ thruster_driver_node:
       links: ["thruster_RR", "thruster_RL", "thruster_FR", "thruster_FL"]
       angle_rad: [2.356194, -2.356194, 0.785398, -0.785398]
       reverse: [false, true, false, true]
-      # BlueRobotics T200 @16V max thrust ~51.5N migi 100Nにしてみる
+      # BlueRobotics T200 @16V max thrust ~51.5N
       max_thrust: [100.0, 100.0, 100.0, 100.0]
 
     topics:

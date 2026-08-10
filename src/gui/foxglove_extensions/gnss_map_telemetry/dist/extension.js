@@ -12,8 +12,7 @@ const L = (() => {
   return leafletModule.exports;
 })();
 
-const FIX_TOPIC = "/sensor/vehicle_gnss/fix/raw";
-const SPEED_TOPIC = "/gui/ground_speed_mps";
+const LOG_TOPIC = "/foxglove_log";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
@@ -79,6 +78,16 @@ function batteryColor(percent) {
   if (percent <= 20) return "#ef4444";
   if (percent <= 50) return "#eab308";
   return "#22c55e";
+}
+
+function parseTelemetryLog(text) {
+  if (typeof text !== "string") return undefined;
+  const match = /NAV LAT=([-+]?\d+(?:\.\d+)?) LON=([-+]?\d+(?:\.\d+)?)\nSOG=([-+]?\d+(?:\.\d+)?)m\/s HDG=([-+]?\d+(?:\.\d+)?)deg/.exec(text);
+  if (!match) return undefined;
+  const [latitude, longitude, speedMps, headingDegrees] = match.slice(1).map(Number);
+  return [latitude, longitude, speedMps, headingDegrees].every(Number.isFinite)
+    ? {latitude, longitude, speedMps, headingDegrees}
+    : undefined;
 }
 
 function normalizeFrame(frame) {
@@ -267,7 +276,7 @@ function initGnssMapTelemetry(context) {
   }
 
   context.subscribe([
-    {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
+    {topic: LOG_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
     {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC}, {topic: GROUND_WAYPOINT_MARKERS_TOPIC},
   ]);
   context.watch("currentFrame");
@@ -275,11 +284,9 @@ function initGnssMapTelemetry(context) {
     try {
       for (const event of renderState.currentFrame || []) {
         const message = event.message || {};
-        if (event.topic === FIX_TOPIC) {
-          if (typeof message.latitude === "number") state.latitude = message.latitude;
-          if (typeof message.longitude === "number") state.longitude = message.longitude;
-        } else if (event.topic === SPEED_TOPIC && typeof message.data === "number") {
-          state.speedMps = message.data;
+        if (event.topic === LOG_TOPIC) {
+          const telemetry = parseTelemetryLog(message.msg);
+          if (telemetry) Object.assign(state, telemetry);
         } else if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
           state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
