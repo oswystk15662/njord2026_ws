@@ -24,8 +24,8 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Empty, Float64, String
 from visualization_msgs.msg import Marker, MarkerArray
 
-from njord_interfaces.action import RunTask
-from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
+from njord_interfaces.action import ConfigureSystem, RunTask
+from njord_interfaces.msg import ControlState, MissionStatus, Nav2RuntimeStatus, TaskInfo
 from njord_interfaces.srv import GetMissionStatus, ListTasks, SetControlMode, StartTask, StopTask
 
 from .executors import (
@@ -183,7 +183,7 @@ class MissionManager(Node):
     def __init__(self) -> None:
         super().__init__("mission_manager")
         self.declare_parameter("registry_file", "")
-        self.declare_parameter("active_nav2_profile", "task1")
+        self.declare_parameter("active_nav2_profile", "")
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
@@ -193,6 +193,9 @@ class MissionManager(Node):
         self._active_task: TaskDefinition | None = None
         self._active_route: Route | None = None
         self._pending_start = None
+        self._pending_runtime_start = None
+        self._active_nav2_profile = str(self.get_parameter("active_nav2_profile").value)
+        self._runtime_state = Nav2RuntimeStatus.STOPPED
         self._pending_coordinate_projection = None
         self._pending_task3_goal_checker = None
         self._auto_permission_deadline_ns: int | None = None
@@ -275,6 +278,8 @@ class MissionManager(Node):
         self._list_srv = self.create_service(ListTasks, "/mission/list_tasks", self._on_list)
         self._status_srv = self.create_service(GetMissionStatus, "/mission/get_status", self._on_status)
         self._set_mode_client = self.create_client(SetControlMode, "/control/set_mode")
+        self._configure_runtime_client = ActionClient(self, ConfigureSystem, "/system/configure")
+        self.create_subscription(Nav2RuntimeStatus, "/runtime/nav2/status", self._on_runtime_status, _STATUS_QOS)
         self._timer = self.create_timer(0.1, self._tick, callback_group=self._cb_group)
         self._publish_task_readiness(False, False, "")
         self._publish_status()
@@ -378,13 +383,18 @@ class MissionManager(Node):
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support AUTO")
         if request.dry_run and not task.supports_dry_run:
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support dry run")
-        active_profile = str(self.get_parameter("active_nav2_profile").value)
+        active_profile = self._active_nav2_profile
         if task.task_id != "return_home" and task.nav2_profile != active_profile:
-            return self._reject_started(
-                decision.execution_id,
-                ResultCode.CONFIGURATION_FAILED,
-                f"task requires Nav2 profile {task.nav2_profile}; active profile is {active_profile}",
-            )
+            self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
+                                     stage="nav2_profile", message=f"switching Nav2 to {task.nav2_profile}")
+            self._pending_runtime_start = (decision, task, request)
+            if not self._configure_runtime_client.server_is_ready():
+                return self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                                            "runtime manager /system/configure is unavailable")
+            goal = ConfigureSystem.Goal(parameter="nav2_profile", value=task.nav2_profile)
+            self._configure_runtime_client.send_goal_async(goal).add_done_callback(self._on_runtime_goal)
+            self._publish_status()
+            return decision
         try:
             route = self._load_route(task)
         except RegistryError as exc:
@@ -408,6 +418,48 @@ class MissionManager(Node):
             self._publish_status()
             return decision
         return self._configure_route(decision, task, route, request)
+
+    def _on_runtime_goal(self, future) -> None:
+        with self._lock:
+            pending = self._pending_runtime_start
+            if pending is None:
+                return
+            try:
+                handle = future.result()
+                if not handle.accepted:
+                    raise RuntimeError("runtime manager rejected profile switch")
+                handle.get_result_async().add_done_callback(self._on_runtime_result)
+            except Exception as exc:
+                self._pending_runtime_start = None
+                self._reject_started(pending[0].execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
+
+    def _on_runtime_result(self, future) -> None:
+        with self._lock:
+            pending = self._pending_runtime_start
+            if pending is None:
+                return
+            self._pending_runtime_start = None
+            try:
+                result = future.result().result
+                if not result.success:
+                    raise RuntimeError(result.message)
+                decision, task, request = pending
+                self._active_nav2_profile = task.nav2_profile
+                try:
+                    route = self._load_route(task)
+                except RegistryError as exc:
+                    self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
+                    return
+                self._configure_route(decision, task, route, request)
+            except Exception as exc:
+                self._reject_started(pending[0].execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
+
+    def _on_runtime_status(self, message: Nav2RuntimeStatus) -> None:
+        with self._lock:
+            self._runtime_state = message.state
+            self._active_nav2_profile = message.active_profile
+            if message.state == Nav2RuntimeStatus.FAILED and self._machine.active:
+                self._complete(self._machine.snapshot.execution_id, ResultCode.CONFIGURATION_FAILED, message.message)
 
     def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Set Task 3's projected strict goals before activating its route."""
@@ -836,6 +888,10 @@ class MissionManager(Node):
         message.auto_permitted = self._auto_permitted
         message.inhibit_reasons = self._inhibit_reasons
         message.last_transition_time = self._last_transition
+        task = self._active_task or self._registry.get(snapshot.task_id)
+        message.required_nav2_profile = task.nav2_profile if task else ""
+        message.active_nav2_profile = self._active_nav2_profile
+        message.runtime_state = self._runtime_state
         return message
 
     def _feedback(self, snapshot) -> RunTask.Feedback:

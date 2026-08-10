@@ -35,6 +35,12 @@ uint64_t steady_milliseconds()
     std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
+int64_t unix_milliseconds()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 diagnostic_msgs::msg::KeyValue key_value(const std::string & key, const std::string & value)
 {
   diagnostic_msgs::msg::KeyValue output;
@@ -57,6 +63,12 @@ public:
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
     stale_after_sec_ = declare_parameter<double>("diagnostic_stale_after_sec", 3.0);
+    max_frame_age_ms_ = declare_parameter<int64_t>("max_frame_age_ms", 2000);
+    future_tolerance_ms_ = declare_parameter<int64_t>("future_tolerance_ms", 1000);
+    const auto key = load_shared_key(declare_parameter<std::string>(
+          "key_file", "/etc/njord/critical_link.key"));
+    if (!key) throw std::runtime_error("critical-link shared key is missing or invalid");
+    key_ = *key;
 
     for (const auto & text : declare_parameter<std::vector<std::string>>(
         "udp_paths", std::vector<std::string>{}))
@@ -164,7 +176,7 @@ private:
         const ssize_t size = read(fd, buffer.data(), buffer.size());
         if (size > 0) {
           serial_last_receive_ms_ = steady_milliseconds();
-          const auto frames = decoder.push(buffer.data(), static_cast<size_t>(size));
+          const auto frames = decoder.push(buffer.data(), static_cast<size_t>(size), key_, unix_milliseconds(), max_frame_age_ms_, future_tolerance_ms_);
           for (const auto & frame : frames) {
             ++serial_received_;
             handle_frame(frame);
@@ -183,7 +195,7 @@ private:
 
   bool handle_datagram(const uint8_t * data, size_t size)
   {
-    const auto frame = decode_frame(data, size);
+    const auto frame = decode_frame(data, size, key_, unix_milliseconds(), max_frame_age_ms_, future_tolerance_ms_);
     if (!frame) {
       return false;
     }
@@ -285,6 +297,9 @@ private:
   std::string serial_device_;
   int serial_baud_{921600};
   double stale_after_sec_{3.0};
+  int64_t max_frame_age_ms_{2000};
+  int64_t future_tolerance_ms_{1000};
+  SharedKey key_{};
   std::atomic<bool> running_{true};
   std::vector<std::unique_ptr<ReceivePath>> udp_paths_;
   std::thread serial_thread_;

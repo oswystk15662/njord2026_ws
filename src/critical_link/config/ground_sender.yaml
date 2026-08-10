@@ -15,3 +15,4 @@ critical_link_sender:
     # Use a stable /dev/serial/by-id path for the Ground ESP32.
     serial_device: ""
     serial_baud: 921600
+    key_file: /etc/njord/critical_link.key

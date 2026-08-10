@@ -9,7 +9,8 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     return LaunchDescription([
-        DeclareLaunchArgument("active_nav2_profile", default_value="task1"),
+        DeclareLaunchArgument("active_nav2_profile", default_value=""),
+        Node(package="mission_manager", executable="runtime_manager_node", name="runtime_manager", output="screen"),
         Node(
             package="mission_manager",
             executable="ground_link_return_monitor_node",
@@ -21,9 +22,7 @@ def generate_launch_description():
             executable="task2_readiness_adapter_node",
             name="task2_readiness_adapter",
             output="screen",
-            condition=IfCondition(PythonExpression([
-                "'", LaunchConfiguration("active_nav2_profile"), "' == 'task2'",
-            ])),
+            condition=IfCondition(PythonExpression(["'", LaunchConfiguration("active_nav2_profile"), "' == 'task2'"])),
         ),
         Node(
             package="mission_manager",

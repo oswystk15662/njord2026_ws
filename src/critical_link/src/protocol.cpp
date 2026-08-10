@@ -1,7 +1,12 @@
 #include "critical_link/protocol.hpp"
 
 #include <algorithm>
+#include <cctype>
+#include <fstream>
 #include <stdexcept>
+
+#include <openssl/crypto.h>
+#include <openssl/hmac.h>
 
 namespace critical_link
 {
@@ -55,7 +60,23 @@ uint64_t read_u64(const uint8_t * data)
 bool valid_stream(uint8_t value)
 {
   return value >= static_cast<uint8_t>(StreamId::kJoy) &&
-         value <= static_cast<uint8_t>(StreamId::kLinkProbe);
+         value <= static_cast<uint8_t>(StreamId::kOperatorResponse);
+}
+
+bool valid_hmac(const uint8_t * data, size_t size, const SharedKey & key)
+{
+  unsigned int length = 0;
+  std::array<uint8_t, EVP_MAX_MD_SIZE> digest{};
+  HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), data, size, digest.data(), &length);
+  return length >= kHmacSize && CRYPTO_memcmp(digest.data(), data + size, kHmacSize) == 0;
+}
+
+void append_hmac(std::vector<uint8_t> & out, const SharedKey & key)
+{
+  unsigned int length = 0;
+  std::array<uint8_t, EVP_MAX_MD_SIZE> digest{};
+  HMAC(EVP_sha256(), key.data(), static_cast<int>(key.size()), out.data(), out.size(), digest.data(), &length);
+  out.insert(out.end(), digest.begin(), digest.begin() + static_cast<std::ptrdiff_t>(kHmacSize));
 }
 
 }  // namespace
@@ -73,30 +94,47 @@ uint32_t crc32_ieee(const uint8_t * data, size_t size)
   return ~crc;
 }
 
-std::vector<uint8_t> encode_frame(const Frame & frame)
+std::optional<SharedKey> load_shared_key(const std::string & path)
+{
+  std::ifstream input(path);
+  std::string value, extra;
+  if (!(input >> value) || (input >> extra) || value.size() != 64U) return std::nullopt;
+  SharedKey key{};
+  for (size_t index = 0; index < key.size(); ++index) {
+    const auto high = value[index * 2U], low = value[index * 2U + 1U];
+    if (!std::isxdigit(static_cast<unsigned char>(high)) || !std::isxdigit(static_cast<unsigned char>(low))) return std::nullopt;
+    key[index] = static_cast<uint8_t>(std::stoi(value.substr(index * 2U, 2U), nullptr, 16));
+  }
+  return key;
+}
+
+std::vector<uint8_t> encode_frame(const Frame & frame, const SharedKey & key)
 {
   if (frame.payload.size() > kMaxPayloadSize) {
     throw std::length_error("critical-link payload exceeds ESP-NOW-safe limit");
   }
 
   std::vector<uint8_t> out;
-  out.reserve(kHeaderSize + frame.payload.size() + kCrcSize);
+  out.reserve(kHeaderSize + frame.payload.size() + kHmacSize + kCrcSize);
   out.insert(out.end(), kFrameMagic.begin(), kFrameMagic.end());
   out.push_back(kProtocolVersion);
   out.push_back(static_cast<uint8_t>(frame.stream));
   append_u16(out, frame.flags);
   append_u64(out, frame.session_id);
   append_u32(out, frame.sequence);
-  append_u64(out, frame.source_monotonic_ms);
+  append_u64(out, static_cast<uint64_t>(frame.source_unix_ms));
   append_u16(out, static_cast<uint16_t>(frame.payload.size()));
   out.insert(out.end(), frame.payload.begin(), frame.payload.end());
+  append_hmac(out, key);
   append_u32(out, crc32_ieee(out.data(), out.size()));
   return out;
 }
 
-std::optional<Frame> decode_frame(const uint8_t * data, size_t size)
+std::optional<Frame> decode_frame(
+  const uint8_t * data, size_t size, const SharedKey & key, int64_t now_unix_ms,
+  int64_t max_age_ms, int64_t future_tolerance_ms)
 {
-  if (data == nullptr || size < kHeaderSize + kCrcSize || size > kMaxFrameSize) {
+  if (data == nullptr || size < kHeaderSize + kHmacSize + kCrcSize || size > kMaxFrameSize) {
     return std::nullopt;
   }
   if (!std::equal(kFrameMagic.begin(), kFrameMagic.end(), data) ||
@@ -106,11 +144,12 @@ std::optional<Frame> decode_frame(const uint8_t * data, size_t size)
   }
 
   const size_t payload_size = read_u16(data + 28);
-  const size_t expected_size = kHeaderSize + payload_size + kCrcSize;
+  const size_t expected_size = kHeaderSize + payload_size + kHmacSize + kCrcSize;
   if (payload_size > kMaxPayloadSize || expected_size != size) {
     return std::nullopt;
   }
-  if (read_u32(data + size - kCrcSize) != crc32_ieee(data, size - kCrcSize)) {
+  if (read_u32(data + size - kCrcSize) != crc32_ieee(data, size - kCrcSize) ||
+    !valid_hmac(data, size - kHmacSize - kCrcSize, key)) {
     return std::nullopt;
   }
 
@@ -119,7 +158,9 @@ std::optional<Frame> decode_frame(const uint8_t * data, size_t size)
   frame.flags = read_u16(data + 6);
   frame.session_id = read_u64(data + 8);
   frame.sequence = read_u32(data + 16);
-  frame.source_monotonic_ms = read_u64(data + 20);
+  frame.source_unix_ms = static_cast<int64_t>(read_u64(data + 20));
+  if (frame.source_unix_ms < now_unix_ms - max_age_ms ||
+    frame.source_unix_ms > now_unix_ms + future_tolerance_ms) return std::nullopt;
   frame.payload.assign(data + kHeaderSize, data + kHeaderSize + payload_size);
   return frame;
 }
@@ -129,7 +170,9 @@ bool sequence_is_newer(uint32_t candidate, uint32_t reference)
   return static_cast<int32_t>(candidate - reference) > 0;
 }
 
-std::vector<Frame> FrameStreamDecoder::push(const uint8_t * data, size_t size)
+std::vector<Frame> FrameStreamDecoder::push(
+  const uint8_t * data, size_t size, const SharedKey & key, int64_t now_unix_ms,
+  int64_t max_age_ms, int64_t future_tolerance_ms)
 {
   if (data != nullptr && size > 0) {
     buffer_.insert(buffer_.end(), data, data + size);
@@ -153,11 +196,11 @@ std::vector<Frame> FrameStreamDecoder::push(const uint8_t * data, size_t size)
       buffer_.erase(buffer_.begin());
       continue;
     }
-    const size_t frame_size = kHeaderSize + payload_size + kCrcSize;
+    const size_t frame_size = kHeaderSize + payload_size + kHmacSize + kCrcSize;
     if (buffer_.size() < frame_size) {
       break;
     }
-    const auto frame = decode_frame(buffer_.data(), frame_size);
+    const auto frame = decode_frame(buffer_.data(), frame_size, key, now_unix_ms, max_age_ms, future_tolerance_ms);
     if (frame) {
       frames.push_back(*frame);
       buffer_.erase(buffer_.begin(), buffer_.begin() + static_cast<std::ptrdiff_t>(frame_size));

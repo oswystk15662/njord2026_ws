@@ -79,6 +79,9 @@ UM982Driver::UM982Driver(const rclcpp::NodeOptions & options)
     ctrl_sub_ = this->create_subscription<std_msgs::msg::String>(
         "/sensor/vehicle_gnss/command", 10,
         std::bind(&UM982Driver::ctrl_callback, this, std::placeholders::_1));
+    hot_restart_srv_ = this->create_service<std_srvs::srv::Trigger>(
+        "/sensor/vehicle_gnss/hot_restart",
+        std::bind(&UM982Driver::hot_restart, this, std::placeholders::_1, std::placeholders::_2));
 
     // IO Thread Start
     io_thread_ = std::thread([this]() {
@@ -276,6 +279,36 @@ void UM982Driver::configure_gnss_output()
         "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
         fix_period.c_str(), heading_period.c_str(),
         params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
+}
+
+void UM982Driver::hot_restart(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    bool expected = false;
+    if (!hot_restart_in_progress_.compare_exchange_strong(expected, true)) {
+        response->success = false;
+        response->message = "UM982 hot restart already in progress";
+        return;
+    }
+    try {
+        // RESET restarts the receiver without clearing its stored navigation information.
+        write_to_gnss("RESET\r\n");
+        gnss_parse_buf_.clear();
+        have_heading_ = have_previous_fix_ = have_previous_yaw_ = false;
+        filtered_surge_mps_ = filtered_sway_mps_ = filtered_yaw_rate_rps_ = 0.0;
+        hot_restart_reconfigure_timer_ = create_wall_timer(3s, [this]() {
+            configure_gnss_output();
+            hot_restart_in_progress_ = false;
+            hot_restart_reconfigure_timer_->cancel();
+        });
+        response->success = true;
+        response->message = "UM982 RESET sent; volatile output will be restored in 3 seconds";
+    } catch (const std::exception & error) {
+        hot_restart_in_progress_ = false;
+        response->success = false;
+        response->message = error.what();
+    }
 }
 
 void UM982Driver::write_to_gnss(const std::string& data)

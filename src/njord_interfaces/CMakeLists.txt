@@ -35,6 +35,9 @@ set(msg_files
   "msg/HealthSignal.msg"
   "msg/HealthState.msg"
   "msg/MissionStatus.msg"
+  "msg/Nav2RuntimeStatus.msg"
+  "msg/OperatorCommand.msg"
+  "msg/OperatorResponse.msg"
   "msg/TaskInfo.msg"
 )
 

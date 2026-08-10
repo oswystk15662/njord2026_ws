@@ -20,42 +20,52 @@ Frame sample_frame()
   frame.flags = 3;
   frame.session_id = 0x0123456789ABCDEFULL;
   frame.sequence = 42;
-  frame.source_monotonic_ms = 987654321ULL;
+  frame.source_unix_ms = 1'700'000'000'000LL;
   frame.payload = {1, 2, 3, 4, 5};
   return frame;
+}
+
+SharedKey sample_key()
+{
+  SharedKey key{};
+  for (size_t index = 0; index < key.size(); ++index) key[index] = static_cast<uint8_t>(index);
+  return key;
 }
 
 TEST(Protocol, RoundTripsFrame)
 {
   const auto source = sample_frame();
-  const auto bytes = encode_frame(source);
-  ASSERT_LE(bytes.size(), 250U);
-  const auto decoded = decode_frame(bytes.data(), bytes.size());
+  const auto key = sample_key();
+  const auto bytes = encode_frame(source, key);
+  ASSERT_LE(bytes.size(), 234U);
+  const auto decoded = decode_frame(bytes.data(), bytes.size(), key, source.source_unix_ms);
   ASSERT_TRUE(decoded.has_value());
   EXPECT_EQ(decoded->stream, source.stream);
   EXPECT_EQ(decoded->flags, source.flags);
   EXPECT_EQ(decoded->session_id, source.session_id);
   EXPECT_EQ(decoded->sequence, source.sequence);
-  EXPECT_EQ(decoded->source_monotonic_ms, source.source_monotonic_ms);
+  EXPECT_EQ(decoded->source_unix_ms, source.source_unix_ms);
   EXPECT_EQ(decoded->payload, source.payload);
 }
 
 TEST(Protocol, RejectsCorruptedFrame)
 {
-  auto bytes = encode_frame(sample_frame());
+  const auto key = sample_key();
+  auto bytes = encode_frame(sample_frame(), key);
   bytes[critical_link::kHeaderSize + 1U] ^= 0x80U;
-  EXPECT_FALSE(decode_frame(bytes.data(), bytes.size()).has_value());
+  EXPECT_FALSE(decode_frame(bytes.data(), bytes.size(), key, sample_frame().source_unix_ms).has_value());
 }
 
 TEST(Protocol, StreamDecoderResynchronizesAndHandlesFragments)
 {
   const auto frame = sample_frame();
-  const auto bytes = encode_frame(frame);
+  const auto key = sample_key();
+  const auto bytes = encode_frame(frame, key);
   const std::array<uint8_t, 5> garbage{{9, 8, 'N', 'C', 7}};
   FrameStreamDecoder decoder;
-  EXPECT_TRUE(decoder.push(garbage.data(), garbage.size()).empty());
-  EXPECT_TRUE(decoder.push(bytes.data(), 11).empty());
-  const auto frames = decoder.push(bytes.data() + 11, bytes.size() - 11);
+  EXPECT_TRUE(decoder.push(garbage.data(), garbage.size(), key, frame.source_unix_ms).empty());
+  EXPECT_TRUE(decoder.push(bytes.data(), 11, key, frame.source_unix_ms).empty());
+  const auto frames = decoder.push(bytes.data() + 11, bytes.size() - 11, key, frame.source_unix_ms);
   ASSERT_EQ(frames.size(), 1U);
   EXPECT_EQ(frames[0].sequence, frame.sequence);
 }

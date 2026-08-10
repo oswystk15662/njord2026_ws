@@ -35,6 +35,12 @@ uint64_t steady_milliseconds()
     std::chrono::steady_clock::now().time_since_epoch()).count());
 }
 
+int64_t unix_milliseconds()
+{
+  return std::chrono::duration_cast<std::chrono::milliseconds>(
+    std::chrono::system_clock::now().time_since_epoch()).count();
+}
+
 uint64_t make_session_id()
 {
   std::random_device random;
@@ -64,6 +70,10 @@ public:
       "heartbeat_input_topic", "/critical_link/input/heartbeat");
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
+    const auto key = load_shared_key(declare_parameter<std::string>(
+          "key_file", "/etc/njord/critical_link.key"));
+    if (!key) throw std::runtime_error("critical-link shared key is missing or invalid");
+    key_ = *key;
 
     for (const auto & text : declare_parameter<std::vector<std::string>>(
         "udp_paths", std::vector<std::string>{}))
@@ -173,9 +183,9 @@ private:
     frame.stream = stream;
     frame.session_id = session_id_;
     frame.sequence = ++sequences_[index];
-    frame.source_monotonic_ms = steady_milliseconds();
+    frame.source_unix_ms = unix_milliseconds();
     frame.payload = std::move(payload);
-    const auto bytes = encode_frame(frame);
+    const auto bytes = encode_frame(frame, key_);
 
     for (auto & path : udp_paths_) {
       path->send_frame(bytes);
@@ -247,6 +257,7 @@ private:
   std::string heartbeat_topic_;
   std::string serial_device_;
   int serial_baud_{921600};
+  SharedKey key_{};
   uint64_t session_id_{0};
   std::array<uint32_t, 4> sequences_{};
   std::array<uint64_t, 4> generated_{};

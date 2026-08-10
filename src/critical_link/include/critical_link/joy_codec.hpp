@@ -8,7 +8,7 @@
 namespace critical_link
 {
 
-constexpr size_t kMaxJoyAxes = 32;
+constexpr size_t kMaxJoyAxes = 24;
 constexpr size_t kMaxJoyButtons = 64;
 
 std::optional<std::vector<uint8_t>> encode_joy_payload(const sensor_msgs::msg::Joy & joy);

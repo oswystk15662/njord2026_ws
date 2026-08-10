@@ -12,3 +12,6 @@ critical_link_receiver:
     # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""
     serial_baud: 921600
+    key_file: /etc/njord/critical_link.key
+    max_frame_age_ms: 2000
+    future_tolerance_ms: 1000

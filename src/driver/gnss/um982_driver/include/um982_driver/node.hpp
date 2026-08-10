@@ -6,6 +6,7 @@
 #include <geometry_msgs/msg/pose_with_covariance_stamped.hpp>
 #include <nav_msgs/msg/odometry.hpp>
 #include <std_msgs/msg/string.hpp>
+#include <std_srvs/srv/trigger.hpp>
 
 #include <boost/asio.hpp>
 #include <thread>
@@ -60,6 +61,8 @@ private:
     // --- ROS Callbacks/Timers ---
     void ctrl_callback(const std_msgs::msg::String::SharedPtr msg);
     void rtk_send_gga_callback(); // RTKサーバーへGGAを送信(5秒周期)
+    void hot_restart(const std::shared_ptr<std_srvs::srv::Trigger::Request>,
+                     std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
     // --- メンバ変数 ---
     
@@ -94,6 +97,8 @@ private:
     // ROS Subscribers & Timers
     rclcpp::Subscription<std_msgs::msg::String>::SharedPtr ctrl_sub_;
     rclcpp::TimerBase::SharedPtr rtk_gga_timer_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr hot_restart_srv_;
+    rclcpp::TimerBase::SharedPtr hot_restart_reconfigure_timer_;
 
     // State
     std::string last_gpgga_;
@@ -116,6 +121,7 @@ private:
     double filtered_yaw_rate_rps_{0.0};
     double previous_yaw_rad_{0.0};
     bool have_previous_yaw_{false};
+    std::atomic_bool hot_restart_in_progress_{false};
     
     // Parameters
     struct {

@@ -593,8 +593,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "enable_nav2",
-                default_value="true",
-                description="Start the resident Nav2 graph owned by miniPC role bringup.",
+                default_value="false",
+                description="Compatibility preload request; normal bringup starts with no Nav2 runtime.",
             ),
             DeclareLaunchArgument(
                 "enable_control_manager",
@@ -610,7 +610,7 @@ def generate_launch_description():
                 "active_nav2_profile",
                 default_value="task1",
                 choices=["task1", "task2", "task3"],
-                description="Resident Nav2 profile; incompatible Mission tasks are safely rejected.",
+                description="Profile used only by the explicit compatibility preload request.",
             ),
             DeclareLaunchArgument("enable_diagnostics", default_value="true"),
             DeclareLaunchArgument(
