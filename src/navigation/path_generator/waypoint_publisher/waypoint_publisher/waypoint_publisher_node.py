@@ -330,13 +330,18 @@ class WaypointPublisher(Node):
     def _active_waypoints(self) -> list:
         """Return the configured route, optionally sliced at a competition WP."""
         waypoints = self.config.get('waypoints', [])
-        if not self.start_competition_waypoint:
-            return waypoints
-        for index, waypoint in enumerate(waypoints):
-            if str(waypoint.get('competition_id', '')) == self.start_competition_waypoint:
-                return waypoints[index:]
-        self.get_logger().warn(
-            f'competition waypoint {self.start_competition_waypoint} is absent; using full route')
+        if self.start_competition_waypoint:
+            for index, waypoint in enumerate(waypoints):
+                if str(waypoint.get('competition_id', '')) == self.start_competition_waypoint:
+                    return waypoints[index:]
+            self.get_logger().warn(
+                f'competition waypoint {self.start_competition_waypoint} is absent; using full route')
+
+        if self.task_type == TaskType.TASK1:
+            # GPS1 denotes the vessel's start pose, not a navigation goal.
+            # Task1 must begin by navigating to the surveyed WP 1.1.
+            return [waypoint for waypoint in waypoints
+                    if str(waypoint.get('competition_id', waypoint.get('id'))) != '1']
         return waypoints
     
     def _publish_task3_first_stage(self):

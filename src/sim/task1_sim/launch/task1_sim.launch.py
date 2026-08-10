@@ -104,7 +104,7 @@ def launch_cardinal_perception_sim(context):
 
 
 def launch_dynamics(context, pkg_dutyed):
-    """Create the dynamics node, normally staged at competition waypoint 1.1."""
+    """Create the dynamics node at GPS1, optionally staged just before WP3."""
     start_at_wp3 = LaunchConfiguration("start_at_wp3").perform(context).lower() == "true"
     with open(LaunchConfiguration("params").perform(context), "r") as params_file:
         params = yaml.safe_load(params_file) or {}
@@ -116,12 +116,16 @@ def launch_dynamics(context, pkg_dutyed):
         gps3_x, gps3_y = checkpoints[2]
         initial_pose = [gps3_x - 5.0 * math.cos(heading),
                         gps3_y - 5.0 * math.sin(heading), heading]
-    elif len(waypoints := json.loads(orchestrator_params.get("waypoint1_xy", "[]"))) >= 2:
-        # Begin exactly at WP 1.1, pointing toward WP 1.2.  The waypoint
-        # publisher will accept WP 1.1 immediately and continue the surveyed
-        # route without an artificial GPS1 -> WP1.1 transit.
-        start_x, start_y = waypoints[0]
-        next_x, next_y = waypoints[1]
+    elif checkpoints:
+        # GPS1 is the starting pose.  WP 1.1 is deliberately the first
+        # NavigateThroughPoses goal, so the boat must travel to it rather than
+        # accepting it immediately at startup.
+        start_x, start_y = checkpoints[0]
+        waypoint1 = json.loads(orchestrator_params.get("waypoint1_xy", "[]"))
+        if waypoint1:
+            next_x, next_y = waypoint1[0]
+        else:
+            next_x, next_y = start_x + 1.0, start_y
         initial_pose = [
             start_x,
             start_y,
@@ -354,8 +358,7 @@ def generate_launch_description():
             "broadcast_utm_transform": False,
             "publish_filtered_gps": False,
             "use_odometry_yaw": True,
-            # Keep /fromLL in the task1monday ENU frame even though the boat
-            # starts at WP 1.1 instead of the GPS1 map origin.
+            # Keep /fromLL in the task1monday ENU frame, whose origin is GPS1.
             "wait_for_datum": True,
             "datum": [63.4408027778, 10.4233944444, 0.0],
         }],
