@@ -61,7 +61,18 @@ def launch_setup(context, *args, **kwargs):
     # take the device path from the selected parameter file.
     video_device_arg = LaunchConfiguration("video_device").perform(context)
     video_device = os.path.realpath(video_device_arg or params["video_device"])
+    enable_compressed_transports = (
+        LaunchConfiguration("enable_compressed_transports").perform(context).lower()
+        in ("true", "1", "yes")
+    )
     configure_v4l2_controls(video_device, params)
+
+    transport_params = {}
+    if not enable_compressed_transports:
+        # usb_cam publishes through image_transport.  Keep only raw for an
+        # RGB camera; compressedDepth cannot encode rgb8 and logs an error
+        # when a rosbag subscribes to every advertised topic.
+        transport_params["image_raw.enable_pub_plugins"] = ["image_transport/raw"]
 
     return [
         Node(
@@ -74,7 +85,8 @@ def launch_setup(context, *args, **kwargs):
                 params_file,
                 {
                     "video_device": video_device,
-                }
+                },
+                transport_params,
             ],
         )
     ]
@@ -100,6 +112,11 @@ def generate_launch_description():
                 "video_device",
                 default_value="",
                 description="Optional device-path override for the selected parameter file.",
+            ),
+            DeclareLaunchArgument(
+                "enable_compressed_transports",
+                default_value="false",
+                description="Advertise compressed image transports in addition to raw.",
             ),
             OpaqueFunction(function=launch_setup),
         ]
