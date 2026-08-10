@@ -18,7 +18,7 @@ def lateral_wall_points(color, x, y, heading, radius=2.0, points_per_full_circle
     ]
 
 
-def same_color_wall_points(points, heading, max_gap_m=12.0, point_spacing_m=0.2):
+def same_color_wall_points(points, heading, max_gap_m=13.0, point_spacing_m=0.2):
     """Connect nearby same-colour marks in channel order without bridging gaps."""
     if not math.isfinite(heading) or max_gap_m <= 0.0 or point_spacing_m <= 0.0:
         return []
@@ -38,7 +38,7 @@ def same_color_wall_points(points, heading, max_gap_m=12.0, point_spacing_m=0.2)
     return wall
 
 
-def task3_virtual_wall_points(buoy_positions, radius=2.0, max_gap_m=12.0, point_spacing_m=0.2):
+def task3_virtual_wall_points(buoy_positions, radius=2.0, max_gap_m=13.0, point_spacing_m=0.2):
     """Build walls for both point-symmetric Task 3 courses in the map frame."""
     groups = {
         ("b31", "red"): [], ("b31", "green"): [],

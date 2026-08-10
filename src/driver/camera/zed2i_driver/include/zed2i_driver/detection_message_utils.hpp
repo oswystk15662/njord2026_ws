@@ -20,6 +20,6 @@ sensor_msgs::msg::PointCloud2 to_virtual_wall_cloud(
   const std::vector<PositionedDetection> & detections, const std_msgs::msg::Header & header,
   const std::string & wall_frame, float channel_heading_rad, float radius_m,
   int points_per_full_circle, bool connect_same_color_buoys = true,
-  float same_color_max_gap_m = 12.0F, float same_color_point_spacing_m = 0.2F);
+  float same_color_max_gap_m = 13.0F, float same_color_point_spacing_m = 0.2F);
 
 }  // namespace zed2i_driver

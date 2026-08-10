@@ -200,7 +200,7 @@ public:
       wall_radius_m_ = declare_parameter<double>("wall_radius_m", 2.0);
       wall_points_per_full_circle_ = declare_parameter<int>("wall_points_per_full_circle", 40);
       connect_same_color_buoys_ = declare_parameter<bool>("connect_same_color_buoys", true);
-      same_color_wall_max_gap_m_ = declare_parameter<double>("same_color_wall_max_gap_m", 12.0);
+      same_color_wall_max_gap_m_ = declare_parameter<double>("same_color_wall_max_gap_m", 13.0);
       same_color_wall_point_spacing_m_ = declare_parameter<double>(
         "same_color_wall_point_spacing_m", 0.2);
       lidar_topic_ = declare_parameter<std::string>("lidar_topic", "/livox/lidar");
