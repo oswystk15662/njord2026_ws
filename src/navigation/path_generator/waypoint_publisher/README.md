@@ -29,6 +29,21 @@ the ASV track against the planned route.
 ros2 launch waypoint_publisher waypoint_publisher.launch.py task_type:=task1
 ```
 
+### FoxgloveでのWP位置確認（航行なし）
+
+次のlaunchは指定したYAMLの緯度・経度を、Foxglove地図拡張用の
+`/ground_waypoint_markers` にpublishするだけです。Mission Manager、Nav2 action、
+GNSS、推進指令には接続しないため、実機を航行させずにWP位置を確認できます。
+
+```bash
+ros2 launch waypoint_publisher waypoint_map.launch.py task_type:=task1
+# task2 / task3_1 / task3_2 も指定可能
+```
+
+Foxglove Bridgeと `gnss_map_telemetry` 拡張を起動したFoxgloveで地図パネルを開くと、
+指定したWPが表示されます。`task_type` を省略した `ground_waypoint_geo_publisher` は、
+従来どおりMission Managerの選択タスクに追従します。
+
 For Task1 simulation, prefer launching through `task1_sim` so dynamics,
 Nav2, waypoint publishing, and validation use the same configuration:
 

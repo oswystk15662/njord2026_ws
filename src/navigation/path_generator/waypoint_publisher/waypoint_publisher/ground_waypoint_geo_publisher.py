@@ -33,12 +33,18 @@ def _coordinate(value):
 
 
 class GroundWaypointGeoPublisher(Node):
-    """Ground-only WGS84 marker source selected by the active mission task."""
+    """Ground-only WGS84 marker source for Foxglove waypoint inspection.
+
+    When ``task_type`` is set, this node is entirely independent of Mission
+    Manager and continuously displays that task's YAML route.  An empty value
+    retains the ground-PC bringup behaviour of following ``/mission/status``.
+    """
 
     def __init__(self):
         super().__init__("ground_waypoint_geo_publisher")
         self.declare_parameter("marker_topic", "/ground_waypoint_markers")
         self.declare_parameter("publish_rate_hz", 1.0)
+        self.declare_parameter("task_type", "")
         self.waypoints = []
         self.active_task = ""
         self.publisher = self.create_publisher(
@@ -49,14 +55,22 @@ class GroundWaypointGeoPublisher(Node):
         rate = float(self.get_parameter("publish_rate_hz").value)
         if rate <= 0.0:
             raise ValueError("publish_rate_hz must be positive")
-        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.status_sub = self.create_subscription(
-            MissionStatus, "/mission/status", self._on_status, status_qos)
+        selected_task = str(self.get_parameter("task_type").value).strip()
+        self.status_sub = None
+        if selected_task:
+            self._select_task(selected_task)
+        else:
+            status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            self.status_sub = self.create_subscription(
+                MissionStatus, "/mission/status", self._on_status, status_qos)
         self.timer = self.create_timer(1.0 / rate, self._publish)
 
     def _on_status(self, message):
-        """Load only the YAML selected by the task command sent from ground."""
-        task_type = message.task_id.strip()
+        """Load the YAML selected by the task command sent from ground."""
+        self._select_task(message.task_id.strip())
+
+    def _select_task(self, task_type):
+        """Load a configured route without creating navigation goals."""
         if task_type == self.active_task:
             return
         self.active_task = task_type
