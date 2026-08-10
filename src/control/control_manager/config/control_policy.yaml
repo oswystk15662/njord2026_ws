@@ -33,7 +33,7 @@ control_policy:
   task2:
     require_waypoint_plan: true
     require_collision_monitor: true
-    require_buoy_perception: true
+    require_buoy_perception: false
     require_dynamic_gate_tf: false
 
   task3:

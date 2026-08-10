@@ -19,7 +19,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task2").executor == "task2_mppi"
     assert registry.get("task4").executor == "waypoint_sequence"
     assert registry.get("task4").features["cardinal_walls"] is False
-    assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
+    assert required_runtime_readiness(registry.get("task2")) == set()
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
 

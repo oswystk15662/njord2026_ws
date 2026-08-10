@@ -38,7 +38,10 @@ tasks:
     frame_id: map
     nav2_profile: task2
     control_policy: task2
-    features: {buoy_perception: true}
+    # Task2 can run the straight GPS5->GPS6 route without a detected vessel.
+    # MPPI paths, FollowPath, and the active Collision Monitor remain AUTO
+    # interlocks; live buoy perception refines avoidance when available.
+    features: {buoy_perception: false}
   task3_1:
     display_name: Task 3-1
     availability: experimental
