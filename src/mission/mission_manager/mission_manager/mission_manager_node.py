@@ -78,6 +78,12 @@ class _RosNavigationClient:
             self._on_goal_response
         )
 
+    def publish_preview(self, waypoints: Sequence[Waypoint]) -> None:
+        """Publish a route visualization without sending a Nav2 goal."""
+        poses = [self._pose(waypoint) for waypoint in waypoints]
+        self._publish_path(poses)
+        self._publish_markers(poses)
+
     def set_frame_id(self, frame_id: str) -> None:
         self._frame_id = frame_id
 
@@ -382,7 +388,7 @@ class MissionManager(Node):
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
-        if route.projection_points() and not request.dry_run:
+        if route.projection_points():
             if not self._from_ll_client.service_is_ready():
                 return self._reject_started(
                     decision.execution_id, ResultCode.CONFIGURATION_FAILED,
@@ -412,6 +418,7 @@ class MissionManager(Node):
         self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                  stage="configure", message="task route validated")
         if request.dry_run:
+            self._navigation.publish_preview(route.waypoints)
             self._complete(decision.execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
             return decision
         if request.request_auto_mode:
