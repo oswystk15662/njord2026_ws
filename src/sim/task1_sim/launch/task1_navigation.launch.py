@@ -114,6 +114,10 @@ def generate_launch_description():
              parameters=[{
                  "autostart": autostart,
                  "node_names": lifecycle_nodes,
+                 # The simulation starts GNSS projection and all Nav2
+                 # servers concurrently.  Give lifecycle bonds enough time
+                 # to form on a loaded development machine.
+                 "bond_timeout": 10.0,
                  "use_sim_time": use_sim_time,
              }]),
     ])

@@ -25,3 +25,17 @@ def test_task1monday_layout_uses_gps1_enu_origin_and_surveyed_buoys():
         math.atan2(gps4[1] - gps3[1], gps4[0] - gps3[0]),
         abs_tol=1.0e-3,
     )
+
+
+def test_task1_launch_starts_navsat_projection_for_gps_waypoints():
+    launch = (PARAMS_PATH.parents[1] / "launch" / "task1_sim.launch.py").read_text(
+        encoding="utf-8")
+    assert 'executable="navsat_transform_node"' in launch
+    assert '"use_navsat"' in launch
+    assert '("odometry/gps", "/odometry/gps/navsat")' in launch
+
+
+def test_task1_navigation_allows_navsat_and_nav2_to_start_together():
+    launch = (PARAMS_PATH.parents[1] / "launch" / "task1_navigation.launch.py").read_text(
+        encoding="utf-8")
+    assert '"bond_timeout": 10.0' in launch

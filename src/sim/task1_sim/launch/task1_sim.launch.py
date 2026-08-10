@@ -191,6 +191,10 @@ def generate_launch_description():
         description="Emit simulated /buoy_detections_3d once the boat is within ZED2i/Mid-360 "
                      "range+FOV of a cardinal marker, so cardinal_wall_publisher can build /virtual_obstacles",
     )
+    use_navsat_arg = DeclareLaunchArgument(
+        "use_navsat", default_value="true",
+        description="Run navsat_transform_node to provide /fromLL for GPS waypoints",
+    )
     use_local_ekf_arg = DeclareLaunchArgument("use_local_ekf", default_value="true")
     use_global_ekf_arg = DeclareLaunchArgument("use_global_ekf", default_value="true")
     task_type_arg = DeclareLaunchArgument(
@@ -322,6 +326,33 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_global_ekf")),
     )
 
+    # waypoint_publisher resolves the surveyed latitude/longitude route via
+    # /fromLL.  Keep navsat's odometry output separate from the simulated
+    # UM982 feed, which is already the input of the global EKF.
+    navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="navsat_transform_node",
+        output="screen",
+        parameters=[{
+            "world_frame": "map",
+            "frequency": 10.0,
+            "magnetic_declination_radians": 0.0,
+            "yaw_offset": 0.0,
+            "zero_altitude": True,
+            "broadcast_utm_transform": False,
+            "publish_filtered_gps": False,
+            "use_odometry_yaw": True,
+            "wait_for_datum": False,
+        }],
+        remappings=[
+            ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
+            ("odometry/filtered", "odometry/filtered/global"),
+            ("odometry/gps", "/odometry/gps/navsat"),
+        ],
+        condition=IfCondition(LaunchConfiguration("use_navsat")),
+    )
+
     orchestrator = Node(
         package="task1_sim",
         executable="task1_orchestrator",
@@ -410,6 +441,7 @@ def generate_launch_description():
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
+            navsat_transform_node,
             validator,
             orchestrator,
             cardinal_walls,
@@ -470,6 +502,7 @@ def generate_launch_description():
         use_gui_dummy_publishers_arg,
         use_foxglove_bridge_arg,
         use_cardinal_perception_sim_arg,
+        use_navsat_arg,
         use_local_ekf_arg,
         use_global_ekf_arg,
         task_type_arg,
