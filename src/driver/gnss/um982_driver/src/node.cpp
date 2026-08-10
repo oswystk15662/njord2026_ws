@@ -272,11 +272,12 @@ void UM982Driver::configure_gnss_output()
 
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
+    write_to_gnss("GPGST " + fix_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
     write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
+        "Configured volatile UM982 output: GPGGA/GPGST(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
         fix_period.c_str(), heading_period.c_str(),
         params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
 }
@@ -454,6 +455,8 @@ void UM982Driver::process_gnss_line(std::string line)
     if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line; // RTK用に保存
+    } else if (line.rfind("$GNGST", 0) == 0 || line.rfind("$GPGST", 0) == 0) {
+        parse_gst(line);
     } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
         parse_uniheadinga(line);
     } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
@@ -501,7 +504,6 @@ void UM982Driver::parse_gga(const std::string& line)
             sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_UNKNOWN;
         // A no-fix record is useful for diagnostics, but must never enter
         // navsat_transform as a normal measurement.
-        fix_debug_pub_->publish(msg);
         return;
     }
 
@@ -519,21 +521,54 @@ void UM982Driver::parse_gga(const std::string& line)
     if (!std::isfinite(msg.altitude)) {
         return;
     }
+    double utc_seconds = 0.0;
+    if (!utils::parse_nmea_utc_seconds(parts[1], utc_seconds)) {
+        RCLCPP_WARN(this->get_logger(), "Discarding GGA with invalid UTC time");
+        return;
+    }
     msg.status.status = quality >= 2 ?
         sensor_msgs::msg::NavSatStatus::STATUS_GBAS_FIX :
         sensor_msgs::msg::NavSatStatus::STATUS_FIX;
-    msg.position_covariance[0] = 0.02 * 0.02;
-    msg.position_covariance[4] = 0.02 * 0.02;
-    msg.position_covariance[8] = 0.02 * 0.02;
-    msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
+    pending_fix_ = msg;
+    pending_fix_utc_seconds_ = utc_seconds;
+    have_pending_fix_ = true;
+}
 
+void UM982Driver::parse_gst(const std::string& line)
+{
+    if (!utils::validate_checksum(line) || !have_pending_fix_) {
+        return;
+    }
+    const auto parts = utils::split(line.substr(0, line.find('*')), ',');
+    if (parts.size() < 9) {
+        return;
+    }
+    double utc_seconds = 0.0;
+    double std_lat_m = 0.0;
+    double std_lon_m = 0.0;
+    double std_alt_m = 0.0;
+    if (!utils::parse_nmea_utc_seconds(parts[1], utc_seconds) ||
+        !utils::parse_finite_double(parts[6], std_lat_m) ||
+        !utils::parse_finite_double(parts[7], std_lon_m) ||
+        !utils::parse_finite_double(parts[8], std_alt_m) ||
+        std_lat_m < 0.0 || std_lon_m < 0.0 || std_alt_m < 0.0 ||
+        std::abs(utc_seconds - pending_fix_utc_seconds_) > 0.05)
+    {
+        RCLCPP_WARN(this->get_logger(), "Discarding unmatched or invalid GST covariance");
+        return;
+    }
+
+    // NavSatFix covariance is ENU, whereas GST reports latitude/longitude/height.
+    pending_fix_.position_covariance[0] = std_lon_m * std_lon_m;
+    pending_fix_.position_covariance[4] = std_lat_m * std_lat_m;
+    pending_fix_.position_covariance[8] = std_alt_m * std_alt_m;
+    pending_fix_.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_KNOWN;
     if (!stop_publish_) {
-        fix_pub_->publish(msg);
+        fix_pub_->publish(pending_fix_);
     }
-    fix_debug_pub_->publish(msg);
-    if (quality >= 1) {
-        publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
-    }
+    publish_feedback_odometry(
+        pending_fix_.latitude, pending_fix_.longitude, pending_fix_.header.stamp);
+    have_pending_fix_ = false;
 }
 
 void UM982Driver::parse_uniheadinga(const std::string& line)
@@ -708,7 +743,6 @@ void UM982Driver::parse_ths(const std::string& line)
     if (!stop_publish_) {
         heading_pub_->publish(msg);
     }
-    heading_debug_pub_->publish(msg);
 }
 
 void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)

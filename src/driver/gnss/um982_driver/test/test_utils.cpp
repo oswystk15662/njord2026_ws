@@ -75,4 +75,13 @@ TEST(NmeaParsing, RejectsNonFiniteMalformedAndOutOfRangeCoordinates)
     EXPECT_FALSE(um982_driver::utils::convert_nmea_to_latlon("3541.0", "X", coordinate));
 }
 
+TEST(NmeaParsing, ParsesUtcTimeForGgaGstMatching)
+{
+    double seconds = 0.0;
+    EXPECT_TRUE(um982_driver::utils::parse_nmea_utc_seconds("123519.25", seconds));
+    EXPECT_DOUBLE_EQ(seconds, 12 * 3600 + 35 * 60 + 19.25);
+    EXPECT_FALSE(um982_driver::utils::parse_nmea_utc_seconds("246000", seconds));
+    EXPECT_FALSE(um982_driver::utils::parse_nmea_utc_seconds("123460", seconds));
+}
+
 }  // namespace

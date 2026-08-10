@@ -42,6 +42,11 @@ bool convert_nmea_to_latlon(
 bool parse_finite_double(const std::string & value, double & result) noexcept;
 
 /**
+ * @brief NMEA UTC time (hhmmss.ss) を一日の秒数に変換する
+ */
+bool parse_nmea_utc_seconds(const std::string & value, double & result) noexcept;
+
+/**
  * @brief 文字列全体を10進intとして解析する
  */
 bool parse_int(const std::string & value, int & result) noexcept;

@@ -95,6 +95,22 @@ bool parse_finite_double(const std::string & value, double & result) noexcept
     }
 }
 
+bool parse_nmea_utc_seconds(const std::string & value, double & result) noexcept
+{
+    double raw = 0.0;
+    if (!parse_finite_double(value, raw) || raw < 0.0) {
+        return false;
+    }
+    const int hours = static_cast<int>(raw / 10000.0);
+    const int minutes = static_cast<int>(raw / 100.0) % 100;
+    const double seconds = raw - hours * 10000.0 - minutes * 100.0;
+    if (hours >= 24 || minutes >= 60 || seconds >= 60.0) {
+        return false;
+    }
+    result = hours * 3600.0 + minutes * 60.0 + seconds;
+    return true;
+}
+
 bool parse_int(const std::string & value, int & result) noexcept
 {
     if (value.empty()) {

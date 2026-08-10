@@ -52,6 +52,7 @@ private:
     void process_gnss_buffer();
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
+    void parse_gst(const std::string& line);
     void parse_uniheadinga(const std::string& line);
     void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
@@ -104,6 +105,11 @@ private:
     std::string last_gpgga_;
     std::ofstream log_file_;
     bool stop_publish_;
+
+    // GGA has the position while GST supplies its per-fix 1-sigma error.
+    sensor_msgs::msg::NavSatFix pending_fix_;
+    double pending_fix_utc_seconds_{0.0};
+    bool have_pending_fix_{false};
 
     // State for UM982-only velocity feedback.  Position changes are converted
     // from local ENU to body-frame surge/sway using the dual-antenna heading.
