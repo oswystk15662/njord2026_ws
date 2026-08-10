@@ -531,8 +531,15 @@ class MissionManager(Node):
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
         self._activate_task_readiness(decision.execution_id, task)
-        self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
-                                 stage="configure", message="task route validated")
+        if self._machine.snapshot.state == MissionState.VALIDATING:
+            self._machine.transition(
+                MissionState.CONFIGURING, execution_id=decision.execution_id,
+                stage="configure", message="task route validated",
+            )
+        else:
+            self._machine.update_progress(
+                decision.execution_id, "configure", 1.0, "task route validated"
+            )
         if request.dry_run:
             self._navigation.publish_preview(route.waypoints)
             self._complete(decision.execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
