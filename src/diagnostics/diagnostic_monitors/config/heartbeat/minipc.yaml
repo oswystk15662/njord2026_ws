@@ -11,11 +11,11 @@ signals:
     timeout_sec: 1.0
     expected_frequency_hz: 20.0
 
-  back_camera:
-    topic: /back_cam/image_raw
-    type: sensor_msgs/msg/Image
-    timeout_sec: 1.0
-    expected_frequency_hz: 30.0
+  # back_camera:
+  #   topic: /back_cam/image_raw
+  #   type: sensor_msgs/msg/Image
+  #   timeout_sec: 1.0
+  #   expected_frequency_hz: 30.0
 
   micon:
     topic: /micon/bms_cells
@@ -69,7 +69,7 @@ aggregates:
   driver:
     output_topic: /heartbeat/driver
     input_signals:
-      - back_camera
+      # - back_camera
       - gnss
       - micon
     input_timeout_sec: 1.5

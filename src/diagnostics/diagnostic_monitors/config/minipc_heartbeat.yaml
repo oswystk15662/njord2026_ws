@@ -6,12 +6,12 @@
 # entries (and add their output to the aggregate inputs) to monitor them.
 minipc_heartbeat:
   # Rear USB camera
-  - name: heartbeat_driver_camera_back
-    inputs:
-      - topic: /back_cam/image_raw
-        topic_type: sensor_msgs/msg/Image
-    output_topic: /heartbeat/driver/camera/back
-    timeout: 1.0
+  # - name: heartbeat_driver_camera_back
+  #   inputs:
+  #     - topic: /back_cam/image_raw
+  #       topic_type: sensor_msgs/msg/Image
+  #   output_topic: /heartbeat/driver/camera/back
+  #   timeout: 1.0
 
   # UM982 GNSS fix
   - name: heartbeat_driver_gnss
@@ -40,8 +40,8 @@ minipc_heartbeat:
   # All miniPC driver health
   - name: heartbeat_driver
     inputs:
-      - topic: /heartbeat/driver/camera
-        topic_type: std_msgs/msg/Empty
+      # - topic: /heartbeat/driver/camera
+      #   topic_type: std_msgs/msg/Empty
       - topic: /heartbeat/driver/gnss
         topic_type: std_msgs/msg/Empty
       - topic: /heartbeat/driver/micon

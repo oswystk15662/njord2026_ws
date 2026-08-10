@@ -26,19 +26,19 @@ task1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
   origin:
-    latitude: 34.5456666667
-    longitude: 135.5070555556
+    latitude: 63.44228538325694
+    longitude: 10.42402403234536
     name: "GPS 1 - Slalom Start"
   gps_points:
     - id: 1
-      latitude: 34.5456666667
-      longitude: 135.5070555556
-      dms: '34°32''44.4"N 135°30''25.4"E'
+      latitude: 63.44228538325694
+      longitude: 10.42402403234536
+      dms: '63°26''32.2"N 10°25''26.5"E'
       name: "GPS 1 - Slalom Start"
     - id: 2
-      latitude: 34.5459166667
-      longitude: 135.5074444444
-      dms: '34°32''45.3"N 135°30''26.8"E'
+      latitude: 63.4425333333
+      longitude: 10.42402403234536
+      dms: '63°26''32.2"N 10°25''26.5"E'
       name: "GPS 2 - Slalom Finish"
 
     # --- Task 1.2 (cardinal marker recognition, issue #46) ---
@@ -63,7 +63,7 @@ task1_config:
       yaw: 0.4636
       type: "start"
       name: "GPS 1 - Task1-1 Start"
-      tolerance_m: 2.0
+      tolerance_m: 5.0
 
     - id: 2
       x: 10.0000
@@ -71,7 +71,7 @@ task1_config:
       yaw: -1.0304
       type: "waypoint"
       name: "Task1-1 waypoint 1"
-      tolerance_m: 2.0
+      tolerance_m: 5.0
 
     - id: 3
       x: 13.0000

@@ -467,7 +467,7 @@ def generate_launch_description():
             DeclareLaunchArgument("um982_protocol", default_value="uart"),
             DeclareLaunchArgument(
                 "enable_um982_rtk",
-                default_value="true",
+                default_value="false",
                 description="Stream RTCM3 corrections from 192.168.1.72:2101 to UM982.",
             ),
             DeclareLaunchArgument(
@@ -522,13 +522,13 @@ def generate_launch_description():
                 default_value="192.168.180.107",
                 description="Ground-station IPv4 address for the CPU ZED 2i H.264 stream.",
             ),
-            DeclareLaunchArgument("zed2i_h264_ground_video_port", default_value="5601"),
-            DeclareLaunchArgument("zed2i_h264_ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("zed2i_h264_ground_video_port", default_value="5600"),
+            DeclareLaunchArgument("zed2i_h264_ground_video_fps", default_value="2.0"),
             DeclareLaunchArgument("zed2i_h264_ground_video_width", default_value="360"),
             DeclareLaunchArgument("zed2i_h264_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_ground_video",
-                default_value="true",
+                default_value="false",
                 description="Use the miniPC VA-API H.264/H.265 back-camera stream. "
                 "An empty host leaves the stream inactive.",
             ),
@@ -542,12 +542,12 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "back_cam_ground_video_codec", default_value="h264", choices=["h264", "h265"]
             ),
-            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("back_cam_ground_video_fps", default_value="2.0"),
             DeclareLaunchArgument("back_cam_ground_video_width", default_value="360"),
             DeclareLaunchArgument("back_cam_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_jpeg_ground_video",
-                default_value="false",
+                default_value="true",
                 description="CPU JPEG compatibility stream on UDP 5602, enabled as a "
                 "fallback alongside H.264/H.265.",
             ),
@@ -559,7 +559,7 @@ def generate_launch_description():
                 "back_cam_jpeg_ground_video_port", default_value="5602"
             ),
             DeclareLaunchArgument(
-                "back_cam_jpeg_ground_video_fps", default_value="4.0"
+                "back_cam_jpeg_ground_video_fps", default_value="2.0"
             ),
             DeclareLaunchArgument(
                 "use_glim_fb",
@@ -626,7 +626,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "thruster_use_velocity_feedback",
-                default_value="true",
+                default_value="false",
                 description="Use measured local odometry velocity in thruster control.",
             ),
             localization_launch,
