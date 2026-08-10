@@ -21,6 +21,9 @@
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/serialization.hpp"
+#include "njord_interfaces/msg/operator_command.hpp"
+#include "njord_interfaces/msg/operator_response.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "std_msgs/msg/empty.hpp"
 
@@ -68,6 +71,10 @@ public:
       "joy_input_topic", "/critical_link/input/joy");
     heartbeat_topic_ = declare_parameter<std::string>(
       "heartbeat_input_topic", "/critical_link/input/heartbeat");
+    command_topic_ = declare_parameter<std::string>(
+      "operator_command_input_topic", "/critical_link/input/operator_command");
+    response_topic_ = declare_parameter<std::string>(
+      "operator_response_output_topic", "/critical_link/output/operator_response");
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
     const auto key = load_shared_key(declare_parameter<std::string>(
@@ -94,10 +101,16 @@ public:
       [this](const std_msgs::msg::Empty::SharedPtr) {
         send(StreamId::kGroundHeartbeat, {});
       });
+    command_sub_ = create_subscription<njord_interfaces::msg::OperatorCommand>(
+      command_topic_, 10, [this](const njord_interfaces::msg::OperatorCommand::SharedPtr message) {
+        send_message(StreamId::kOperatorCommand, *message);
+      });
+    response_pub_ = create_publisher<njord_interfaces::msg::OperatorResponse>(response_topic_, 10);
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
       "/diagnostics", 10);
     probe_timer_ = create_wall_timer(std::chrono::seconds(1), [this]() {
           send(StreamId::kLinkProbe, {});
+          poll_responses();
           publish_diagnostics();
     });
 
@@ -174,6 +187,39 @@ private:
       return;
     }
     send(StreamId::kJoy, *payload);
+  }
+
+  template<typename MessageT>
+  void send_message(StreamId stream, const MessageT & message)
+  {
+    rclcpp::Serialization<MessageT> serializer;
+    rclcpp::SerializedMessage serialized;
+    serializer.serialize_message(&message, &serialized);
+    const auto & raw = serialized.get_rcl_serialized_message();
+    send(stream, std::vector<uint8_t>(raw.buffer, raw.buffer + raw.buffer_length));
+  }
+
+  void poll_responses()
+  {
+    std::array<uint8_t, kMaxFrameSize> buffer{};
+    for (const auto & path : udp_paths_) {
+      if (path->fd < 0) continue;
+      while (true) {
+        const auto received = recv(path->fd, buffer.data(), buffer.size(), MSG_DONTWAIT);
+        if (received <= 0) break;
+        const auto frame = decode_frame(buffer.data(), static_cast<size_t>(received), key_, unix_milliseconds());
+        if (!frame || frame->stream != StreamId::kOperatorResponse) continue;
+        try {
+          rclcpp::SerializedMessage serialized(frame->payload.size());
+          auto & raw = serialized.get_rcl_serialized_message();
+          std::memcpy(raw.buffer, frame->payload.data(), frame->payload.size());
+          raw.buffer_length = frame->payload.size();
+          njord_interfaces::msg::OperatorResponse response;
+          rclcpp::Serialization<njord_interfaces::msg::OperatorResponse>().deserialize_message(&serialized, &response);
+          response_pub_->publish(response);
+        } catch (const std::exception &) {}
+      }
+    }
   }
 
   void send(StreamId stream, std::vector<uint8_t> payload)
@@ -255,6 +301,8 @@ private:
 
   std::string joy_topic_;
   std::string heartbeat_topic_;
+  std::string command_topic_;
+  std::string response_topic_;
   std::string serial_device_;
   int serial_baud_{921600};
   SharedKey key_{};
@@ -270,6 +318,8 @@ private:
   std::chrono::steady_clock::time_point serial_next_open_attempt_{};
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr heartbeat_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::OperatorCommand>::SharedPtr command_sub_;
+  rclcpp::Publisher<njord_interfaces::msg::OperatorResponse>::SharedPtr response_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::TimerBase::SharedPtr probe_timer_;
 };

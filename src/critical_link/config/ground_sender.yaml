@@ -2,6 +2,8 @@ critical_link_sender:
   ros__parameters:
     joy_input_topic: /critical_link/input/joy
     heartbeat_input_topic: /critical_link/input/heartbeat
+    operator_command_input_topic: /critical_link/input/operator_command
+    operator_response_output_topic: /critical_link/output/operator_response
     # Format: name|Ground-PC bind IPv4|miniPC destination IPv4|UDP port
     # Example paths after assigning static/VPN addresses:
     # udp_paths:

@@ -9,6 +9,7 @@
 #include <atomic>
 #include <chrono>
 #include <cerrno>
+#include <cstring>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -21,6 +22,8 @@
 #include "diagnostic_msgs/msg/diagnostic_status.hpp"
 #include "diagnostic_msgs/msg/key_value.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "rclcpp/serialization.hpp"
+#include "njord_interfaces/msg/operator_command.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "std_msgs/msg/empty.hpp"
 
@@ -60,6 +63,8 @@ public:
     joy_output_topic_ = declare_parameter<std::string>("joy_output_topic", "/joy");
     heartbeat_output_topic_ = declare_parameter<std::string>(
       "heartbeat_output_topic", "/heartbeat/ground_station");
+    command_output_topic_ = declare_parameter<std::string>(
+      "operator_command_output_topic", "/critical_link/operator_command");
     serial_device_ = declare_parameter<std::string>("serial_device", "");
     serial_baud_ = declare_parameter<int>("serial_baud", 921600);
     stale_after_sec_ = declare_parameter<double>("diagnostic_stale_after_sec", 3.0);
@@ -83,6 +88,7 @@ public:
 
     joy_pub_ = create_publisher<sensor_msgs::msg::Joy>(joy_output_topic_, 10);
     heartbeat_pub_ = create_publisher<std_msgs::msg::Empty>(heartbeat_output_topic_, 10);
+    command_pub_ = create_publisher<njord_interfaces::msg::OperatorCommand>(command_output_topic_, 10);
     diagnostics_pub_ = create_publisher<diagnostic_msgs::msg::DiagnosticArray>(
       "/diagnostics", 10);
 
@@ -206,11 +212,24 @@ private:
   void handle_frame(const Frame & frame)
   {
     std::optional<sensor_msgs::msg::Joy> joy;
+    std::optional<njord_interfaces::msg::OperatorCommand> command;
     if (frame.stream == StreamId::kJoy) {
       joy = decode_joy_payload(frame.payload.data(), frame.payload.size());
       if (!joy) {
         ++invalid_payload_;
         return;
+      }
+    } else if (frame.stream == StreamId::kOperatorCommand) {
+      try {
+        rclcpp::SerializedMessage serialized(frame.payload.size());
+        auto & raw = serialized.get_rcl_serialized_message();
+        std::memcpy(raw.buffer, frame.payload.data(), frame.payload.size());
+        raw.buffer_length = frame.payload.size();
+        command.emplace();
+        rclcpp::Serialization<njord_interfaces::msg::OperatorCommand>().deserialize_message(
+          &serialized, &*command);
+      } catch (const std::exception &) {
+        ++invalid_payload_;
       }
     } else if (!frame.payload.empty()) {
       ++invalid_payload_;
@@ -237,6 +256,8 @@ private:
       ++accepted_heartbeat_;
     } else if (frame.stream == StreamId::kLinkProbe) {
       last_probe_ms_ = steady_milliseconds();
+    } else if (frame.stream == StreamId::kOperatorCommand && command) {
+      command_pub_->publish(*command);
     }
   }
 
@@ -294,6 +315,7 @@ private:
 
   std::string joy_output_topic_;
   std::string heartbeat_output_topic_;
+  std::string command_output_topic_;
   std::string serial_device_;
   int serial_baud_{921600};
   double stale_after_sec_{3.0};
@@ -318,6 +340,7 @@ private:
   std::atomic<uint64_t> last_probe_ms_{0};
   rclcpp::Publisher<sensor_msgs::msg::Joy>::SharedPtr joy_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
+  rclcpp::Publisher<njord_interfaces::msg::OperatorCommand>::SharedPtr command_pub_;
   rclcpp::Publisher<diagnostic_msgs::msg::DiagnosticArray>::SharedPtr diagnostics_pub_;
   rclcpp::TimerBase::SharedPtr diagnostics_timer_;
 };

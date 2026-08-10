@@ -11,6 +11,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("active_nav2_profile", default_value=""),
         Node(package="mission_manager", executable="runtime_manager_node", name="runtime_manager", output="screen"),
+        Node(package="mission_manager", executable="operator_dispatcher_node", name="operator_dispatcher", output="screen"),
         Node(
             package="mission_manager",
             executable="ground_link_return_monitor_node",

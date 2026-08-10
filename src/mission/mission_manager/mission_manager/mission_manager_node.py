@@ -384,7 +384,7 @@ class MissionManager(Node):
         if request.dry_run and not task.supports_dry_run:
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support dry run")
         active_profile = self._active_nav2_profile
-        if task.task_id != "return_home" and task.nav2_profile != active_profile:
+        if not request.dry_run and task.task_id != "return_home" and task.nav2_profile != active_profile:
             self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                      stage="nav2_profile", message=f"switching Nav2 to {task.nav2_profile}")
             self._pending_runtime_start = (decision, task, request)
