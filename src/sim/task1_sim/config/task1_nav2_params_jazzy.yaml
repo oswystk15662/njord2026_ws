@@ -111,14 +111,12 @@ global_costmap:
       use_sim_time: false
       rolling_window: false
       width: 60
-      # Covers the default competition slalom route (x:[0,50], y:[-35,-15],
-      # task_type=task1) and the spawn-to-course transit from (0,0), as well
-      # as the task1_follow lawnmower-survey route (x:[0,35.66], y:[0,27.83],
-      # task_type=task1_follow), all with margin.
-      height: 75
+      # Covers the task1monday local-ENU route (x:[-18,16], y:[-43,0]) and
+      # the staged approach immediately before GPS3, with margin.
+      height: 70
       resolution: 0.1
-      origin_x: -5.0
-      origin_y: -40.0
+      origin_x: -30.0
+      origin_y: -55.0
       track_unknown_space: false
       robot_radius: 0.8
       plugins: ["obstacle_layer", "inflation_layer"]

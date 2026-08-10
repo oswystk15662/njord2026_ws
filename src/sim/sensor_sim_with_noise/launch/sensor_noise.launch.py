@@ -24,12 +24,18 @@ def generate_launch_description():
         default_value='1.5707963267948966',
         description='Geographical true-north direction expressed in the sim map frame (rad)',
     )
+    gps_origin_lat_arg = DeclareLaunchArgument("gps_origin_lat", default_value="35.652832")
+    gps_origin_lon_arg = DeclareLaunchArgument("gps_origin_lon", default_value="139.839478")
+    gps_origin_alt_arg = DeclareLaunchArgument("gps_origin_alt", default_value="0.0")
 
     gnss_sim_node = Node(
         package='sensor_sim_with_noise',
         executable='gnss_noise_simulator',
         name='gnss_noise_simulator',
         parameters=[config_file, {
+            'gps_origin_lat': ParameterValue(LaunchConfiguration('gps_origin_lat'), value_type=float),
+            'gps_origin_lon': ParameterValue(LaunchConfiguration('gps_origin_lon'), value_type=float),
+            'gps_origin_alt': ParameterValue(LaunchConfiguration('gps_origin_alt'), value_type=float),
             'true_north_yaw_rad': ParameterValue(
                 LaunchConfiguration('true_north_yaw_rad'), value_type=float),
         }],
@@ -58,6 +64,9 @@ def generate_launch_description():
         fix_topic_arg,
         imu_topic_arg,
         true_north_yaw_arg,
+        gps_origin_lat_arg,
+        gps_origin_lon_arg,
+        gps_origin_alt_arg,
         gnss_sim_node,
         imu_sim_node,
         um982_odom_sim_node

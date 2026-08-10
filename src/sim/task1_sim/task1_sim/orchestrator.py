@@ -100,6 +100,7 @@ class Task1Orchestrator(Node):
         self.declare_parameter("avoidance_margin", 0.5)
         self.declare_parameter("forced_mark", "")
         self.declare_parameter("course_bounds", [-5.0, 55.0, -40.0, 35.0])
+        self.declare_parameter("enable_center_line", True)
         self.declare_parameter("center_line", [0.0, 40.0, -10.0, 0.05])
         self.declare_parameter("pre_inference_block", "[]")
         self.declare_parameter("obstacle_spacing", 0.25)
@@ -140,6 +141,7 @@ class Task1Orchestrator(Node):
             self.buoy_marks = self._align_marks(buoy_marks_raw, len(self.buoy_positions))
 
         self.course_bounds = list(self.get_parameter("course_bounds").get_parameter_value().double_array_value)
+        self.enable_center_line = self.get_parameter("enable_center_line").value
         self.course_heading_rad = self.get_parameter("course_heading_rad").get_parameter_value().double_value
         self.wall_retirement_start_xy = list(self.get_parameter("wall_retirement_start_xy").value)
         self.wall_retirement_enabled = False
@@ -329,7 +331,8 @@ class Task1Orchestrator(Node):
         # The course boundary is a visual aid, not a physical wall. Including
         # it in /sim_obstacles split the global costmap at y=15 and made the
         # shared waypoint route impossible to plan through.
-        self._append_center_line(points)
+        if self.enable_center_line:
+            self._append_center_line(points)
         return points
 
     def publish_sim_obstacles(self):

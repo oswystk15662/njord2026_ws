@@ -1,4 +1,6 @@
 import os
+import json
+import math
 
 import yaml
 
@@ -28,6 +30,7 @@ def launch_cardinal_walls(context):
         "course_bounds", [-5.0, 55.0, -40.0, 35.0]
     )
     orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    course_heading = float(orchestrator_params.get("course_heading_rad", 0.0))
     return [Node(
         package="buoy_obstacle_publisher",
         executable="cardinal_wall_publisher",
@@ -38,14 +41,15 @@ def launch_cardinal_walls(context):
             "map_frame": "map",
             "course_bounds": bounds,
             "wall_width_m": 0.2,
+            "max_wall_length_m": 13.0,
             "point_spacing_m": 0.05,
             "confirmations_required": 2,
             # Keep the nearest four not-yet-passed marks in the GPS3->GPS4
             # direction; newly detected marks are re-ranked immediately.
             "max_active_wall_tracks": 4,
-            # Main Task1.2 direction: GPS waypoint 3 -> 4 (west in this map).
-            "course_heading_rad": 3.141592653589793,
-            "retirement_course_heading_rad": 3.141592653589793,
+            # Surveyed Task1 GPS3 -> GPS4 direction in the local ENU map.
+            "course_heading_rad": course_heading,
+            "retirement_course_heading_rad": course_heading,
             "retire_passed_cardinal_walls_from_base_pose": True,
             "retirement_margin_m": 1.0,
             "retirement_confirmations_required": 5,
@@ -102,7 +106,18 @@ def launch_cardinal_perception_sim(context):
 def launch_dynamics(context, pkg_dutyed):
     """Create the dynamics node, optionally staged just before competition WP3."""
     start_at_wp3 = LaunchConfiguration("start_at_wp3").perform(context).lower() == "true"
-    initial_pose = [50.0, -20.0, -1.5707963267948966] if start_at_wp3 else [0.0, 0.0, 0.0]
+    with open(LaunchConfiguration("params").perform(context), "r") as params_file:
+        params = yaml.safe_load(params_file) or {}
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    checkpoints = json.loads(orchestrator_params.get("gps_checkpoint_xy", "[]"))
+    heading = float(orchestrator_params.get("course_heading_rad", 0.0))
+    # Stage five metres before GPS3, opposite the GPS3 -> GPS4 direction.
+    if start_at_wp3 and len(checkpoints) >= 3:
+        gps3_x, gps3_y = checkpoints[2]
+        initial_pose = [gps3_x - 5.0 * math.cos(heading),
+                        gps3_y - 5.0 * math.sin(heading), heading]
+    else:
+        initial_pose = [0.0, 0.0, 0.0]
     return [Node(
         package="dutyed_tf_pub_with_disturbance",
         executable="dutyed_tf_pub_with_disturbance_node",
@@ -190,9 +205,8 @@ def generate_launch_description():
     )
     sim_true_north_yaw_arg = DeclareLaunchArgument(
         "sim_true_north_yaw_rad",
-        # True north is 30 deg east of map +Y (60 deg CCW from map +X).
-        default_value="1.0471975511965976",
-        description="Geographical true-north direction in Task1 sim map coordinates (rad)",
+        default_value="1.5707963267948966",
+        description="Geographical true-north direction in the task1monday ENU map (rad)",
     )
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
@@ -225,6 +239,9 @@ def generate_launch_description():
         launch_arguments={
             # Match the GNSS topic consumed by the bundled Foxglove extension.
             "fix_topic": "/sensor/vehicle_gnss/fix/raw",
+            "gps_origin_lat": "63.4408027778",
+            "gps_origin_lon": "10.4233944444",
+            "gps_origin_alt": "0.0",
             "true_north_yaw_rad": LaunchConfiguration("sim_true_north_yaw_rad"),
         }.items(),
     )
