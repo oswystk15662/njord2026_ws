@@ -63,19 +63,23 @@ def test_sequence_maps_nav_success_to_result():
     assert results[0].status == ExecutorStatus.SUCCEEDED
 
 
-def test_navigation_client_publishes_waypoint_markers():
+def test_navigation_client_publishes_preview_markers_and_path():
     client = object.__new__(_RosNavigationClient)
     client._node = _MarkerNode()
     client._frame_id = "map"
     client._marker_publisher = _MarkerPublisher()
-    poses = [PoseStamped(), PoseStamped()]
-    poses[1].pose.position.x = 2.0
+    client._path_publisher = _MarkerPublisher()
+    waypoints = [
+        Waypoint("first", 0.0, 0.0, 0.0, "first", "waypoint"),
+        Waypoint("second", 2.0, 0.0, 0.0, "second", "waypoint"),
+    ]
 
-    client._publish_markers(poses)
+    client.publish_preview(waypoints)
 
     route, points = client._marker_publisher.messages[0].markers
     assert route.type == route.LINE_STRIP
     assert [(point.x, point.y) for point in points.points] == [(0.0, 0.0), (2.0, 0.0)]
+    assert [pose.pose.position.x for pose in client._path_publisher.messages[0].poses] == [0.0, 2.0]
 
 
 def test_staged_docking_cancels_wait_timer_and_ignores_late_callback():
