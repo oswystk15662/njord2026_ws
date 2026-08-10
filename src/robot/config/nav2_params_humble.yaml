@@ -6,7 +6,7 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
-    global_frame: odom
+    global_frame: map
     robot_base_frame: base_link
     odom_topic: /odometry/filtered/local
     bt_loop_duration: 10
@@ -124,20 +124,23 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: odom
+      global_frame: map
       robot_base_frame: base_link
       use_sim_time: false
       robot_radius: 0.8
       resolution: 0.1
       track_unknown_space: true
       
-      # Map Serverを使わないための設定 (Rolling Window)
-      # GPS走行の場合、巨大なローカルマップのように扱う
-      rolling_window: true 
-      width: 200 # m
-      height: 200 # m
-      origin_x: -100.0
-      origin_y: -100.0
+      # Exam-field navigation area, fixed in the map frame.  The four
+      # specified WGS84 corners resolve through /fromLL to approximately
+      # x=-113.01..39.45 m and y=-219.10..41.81 m.  Keep a 20 m margin.
+      # A fixed map-frame costmap prevents a legitimate distant GPS goal
+      # from falling outside a rolling odom-frame window.
+      rolling_window: false
+      width: 200 # x=-135..65 m
+      height: 310 # y=-240..70 m
+      origin_x: -135.0
+      origin_y: -240.0
       
       plugins: ["obstacle_layer", "inflation_layer"]
       obstacle_layer:
