@@ -69,6 +69,18 @@ class RuntimeManager(Node):
                 continue
         self._process = None
 
+    def shutdown(self):
+        """Stop the Nav2 process group before this manager exits.
+
+        ``task_runtime.launch.py`` is intentionally started in its own process
+        session so profile switches can terminate the complete Nav2 tree.  It
+        must therefore be stopped explicitly when the enclosing miniPC
+        bringup receives Ctrl-C; otherwise it is reparented to PID 1.
+        """
+        with self._lock:
+            self._stop()
+            self._profile = ""
+
     def _execute(self, handle):
         profile = handle.request.value
         with self._lock:
@@ -92,5 +104,13 @@ class RuntimeManager(Node):
 
 def main():
     rclpy.init()
-    rclpy.spin(RuntimeManager())
-    rclpy.shutdown()
+    node = RuntimeManager()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.shutdown()
+        node.destroy_node()
+        if rclpy.ok():
+            rclpy.shutdown()
