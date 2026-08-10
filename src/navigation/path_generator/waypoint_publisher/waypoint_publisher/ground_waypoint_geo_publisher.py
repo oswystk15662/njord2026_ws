@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
+from njord_interfaces.msg import MissionStatus
 import rclpy
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
@@ -21,20 +22,14 @@ _CONFIGS = {
 
 
 class GroundWaypointGeoPublisher(Node):
-    """Ground-only WGS84 marker source; no vessel waypoint topic is consumed."""
+    """Ground-only WGS84 marker source selected by the active mission task."""
 
     def __init__(self):
         super().__init__("ground_waypoint_geo_publisher")
-        self.declare_parameter("task_type", "task1")
         self.declare_parameter("marker_topic", "/ground_waypoint_markers")
         self.declare_parameter("publish_rate_hz", 1.0)
-        task_type = self.get_parameter("task_type").value
-        if task_type not in _CONFIGS:
-            raise ValueError(f"unknown task_type '{task_type}'")
-        filename, key = _CONFIGS[task_type]
-        config_path = Path(get_package_share_directory("waypoint_publisher")) / "config" / filename
-        with config_path.open() as stream:
-            self.waypoints = yaml.safe_load(stream)[key].get("waypoints", [])
+        self.waypoints = []
+        self.active_task = ""
         self.publisher = self.create_publisher(
             MarkerArray,
             self.get_parameter("marker_topic").value,
@@ -43,12 +38,35 @@ class GroundWaypointGeoPublisher(Node):
         rate = float(self.get_parameter("publish_rate_hz").value)
         if rate <= 0.0:
             raise ValueError("publish_rate_hz must be positive")
-        self._publish()
+        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.status_sub = self.create_subscription(
+            MissionStatus, "/mission/status", self._on_status, status_qos)
         self.timer = self.create_timer(1.0 / rate, self._publish)
+
+    def _on_status(self, message):
+        """Load only the YAML selected by the task command sent from ground."""
+        task_type = message.task_id.strip()
+        if task_type == self.active_task:
+            return
+        self.active_task = task_type
+        self.waypoints = []
+        if task_type not in _CONFIGS:
+            self.get_logger().info("No active task waypoint display")
+            self._publish()
+            return
+        filename, key = _CONFIGS[task_type]
+        config_path = Path(get_package_share_directory("waypoint_publisher")) / "config" / filename
+        with config_path.open() as stream:
+            self.waypoints = yaml.safe_load(stream)[key].get("waypoints", [])
+        self.get_logger().info(f"Showing local YAML waypoints for {task_type}")
+        self._publish()
 
     def _publish(self):
         markers = MarkerArray()
         stamp = self.get_clock().now().to_msg()
+        reset = Marker()
+        reset.action = Marker.DELETEALL
+        markers.markers.append(reset)
         for index, waypoint in enumerate(self.waypoints):
             if "latitude" not in waypoint or "longitude" not in waypoint:
                 continue

@@ -251,11 +251,21 @@ def test_ground_pc_enables_foxglove_by_default_for_waypoint_visualization():
     assert '"enable_foxglove_bridge",\n                default_value="true"' in source
 
 
-def test_ground_pc_reads_the_selected_local_waypoint_yaml():
+def test_ground_pc_reads_the_active_mission_waypoint_yaml_locally():
     source = _read_launch_source("ground_pc.launch.py")
 
     assert 'executable="ground_waypoint_geo_publisher"' in source
-    assert '"waypoint_task_type"' in source
+    assert '"waypoint_task_type"' not in source
+
+
+def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():
+    root = Path(_LAUNCH_DIR).parents[2]
+    ground = (root / "config" / "zenoh" / "bridge_groundpc.json5").read_text()
+    minipc = (root / "config" / "zenoh" / "bridge_minipc.json5").read_text()
+
+    assert '"/mission/status"' in ground
+    assert '"/mission/status"' in minipc
+    assert '"/waypoint_markers"' not in ground
 
 
 def test_disabled_minipc_serial_drivers_default_to_false():

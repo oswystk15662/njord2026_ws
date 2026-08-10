@@ -40,6 +40,7 @@
       allow: {
         publishers: [
           "/odom", "/odometry/filtered/global", "/tf", "/tf_static", "/livox/imu",
+          "/mission/status",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
           "/waypoint1_pose", "/waypoint2_pose",

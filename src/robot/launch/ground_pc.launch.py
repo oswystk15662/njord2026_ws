@@ -27,7 +27,6 @@ def generate_launch_description():
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
     enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
-    waypoint_task_type = LaunchConfiguration("waypoint_task_type")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -112,7 +111,6 @@ def generate_launch_description():
         executable="ground_waypoint_geo_publisher",
         name="ground_waypoint_geo_publisher",
         output="screen",
-        parameters=[{"task_type": waypoint_task_type}],
     )
 
     ntrip_caster = ExecuteProcess(
@@ -162,12 +160,6 @@ def generate_launch_description():
                 "Use 0 only for controlled low-latency tests.",
             ),
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
-            DeclareLaunchArgument(
-                "waypoint_task_type",
-                default_value="task1",
-                choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task3_1", "task3_2"],
-                description="Task YAML rendered locally by the Ground PC GNSS map panel.",
-            ),
             DeclareLaunchArgument(
                 "enable_foxglove_bridge",
                 default_value="true",

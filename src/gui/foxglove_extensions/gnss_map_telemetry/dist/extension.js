@@ -198,6 +198,12 @@ function initGnssMapTelemetry(context) {
 
   function updateWaypointMarkers(message) {
     for (const waypoint of message?.markers || []) {
+      if (waypoint.action === 3) {
+        for (const marker of waypointMarkers.values()) map.removeLayer(marker);
+        waypointMarkers.clear();
+        waypointsCentered = false;
+        continue;
+      }
       if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
       // The Ground PC publisher deliberately stores longitude in x and
       // latitude in y, so this panel can render YAML waypoints without
