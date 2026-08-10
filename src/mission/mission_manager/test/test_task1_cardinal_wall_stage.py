@@ -23,6 +23,7 @@ def test_coordinate_projection_has_a_bounded_failure_path():
     assert 'declare_parameter("coordinate_projection_timeout_sec", 10.0)' in source
     assert "map projection service /fromLL timed out after " in source
     assert "ResultCode.CONFIGURATION_FAILED" in source
+    assert "Serialize /fromLL requests" in source
 
 
 def test_persistent_minipc_bringup_starts_the_task1_wall_node():

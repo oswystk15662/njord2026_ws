@@ -562,49 +562,72 @@ class MissionManager(Node):
     def _start_coordinate_projection(
         self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
     ) -> None:
-        futures = []
-        for point in route.projection_points():
-            projection_request = FromLL.Request()
-            projection_request.ll_point = GeoPoint(
-                latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
-            )
-            futures.append(self._from_ll_client.call_async(projection_request))
-        self._pending_coordinate_projection = (execution_id, task, route, request, futures)
+        points = route.projection_points()
+        self._pending_coordinate_projection = {
+            "execution_id": execution_id,
+            "task": task,
+            "route": route,
+            "request": request,
+            "points": points,
+            "projected": [],
+            "next_index": 0,
+        }
         timeout_sec = max(0.0, float(
             self.get_parameter("coordinate_projection_timeout_sec").value
         ))
         self._coordinate_projection_deadline_ns = (
             self.get_clock().now().nanoseconds + int(timeout_sec * 1e9)
         ) if timeout_sec else None
-        for future in futures:
-            future.add_done_callback(self._finish_coordinate_projection)
+        self._request_next_coordinate_projection()
 
-    def _finish_coordinate_projection(self, _future) -> None:
-        with self._lock:
-            pending = self._pending_coordinate_projection
-            if pending is None:
-                return
-            execution_id, task, route, request, futures = pending
-            if not all(future.done() for future in futures):
-                return
+    def _request_next_coordinate_projection(self) -> None:
+        """Serialize /fromLL requests; navsat_transform drops bursts of service calls."""
+        pending = self._pending_coordinate_projection
+        if pending is None:
+            return
+        points = pending["points"]
+        index = pending["next_index"]
+        if index >= len(points):
             self._pending_coordinate_projection = None
             self._coordinate_projection_deadline_ns = None
-            if not self._machine.is_current(execution_id):
+            resolved = pending["route"].with_projected_points(tuple(pending["projected"]))
+            decision = type("Decision", (), {"execution_id": pending["execution_id"]})()
+            self._configure_route(decision, pending["task"], resolved, pending["request"])
+            return
+        point = points[index]
+        projection_request = FromLL.Request()
+        projection_request.ll_point = GeoPoint(
+            latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
+        )
+        future = self._from_ll_client.call_async(projection_request)
+        future.add_done_callback(self._finish_coordinate_projection)
+
+    def _finish_coordinate_projection(self, future) -> None:
+        with self._lock:
+            pending = self._pending_coordinate_projection
+            if pending is None or not self._machine.is_current(pending["execution_id"]):
                 return
             try:
-                points = tuple(
-                    (float(future.result().map_point.x), float(future.result().map_point.y))
-                    for future in futures
-                )
-                resolved = route.with_projected_points(points)
+                response = future.result()
+                pending["projected"].append((
+                    float(response.map_point.x), float(response.map_point.y)
+                ))
             except Exception as exc:
+                execution_id = pending["execution_id"]
+                self._pending_coordinate_projection = None
+                self._coordinate_projection_deadline_ns = None
                 self._complete(
                     execution_id, ResultCode.CONFIGURATION_FAILED,
                     f"map projection for waypoint coordinates failed: {exc}",
                 )
                 return
-            decision = type("Decision", (), {"execution_id": execution_id})()
-            self._configure_route(decision, task, resolved, request)
+            pending["next_index"] += 1
+            self._machine.update_progress(
+                pending["execution_id"], "project_waypoints",
+                pending["next_index"] / len(pending["points"]),
+                f"projected waypoint {pending['next_index']}/{len(pending['points'])}",
+            )
+            self._request_next_coordinate_projection()
 
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
@@ -838,7 +861,7 @@ class MissionManager(Node):
                 and self._coordinate_projection_deadline_ns is not None
                 and self.get_clock().now().nanoseconds >= self._coordinate_projection_deadline_ns
             ):
-                execution_id = pending_projection[0]
+                execution_id = pending_projection["execution_id"]
                 self._pending_coordinate_projection = None
                 self._coordinate_projection_deadline_ns = None
                 self._complete(
