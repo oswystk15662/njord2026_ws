@@ -625,6 +625,15 @@ def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
             assert topic not in allow_lists
 
 
+def test_zenoh_bridges_mission_waypoint_markers_to_ground_pc():
+    zenoh_dir = os.path.normpath(
+        os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh")
+    )
+    for filename in ("bridge_minipc.json5", "bridge_groundpc.json5"):
+        with open(os.path.join(zenoh_dir, filename), "r") as stream:
+            assert '"/mission/waypoint_markers"' in stream.read()
+
+
 def test_ground_pc_routes_control_sources_only_to_critical_link_inputs():
     source = _read_launch_source("ground_pc.launch.py")
 

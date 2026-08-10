@@ -46,6 +46,7 @@
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/joy/set_feedback",
           "/foxglove_log",
+          "/mission/waypoint_markers",
           "/gui/battery_percent",
         ],
         subscribers: [
