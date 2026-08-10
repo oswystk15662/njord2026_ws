@@ -245,6 +245,19 @@ def test_ground_pc_publishes_the_actual_route_marker_from_shared_tf():
     assert '"child_frame": "base_link"' in source
 
 
+def test_ground_pc_enables_foxglove_by_default_for_waypoint_visualization():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '"enable_foxglove_bridge",\n                default_value="true"' in source
+
+
+def test_ground_pc_reads_the_selected_local_waypoint_yaml():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'executable="ground_waypoint_geo_publisher"' in source
+    assert '"waypoint_task_type"' in source
+
+
 def test_disabled_minipc_serial_drivers_default_to_false():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert '"enable_drogger_rzs", default_value="false"' in source

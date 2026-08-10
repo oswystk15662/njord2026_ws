@@ -27,6 +27,7 @@ def generate_launch_description():
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
     enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
+    waypoint_task_type = LaunchConfiguration("waypoint_task_type")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -106,6 +107,14 @@ def generate_launch_description():
         ],
     )
 
+    ground_waypoints = Node(
+        package="waypoint_publisher",
+        executable="ground_waypoint_geo_publisher",
+        name="ground_waypoint_geo_publisher",
+        output="screen",
+        parameters=[{"task_type": waypoint_task_type}],
+    )
+
     ntrip_caster = ExecuteProcess(
         cmd=[
             PathJoinSubstitution(
@@ -154,9 +163,15 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
             DeclareLaunchArgument(
+                "waypoint_task_type",
+                default_value="task1",
+                choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task3_1", "task3_2"],
+                description="Task YAML rendered locally by the Ground PC GNSS map panel.",
+            ),
+            DeclareLaunchArgument(
                 "enable_foxglove_bridge",
-                default_value="false",
-                description="Expose mission action/service APIs to a Foxglove GUI.",
+                default_value="true",
+                description="Expose vessel telemetry and waypoint markers to the Ground PC Foxglove GUI.",
             ),
             DeclareLaunchArgument(
                 "enable_zenoh_bridge",
@@ -178,6 +193,7 @@ def generate_launch_description():
             joy_node,
             ground_station_heartbeat,
             actual_route,
+            ground_waypoints,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,
             back_cam_jpeg_receiver_launch,

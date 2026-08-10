@@ -17,6 +17,7 @@ const SPEED_TOPIC = "/gui/ground_speed_mps";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
+const GROUND_WAYPOINT_MARKERS_TOPIC = "/ground_waypoint_markers";
 const WORLD_FRAME = "map";
 const VESSEL_FRAME = "base_link";
 
@@ -132,10 +133,10 @@ function quaternionToBearingDegrees(rotation) {
 }
 
 function vesselIcon() {
+  // A pointed pentagon: the tip is base_link +X (the vessel's bow).
+  // Ground PC code rotates it from the received map -> base_link TF.
   const points = [
-    [11, 3], [7, 11], [7, 30], [11, 37], [15, 30], [15, 22],
-    [25, 22], [25, 30], [29, 37], [33, 30], [33, 11], [29, 3],
-    [25, 11], [25, 18], [15, 18], [15, 11],
+    [20, 2], [34, 14], [29, 36], [11, 36], [6, 14],
   ];
   const bodyPath = `${points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x} ${y}`).join(" ")} Z`;
   return L.divIcon({
@@ -178,15 +179,46 @@ function initGnssMapTelemetry(context) {
 
   const state = {};
   const transforms = new Map();
+  const waypointMarkers = new Map();
   let marker;
   let centered = false;
+  let waypointsCentered = false;
 
   function updateTransforms(message) {
     for (const stamped of message?.transforms || []) {
       const parent = normalizeFrame(stamped.header?.frame_id);
       const child = normalizeFrame(stamped.child_frame_id);
       const rotation = normalizeQuaternion(stamped.transform?.rotation);
-      if (parent && child && rotation) transforms.set(child, {parent, rotation});
+      const translation = stamped.transform?.translation;
+      if (parent && child && rotation && Number.isFinite(translation?.x) && Number.isFinite(translation?.y)) {
+        transforms.set(child, {parent, rotation, translation});
+      }
+    }
+  }
+
+  function updateWaypointMarkers(message) {
+    for (const waypoint of message?.markers || []) {
+      if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      // The Ground PC publisher deliberately stores longitude in x and
+      // latitude in y, so this panel can render YAML waypoints without
+      // receiving the vessel's map-frame MarkerArray over Zenoh.
+      const position = [waypoint.pose.position.y, waypoint.pose.position.x];
+      const id = String(waypoint.id);
+      let waypointMarker = waypointMarkers.get(id);
+      if (!waypointMarker) {
+        waypointMarker = L.circleMarker(position, {
+          radius: 7, color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 0.9, weight: 2,
+        }).bindTooltip(waypoint.text || `WP ${Number(waypoint.id) + 1}`, {direction: "top", offset: [0, -7]});
+        waypointMarker.addTo(map);
+        waypointMarkers.set(id, waypointMarker);
+      } else {
+        waypointMarker.setLatLng(position);
+      }
+    }
+    if (!waypointsCentered && waypointMarkers.size && marker) {
+      const positions = [marker.getLatLng(), ...[...waypointMarkers.values()].map((item) => item.getLatLng())];
+      map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
+      waypointsCentered = true;
     }
   }
 
@@ -221,12 +253,14 @@ function initGnssMapTelemetry(context) {
       '<div class="gnss-telemetry-separator">',
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
       `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
+      '<div class="gnss-telemetry-separator">',
+      `WP&nbsp;&nbsp;&nbsp; ${waypointMarkers.size}</div>`,
     ].join("");
   }
 
   context.subscribe([
     {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
-    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
+    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC}, {topic: GROUND_WAYPOINT_MARKERS_TOPIC},
   ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
@@ -242,9 +276,16 @@ function initGnssMapTelemetry(context) {
           state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
           updateTransforms(message);
+        } else if (event.topic === GROUND_WAYPOINT_MARKERS_TOPIC) {
+          updateWaypointMarkers(message);
         }
       }
       updateMarker();
+      // MarkerArray is transient-local, but re-applying it also handles a
+      // GNSS fix arriving after the ground-side waypoint list.
+      for (const event of renderState.currentFrame || []) {
+        if (event.topic === GROUND_WAYPOINT_MARKERS_TOPIC) updateWaypointMarkers(event.message || {});
+      }
       renderLegend();
     } finally {
       done();
