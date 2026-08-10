@@ -23,6 +23,7 @@ class StagedDockingExecutor(TaskExecutor):
         self._retry_count = 0
         self._max_retries = 0
         self._wait_timer: object | None = None
+        self._berth_wait_count = 0
 
     def start(self, execution_id: str, route: Route, feedback: FeedbackCallback,
               complete: CompletionCallback, *, full_sequence: bool = False) -> None:
@@ -34,6 +35,7 @@ class StagedDockingExecutor(TaskExecutor):
                              if stage_set.get(name)]
         self._stage_index = 0
         self._retry_count = 0
+        self._berth_wait_count = 0
         attempts = route.constraints.get("attempts", 1)
         self._max_retries = max(0, int(attempts) - 1) if isinstance(attempts, (int, float)) else 0
         if not self._stage_names:
@@ -97,10 +99,13 @@ class StagedDockingExecutor(TaskExecutor):
             self._finish(ExecutorStatus.INTERNAL_ERROR, "missing route during berth wait")
             return
         stage = self._stage_names[self._stage_index]
-        final_waypoint = self._route.stage(stage, full_sequence=self._full_sequence)[-1]
-        seconds_key = "second_wait_time_s" if final_waypoint.waypoint_id == "berth2" else "wait_time_s"
+        # A continuous run visits two docks.  Use the route's optional second
+        # berth dwell time for the latter without coupling this behavior to a
+        # particular waypoint ID.
+        seconds_key = "second_wait_time_s" if self._berth_wait_count else "wait_time_s"
         seconds = self._route.constraints.get(seconds_key, self._route.constraints.get("wait_time_s", 0.0))
         seconds = float(seconds) if isinstance(seconds, (int, float)) else 0.0
+        self._berth_wait_count += 1
         self._report(f"{stage}_wait", (self._stage_index + 0.5) / len(self._stage_names),
                      f"waiting at berth for {seconds:g} seconds")
         expected_id = self.execution_id

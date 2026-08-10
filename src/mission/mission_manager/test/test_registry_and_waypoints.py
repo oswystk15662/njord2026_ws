@@ -27,14 +27,24 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task1 = loader.load(WAYPOINT_ROOT / "config/task1_waypoints.yaml", "task1_config")
     task2 = loader.load(WAYPOINT_ROOT / "config/task2_waypoints.yaml", "task2_config")
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
+    task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
     assert len(task1.waypoints) == 17
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[12].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "gate_1", "gate_2", "6"]
-    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7", "b31_corridor_gate", "8"]
-    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["berth1_approach"]
-    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["8"]
+    assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["9"]
+    assert [(waypoint.waypoint_id, waypoint.latitude, waypoint.longitude) for waypoint in task3.waypoints] == [
+        ("7", 63.4409750000, 10.4237833333),
+        ("8", 63.4409333333, 10.4240611111),
+        ("9", 63.4408472222, 10.4240444444),
+        ("10", 63.4411333333, 10.4242305556),
+        ("11", 63.4410138889, 10.4241472222),
+        ("12", 63.4410361111, 10.4239361111),
+    ]
+    assert [waypoint.waypoint_id for waypoint in task3_2.waypoints] == ["10", "11", "12"]
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):

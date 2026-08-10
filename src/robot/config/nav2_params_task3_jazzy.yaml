@@ -98,9 +98,11 @@ controller_server:
       position_only_xy_goal_tolerance: 1.5
       # 20 degrees: tight enough to face the berth, tolerant of on-water yaw noise.
       yaw_goal_tolerance: 0.35
-      heading_required_goal_xs: [18.25, 20.0, -18.25, -20.0]
-      heading_required_goal_ys: [1.065, 1.065, 0.0, 0.0]
-      heading_required_goal_tolerance: 0.2
+      # GPS8/GPS9 and GPS11/GPS12.  Identify the strict goals by their
+      # assigned course instead of map coordinates, which lets /fromLL choose
+      # the map datum at each launch.
+      heading_required_goal_yaws: [-1.6572, 2.9104]
+      heading_required_goal_yaw_tolerance: 0.01
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths
