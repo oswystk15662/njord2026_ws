@@ -69,6 +69,9 @@ def generate_launch_description():
     enable_bms = LaunchConfiguration("enable_bms")
     enable_buoy_costmap = LaunchConfiguration("enable_buoy_costmap")
     enable_back_cam = LaunchConfiguration("enable_back_cam")
+    enable_back_cam_compressed_transports = LaunchConfiguration(
+        "enable_back_cam_compressed_transports"
+    )
     enable_zed2i_cpu = LaunchConfiguration("enable_zed2i_cpu")
     enable_zed2i_h264_ground_video = LaunchConfiguration(
         "enable_zed2i_h264_ground_video"
@@ -353,6 +356,9 @@ def generate_launch_description():
         "robot",
         ["launch", "back_cam.launch.py"],
         IfCondition(enable_back_cam),
+        {
+            "enable_compressed_transports": enable_back_cam_compressed_transports,
+        },
     )
 
     zed2i_cpu_launch = include_launch(
@@ -530,6 +536,11 @@ def generate_launch_description():
                 "enable_back_cam",
                 default_value="true",
                 description="Start the miniPC-connected rear USB camera.",
+            ),
+            DeclareLaunchArgument(
+                "enable_back_cam_compressed_transports",
+                default_value="false",
+                description="Advertise compressed transports for the rear USB camera.",
             ),
             DeclareLaunchArgument(
                 "enable_zed2i_cpu",
