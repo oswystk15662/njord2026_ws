@@ -97,6 +97,100 @@ private:
   bool entered_radius_{false};
 };
 
+class SelectiveHeadingGoalChecker : public nav2_core::GoalChecker
+{
+public:
+  void initialize(
+    const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
+    const std::string & plugin_name,
+    const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>) override
+  {
+    const auto node = parent.lock();
+    if (!node) {
+      throw std::runtime_error("goal checker lifecycle node expired");
+    }
+    node->declare_parameter(plugin_name + ".xy_goal_tolerance", 0.5);
+    node->declare_parameter(plugin_name + ".yaw_goal_tolerance", 0.5);
+    node->declare_parameter(
+      plugin_name + ".heading_optional_goal_x", std::numeric_limits<double>::quiet_NaN());
+    node->declare_parameter(
+      plugin_name + ".heading_optional_goal_y", std::numeric_limits<double>::quiet_NaN());
+    node->declare_parameter(plugin_name + ".heading_optional_goal_tolerance", 0.2);
+    xy_tolerance_ = node->get_parameter(plugin_name + ".xy_goal_tolerance").as_double();
+    yaw_tolerance_ = node->get_parameter(plugin_name + ".yaw_goal_tolerance").as_double();
+    optional_x_ = node->get_parameter(plugin_name + ".heading_optional_goal_x").as_double();
+    optional_y_ = node->get_parameter(plugin_name + ".heading_optional_goal_y").as_double();
+    optional_tolerance_ = node->get_parameter(
+      plugin_name + ".heading_optional_goal_tolerance").as_double();
+    if (xy_tolerance_ <= 0.0 || yaw_tolerance_ < 0.0 || optional_tolerance_ < 0.0 ||
+      std::isfinite(optional_x_) != std::isfinite(optional_y_))
+    {
+      throw std::runtime_error("invalid selective heading goal checker parameters");
+    }
+  }
+
+  void reset() override {}
+
+  bool isGoalReached(
+    const geometry_msgs::msg::Pose & query_pose,
+    const geometry_msgs::msg::Pose & goal_pose,
+    const geometry_msgs::msg::Twist &) override
+  {
+    const double dx = query_pose.position.x - goal_pose.position.x;
+    const double dy = query_pose.position.y - goal_pose.position.y;
+    if (std::hypot(dx, dy) > xy_tolerance_) {
+      return false;
+    }
+    // GPS10 is a finish-line position, not a docking pose.  Its configured
+    // coordinate opts out of yaw completion while all other Task 3 goals
+    // require their commanded heading.
+    if (std::isfinite(optional_x_) &&
+      std::hypot(goal_pose.position.x - optional_x_, goal_pose.position.y - optional_y_) <=
+      optional_tolerance_)
+    {
+      return true;
+    }
+    return std::abs(shortest_angle(yaw(query_pose), yaw(goal_pose))) <= yaw_tolerance_;
+  }
+
+  bool getTolerances(
+    geometry_msgs::msg::Pose & pose_tolerance,
+    geometry_msgs::msg::Twist & velocity_tolerance) override
+  {
+    pose_tolerance.position.x = xy_tolerance_;
+    pose_tolerance.position.y = xy_tolerance_;
+    pose_tolerance.position.z = 0.0;
+    pose_tolerance.orientation.w = yaw_tolerance_;
+    velocity_tolerance.linear.x = std::numeric_limits<double>::lowest();
+    velocity_tolerance.linear.y = std::numeric_limits<double>::lowest();
+    velocity_tolerance.linear.z = std::numeric_limits<double>::lowest();
+    velocity_tolerance.angular.x = std::numeric_limits<double>::lowest();
+    velocity_tolerance.angular.y = std::numeric_limits<double>::lowest();
+    velocity_tolerance.angular.z = std::numeric_limits<double>::lowest();
+    return true;
+  }
+
+private:
+  static double yaw(const geometry_msgs::msg::Pose & pose)
+  {
+    const auto & q = pose.orientation;
+    return std::atan2(2.0 * (q.w * q.z + q.x * q.y),
+      1.0 - 2.0 * (q.y * q.y + q.z * q.z));
+  }
+
+  static double shortest_angle(double from, double to)
+  {
+    return std::atan2(std::sin(to - from), std::cos(to - from));
+  }
+
+  double xy_tolerance_{0.5};
+  double yaw_tolerance_{0.5};
+  double optional_x_{std::numeric_limits<double>::quiet_NaN()};
+  double optional_y_{std::numeric_limits<double>::quiet_NaN()};
+  double optional_tolerance_{0.2};
+};
+
 }  // namespace robot
 
 PLUGINLIB_EXPORT_CLASS(robot::PassThroughGoalChecker, nav2_core::GoalChecker)
+PLUGINLIB_EXPORT_CLASS(robot::SelectiveHeadingGoalChecker, nav2_core::GoalChecker)

@@ -166,8 +166,9 @@ def test_task3_requires_goal_heading_alignment(filename):
     checker = controller["general_goal_checker"]
 
     assert "RotateToGoal" in follow_path["critics"]
-    assert checker["plugin"] == "nav2_controller::SimpleGoalChecker"
+    assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
     assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
+    assert (checker["heading_optional_goal_x"], checker["heading_optional_goal_y"]) == (-18.0, -11.0)
 
 
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():

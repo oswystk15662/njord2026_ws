@@ -91,12 +91,15 @@ controller_server:
       RotateToGoal.lookahead_time: -1.0
 
     general_goal_checker:
-      # PassThroughGoalChecker allows a waypoint crossing to complete without
-      # heading alignment. Docking needs the commanded pose orientation.
-      plugin: "nav2_controller::SimpleGoalChecker"
+      # Every Task 3 goal needs its commanded heading except GPS10, which is
+      # a finish-line position and therefore completes by position alone.
+      plugin: "robot::SelectiveHeadingGoalChecker"
       xy_goal_tolerance: 0.8
       # 20 degrees: tight enough to face the berth, tolerant of on-water yaw noise.
       yaw_goal_tolerance: 0.35
+      heading_optional_goal_x: -18.0
+      heading_optional_goal_y: -11.0
+      heading_optional_goal_tolerance: 0.2
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths

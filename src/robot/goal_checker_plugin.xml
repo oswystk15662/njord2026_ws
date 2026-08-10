@@ -3,4 +3,7 @@
   <class type="robot::PassThroughGoalChecker" base_class_type="nav2_core::GoalChecker">
     <description>Completes a waypoint after heading alignment or one radius crossing.</description>
   </class>
+  <class type="robot::SelectiveHeadingGoalChecker" base_class_type="nav2_core::GoalChecker">
+    <description>Requires goal heading except at one configured position-only finish goal.</description>
+  </class>
 </library>
