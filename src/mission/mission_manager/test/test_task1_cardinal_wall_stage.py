@@ -17,6 +17,14 @@ def test_mission_manager_latches_cardinal_walls_from_nav2_feedback():
     assert "competition_id" in source
 
 
+def test_coordinate_projection_has_a_bounded_failure_path():
+    """A lost /fromLL response must not keep a mission active forever."""
+    source = NODE_SOURCE.read_text(encoding="utf-8")
+    assert 'declare_parameter("coordinate_projection_timeout_sec", 10.0)' in source
+    assert "map projection service /fromLL timed out after " in source
+    assert "ResultCode.CONFIGURATION_FAILED" in source
+
+
 def test_persistent_minipc_bringup_starts_the_task1_wall_node():
     source = (REPO_ROOT / "src" / "robot" / "launch" / "minipc_bringup.launch.py").read_text(
         encoding="utf-8"

@@ -185,6 +185,7 @@ class MissionManager(Node):
         self.declare_parameter("registry_file", "")
         self.declare_parameter("active_nav2_profile", "")
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
+        self.declare_parameter("coordinate_projection_timeout_sec", 10.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -197,6 +198,7 @@ class MissionManager(Node):
         self._active_nav2_profile = str(self.get_parameter("active_nav2_profile").value)
         self._runtime_state = Nav2RuntimeStatus.STOPPED
         self._pending_coordinate_projection = None
+        self._coordinate_projection_deadline_ns: int | None = None
         self._pending_task3_goal_checker = None
         self._auto_permission_deadline_ns: int | None = None
         self._auto_mode_request_sent = False
@@ -568,6 +570,12 @@ class MissionManager(Node):
             )
             futures.append(self._from_ll_client.call_async(projection_request))
         self._pending_coordinate_projection = (execution_id, task, route, request, futures)
+        timeout_sec = max(0.0, float(
+            self.get_parameter("coordinate_projection_timeout_sec").value
+        ))
+        self._coordinate_projection_deadline_ns = (
+            self.get_clock().now().nanoseconds + int(timeout_sec * 1e9)
+        ) if timeout_sec else None
         for future in futures:
             future.add_done_callback(self._finish_coordinate_projection)
 
@@ -580,6 +588,7 @@ class MissionManager(Node):
             if not all(future.done() for future in futures):
                 return
             self._pending_coordinate_projection = None
+            self._coordinate_projection_deadline_ns = None
             if not self._machine.is_current(execution_id):
                 return
             try:
@@ -749,6 +758,7 @@ class MissionManager(Node):
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
         self._pending_coordinate_projection = None
+        self._coordinate_projection_deadline_ns = None
         self._auto_permission_deadline_ns = None
         self._auto_mode_request_sent = False
         if self._active_executor and not was_canceling:
@@ -779,6 +789,8 @@ class MissionManager(Node):
             return
         self._action_results[execution_id] = (code, message)
         self._pending_start = None
+        self._pending_coordinate_projection = None
+        self._coordinate_projection_deadline_ns = None
         self._auto_permission_deadline_ns = None
         self._auto_mode_request_sent = False
         self._active_executor = None
@@ -820,6 +832,22 @@ class MissionManager(Node):
     def _tick(self) -> None:
         with self._lock:
             snapshot = self._machine.snapshot
+            pending_projection = self._pending_coordinate_projection
+            if (
+                pending_projection is not None
+                and self._coordinate_projection_deadline_ns is not None
+                and self.get_clock().now().nanoseconds >= self._coordinate_projection_deadline_ns
+            ):
+                execution_id = pending_projection[0]
+                self._pending_coordinate_projection = None
+                self._coordinate_projection_deadline_ns = None
+                self._complete(
+                    execution_id,
+                    ResultCode.CONFIGURATION_FAILED,
+                    "map projection service /fromLL timed out after "
+                    f"{float(self.get_parameter('coordinate_projection_timeout_sec').value):g} seconds",
+                )
+                snapshot = self._machine.snapshot
             if snapshot.state == MissionState.WAITING_FOR_AUTO_PERMISSION:
                 if not self._auto_mode_request_sent:
                     self._request_auto_mode()
