@@ -184,7 +184,7 @@ function initGnssMapTelemetry(context) {
   const waypointMarkers = new Map();
   let marker;
   let centered = false;
-  let waypointsCentered = false;
+  let waypointSignature = "";
 
   function updateTransforms(message) {
     for (const stamped of message?.transforms || []) {
@@ -203,7 +203,6 @@ function initGnssMapTelemetry(context) {
       if (waypoint.action === 3) {
         for (const marker of waypointMarkers.values()) map.removeLayer(marker);
         waypointMarkers.clear();
-        waypointsCentered = false;
         continue;
       }
       if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
@@ -223,15 +222,22 @@ function initGnssMapTelemetry(context) {
         waypointMarker.setLatLng(position);
       }
     }
-    if (!waypointsCentered && waypointMarkers.size) {
+    const nextWaypointSignature = [...waypointMarkers.entries()].map(([id, item]) => {
+      const position = item.getLatLng();
+      return `${id}:${position.lat.toFixed(8)}:${position.lng.toFixed(8)}`;
+    }).join("|");
+    // The source republishes DELETEALL followed by the complete identical
+    // route every second.  Refit only when that actual route changes, so a
+    // user's manual pan/zoom is never overwritten by the periodic update.
+    if (nextWaypointSignature && nextWaypointSignature !== waypointSignature) {
       // Waypoint-only inspection intentionally runs without a vessel GNSS
-      // fix.  Center on the route itself in that case; include the vessel when
+      // fix. Center on the route itself in that case; include the vessel when
       // it is available so the normal ground-station view is unchanged.
       const positions = [...waypointMarkers.values()].map((item) => item.getLatLng());
       if (marker) positions.unshift(marker.getLatLng());
       map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
-      waypointsCentered = true;
     }
+    waypointSignature = nextWaypointSignature;
   }
 
   function updateMarker() {

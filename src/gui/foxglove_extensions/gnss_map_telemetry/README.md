@@ -14,7 +14,7 @@ it does not depend on waypoint-marker traffic from the vessel.  The ground PC
 selects the YAML from the lightweight `/mission/status.task_id` value published
 after the operator starts a task; it shows no stale WPs while idle.
 
-Install [gnss-map-telemetry-0.2.5.foxe](gnss-map-telemetry-0.2.5.foxe) by dragging it
+Install [gnss-map-telemetry-0.2.6.foxe](gnss-map-telemetry-0.2.6.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The cyan catamaran's bow points along the `base_link` +X axis. Its orientation is
