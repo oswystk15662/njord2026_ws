@@ -33,6 +33,16 @@ def test_task1_launch_starts_navsat_projection_for_gps_waypoints():
     assert 'executable="navsat_transform_node"' in launch
     assert '"use_navsat"' in launch
     assert '("odometry/gps", "/odometry/gps/navsat")' in launch
+    assert '"wait_for_datum": True' in launch
+    assert '"datum": [63.4408027778, 10.4233944444, 0.0]' in launch
+
+
+def test_task1_launch_starts_at_first_surveyed_waypoint():
+    launch = (PARAMS_PATH.parents[1] / "launch" / "task1_sim.launch.py").read_text(
+        encoding="utf-8")
+    assert 'normally staged at competition waypoint 1.1' in launch
+    assert 'start_x, start_y = waypoints[0]' in launch
+    assert 'next_x, next_y = waypoints[1]' in launch
 
 
 def test_task1_navigation_allows_navsat_and_nav2_to_start_together():

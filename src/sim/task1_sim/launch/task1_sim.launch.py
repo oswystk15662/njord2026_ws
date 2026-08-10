@@ -104,7 +104,7 @@ def launch_cardinal_perception_sim(context):
 
 
 def launch_dynamics(context, pkg_dutyed):
-    """Create the dynamics node, optionally staged just before competition WP3."""
+    """Create the dynamics node, normally staged at competition waypoint 1.1."""
     start_at_wp3 = LaunchConfiguration("start_at_wp3").perform(context).lower() == "true"
     with open(LaunchConfiguration("params").perform(context), "r") as params_file:
         params = yaml.safe_load(params_file) or {}
@@ -116,6 +116,17 @@ def launch_dynamics(context, pkg_dutyed):
         gps3_x, gps3_y = checkpoints[2]
         initial_pose = [gps3_x - 5.0 * math.cos(heading),
                         gps3_y - 5.0 * math.sin(heading), heading]
+    elif len(waypoints := json.loads(orchestrator_params.get("waypoint1_xy", "[]"))) >= 2:
+        # Begin exactly at WP 1.1, pointing toward WP 1.2.  The waypoint
+        # publisher will accept WP 1.1 immediately and continue the surveyed
+        # route without an artificial GPS1 -> WP1.1 transit.
+        start_x, start_y = waypoints[0]
+        next_x, next_y = waypoints[1]
+        initial_pose = [
+            start_x,
+            start_y,
+            math.atan2(next_y - start_y, next_x - start_x),
+        ]
     else:
         initial_pose = [0.0, 0.0, 0.0]
     return [Node(
@@ -343,7 +354,10 @@ def generate_launch_description():
             "broadcast_utm_transform": False,
             "publish_filtered_gps": False,
             "use_odometry_yaw": True,
-            "wait_for_datum": False,
+            # Keep /fromLL in the task1monday ENU frame even though the boat
+            # starts at WP 1.1 instead of the GPS1 map origin.
+            "wait_for_datum": True,
+            "datum": [63.4408027778, 10.4233944444, 0.0],
         }],
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
