@@ -79,8 +79,12 @@ local_costmap:
       robot_base_frame: base_link
       use_sim_time: false
       rolling_window: true
-      width: 10
-      height: 10
+      # The Task 1 navigation profile is also used to reach the exam field.
+      # Keep this costmap centered on the vessel, but give its obstacle
+      # raytracing sources enough margin while the vessel is outside the
+      # original Task 1 test area.
+      width: 30
+      height: 30
       resolution: 0.1
       # ロボットの半径 (円形近似) または footprint (矩形)
       robot_radius: 0.8 

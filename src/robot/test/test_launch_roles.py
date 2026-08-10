@@ -481,6 +481,10 @@ def test_task1_tf_authorities_and_local_virtual_wall_contract():
     assert local_ekf["base_link_frame"] == "base_link"
 
     local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
+    local_costmap = nav2["local_costmap"]["local_costmap"]["ros__parameters"]
+    assert local_costmap["rolling_window"] is True
+    assert local_costmap["width"] == 30
+    assert local_costmap["height"] == 30
     assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
     assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
 
