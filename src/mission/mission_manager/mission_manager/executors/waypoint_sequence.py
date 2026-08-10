@@ -1,4 +1,4 @@
-"""One NavigateThroughPoses goal for Task 1 and Task 2 routes."""
+"""Send route waypoints to Nav2 one goal at a time."""
 
 from __future__ import annotations
 
@@ -19,26 +19,48 @@ class WaypointSequenceExecutor(TaskExecutor):
             self._finish(complete_status, complete_result)
             return
         self._begin(execution_id, feedback, complete)
-        self._report("navigate", 0.0, f"sending {len(route.waypoints)} planned waypoints")
         expected_id = execution_id
+        waypoint_index = 0
 
-        def accepted(ok: bool) -> None:
+        def send_next() -> None:
+            nonlocal waypoint_index
             if expected_id != self.execution_id or self._finished:
                 return
-            if not ok:
-                self._finish(ExecutorStatus.REJECTED, "Nav2 rejected waypoint goal")
-            else:
-                self._report("navigate", 0.05, "Nav2 accepted waypoint goal")
-
-        def completed(status: ExecutorStatus, message: str) -> None:
-            if expected_id != self.execution_id or self._finished:
-                return
-            if self._cancel_requested:
-                self._finish(ExecutorStatus.CANCELED, "waypoint goal canceled")
-            elif status == ExecutorStatus.SUCCEEDED:
+            if waypoint_index >= len(route.waypoints):
                 self._report("navigate", 1.0, "waypoint route complete")
-                self._finish(status, message or "waypoint route complete")
-            else:
-                self._finish(status, message or "waypoint navigation failed")
+                self._finish(ExecutorStatus.SUCCEEDED, "waypoint route complete")
+                return
 
-        self._navigation.send(route.waypoints, accepted, completed)
+            waypoint = route.waypoints[waypoint_index]
+            ordinal = waypoint_index + 1
+            self._report(
+                "navigate", waypoint_index / len(route.waypoints),
+                f"sending waypoint {ordinal}/{len(route.waypoints)}: {waypoint.waypoint_id}",
+            )
+
+            def accepted(ok: bool) -> None:
+                if expected_id != self.execution_id or self._finished:
+                    return
+                if not ok:
+                    self._finish(ExecutorStatus.REJECTED, "Nav2 rejected waypoint goal")
+                else:
+                    self._report(
+                        "navigate", (waypoint_index + 0.05) / len(route.waypoints),
+                        f"Nav2 accepted waypoint {ordinal}/{len(route.waypoints)}",
+                    )
+
+            def completed(status: ExecutorStatus, message: str) -> None:
+                nonlocal waypoint_index
+                if expected_id != self.execution_id or self._finished:
+                    return
+                if self._cancel_requested:
+                    self._finish(ExecutorStatus.CANCELED, "waypoint goal canceled")
+                elif status == ExecutorStatus.SUCCEEDED:
+                    waypoint_index += 1
+                    send_next()
+                else:
+                    self._finish(status, message or "waypoint navigation failed")
+
+            self._navigation.send((waypoint,), accepted, completed)
+
+        send_next()

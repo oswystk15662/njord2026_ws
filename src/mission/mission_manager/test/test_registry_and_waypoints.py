@@ -69,6 +69,17 @@ def test_route_supports_latitude_longitude_coordinates(tmp_path):
     assert [(w.x, w.y) for w in route.with_projected_points(((1.5, 2.5),)).waypoints] == [(1.5, 2.5)]
 
 
+def test_route_rejects_collapsed_projection_for_separated_geographic_points(tmp_path):
+    config = tmp_path / "coordinates.yaml"
+    config.write_text(
+        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: 35.0, longitude: 139.0, yaw: 0.0}\n    - {id: b, latitude: 35.001, longitude: 139.001, yaw: 0.0}\n""",
+        encoding="utf-8",
+    )
+    route = WaypointConfigLoader().load(config, "route")
+    assert route.projection_is_degenerate(((0.0, 0.0), (0.0, 0.0)))
+    assert not route.projection_is_degenerate(((0.0, 0.0), (100.0, 100.0)))
+
+
 def test_duplicate_yaml_keys_are_rejected(tmp_path):
     bad = tmp_path / "duplicate.yaml"
     bad.write_text("tasks: {}\ntasks: {}\n", encoding="utf-8")
