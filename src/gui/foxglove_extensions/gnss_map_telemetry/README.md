@@ -17,10 +17,11 @@ after the operator starts a task; it shows no stale WPs while idle.
 Waypoint labels show their route order and competition label, and a dashed cyan
 line connects the route in that order. The legend identifies the Mission
 Manager-selected task. Install
-[gnss-map-telemetry-0.2.8.foxe](gnss-map-telemetry-0.2.8.foxe) by dragging it
+[gnss-map-telemetry-0.2.9.foxe](gnss-map-telemetry-0.2.9.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
-The cyan catamaran's bow points along the `base_link` +X axis. Its orientation is
+The catamaran's bright cyan bow and darker stern point along the `base_link` +X
+axis. Its orientation is
 resolved on the Ground PC from the `map -> base_link` TF chain, assuming the `map`
 frame is ENU (+X east, +Y north). If the chain is unavailable, the panel shows a
 position dot and `HDG --`.
