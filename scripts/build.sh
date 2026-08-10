@@ -18,10 +18,9 @@ cd "${WS_DIR}"
 source "${SCRIPT_DIR}/njord_env.sh"
 
 BUILD_VARIANT="${ROS_DISTRO}/${NJORD_PROFILE}"
-colcon build \
+colcon --log-base "log/${BUILD_VARIANT}" build \
   --build-base "build/${BUILD_VARIANT}" \
   --install-base "install/${BUILD_VARIANT}" \
-  --log-base "log/${BUILD_VARIANT}" \
   --symlink-install \
   --cmake-args -DCMAKE_BUILD_TYPE=Release "$@"
 
