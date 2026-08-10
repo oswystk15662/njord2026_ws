@@ -12,11 +12,16 @@ task1_orchestrator:
        [25.0, 0.0], [28.0, -5.0], [31.0, -1.0], [34.0, 2.0], [40.0, 0.0]]
     waypoint2_xy: "[[24.0, -35.0], [15.0, -15.0], [8.0, -35.0]]"
 
-    buoy_position_xy: "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
-    # Cardinal orientation per marker, aligned index-wise with
-    # buoy_position_xy: S (pass south), N (pass north), S (pass south) --
-    # this is what makes the route above a slalom instead of a straight line.
-    buoy_marks: "[\"S\", \"N\", \"S\"]"
+    # First mark is a port-hand red buoy between GPS3 and GPS4; remaining
+    # marks are the official cardinal S/N/S slalom.
+    buoy_position_xy: "[[40.0, -25.0], [28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
+    # Official Task1 cardinal marks, interpreted against GNSS true north.
+    # The S/N/S sequence matches the slalom waypoint route. Red and green
+    # reference buoys are shown adjacent to each mark by the simulator.
+    buoy_marks: "[\"RED\", \"S\", \"N\", \"S\"]"
+    course_heading_rad: 3.141592653589793
+    # Main waypoint 3: start retiring passed buoy walls from the next WP.
+    wall_retirement_start_xy: [50.0, -25.0]
     wall_radius: 2.5
     wall_points: 24
     goal_radius: 2.0
@@ -24,8 +29,8 @@ task1_orchestrator:
     avoidance_eval_radius: 10.0
     avoidance_margin: 0.5
     # Testing override only: forces every marker (not just one) to this
-    # cardinal mark, ignoring buoy_marks above. Leave empty for the
-    # competition S/N/S slalom.
+    # buoy class, ignoring buoy_marks above. Leave empty for the
+    # competition cardinal-mark slalom.
     forced_mark: ""
 
     # This visual boundary includes spawn and every Task1-1/slalom waypoint.

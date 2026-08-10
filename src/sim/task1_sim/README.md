@@ -103,3 +103,16 @@ The default route and simulated obstacle geometry are configured in
 `config/task1_params.yaml`. The global costmap window
 (`config/task1_nav2_params.yaml`, `global_costmap.width`/`height`/`origin_x`/
 `origin_y`) covers both `task1` and `task1_follow` routes.
+
+### Testing a map frame rotated from true north
+
+The simulator defaults to ENU (`map` +Y is true north). To reproduce a site
+where the navigation axes are rotated, set the true-north angle in map
+coordinates. This changes the simulated UM982 heading while preserving the
+waypoint and buoy coordinates, so `cardinal_wall_publisher` must infer the
+correct rotated north from GNSS heading and TF:
+
+```bash
+# True north is 30 degrees counter-clockwise from map +X.
+ros2 launch task1_sim task1_sim.launch.py sim_true_north_yaw_rad:=0.5235987756
+```

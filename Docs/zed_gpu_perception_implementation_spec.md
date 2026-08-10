@@ -637,10 +637,19 @@ IALA Region Aを前提とする。`channel_heading_rad`はmap x軸から反時�
 
 危険側中心角の±90度に半円弧を生成する。
 
+同色の lateral mark が2個以上ある場合は、`channel_heading_rad` への投影順で
+隣接するブイ同士を直線の点群で結ぶ。これにより赤列・緑列それぞれが航路外側の
+連続した仮想壁になる。`same_color_wall_max_gap_m` より離れた点は結ばないため、
+欠落や誤検出をまたいだ壁は作らない。方位が未設定の場合は、半円壁・同色連結壁の
+どちらも生成しない。
+
 ### 14.4 既定geometry
 
 - `wall_radius_m=2.0`
 - `wall_points_per_full_circle=40`
+- `connect_same_color_buoys=true`
+- `same_color_wall_max_gap_m=12.0`
+- `same_color_wall_point_spacing_m=0.2`
 - 270度arcは31点、180度arcは21点。両端を含める。
 - 同じframe内で複数検出があれば全点を1つのPointCloud2へまとめる。
 - NaN、infの点をmessageへ入れない。

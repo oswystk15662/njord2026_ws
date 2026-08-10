@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import math
 import threading
 from pathlib import Path
 from typing import Callable, Optional, Sequence
@@ -10,13 +11,17 @@ from typing import Callable, Optional, Sequence
 import rclpy
 from action_msgs.msg import GoalStatus
 from geometry_msgs.msg import PoseStamped
+from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
 from nav_msgs.msg import Path as NavPath
+from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
+from rcl_interfaces.srv import SetParameters
+from robot_localization.srv import FromLL
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import Bool, Empty, String
+from std_msgs.msg import Bool, Empty, Float64, String
 
 from njord_interfaces.action import RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, TaskInfo
@@ -29,7 +34,6 @@ from .executors import (
     Task2MppiExecutor,
     WaypointSequenceExecutor,
 )
-from .geodesy import load_home_datum
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
 from .task_registry import (
     RUNTIME_READINESS_FEATURES,
@@ -58,6 +62,7 @@ class _RosNavigationClient:
         self._goal_handle = None
         self._callbacks = None
         self._frame_id = "map"
+        self._feedback_callback = None
 
     def send(self, poses: Sequence[Waypoint], accepted, completed) -> None:
         self._callbacks = (accepted, completed)
@@ -68,10 +73,15 @@ class _RosNavigationClient:
         self._publish_path(messages)
         goal = NavigateThroughPoses.Goal()
         goal.poses = messages
-        self._client.send_goal_async(goal).add_done_callback(self._on_goal_response)
+        self._client.send_goal_async(goal, feedback_callback=self._on_feedback).add_done_callback(
+            self._on_goal_response
+        )
 
     def set_frame_id(self, frame_id: str) -> None:
         self._frame_id = frame_id
+
+    def set_feedback_callback(self, callback) -> None:
+        self._feedback_callback = callback
 
     def cancel(self) -> None:
         if self._goal_handle is not None:
@@ -126,6 +136,10 @@ class _RosNavigationClient:
         except Exception as exc:
             callbacks[1](ExecutorStatus.NAVIGATION_FAILED, f"Nav2 result failed: {exc}")
 
+    def _on_feedback(self, feedback_msg) -> None:
+        if self._feedback_callback is not None:
+            self._feedback_callback(feedback_msg.feedback)
+
 
 class MissionManager(Node):
     """Thread-safe adapter around the serialized :class:`MissionStateMachine`."""
@@ -138,11 +152,13 @@ class MissionManager(Node):
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
-        self._loader = WaypointConfigLoader(load_home_datum(self._home_file_path()))
+        self._loader = WaypointConfigLoader()
         self._active_executor = None
         self._active_task: TaskDefinition | None = None
         self._active_route: Route | None = None
         self._pending_start = None
+        self._pending_coordinate_projection = None
+        self._pending_task3_goal_checker = None
         self._auto_permission_deadline_ns: int | None = None
         self._auto_mode_request_sent = False
         self._manual_mode_requested: set[str] = set()
@@ -174,8 +190,22 @@ class MissionManager(Node):
             String, "/mission/active_control_policy", _STATUS_QOS
         )
         self._task2_enabled_pub = self.create_publisher(Bool, "/mission/task2/enabled", _STATUS_QOS)
+        self.create_subscription(Bool, "/mission/task2/goal_reached", self._on_task2_goal_reached, _STATUS_QOS)
+        self._task1_cardinal_wall_enable_pub = self.create_publisher(
+            Bool, "/task1/cardinal_wall_enable", _STATUS_QOS
+        )
+        self._task1_cardinal_heading_pub = self.create_publisher(
+            Float64, "/task1/gps3_to_gps4_heading", _STATUS_QOS
+        )
+        self._task1_wall_enable_after_remaining: int | None = None
+        self._task1_walls_enabled = False
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._navigation = _RosNavigationClient(self, self._plan_pub)
+        self._from_ll_client = self.create_client(FromLL, "/fromLL")
+        self._task3_goal_checker_client = self.create_client(
+            SetParameters, "/controller_server/set_parameters"
+        )
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
@@ -221,10 +251,6 @@ class MissionManager(Node):
         if configured:
             return Path(configured)
         return Path(__file__).resolve().parents[1] / "config" / "task_registry.yaml"
-
-    @staticmethod
-    def _home_file_path() -> Path:
-        return Path(__file__).resolve().parents[1] / "config" / "home.yaml"
 
     @staticmethod
     def _waypoint_share_path() -> Path:
@@ -327,9 +353,85 @@ class MissionManager(Node):
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
+        if route.projection_points() and not request.dry_run:
+            if not self._from_ll_client.service_is_ready():
+                return self._reject_started(
+                    decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                    "map projection service /fromLL is unavailable",
+                )
+            self._machine.transition(
+                MissionState.CONFIGURING, execution_id=decision.execution_id,
+                stage="project_waypoints", message="projecting latitude/longitude waypoint coordinates",
+            )
+            self._start_coordinate_projection(decision.execution_id, task, route, request)
+            self._publish_status()
+            return decision
+        return self._configure_route(decision, task, route, request)
+
+    def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
+        """Set Task 3's projected strict goals before activating its route."""
+        if task.nav2_profile != "task3" or request.dry_run:
+            return self._finish_configure_route(decision, task, route, request)
+        if not self._task3_goal_checker_client.service_is_ready():
+            return self._reject_started(
+                decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                "Task 3 goal checker parameter service is unavailable",
+            )
+        strict = [
+            waypoint for waypoint in route.waypoints
+            if waypoint.waypoint_type in {"dock_approach", "dock"}
+        ]
+        parameter_request = SetParameters.Request()
+        parameter_request.parameters = [
+            Parameter(
+                name="general_goal_checker.heading_required_goal_xs",
+                value=ParameterValue(
+                    type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                    double_array_value=[waypoint.x for waypoint in strict],
+                ),
+            ),
+            Parameter(
+                name="general_goal_checker.heading_required_goal_ys",
+                value=ParameterValue(
+                    type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                    double_array_value=[waypoint.y for waypoint in strict],
+                ),
+            ),
+        ]
+        self._pending_task3_goal_checker = (decision, task, route, request)
+        self._task3_goal_checker_client.call_async(parameter_request).add_done_callback(
+            self._finish_task3_goal_checker_configuration
+        )
+        return decision
+
+    def _finish_task3_goal_checker_configuration(self, future) -> None:
+        with self._lock:
+            pending = self._pending_task3_goal_checker
+            self._pending_task3_goal_checker = None
+            if pending is None:
+                return
+            decision, task, route, request = pending
+            if not self._machine.is_current(decision.execution_id):
+                return
+            try:
+                response = future.result()
+                if not all(result.successful for result in response.results):
+                    reason = next(result.reason for result in response.results if not result.successful)
+                    raise RuntimeError(reason or "controller rejected Task 3 strict-goal parameters")
+            except Exception as exc:
+                self._reject_started(
+                    decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                    f"unable to configure Task 3 strict goals: {exc}",
+                )
+                return
+            self._finish_configure_route(decision, task, route, request)
+
+    def _finish_configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
+        """Finish setup after any YAML GPS coordinates are expressed in map."""
         self._active_route = route
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
+        self._configure_task1_cardinal_walls(task, route)
         # Task 1's only required runtime input is the route just validated
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
@@ -361,6 +463,46 @@ class MissionManager(Node):
         self._publish_status()
         return decision
 
+    def _start_coordinate_projection(
+        self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
+    ) -> None:
+        futures = []
+        for point in route.projection_points():
+            projection_request = FromLL.Request()
+            projection_request.ll_point = GeoPoint(
+                latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
+            )
+            futures.append(self._from_ll_client.call_async(projection_request))
+        self._pending_coordinate_projection = (execution_id, task, route, request, futures)
+        for future in futures:
+            future.add_done_callback(self._finish_coordinate_projection)
+
+    def _finish_coordinate_projection(self, _future) -> None:
+        with self._lock:
+            pending = self._pending_coordinate_projection
+            if pending is None:
+                return
+            execution_id, task, route, request, futures = pending
+            if not all(future.done() for future in futures):
+                return
+            self._pending_coordinate_projection = None
+            if not self._machine.is_current(execution_id):
+                return
+            try:
+                points = tuple(
+                    (float(future.result().map_point.x), float(future.result().map_point.y))
+                    for future in futures
+                )
+                resolved = route.with_projected_points(points)
+            except Exception as exc:
+                self._complete(
+                    execution_id, ResultCode.CONFIGURATION_FAILED,
+                    f"map projection for waypoint coordinates failed: {exc}",
+                )
+                return
+            decision = type("Decision", (), {"execution_id": execution_id})()
+            self._configure_route(decision, task, resolved, request)
+
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
         self._action_results[execution_id] = (code, message)
@@ -368,6 +510,7 @@ class MissionManager(Node):
         self._machine.reset_to_idle(execution_id)
         self._active_task = None
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._publish_task_readiness(False, False, "")
         self._publish_status()
         return type("Decision", (), {"accepted": False, "result_code": code, "message": message,
@@ -381,8 +524,12 @@ class MissionManager(Node):
         if not self._machine.is_current(execution_id) or self._active_route is None:
             return
         self._pending_start = None
+        self._pending_coordinate_projection = None
         self._machine.transition(MissionState.RUNNING, execution_id=execution_id,
                                  stage="starting", message="starting task executor")
+        self._navigation.set_feedback_callback(
+            self._on_task1_navigation_feedback if task.features.get("cardinal_walls") is True else None
+        )
         if task.executor == "waypoint_sequence":
             executor = WaypointSequenceExecutor(self._navigation)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
@@ -405,6 +552,46 @@ class MissionManager(Node):
 
     def _set_task2_enabled(self, enabled: bool) -> None:
         self._task2_enabled_pub.publish(Bool(data=enabled))
+
+    def _on_task2_goal_reached(self, message: Bool) -> None:
+        if not message.data:
+            return
+        with self._lock:
+            if isinstance(self._active_executor, Task2MppiExecutor):
+                self._active_executor.goal_reached()
+
+    def _configure_task1_cardinal_walls(self, task: TaskDefinition, route: Route) -> None:
+        """Prepare the Task1 GPS3 stage gate from the validated route."""
+        self._set_task1_cardinal_walls(False)
+        self._task1_wall_enable_after_remaining = None
+        if task.features.get("cardinal_walls") is not True:
+            return
+        by_competition_id = {waypoint.competition_id: waypoint for waypoint in route.waypoints}
+        gps3 = by_competition_id.get("3")
+        gps4 = by_competition_id.get("4")
+        if gps3 is None or gps4 is None:
+            self.get_logger().error("Task1 route has no GPS3/GPS4; cardinal walls remain disabled")
+            return
+        dx, dy = gps4.x - gps3.x, gps4.y - gps3.y
+        if dx * dx + dy * dy < 1.0e-8:
+            self.get_logger().error("Task1 GPS3 and GPS4 coincide; cardinal walls remain disabled")
+            return
+        gps3_index = route.waypoints.index(gps3)
+        self._task1_wall_enable_after_remaining = len(route.waypoints) - gps3_index
+        self._task1_cardinal_heading_pub.publish(Float64(data=math.atan2(dy, dx)))
+
+    def _on_task1_navigation_feedback(self, feedback) -> None:
+        """Latch virtual walls only after Nav2 reports competition GPS3 passed."""
+        threshold = self._task1_wall_enable_after_remaining
+        if self._task1_walls_enabled or threshold is None:
+            return
+        if int(feedback.number_of_poses_remaining) < threshold:
+            self._set_task1_cardinal_walls(True)
+            self.get_logger().info("GPS3 reached: enabled cardinal virtual walls")
+
+    def _set_task1_cardinal_walls(self, enabled: bool) -> None:
+        self._task1_walls_enabled = enabled
+        self._task1_cardinal_wall_enable_pub.publish(Bool(data=enabled))
 
     def _activate_task_readiness(self, execution_id: str, task: TaskDefinition) -> None:
         if self._machine.is_current(execution_id):
@@ -464,8 +651,10 @@ class MissionManager(Node):
         was_canceling = self._machine.snapshot.state == MissionState.CANCELING
         self._machine.begin_cancel(execution_id)
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
+        self._pending_coordinate_projection = None
         self._auto_permission_deadline_ns = None
         self._auto_mode_request_sent = False
         if self._active_executor and not was_canceling:
@@ -501,6 +690,8 @@ class MissionManager(Node):
         self._active_executor = None
         self._active_task = None
         self._set_task2_enabled(False)
+        self._set_task1_cardinal_walls(False)
+        self._navigation.set_feedback_callback(None)
         self._publish_status()
         self._publish_task_readiness(False, False, "")
         self._machine.reset_to_idle(execution_id)

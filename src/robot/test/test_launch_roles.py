@@ -158,14 +158,37 @@ def test_resident_nav2_profile_is_selected_by_role_bringup():
     assert "changed by Mission Manager" in nav2_source
 
 
+@pytest.mark.parametrize("filename", ["nav2_params_task3_humble.yaml", "nav2_params_task3_jazzy.yaml"])
+def test_task3_requires_goal_heading_alignment(filename):
+    params = yaml.safe_load((Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text())
+    controller = params["controller_server"]["ros__parameters"]
+    follow_path = controller["FollowPath"]
+    checker = controller["general_goal_checker"]
+
+    assert "RotateToGoal" in follow_path["critics"]
+    assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
+    assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
+    assert checker["position_only_xy_goal_tolerance"] == pytest.approx(1.5)
+    assert checker["heading_required_goal_xs"] == []
+    assert checker["heading_required_goal_ys"] == []
+    assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
+
+
+def test_task3_uses_its_relaxed_waypoint_behavior_tree():
+    source = _read_launch_source("nav2.launch.py")
+    task3_bt = (Path(_LAUNCH_DIR).parents[0] / "config" /
+                "navigate_through_poses_task3_w_replanning_and_recovery.xml").read_text()
+
+    assert "navigate_through_poses_task3_w_replanning_and_recovery.xml" in source
+    assert 'RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="1.5"' in task3_bt
+
+
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
     adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
-    task2_params = [
-        (Path(_LAUNCH_DIR).parents[0] / "config" / filename).read_text()
-        for filename in ("nav2_params_task2_humble.yaml", "nav2_params_task2_jazzy.yaml")
-    ]
+    task2_params = (Path(_LAUNCH_DIR).parents[0] / "config" /
+                    "nav2_params_task2_humble.yaml").read_text()
 
     assert '"navigation_launch_task2.py"' in minipc_source
     assert '"task2_mission_adapter.launch.py"' in minipc_source
@@ -173,16 +196,14 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "' != 'task2'" in minipc_source
     assert 'executable="autonomy_supervisor_node"' in minipc_source
     assert '"task2_autonomy_ready_node"' in adapter_source
-    assert '"preprocessing.launch.py"' in adapter_source
-    assert '"segmentation.launch.py"' in adapter_source
-    assert '"tracker.launch.py"' in adapter_source
-    assert '"ego_odom_topic": own_odom_topic' in adapter_source
-    assert '"planner_real.launch.py"' in adapter_source
-    assert '"mission_gate_required": "true"' in adapter_source
+    assert '"follow_path_client_node"' in adapter_source
+    assert '"mission_gate_required": True' in adapter_source
+    assert '"preprocessing.launch.py"' not in adapter_source
+    assert '"planner_real.launch.py"' not in adapter_source
     assert "nav2_controller" in task2_nav_source
     assert "nav2_velocity_smoother" in task2_nav_source
     assert "nav2_lifecycle_manager" in task2_nav_source
-    assert '"controller_server", "velocity_smoother"' in task2_nav_source
+    assert '"controller_server", "velocity_smoother", "collision_monitor"' in task2_nav_source
     assert "/cmd_vel_nav" in task2_nav_source
     assert "root_key=None" in task2_nav_source
     for forbidden in (
@@ -191,13 +212,13 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
         "nav2_behaviors",
         "nav2_bt_navigator",
         "nav2_waypoint_follower",
-        "nav2_collision_monitor",
-        "pointcloud",
+        "nav2_planner",
     ):
         assert forbidden not in task2_nav_source
-        assert all(forbidden not in params for params in task2_params)
-    for params in task2_params:
-        assert "use_collision_detection: false" in params
+        assert forbidden not in task2_params
+    assert "use_collision_detection: false" in task2_params
+    assert "nav2_collision_monitor" in task2_nav_source
+    assert '"/task2/safety_points"' in task2_params
 
 
 def test_legacy_task2_launch_uses_the_follow_path_only_graph():
@@ -247,6 +268,29 @@ def test_ground_pc_publishes_the_actual_route_marker_from_shared_tf():
     assert '"marker_topic": "/actual_path_marker"' in source
     assert '"parent_frame": "odom"' in source
     assert '"child_frame": "base_link"' in source
+
+
+def test_ground_pc_enables_foxglove_by_default_for_waypoint_visualization():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert '"enable_foxglove_bridge",\n                default_value="true"' in source
+
+
+def test_ground_pc_reads_the_active_mission_waypoint_yaml_locally():
+    source = _read_launch_source("ground_pc.launch.py")
+
+    assert 'executable="ground_waypoint_geo_publisher"' in source
+    assert '"waypoint_task_type"' not in source
+
+
+def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():
+    root = Path(_LAUNCH_DIR).parents[2]
+    ground = (root / "config" / "zenoh" / "bridge_groundpc.json5").read_text()
+    minipc = (root / "config" / "zenoh" / "bridge_minipc.json5").read_text()
+
+    assert '"/mission/status"' in ground
+    assert '"/mission/status"' in minipc
+    assert '"/waypoint_markers"' not in ground
 
 
 def test_disabled_minipc_serial_drivers_default_to_false():
@@ -401,6 +445,41 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
+def test_task1_tf_authorities_and_local_virtual_wall_contract():
+    """Keep Task 1's map-frame walls transformable into the local costmap."""
+    robot_config_dir = os.path.normpath(os.path.join(_THIS_DIR, "..", "config"))
+    with open(os.path.join(robot_config_dir, "ekf_global.yaml"), encoding="utf-8") as stream:
+        global_ekf = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
+    with open(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "localization",
+            "um982_feedback_filter",
+            "config",
+            "um982_feedback_ekf.yaml",
+        ),
+        encoding="utf-8",
+    ) as stream:
+        local_ekf = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
+    with open(os.path.join(robot_config_dir, "nav2_params_humble.yaml"), encoding="utf-8") as stream:
+        nav2 = yaml.safe_load(stream)
+
+    assert global_ekf["publish_tf"] is True
+    assert global_ekf["world_frame"] == "map"
+    assert global_ekf["map_frame"] == "map"
+    assert global_ekf["odom_frame"] == "odom"
+    assert local_ekf["publish_tf"] is True
+    assert local_ekf["world_frame"] == "odom"
+    assert local_ekf["odom_frame"] == "odom"
+    assert local_ekf["base_link_frame"] == "base_link"
+
+    local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
+    assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
+    assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
 def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
     launch_source = _read_launch_source("glim_um982_localization.launch.py")
     assert '"feedback_frame_id": "map"' in launch_source
@@ -539,6 +618,36 @@ def test_zenoh_only_exports_livox_imu_from_the_raw_livox_streams(filename):
 
     assert '"/livox/imu"' in source
     assert '"/livox/lidar"' not in source
+
+
+def test_task1_safety_cloud_is_compacted_on_jetson_and_bridged_to_minipc():
+    jetson_source = _read_launch_source("jetson_bringup.launch.py")
+    assert 'name="task1_safety_points"' in jetson_source
+    assert '"input_topic": "/zed2i/points"' in jetson_source
+    assert '"output_topic": "/task1/safety_points"' in jetson_source
+    assert '"max_range_m": 8.0' in jetson_source
+    assert '"min_valid_input_points": 0' in jetson_source
+    assert '"publish_empty_on_invalid_input": True' in jetson_source
+    assert '"voxel_leaf_size_m": 0.25' in jetson_source
+    assert '"process_rate_hz": 5.0' in jetson_source
+
+    zed_config = os.path.normpath(
+        os.path.join(
+            _THIS_DIR, "..", "..", "driver", "camera", "zed2i_driver",
+            "config", "zed2i_jetson_orin_nano.yaml",
+        )
+    )
+    with open(zed_config, "r") as stream:
+        zed_source = stream.read()
+    assert "publish_pointcloud: true" in zed_source
+    assert "pointcloud_stride: 4" in zed_source
+
+    for filename in ("bridge_jetson.json5", "bridge_minipc.json5"):
+        path = os.path.normpath(
+            os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", filename)
+        )
+        with open(path, "r") as stream:
+            assert '"/task1/safety_points"' in stream.read()
 
 
 def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():

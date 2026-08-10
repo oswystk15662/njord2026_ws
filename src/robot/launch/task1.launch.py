@@ -74,7 +74,9 @@ def generate_launch_description():
         'waypoint_publisher.launch.py',
         {
             'task_type': LaunchConfiguration('task_type'),
-            'frame_id': 'odom',
+            # GNSS localization, buoy detections, virtual walls and GPS
+            # waypoint projection all share this frame.
+            'frame_id': 'map',
             'publish_rate_hz': '2.0',
         },
         condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
@@ -88,6 +90,17 @@ def generate_launch_description():
             'detection_topic': '/buoy_detections_3d',
             'output_topic': '/virtual_obstacles',
             'map_frame': 'map',
+            # UM982 dual-antenna heading is referenced to true north. The
+            # wall node maps it into the navigation map frame per detection.
+            'true_north_heading_topic': '/sensor/vehicle_gnss/compass/raw',
+            # waypoint_publisher latches this true only after competition
+            # waypoint GPS3 is passed.
+            'wall_enable_topic': '/task1/cardinal_wall_enable',
+            # GPS3->4 map heading is calculated by waypoint_publisher from
+            # the configured (possibly geodetic) route points.
+            'retire_passed_cardinal_walls_from_base_pose': True,
+            'retirement_margin_m': 1.0,
+            'retirement_heading_topic': '/task1/gps3_to_gps4_heading',
         }],
         condition=IfCondition(LaunchConfiguration('start_legacy_task_nodes')),
     )

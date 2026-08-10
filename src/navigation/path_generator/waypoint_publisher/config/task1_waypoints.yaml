@@ -1,9 +1,6 @@
 # Task 1: Maneuvering and Path Finding
-# The Task1 simulation coordinates below use the same rotated local frame as
-# task1_sim/config/task1_params.yaml.  In particular, x points along the
-# course and y is the lateral axis.  Do not publish the raw ENU follow-test
-# points here: their unrotated end point (35.66, 27.83) is outside the Task1
-# simulated course (y = -40 .. 15).
+# Every waypoint is entered as WGS84 latitude/longitude and projected to map
+# through /fromLL.  Replace the sample coordinates with surveyed course data.
 #
 # `task1_config` is the official NJORD 2026 Task1 competition scenario: a
 # Cartesian sim approximation of the "4 GPS point -> cardinal marker slalom"
@@ -24,173 +21,164 @@
 
 task1_config:
   frame_id: "map"
+  # GPS3/GPS4の competition_id は残すこと。GPS3通過後の仮想壁
+  # 有効化と、GPS3→GPS4の方位算出に使う。
   publish_rate_hz: 2.0
-  origin:
-    latitude: 63.44228538325694
-    longitude: 10.42402403234536
-    name: "GPS 1 - Slalom Start"
-  gps_points:
-    - id: 1
-      latitude: 63.44228538325694
-      longitude: 10.42402403234536
-      dms: '63°26''32.2"N 10°25''26.5"E'
-      name: "GPS 1 - Slalom Start"
-    - id: 2
-      latitude: 63.4425333333
-      longitude: 10.42402403234536
-      dms: '63°26''32.2"N 10°25''26.5"E'
-      name: "GPS 2 - Slalom Finish"
-
-    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
-    # Reference points only; not used as route waypoints (route uses the
-    # Cartesian slalom coordinates below, matching task1_sim/config/task1_params.yaml).
-    - id: 3
-      latitude: 35.6675575459
-      longitude: 139.7933614800
-      name: "GPS 3 - Task1.2 diagonal start (corner C)"
-    - id: 4
-      latitude: 35.6674742121
-      longitude: 139.7938614790
-      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
-
   # Full Task1 route: task1-1's maneuvering waypoints, followed by the
   # cardinal-marker S/N/S slalom. This order matches task1_sim's evaluation
   # sequence (waypoint1_xy, GPS checkpoints, then waypoint2_xy).
   waypoints:
     - id: 1
-      x: 0.0000
-      y: 0.0000
+      competition_id: "1"
+      latitude: 34.5456666667
+      longitude: 135.5070555556
       yaw: 0.4636
       type: "start"
-      name: "GPS 1 - Task1-1 Start"
-      tolerance_m: 5.0
+      name: "GPS 1"
+      tolerance_m: 2.0
 
     - id: 2
-      x: 10.0000
-      y: 5.0000
+      competition_id: "1.1"
+      latitude: 34.5457115823
+      longitude: 135.5071646170
       yaw: -1.0304
       type: "waypoint"
-      name: "Task1-1 waypoint 1"
-      tolerance_m: 5.0
+      name: "GPS 1.1"
+      tolerance_m: 2.0
 
     - id: 3
-      x: 13.0000
-      y: 0.0000
+      competition_id: "1.2"
+      latitude: 34.5456666667
+      longitude: 135.5071973355
       yaw: -1.0304
       type: "waypoint"
-      name: "Task1-1 waypoint 2"
+      name: "GPS 1.2"
       tolerance_m: 2.0
 
     - id: 4
-      x: 16.0000
-      y: -5.0000
+      competition_id: "1.3"
+      latitude: 34.5456217511
+      longitude: 135.5072300539
       yaw: 0.9828
       type: "waypoint"
-      name: "Task1-1 waypoint 3"
+      name: "GPS 1.3"
       tolerance_m: 2.0
 
     - id: 5
-      x: 19.0000
-      y: -0.5000
+      competition_id: "1.4"
+      latitude: 34.5456621751
+      longitude: 135.5072627723
       yaw: 1.1384
       type: "waypoint"
-      name: "Task1-1 waypoint 4"
+      name: "GPS 1.4"
       tolerance_m: 2.0
 
     - id: 6
-      x: 22.0000
-      y: 6.0000
+      competition_id: "1.5"
+      latitude: 34.5457205654
+      longitude: 135.5072954907
       yaw: -1.1071
       type: "waypoint"
-      name: "Task1-1 waypoint 5"
+      name: "GPS 1.5"
       tolerance_m: 2.0
 
     - id: 7
-      x: 25.0000
-      y: 0.0000
+      competition_id: "1.6"
+      latitude: 34.5456666667
+      longitude: 135.5073282092
       yaw: -1.0304
       type: "waypoint"
-      name: "Task1-1 waypoint 6"
+      name: "GPS 1.6"
       tolerance_m: 2.0
 
     - id: 8
-      x: 28.0000
-      y: -5.0000
+      competition_id: "1.7"
+      latitude: 34.5456217511
+      longitude: 135.5073609276
       yaw: 0.9273
       type: "waypoint"
-      name: "Task1-1 waypoint 7"
+      name: "GPS 1.7"
       tolerance_m: 2.0
 
     - id: 9
-      x: 31.0000
-      y: -1.0000
+      competition_id: "1.8"
+      latitude: 34.5456576836
+      longitude: 135.5073936460
       yaw: 0.7854
       type: "waypoint"
-      name: "Task1-1 waypoint 8"
+      name: "GPS 1.8"
       tolerance_m: 2.0
 
     - id: 10
-      x: 34.0000
-      y: 2.0000
+      competition_id: "1.9"
+      latitude: 34.5456846329
+      longitude: 135.5074263645
       yaw: -0.3218
       type: "waypoint"
-      name: "Task1-1 waypoint 9"
+      name: "GPS 1.9"
       tolerance_m: 2.0
 
     - id: 11
-      x: 40.0000
-      y: 0.0000
+      competition_id: "1.10"
+      latitude: 34.5456666667
+      longitude: 135.5074918013
       yaw: 0.0000
       type: "waypoint"
-      name: "Task1-1 waypoint 10"
+      name: "GPS 1.10"
       tolerance_m: 2.0
 
     - id: 12
-      x: 50.0000
-      y: 0.0000
+      competition_id: "2"
+      latitude: 34.5456666667
+      longitude: 135.5076008628
       yaw: -1.5708
       type: "transit"
-      name: "Transit - clear of marker corridor"
+      name: "GPS 2"
       tolerance_m: 2.0
 
     - id: 13
-      x: 50.0000
-      y: -25.0000
+      competition_id: "3"
+      latitude: 34.5454420889
+      longitude: 135.5076008628
       yaw: -2.7744
       type: "start"
-      name: "GPS 2 - Slalom Start"
+      name: "GPS 3"
       tolerance_m: 2.0
 
     - id: 14
-      x: 24.0000
-      y: -35.0000
+      competition_id: "3.1"
+      latitude: 34.5453522578
+      longitude: 135.5073173030
       yaw: 1.9937
       type: "turn"
-      name: "Slalom turn 1 (pass south of marker 1, S)"
+      name: "GPS 3.1"
       tolerance_m: 2.0
 
     - id: 15
-      x: 15.0000
-      y: -15.0000
+      competition_id: "3.2"
+      latitude: 34.5455319200
+      longitude: 135.5072191477
       yaw: -1.9075
       type: "turn"
-      name: "Slalom turn 2 (pass north of marker 2, N)"
+      name: "GPS 3.2"
       tolerance_m: 2.0
 
     - id: 16
-      x: 8.0000
-      y: -35.0000
+      competition_id: "3.3"
+      latitude: 34.5453522578
+      longitude: 135.5071428047
       yaw: 2.2455
       type: "turn"
-      name: "Slalom turn 3 (pass south of marker 3, S)"
+      name: "GPS 3.3"
       tolerance_m: 2.0
 
     - id: 17
-      x: 0.0000
-      y: -25.0000
+      competition_id: "4"
+      latitude: 34.5454420889
+      longitude: 135.5070555556
       yaw: 2.2455
       type: "goal"
-      name: "GPS 2 - Slalom Finish"
+      name: "GPS 4"
       tolerance_m: 2.0
 
   constraints:
@@ -202,170 +190,142 @@ task1_config:
 task1_follow_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  origin:
-    latitude: 34.5456666667
-    longitude: 135.5070555556
-    name: "GPS 1 - Survey Start"
-  gps_points:
-    - id: 1
-      latitude: 34.5456666667
-      longitude: 135.5070555556
-      dms: '34°32''44.4"N 135°30''25.4"E'
-      name: "GPS 1 - Slalom Start"
-    - id: 2
-      latitude: 34.5459166667
-      longitude: 135.5074444444
-      dms: '34°32''45.3"N 135°30''26.8"E'
-      name: "GPS 2 - Slalom Finish"
-
-    # --- Task 1.2 (cardinal marker recognition, issue #46) ---
-    # Reference points only; no TaskType/route exists yet for task1-2.
-    # Diagonal A<->C of the legacy pool rectangle; not used by this route.
-    - id: 3
-      latitude: 35.6675575459
-      longitude: 139.7933614800
-      name: "GPS 3 - Task1.2 diagonal start (corner C)"
-    - id: 4
-      latitude: 35.6674742121
-      longitude: 139.7938614790
-      name: "GPS 4 - Task1.2 diagonal goal (corner A)"
-
   # This sequence is expressed in the simulation-local, rotated frame. It
   # contains every required point: GPS 1 -> 1.1--1.10 -> GPS 2 -> GPS 3 ->
   # 3.1--3.3 -> GPS 4.  The previous route began at GPS 2 and consequently
   # never sent the ten intermediate GPS 1--2 waypoints to Nav2.
   waypoints:
     - id: 1
-      x: 0.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5070555556
       yaw: 0.4636
       type: "start"
       name: "GPS 1 - Slalom Start"
       tolerance_m: 2.0
 
     - id: 2
-      x: 10.0000
-      y: 5.0000
+      latitude: 34.5457115823
+      longitude: 135.5071646170
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.1"
       tolerance_m: 2.0
 
     - id: 3
-      x: 13.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5071973355
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.2"
       tolerance_m: 2.0
 
     - id: 4
-      x: 16.0000
-      y: -5.0000
+      latitude: 34.5456217511
+      longitude: 135.5072300539
       yaw: 0.9828
       type: "waypoint"
       name: "GPS 1.3"
       tolerance_m: 2.0
 
     - id: 5
-      x: 19.0000
-      y: -0.5000
+      latitude: 34.5456621751
+      longitude: 135.5072627723
       yaw: 1.1384
       type: "waypoint"
       name: "GPS 1.4"
       tolerance_m: 2.0
 
     - id: 6
-      x: 22.0000
-      y: 6.0000
+      latitude: 34.5457205654
+      longitude: 135.5072954907
       yaw: -1.1071
       type: "waypoint"
       name: "GPS 1.5"
       tolerance_m: 2.0
 
     - id: 7
-      x: 25.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5073282092
       yaw: -1.0304
       type: "waypoint"
       name: "GPS 1.6"
       tolerance_m: 2.0
 
     - id: 8
-      x: 28.0000
-      y: -5.0000
+      latitude: 34.5456217511
+      longitude: 135.5073609276
       yaw: 0.9273
       type: "waypoint"
       name: "GPS 1.7"
       tolerance_m: 2.0
 
     - id: 9
-      x: 31.0000
-      y: -1.0000
+      latitude: 34.5456576836
+      longitude: 135.5073936460
       yaw: 0.7854
       type: "waypoint"
       name: "GPS 1.8"
       tolerance_m: 2.0
 
     - id: 10
-      x: 34.0000
-      y: 2.0000
+      latitude: 34.5456846329
+      longitude: 135.5074263645
       yaw: -0.3218
       type: "waypoint"
       name: "GPS 1.9"
       tolerance_m: 2.0
 
     - id: 11
-      x: 40.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5074918013
       yaw: 0.0000
       type: "waypoint"
       name: "GPS 1.10"
       tolerance_m: 2.0
 
     - id: 12
-      x: 50.0000
-      y: 0.0000
+      latitude: 34.5456666667
+      longitude: 135.5076008628
       yaw: -1.5708
       type: "gps"
       name: "GPS 2"
       tolerance_m: 2.0
 
     - id: 13
-      x: 50.0000
-      y: -25.0000
+      latitude: 34.5454420889
+      longitude: 135.5076008628
       yaw: -2.7744
       type: "gps"
       name: "GPS 3"
       tolerance_m: 2.0
 
     - id: 14
-      x: 24.0000
-      y: -35.0000
+      latitude: 34.5453522578
+      longitude: 135.5073173030
       yaw: 1.9937
       type: "turn"
       name: "Slalom turn 1 - pass south of marker 1"
       tolerance_m: 2.0
 
     - id: 15
-      x: 15.0000
-      y: -15.0000
+      latitude: 34.5455319200
+      longitude: 135.5072191477
       yaw: -1.9075
       type: "turn"
       name: "Slalom turn 2 - pass north of marker 2"
       tolerance_m: 2.0
 
     - id: 16
-      x: 8.0000
-      y: -35.0000
+      latitude: 34.5453522578
+      longitude: 135.5071428047
       yaw: 2.2455
       type: "turn"
       name: "Slalom turn 3 - pass south of marker 3"
       tolerance_m: 2.0
 
     - id: 17
-      x: 0.0000
-      y: -25.0000
+      latitude: 34.5454420889
+      longitude: 135.5070555556
       yaw: 2.2455
       type: "goal"
       name: "GPS 4 - Slalom Finish"

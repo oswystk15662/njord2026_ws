@@ -4,6 +4,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 
 def generate_launch_description():
     pkg_share = get_package_share_directory('sensor_sim_with_noise')
@@ -18,12 +19,20 @@ def generate_launch_description():
         default_value='/wit/imu',
         description='Output topic for the simulated IMU message',
     )
+    true_north_yaw_arg = DeclareLaunchArgument(
+        'true_north_yaw_rad',
+        default_value='1.5707963267948966',
+        description='Geographical true-north direction expressed in the sim map frame (rad)',
+    )
 
     gnss_sim_node = Node(
         package='sensor_sim_with_noise',
         executable='gnss_noise_simulator',
         name='gnss_noise_simulator',
-        parameters=[config_file],
+        parameters=[config_file, {
+            'true_north_yaw_rad': ParameterValue(
+                LaunchConfiguration('true_north_yaw_rad'), value_type=float),
+        }],
         remappings=[('/gps/fix', LaunchConfiguration('fix_topic'))],
         output='screen'
     )
@@ -48,6 +57,7 @@ def generate_launch_description():
     return LaunchDescription([
         fix_topic_arg,
         imu_topic_arg,
+        true_north_yaw_arg,
         gnss_sim_node,
         imu_sim_node,
         um982_odom_sim_node

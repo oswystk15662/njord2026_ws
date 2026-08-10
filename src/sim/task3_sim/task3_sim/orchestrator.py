@@ -11,6 +11,8 @@ from std_msgs.msg import Bool
 from tf2_ros import TransformBroadcaster, Buffer, TransformListener
 from visualization_msgs.msg import Marker, MarkerArray
 
+from .virtual_walls import task3_virtual_wall_points
+
 
 class Task3Orchestrator(Node):
     def __init__(self):
@@ -30,6 +32,10 @@ class Task3Orchestrator(Node):
         self.declare_parameter("publish_rate_hz", 10.0)
         self.declare_parameter("course_bounds", [-24.0, 24.0, -14.0, 14.0])
         self.declare_parameter("boundary_marker_step", 4.0)
+        self.declare_parameter("enable_virtual_walls", True)
+        self.declare_parameter("virtual_wall_radius_m", 2.0)
+        self.declare_parameter("same_color_wall_max_gap_m", 12.0)
+        self.declare_parameter("same_color_wall_point_spacing_m", 0.2)
 
         self.frame_id = self.get_parameter("frame_id").get_parameter_value().string_value
         self.task_type = self.get_parameter("task_type").get_parameter_value().string_value
@@ -41,6 +47,11 @@ class Task3Orchestrator(Node):
         self.publish_rate_hz = self.get_parameter("publish_rate_hz").get_parameter_value().double_value
         self.course_bounds = list(self.get_parameter("course_bounds").value)
         self.boundary_marker_step = max(0.5, float(self.get_parameter("boundary_marker_step").value))
+        self.enable_virtual_walls = self.get_parameter("enable_virtual_walls").value
+        self.virtual_wall_radius_m = float(self.get_parameter("virtual_wall_radius_m").value)
+        self.same_color_wall_max_gap_m = float(self.get_parameter("same_color_wall_max_gap_m").value)
+        self.same_color_wall_point_spacing_m = float(
+            self.get_parameter("same_color_wall_point_spacing_m").value)
 
         # Dynamically override parameters based on task type to form a point-symmetric virtual field
         if self.task_type == "task3_2":
@@ -77,6 +88,7 @@ class Task3Orchestrator(Node):
 
         # Pointcloud publisher and TF listener
         self.pub_pointcloud = self.create_publisher(PointCloud2, "/pointcloud", 10)
+        self.pub_virtual_obstacles = self.create_publisher(PointCloud2, "/virtual_obstacles", 10)
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
 
@@ -405,10 +417,10 @@ class Task3Orchestrator(Node):
         rz = z + 2.0 * c2z
         return rx, ry, rz
 
-    def create_pointcloud2(self, points):
+    def create_pointcloud2(self, points, frame_id="base_link"):
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
-        msg.header.frame_id = "base_link"
+        msg.header.frame_id = frame_id
 
         msg.height = 1
         msg.width = len(points)
@@ -458,6 +470,12 @@ class Task3Orchestrator(Node):
         self.publish_dock_projection()
         self.publish_buoy_markers(buoy_positions)
         self.publish_waypoint_markers()
+
+        if self.enable_virtual_walls:
+            virtual_wall = task3_virtual_wall_points(
+                buoy_positions, self.virtual_wall_radius_m, self.same_color_wall_max_gap_m,
+                self.same_color_wall_point_spacing_m)
+            self.pub_virtual_obstacles.publish(self.create_pointcloud2(virtual_wall, "map"))
 
         # Combine static dock and dynamic buoy points
         all_map_pts = self.static_map_points + buoy_pts

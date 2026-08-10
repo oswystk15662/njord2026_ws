@@ -15,10 +15,18 @@ import rclpy
 from rclpy.node import Node
 from rclpy.action import ActionClient
 from action_msgs.msg import GoalStatus
-from geometry_msgs.msg import PoseStamped
+from ament_index_python.packages import get_package_share_directory
+from geometry_msgs.msg import Point, PoseStamped
+from geographic_msgs.msg import GeoPoint
 from nav2_msgs.action import NavigateThroughPoses
+from robot_localization.srv import FromLL
+from rclpy.qos import DurabilityPolicy, QoSProfile
+from std_msgs.msg import Bool
+from std_msgs.msg import Float64
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 import yaml
+import math
 from pathlib import Path
 from enum import Enum
 
@@ -59,6 +67,15 @@ class WaypointPublisher(Node):
         self.declare_parameter('use_dynamic_gate_midpoints', True)
         self.declare_parameter('run_full_sequence', False)
         self.declare_parameter('max_goal_retries', 1)
+        self.declare_parameter('waypoint_marker_topic', '/waypoint_markers')
+        self.declare_parameter('nav2_goal_tolerance_m', 1.0)
+        self.declare_parameter('show_waypoint_route_line', False)
+        self.declare_parameter('waypoint_route_z', -0.05)
+        self.declare_parameter('cardinal_wall_enable_topic', '/task1/cardinal_wall_enable')
+        self.declare_parameter('cardinal_wall_enable_waypoint', '3')
+        self.declare_parameter('start_competition_waypoint', '')
+        self.declare_parameter('from_ll_service', '/fromLL')
+        self.declare_parameter('cardinal_retirement_heading_topic', '/task1/gps3_to_gps4_heading')
 
         # Get parameters
         self.task_type_str = self.get_parameter('task_type').value
@@ -67,6 +84,18 @@ class WaypointPublisher(Node):
         self.use_dynamic_gate_midpoints = self.get_parameter('use_dynamic_gate_midpoints').value
         self.run_full_sequence = self.get_parameter('run_full_sequence').value
         self.max_goal_retries = int(self.get_parameter('max_goal_retries').value)
+        self.waypoint_marker_topic = self.get_parameter('waypoint_marker_topic').value
+        self.nav2_goal_tolerance_m = float(self.get_parameter('nav2_goal_tolerance_m').value)
+        self.show_waypoint_route_line = self.get_parameter('show_waypoint_route_line').value
+        self.waypoint_route_z = float(self.get_parameter('waypoint_route_z').value)
+        self.cardinal_wall_enable_topic = self.get_parameter('cardinal_wall_enable_topic').value
+        self.cardinal_wall_enable_waypoint = str(
+            self.get_parameter('cardinal_wall_enable_waypoint').value)
+        self.start_competition_waypoint = str(
+            self.get_parameter('start_competition_waypoint').value).strip()
+        self.from_ll_service = self.get_parameter('from_ll_service').value
+        self.cardinal_retirement_heading_topic = self.get_parameter(
+            'cardinal_retirement_heading_topic').value
         
         # Validate task type
         try:
@@ -78,6 +107,18 @@ class WaypointPublisher(Node):
         # Load configuration
         self.config = self._load_config()
 
+        marker_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+        self.waypoint_marker_pub = self.create_publisher(
+            MarkerArray, self.waypoint_marker_topic, marker_qos)
+        self.cardinal_wall_enable_pub = self.create_publisher(
+            Bool, self.cardinal_wall_enable_topic, marker_qos)
+        self.cardinal_retirement_heading_pub = self.create_publisher(
+            Float64, self.cardinal_retirement_heading_topic, marker_qos)
+        self.cardinal_wall_enabled = False
+        self.cardinal_wall_enable_goal_index = self._cardinal_wall_enable_goal_index()
+        self._publish_cardinal_wall_enable()
+        self._publish_waypoint_markers()
+
         # TF lookup is used to replace Task3 gate waypoints with the live midpoint
         # between the corresponding red and green buoys when those frames exist.
         self.tf_buffer = Buffer()
@@ -85,6 +126,10 @@ class WaypointPublisher(Node):
         
         # Initialize action client for NavigateThroughPoses
         self.nav_client = ActionClient(self, NavigateThroughPoses, '/navigate_through_poses')
+        self.from_ll_client = self.create_client(FromLL, self.from_ll_service)
+        self.geodetic_futures = None
+        self.geodetic_indices = []
+        self.geodetic_positions = []
         
         # Task3 state machine
         self.docking_state = DockingState.IDLE
@@ -112,13 +157,14 @@ class WaypointPublisher(Node):
         Load waypoint configuration from YAML file
         Returns: dict with task configuration
         """
-        # Construct config file path
-        package_share_dir = Path(__file__).parent.parent / 'config'
+        # Installed ROS packages keep data files under share/<package>, not
+        # beside the Python module under lib/python*/site-packages.
+        package_share_dir = Path(get_package_share_directory('waypoint_publisher')) / 'config'
         
         config_mapping = {
             TaskType.TASK1: 'task1_waypoints.yaml',
             TaskType.TASK1_SKIP_1_1: 'task1_skip_1_1_waypoints.yaml',
-            TaskType.TASK1_FOLLOW: 'task1_waypoints.yaml',
+            TaskType.TASK1_FOLLOW: 'task1_follow_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
             TaskType.TASK3_2: 'task3_waypoints.yaml',
@@ -146,9 +192,45 @@ class WaypointPublisher(Node):
             return full_config['task3_1_config']
         elif self.task_type == TaskType.TASK3_2:
             return full_config['task3_2_config']
+
+    def _cardinal_wall_enable_goal_index(self):
+        """Return the Task1 NavigateThroughPoses index for competition WP3."""
+        if self.task_type != TaskType.TASK1:
+            return None
+        for index, waypoint in enumerate(self._active_waypoints()):
+            if str(waypoint.get('competition_id', waypoint.get('id'))) == self.cardinal_wall_enable_waypoint:
+                return index
+        self.get_logger().warn(
+            f'competition waypoint {self.cardinal_wall_enable_waypoint} is absent; '
+            'cardinal virtual walls remain disabled')
+        return None
+
+    def _publish_cardinal_wall_enable(self):
+        msg = Bool()
+        msg.data = self.cardinal_wall_enabled
+        self.cardinal_wall_enable_pub.publish(msg)
+
+    def _on_navigation_feedback(self, feedback_msg):
+        """Enable Task1 cardinal walls only after Nav2 reports GPS3 passed."""
+        if self.cardinal_wall_enabled or self.cardinal_wall_enable_goal_index is None:
+            return
+        # NavigateThroughPoses feedback in Humble does not expose the active
+        # waypoint index.  It does expose the number of poses still pending;
+        # it decreases only after the current pose is passed.  This works both
+        # for the complete Task1 route and for the route sliced to start at
+        # competition WP3.
+        total_poses = len(self._active_waypoints())
+        poses_remaining = int(feedback_msg.feedback.number_of_poses_remaining)
+        if poses_remaining < total_poses - self.cardinal_wall_enable_goal_index:
+            self.cardinal_wall_enabled = True
+            self._publish_cardinal_wall_enable()
+            self.get_logger().info('GPS3 reached: enabled cardinal virtual walls')
     
     def _timer_callback(self):
         """Timer callback to publish waypoints"""
+        if self.geodetic_futures is not None:
+            self._finish_geodetic_waypoint_conversion()
+            return
         if not self.first_publish:
             return
         
@@ -157,6 +239,8 @@ class WaypointPublisher(Node):
             return
         
         self.first_publish = False
+        self._start_geodetic_waypoint_conversion()
+        return
         
         if self.task_type in [
             TaskType.TASK1,
@@ -167,14 +251,93 @@ class WaypointPublisher(Node):
             self._publish_waypoints_single_stage()
         elif self.task_type in [TaskType.TASK3_1, TaskType.TASK3_2]:
             self._publish_task3_first_stage()
+
+    def _start_geodetic_waypoint_conversion(self):
+        """Resolve every YAML latitude/longitude waypoint through /fromLL."""
+        waypoints = self._active_waypoints()
+        incomplete = [self._display_waypoint_id(wp, i) for i, wp in enumerate(waypoints)
+                      if 'latitude' not in wp or 'longitude' not in wp]
+        if incomplete:
+            self.get_logger().error('Every waypoint needs latitude and longitude: ' + ', '.join(incomplete))
+            self.first_publish = True
+            return
+        self.geodetic_indices = list(range(len(waypoints)))
+        if self.geodetic_indices and not self.from_ll_client.service_is_ready():
+            self.get_logger().warn(f'Waiting for map projection service {self.from_ll_service}')
+            self.first_publish = True
+            return
+        self.geodetic_futures = []
+        for index in self.geodetic_indices:
+            waypoint = waypoints[index]
+            request = FromLL.Request()
+            request.ll_point = GeoPoint(latitude=float(waypoint['latitude']),
+                                        longitude=float(waypoint['longitude']),
+                                        altitude=float(waypoint.get('altitude', 0.0)))
+            self.geodetic_futures.append(self.from_ll_client.call_async(request))
+
+    def _finish_geodetic_waypoint_conversion(self):
+        if not all(future.done() for future in self.geodetic_futures):
+            return
+        try:
+            self.geodetic_positions = [
+                (future.result().map_point.x, future.result().map_point.y)
+                for future in self.geodetic_futures
+            ]
+        except Exception as error:
+            self.get_logger().error(f'GPS waypoint map conversion failed: {error}')
+            self.geodetic_futures = None
+            self.geodetic_indices = []
+            self.first_publish = True
+            return
+        self.geodetic_futures = None
+        waypoints = self._active_waypoints()
+        self._publish_waypoint_markers(self.geodetic_positions)
+        poses = [self._pose_from_waypoint(wp, position)
+                 for wp, position in zip(waypoints, self.geodetic_positions)]
+        self._publish_cardinal_retirement_heading(waypoints, self.geodetic_positions)
+        self._send_navigate_through_poses_goal(poses)
+        self.get_logger().info(
+            f'Published {len(poses)} latitude/longitude waypoints for {self.task_type.value}')
     
     def _publish_waypoints_single_stage(self):
         """Publish all waypoints for task1 and task2"""
         waypoints = self._build_poses_from_config()
+        self._publish_cardinal_retirement_heading(
+            self._active_waypoints(),
+            [(pose.pose.position.x, pose.pose.position.y) for pose in waypoints])
         self._send_navigate_through_poses_goal(waypoints)
         
         task_name = self.task_type.value
         self.get_logger().info(f"Published {len(waypoints)} waypoints for {task_name}")
+
+    def _publish_cardinal_retirement_heading(self, configured_waypoints, positions):
+        """Publish the map-frame course heading calculated from GPS3 to GPS4."""
+        by_competition_id = {
+            str(waypoint.get('competition_id')): position
+            for waypoint, position in zip(configured_waypoints, positions)
+        }
+        gps3, gps4 = by_competition_id.get('3'), by_competition_id.get('4')
+        if gps3 is None or gps4 is None:
+            return
+        dx, dy = gps4[0] - gps3[0], gps4[1] - gps3[1]
+        if dx * dx + dy * dy < 1.0e-8:
+            self.get_logger().warn('GPS3 and GPS4 map positions are identical; cannot set wall retirement heading')
+            return
+        heading = Float64()
+        heading.data = math.atan2(dy, dx)
+        self.cardinal_retirement_heading_pub.publish(heading)
+
+    def _active_waypoints(self) -> list:
+        """Return the configured route, optionally sliced at a competition WP."""
+        waypoints = self.config.get('waypoints', [])
+        if not self.start_competition_waypoint:
+            return waypoints
+        for index, waypoint in enumerate(waypoints):
+            if str(waypoint.get('competition_id', '')) == self.start_competition_waypoint:
+                return waypoints[index:]
+        self.get_logger().warn(
+            f'competition waypoint {self.start_competition_waypoint} is absent; using full route')
+        return waypoints
     
     def _publish_task3_first_stage(self):
         """Publish the gate approach stage for the selected Task3 mode."""
@@ -221,12 +384,81 @@ class WaypointPublisher(Node):
         Returns: list of geometry_msgs.msg.PoseStamped
         """
         poses = []
-        waypoints = self.config.get('waypoints', [])
+        waypoints = self._active_waypoints()
         
         for wp in waypoints:
             poses.append(self._pose_from_waypoint(wp))
         
         return poses
+
+    def _publish_waypoint_markers(self, projected_positions=None):
+        """Publish numbered waypoint discs and their Nav2 reach radius."""
+        waypoints = self._active_waypoints()
+        if not waypoints:
+            return
+        stamp = self.get_clock().now().to_msg()
+        markers = MarkerArray()
+        route = Marker()
+        route.header.frame_id, route.header.stamp = self.frame_id, stamp
+        route.ns, route.id, route.type, route.action = 'task_waypoint_route', 0, Marker.LINE_STRIP, Marker.ADD
+        route.pose.orientation.w, route.scale.x = 1.0, 0.12
+        route.color.r, route.color.g, route.color.b, route.color.a = 0.1, 0.9, 1.0, 0.9
+        for index, waypoint in enumerate(waypoints):
+            x, y = (projected_positions[index] if projected_positions is not None
+                    else (float(waypoint.get('x', 0.0)), float(waypoint.get('y', 0.0))))
+            route.points.append(Point(x=x, y=y, z=self.waypoint_route_z))
+            disc = Marker()
+            disc.header.frame_id, disc.header.stamp = self.frame_id, stamp
+            disc.ns, disc.id, disc.type, disc.action = 'task_waypoint_reach_radius', index, Marker.CYLINDER, Marker.ADD
+            disc.pose.position.x, disc.pose.position.y, disc.pose.position.z = x, y, 0.01
+            disc.pose.orientation.w = 1.0
+            disc.scale.x = disc.scale.y = 2.0 * self.nav2_goal_tolerance_m
+            disc.scale.z = 0.02
+            disc.color.r, disc.color.g, disc.color.b, disc.color.a = 0.1, 0.8, 1.0, 0.22
+            markers.markers.append(disc)
+            dot = Marker()
+            dot.header.frame_id, dot.header.stamp = self.frame_id, stamp
+            dot.ns, dot.id, dot.type, dot.action = 'task_waypoint_point', index, Marker.SPHERE, Marker.ADD
+            dot.pose.position.x, dot.pose.position.y, dot.pose.position.z = x, y, 0.18
+            dot.pose.orientation.w = 1.0
+            dot.scale.x = dot.scale.y = dot.scale.z = 0.35
+            dot.color.g, dot.color.b, dot.color.a = 0.95, 1.0, 1.0
+            markers.markers.append(dot)
+            label = Marker()
+            label.header.frame_id, label.header.stamp = self.frame_id, stamp
+            label.ns, label.id, label.type, label.action = 'task_waypoint_label', index, Marker.TEXT_VIEW_FACING, Marker.ADD
+            label.pose.position.x, label.pose.position.y, label.pose.position.z = x, y, 0.65
+            label.pose.orientation.w, label.scale.z = 1.0, 0.45
+            label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+            label.text = (
+                f"WP {self._display_waypoint_id(waypoint, index)}\\n"
+                f"reach {self.nav2_goal_tolerance_m:.1f} m"
+            )
+            markers.markers.append(label)
+        if self.show_waypoint_route_line:
+            markers.markers.insert(0, route)
+        self.waypoint_marker_pub.publish(markers)
+
+    def _display_waypoint_id(self, waypoint: dict, index: int) -> str:
+        """Return Task1's grouped competition number for display only."""
+        competition_id = waypoint.get('competition_id')
+        if competition_id is not None:
+            return str(competition_id)
+        waypoint_id = int(waypoint.get('id', index + 1))
+        if self.task_type == TaskType.TASK1:
+            if waypoint_id == 1:
+                return '1'
+            if 2 <= waypoint_id <= 11:
+                return f'1.{waypoint_id - 1}'
+            if waypoint_id == 12:
+                return '2'
+            if waypoint_id == 13:
+                return '3'
+            if 14 <= waypoint_id <= 16:
+                return f'3.{waypoint_id - 13}'
+            if waypoint_id == 17:
+                return '4'
+        return str(waypoint_id)
 
     def _build_poses_for_ids(self, waypoint_ids: list) -> list:
         """Build poses for the requested waypoint ids, preserving the id order."""
@@ -250,13 +482,12 @@ class WaypointPublisher(Node):
             stages = self.config.get('full_sequence_stages', stages)
         return stages.get(stage_name, [])
 
-    def _pose_from_waypoint(self, wp: dict) -> PoseStamped:
+    def _pose_from_waypoint(self, wp: dict, position_override=None) -> PoseStamped:
         pose = PoseStamped()
         pose.header.frame_id = self.frame_id
         pose.header.stamp = self.get_clock().now().to_msg()
 
-        x = float(wp.get('x', 0.0))
-        y = float(wp.get('y', 0.0))
+        x, y = position_override or (float(wp.get('x', 0.0)), float(wp.get('y', 0.0)))
         midpoint = self._gate_midpoint_from_tf(wp)
         if midpoint is not None:
             x, y = midpoint
@@ -336,7 +567,10 @@ class WaypointPublisher(Node):
         
         self.get_logger().debug(f"Sending goal with {len(poses)} poses")
         
-        self.nav_client.send_goal_async(goal_msg).add_done_callback(self._goal_response_callback)
+        self.nav_client.send_goal_async(
+            goal_msg,
+            feedback_callback=self._on_navigation_feedback,
+        ).add_done_callback(self._goal_response_callback)
     
     def _goal_response_callback(self, future):
         """Callback for NavigateThroughPoses goal response"""

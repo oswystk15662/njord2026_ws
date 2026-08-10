@@ -51,6 +51,13 @@ def _launch_nav2(context, pkg_robot):
             ) from error
     nav_to_pose_bt_xml = LaunchConfiguration('nav_to_pose_bt_xml').perform(context)
     nav_through_poses_bt_xml = LaunchConfiguration('nav_through_poses_bt_xml').perform(context)
+    default_nav_through_poses_bt_xml = os.path.join(
+        pkg_robot, 'config', 'navigate_through_poses_w_replanning_and_recovery.xml'
+    )
+    if profile == 'task3' and nav_through_poses_bt_xml == default_nav_through_poses_bt_xml:
+        nav_through_poses_bt_xml = os.path.join(
+            pkg_robot, 'config', 'navigate_through_poses_task3_w_replanning_and_recovery.xml'
+        )
 
     replanning_frequency = _load_replanning_frequency(params_file)
     configured_nav_to_pose_bt_xml = _write_configured_bt_xml(

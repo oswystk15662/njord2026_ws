@@ -38,6 +38,11 @@ controller_server:
       min_lookahead_dist: 0.5
       max_lookahead_dist: 3.0
       lookahead_time: 1.5
+      # A surface vessel should curve toward the path while it is moving, not
+      # stop and turn back at a waypoint solely to satisfy its final yaw.
+      # PassThroughGoalChecker keeps yaw as the preferred completion condition
+      # and advances after the vessel has passed through the waypoint.
+      use_rotate_to_heading: false
       rotate_to_heading_min_angle: 0.785
       transform_tolerance: 0.1
       use_velocity_scaled_lookahead_dist: true
@@ -48,10 +53,10 @@ controller_server:
       max_linear_accel: 2.0
 
     general_goal_checker:
-      stateful: True
-      plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 5.0   # ゴール判定の誤差許容範囲 [m] (船なので広めに)
-      yaw_goal_tolerance: 1.0  # 向きの許容範囲 [rad]
+      plugin: "robot::PassThroughGoalChecker"
+      xy_goal_tolerance: 0.5   # ゴール判定の誤差許容範囲 [m] (船なので広めに)
+      yaw_goal_tolerance: 0.5  # 向きの許容範囲 [rad]
+      exit_margin_m: 0.05      # 一度半径に入り、外へ抜けたら次WPへ
 
 planner_server:
   ros__parameters:
@@ -84,16 +89,26 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        # LiDARの設定
-        observation_sources: livox
-        livox:
-          topic: /livox/lidar
+        # LiDAR と Task 1 cardinal mark から生成する仮想壁。仮想壁は
+        # map frame で publish されるため、local costmap (odom frame) へ
+        # 取り込むには安定した map -> odom -> base_link TF が必要。
+        observation_sources: safety_points virtual_wall
+        safety_points:
+          topic: /task1/safety_points
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
-          obstacle_max_range: 2.5
+          raytrace_max_range: 8.0
+          obstacle_max_range: 8.0
+        virtual_wall:
+          topic: /virtual_obstacles
+          max_obstacle_height: 2.0
+          clearing: True
+          marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 10.0
+          obstacle_max_range: 9.0
       
       inflation_layer:
         plugin: "nav2_costmap_2d::InflationLayer"
@@ -124,15 +139,15 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: livox virtual_wall
-        livox:
-          topic: /livox/lidar
+        observation_sources: safety_points virtual_wall
+        safety_points:
+          topic: /task1/safety_points
           max_obstacle_height: 2.0
           clearing: True
           marking: True
           data_type: "PointCloud2"
-          raytrace_max_range: 3.0
-          obstacle_max_range: 2.5
+          raytrace_max_range: 8.0
+          obstacle_max_range: 8.0
         # 新しく追加: YOLOが生成した仮想壁
         virtual_wall:
           topic: /virtual_obstacles
@@ -183,10 +198,17 @@ collision_monitor:
       min_points: 6
       visualize: false
       enabled: true
-    observation_sources: ["livox"]
-    livox:
+    observation_sources: ["safety_points", "virtual_wall"]
+    safety_points:
       type: "pointcloud"
-      topic: "/livox/lidar"
+      topic: "/task1/safety_points"
+      min_height: -0.5
+      max_height: 2.0
+      use_global_height: false
+      enabled: true
+    virtual_wall:
+      type: "pointcloud"
+      topic: "/virtual_obstacles"
       min_height: -0.5
       max_height: 2.0
       use_global_height: false

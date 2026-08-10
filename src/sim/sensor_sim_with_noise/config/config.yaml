@@ -5,6 +5,8 @@ gnss_noise_simulator:
     gps_origin_alt: 0.0
     gps_pos_noise_std: 0.02
     gps_heading_noise_std_deg: 2.5
+    # Geographical true north in the map frame. ENU default: map +Y.
+    true_north_yaw_rad: 1.5707963267948966
     publish_rate_hz: 10.0
     frame_id_gps: "base_link"
     frame_id_compass: "base_link"

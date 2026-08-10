@@ -109,6 +109,13 @@ class CloudFilterNode(Node):
             ("output_frame", "base_link"),
             ("min_range_m", 0.5),
             ("max_range_m", 60.0),
+            # A positive value makes this a fail-closed sensor-health gate:
+            # no output is published when the raw cloud has too few valid
+            # samples for a trustworthy obstacle observation.
+            ("min_valid_input_points", 0),
+            # Some consumers use an empty cloud as a valid "no obstacle"
+            # observation rather than a sensor-fault signal.
+            ("publish_empty_on_invalid_input", False),
             ("voxel_leaf_size_m", 0.0),
             ("accumulation_frames", 1),
             # 0 = process every frame.  A positive value processes at most
@@ -148,6 +155,8 @@ class CloudFilterNode(Node):
         self.self_marker_yaw_rad = np.deg2rad(float(gp("self_marker_yaw_deg")))
         self.min_range = float(gp("min_range_m"))
         self.max_range = float(gp("max_range_m"))
+        self.min_valid_input_points = max(0, int(gp("min_valid_input_points")))
+        self.publish_empty_on_invalid_input = bool(gp("publish_empty_on_invalid_input"))
         self.voxel_leaf = float(gp("voxel_leaf_size_m"))
         self.process_period_ns = 0
         process_rate_hz = float(gp("process_rate_hz"))
@@ -318,7 +327,18 @@ class CloudFilterNode(Node):
         points = cloud_to_array(msg)
         # NaN/Inf removal first so the transforms never propagate garbage.
         points = cloud_ops.remove_nonfinite(points)
+        if points.shape[0] < self.min_valid_input_points:
+            self.get_logger().warning(
+                "Raw cloud has too few valid points for safety output "
+                f"({points.shape[0]} < {self.min_valid_input_points}); withholding output",
+                throttle_duration_sec=1.0)
+            return
         if points.shape[0] == 0:
+            if self.publish_empty_on_invalid_input:
+                header = Header()
+                header.stamp = msg.header.stamp
+                header.frame_id = self.output_frame
+                self.pub.publish(array_to_cloud(header, points))
             return
 
         # Emergency manual pre-rotation (BEFORE TF); no-op by default.

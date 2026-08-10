@@ -1,36 +1,22 @@
 # Task 1 smoke test: navigate directly from GPS point 1 to GPS point 2.
 #
-# The endpoints below are 46.497 m apart (great-circle distance, calculated
-# from the configured latitude/longitude).  The local test route expresses
-# that distance along the +x axis so Nav2 receives exactly two poses.
+# Enter each endpoint as WGS84 latitude/longitude. `/fromLL` converts the
+# values to the current map frame at runtime.
 
 task1_skip_1_1_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  origin:
-    latitude: 63.44228538325694
-    longitude: 10.42402403234536
-    name: "GPS 1 - Start"
-  gps_points:
-    - id: 1
-      latitude:  63.44228538325694
-      longitude: 10.42402403234536 
-      name: "GPS 1 - Start"
-    - id: 2
-      latitude:  63.440800
-      longitude: 10.423450
-      name: "GPS 2 - Goal"
   waypoints:
     - id: 1
-      x: 0.0000
-      y: 0.0000
+      latitude: 63.44228538325694
+      longitude: 10.42402403234536
       yaw: 0.0000
       type: "start"
       name: "GPS 1 - Start"
       tolerance_m: 2.0
     - id: 2
-      x: 25.47
-      y: 0.0000
+      latitude: 63.44228538325694
+      longitude: 10.42495583338823
       yaw: 0.0000
       type: "goal"
       name: "GPS 2 - Goal"

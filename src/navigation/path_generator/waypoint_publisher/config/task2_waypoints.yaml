@@ -1,36 +1,24 @@
 # Task 2: Collision Avoidance
-# Today's experiment: straight run from GPS 5 (= Task 1 GPS 1) to GPS 6
-# (= Task 1 GPS 2). Course length ~45.23 m, heading 0.6627 rad.
+# Enter every waypoint as WGS84 latitude/longitude. Mission Manager and Task2
+# MPPI project these values through /fromLL at run time; coordinate modes and
+# x/y waypoint input are intentionally unsupported.
 
 task2_config:
   frame_id: "map"
   publish_rate_hz: 2.0
-  origin:
-    latitude: 34.5456666667
-    longitude: 135.5070555556
-    name: "GPS 5 - Start (same as GPS 1)"
-  gps_points:
+  # Replace only latitude/longitude below with surveyed course values.
+  waypoints:
     - id: 5
       latitude: 34.5456666667
       longitude: 135.5070555556
-      name: "GPS 5 - Start (same as GPS 1)"
-    - id: 6
-      latitude: 34.5459166667
-      longitude: 135.5074444444
-      name: "GPS 6 - Goal (same as GPS 2)"
-
-  waypoints:
-    - id: 5
-      x: 0.0
-      y: 0.0
       yaw: 0.6627
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
 
     - id: "gate_1"
-      x: 11.8859
-      y: 9.2766
+      latitude: 34.5457500000
+      longitude: 135.5071851354
       yaw: 0.6627
       type: "gate"
       name: "Entry Gate"
@@ -39,8 +27,8 @@ task2_config:
       tolerance_m: 2.0
 
     - id: "gate_2"
-      x: 23.7717
-      y: 18.5532
+      latitude: 34.5458333333
+      longitude: 135.5073147142
       yaw: 0.6627
       type: "gate"
       name: "Exit Gate"
@@ -49,8 +37,8 @@ task2_config:
       tolerance_m: 2.0
 
     - id: 6
-      x: 35.6576
-      y: 27.8299
+      latitude: 34.5459166689
+      longitude: 135.5074442940
       yaw: 0.6627
       type: "goal"
       name: "GPS 6 - Goal"

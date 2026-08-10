@@ -85,3 +85,14 @@ def test_task2_mppi_withdraws_its_gate_before_reporting_canceled():
     executor.cancel("execution")
     assert enabled == [True, False]
     assert results[0].status == ExecutorStatus.CANCELED
+
+
+def test_task2_mppi_reports_follow_path_goal_success_once():
+    enabled = []
+    results = []
+    executor = Task2MppiExecutor(enabled.append)
+    executor.start("execution", _route(), lambda *_: None, results.append)
+    executor.goal_reached()
+    executor.goal_reached()  # Delayed duplicate status must be harmless.
+    assert enabled == [True, False]
+    assert [result.status for result in results] == [ExecutorStatus.SUCCEEDED]
