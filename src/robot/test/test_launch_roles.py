@@ -281,6 +281,8 @@ def test_ground_pc_reads_the_active_mission_waypoint_yaml_locally():
 
     assert 'executable="ground_waypoint_geo_publisher"' in source
     assert '"waypoint_task_type"' not in source
+    assert '"enable_waypoint_display",\n                default_value="true"' in source
+    assert 'condition=IfCondition(enable_waypoint_display)' in source
 
 
 def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():

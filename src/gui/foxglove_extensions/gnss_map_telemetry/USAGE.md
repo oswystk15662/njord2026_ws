@@ -23,6 +23,14 @@ ros2 topic echo /gui/ground_speed_mps --once
 ros2 run tf2_ros tf2_echo map base_link
 ```
 
+陸上PCでは通常のbringupにWP表示が既定で含まれます。
+Mission ManagerでAUTOタスクを開始すると、Zenoh経由の`/mission/status.task_id`に
+従って該当taskのWPだけを表示します。これは表示専用であり、Nav2や推進を操作しません。
+
+```bash
+ros2 launch robot ground_pc.launch.py
+```
+
 ## 2. Foxglove拡張を導入する
 
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。

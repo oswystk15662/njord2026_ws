@@ -5,7 +5,7 @@
 Why this node exists (waypoint-source decision):
     The waypoint_publisher package delivers Task2 waypoints only as a
     NavigateThroughPoses action goal plus /task_waypoints // /plan Path
-    topics containing ALL configured waypoints (start, gates, goal). The
+    topics containing all configured waypoints. The
     MPPI planner_node instead needs exactly two PoseStamped topics
     (/waypoint1_pose, /waypoint2_pose) defining the GPS reference line, and
     waypoint_publisher offers no parameter or remap that can produce them.

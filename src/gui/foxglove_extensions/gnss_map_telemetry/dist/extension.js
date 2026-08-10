@@ -185,6 +185,7 @@ function initGnssMapTelemetry(context) {
   const waypointMarkers = new Map();
   let marker;
   let waypointRoute;
+  let activeWaypointTask = "";
   let centered = false;
   let waypointSignature = "";
 
@@ -207,9 +208,12 @@ function initGnssMapTelemetry(context) {
         waypointMarkers.clear();
         if (waypointRoute) map.removeLayer(waypointRoute);
         waypointRoute = undefined;
+        activeWaypointTask = "";
         continue;
       }
-      if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      if (!waypoint.ns?.startsWith("ground_waypoint_wgs84") || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      const selectedTask = waypoint.ns.split("/", 2)[1];
+      if (selectedTask) activeWaypointTask = selectedTask;
       // The Ground PC publisher deliberately stores longitude in x and
       // latitude in y, so this panel can render YAML waypoints without
       // receiving the vessel's map-frame MarkerArray over Zenoh.
@@ -288,6 +292,7 @@ function initGnssMapTelemetry(context) {
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
       `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
       '<div class="gnss-telemetry-separator">',
+      `TASK&nbsp; ${activeWaypointTask || "--"}</div>`,
       `WP&nbsp;&nbsp;&nbsp; ${waypointMarkers.size}</div>`,
     ].join("");
   }

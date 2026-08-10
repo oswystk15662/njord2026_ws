@@ -97,7 +97,10 @@ class GroundWaypointGeoPublisher(Node):
                 continue
             marker = Marker()
             marker.header.frame_id, marker.header.stamp = "wgs84", stamp
-            marker.ns, marker.id = "ground_waypoint_wgs84", index
+            # The namespace carries display metadata only.  The Foxglove
+            # extension uses it to show which Mission Manager task selected
+            # this route while retaining the same WGS84 marker contract.
+            marker.ns, marker.id = f"ground_waypoint_wgs84/{self.active_task}", index
             marker.type, marker.action = Marker.SPHERE, Marker.ADD
             # This display-only contract uses x=longitude and y=latitude.
             marker.pose.position.x = _coordinate(waypoint["longitude"])
