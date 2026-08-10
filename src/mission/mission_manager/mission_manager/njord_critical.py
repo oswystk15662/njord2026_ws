@@ -92,11 +92,17 @@ def main(argv=None) -> int:
         while node.publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
             rclpy.spin_once(node, timeout_sec=0.1)
         # Publishing several times is safe because request_id deduplication is mandatory.
+        # The critical-link sender polls network responses on a timer, so keep
+        # spinning after the burst rather than treating its 0.75 s duration as
+        # the response timeout.
+        response_deadline = time.monotonic() + 2.0
         for _ in range(3):
             node.publisher.publish(command)
             rclpy.spin_once(node, timeout_sec=0.25)
             if node.response:
                 break
+        while not node.response and time.monotonic() < response_deadline:
+            rclpy.spin_once(node, timeout_sec=min(0.1, response_deadline - time.monotonic()))
         if not node.response:
             print("njord-critical: no authenticated operator response", file=sys.stderr)
             return 3
