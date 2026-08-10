@@ -13,3 +13,9 @@ def test_mission_manager_projects_waypoints_one_at_a_time():
     assert "self._request_next_coordinate_projection()" in SOURCE
     assert "if len(resolved) < len(points):" in SOURCE
     assert "for point in route.projection_points()" not in SOURCE
+
+
+def test_mission_manager_uses_gps1_as_task1_start_pose_not_nav2_goal():
+    assert 'if task.task_id != "task1":' in SOURCE
+    assert 'waypoint.competition_id != "1"' in SOURCE
+    assert "Task1 navigation starts by traveling to WP 1.1" in SOURCE
