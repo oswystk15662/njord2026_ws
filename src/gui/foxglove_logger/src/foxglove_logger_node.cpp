@@ -217,10 +217,8 @@ private:
     const auto & orientation = odometry_->pose.pose.orientation;
     const double sin_yaw = 2.0 * (orientation.w * orientation.z + orientation.x * orientation.y);
     const double cos_yaw = 1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z);
-    double degrees = std::atan2(sin_yaw, cos_yaw) * 180.0 / kPi;
-    while (degrees > 180.0) {degrees -= 360.0;}
-    while (degrees <= -180.0) {degrees += 360.0;}
-    return degrees;
+    const double yaw_degrees = std::atan2(sin_yaw, cos_yaw) * 180.0 / kPi;
+    return std::fmod(90.0 - yaw_degrees + 360.0, 360.0);
   }
 
   std::optional<double> speedMps() const

@@ -12,13 +12,8 @@ const L = (() => {
   return leafletModule.exports;
 })();
 
-const FIX_TOPIC = "/sensor/vehicle_gnss/fix/raw";
-const SPEED_TOPIC = "/gui/ground_speed_mps";
+const LOG_TOPIC = "/foxglove_log";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
-const TF_TOPIC = "/tf";
-const TF_STATIC_TOPIC = "/tf_static";
-const WORLD_FRAME = "map";
-const VESSEL_FRAME = "base_link";
 
 const PANEL_CSS = `
 .gnss-map-root{height:100%;position:relative;overflow:hidden;background:#15202b}
@@ -80,55 +75,14 @@ function batteryColor(percent) {
   return "#22c55e";
 }
 
-function normalizeFrame(frame) {
-  return typeof frame === "string" ? frame.replace(/^\/+/, "") : "";
-}
-
-function normalizeQuaternion(rotation) {
-  if (!rotation) return undefined;
-  const values = [rotation.x, rotation.y, rotation.z, rotation.w];
-  if (!values.every((value) => typeof value === "number" && Number.isFinite(value))) return undefined;
-  const magnitude = Math.hypot(...values);
-  if (magnitude < 1e-12) return undefined;
-  return {x: rotation.x / magnitude, y: rotation.y / magnitude, z: rotation.z / magnitude, w: rotation.w / magnitude};
-}
-
-function multiplyQuaternions(a, b) {
-  return {
-    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
-    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
-    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
-    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
-  };
-}
-
-function resolveOrientation(transforms, worldFrame, vesselFrame) {
-  const rotations = [];
-  const visited = new Set();
-  let current = normalizeFrame(vesselFrame);
-  const world = normalizeFrame(worldFrame);
-  while (current !== world) {
-    if (!current || visited.has(current)) return undefined;
-    visited.add(current);
-    const transform = transforms.get(current);
-    if (!transform) return undefined;
-    rotations.push(transform.rotation);
-    current = transform.parent;
-  }
-  let result = {x: 0, y: 0, z: 0, w: 1};
-  for (let index = rotations.length - 1; index >= 0; index -= 1) {
-    result = multiplyQuaternions(result, rotations[index]);
-  }
-  return normalizeQuaternion(result);
-}
-
-function quaternionToBearingDegrees(rotation) {
-  if (!rotation) return undefined;
-  // map is ENU. Rotate base_link +X into map, then convert east/north to a compass bearing.
-  const east = 1 - 2 * (rotation.y * rotation.y + rotation.z * rotation.z);
-  const north = 2 * (rotation.x * rotation.y + rotation.w * rotation.z);
-  if (!Number.isFinite(east) || !Number.isFinite(north) || Math.hypot(east, north) < 1e-9) return undefined;
-  return (Math.atan2(east, north) * 180 / Math.PI + 360) % 360;
+function parseTelemetryLog(text) {
+  if (typeof text !== "string") return undefined;
+  const match = /NAV LAT=([-+]?\d+(?:\.\d+)?) LON=([-+]?\d+(?:\.\d+)?)\nSOG=([-+]?\d+(?:\.\d+)?)m\/s HDG=([-+]?\d+(?:\.\d+)?)deg/.exec(text);
+  if (!match) return undefined;
+  const [latitude, longitude, speedMps, headingDegrees] = match.slice(1).map(Number);
+  return [latitude, longitude, speedMps, headingDegrees].every(Number.isFinite)
+    ? {latitude, longitude, speedMps, headingDegrees}
+    : undefined;
 }
 
 function vesselIcon() {
@@ -177,18 +131,8 @@ function initGnssMapTelemetry(context) {
   tileLayer.on("load", () => mapError.classList.remove("visible"));
 
   const state = {};
-  const transforms = new Map();
   let marker;
   let centered = false;
-
-  function updateTransforms(message) {
-    for (const stamped of message?.transforms || []) {
-      const parent = normalizeFrame(stamped.header?.frame_id);
-      const child = normalizeFrame(stamped.child_frame_id);
-      const rotation = normalizeQuaternion(stamped.transform?.rotation);
-      if (parent && child && rotation) transforms.set(child, {parent, rotation});
-    }
-  }
 
   function updateMarker() {
     if (!Number.isFinite(state.latitude) || !Number.isFinite(state.longitude)) return;
@@ -200,8 +144,6 @@ function initGnssMapTelemetry(context) {
       centered = true;
     }
 
-    const orientation = resolveOrientation(transforms, WORLD_FRAME, VESSEL_FRAME);
-    state.headingDegrees = quaternionToBearingDegrees(orientation);
     const element = marker.getElement()?.querySelector(".vessel-icon");
     const arrow = element?.querySelector(".vessel-arrow");
     if (element && arrow && Number.isFinite(state.headingDegrees)) {
@@ -225,23 +167,18 @@ function initGnssMapTelemetry(context) {
   }
 
   context.subscribe([
-    {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
-    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
+    {topic: LOG_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
   ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
     try {
       for (const event of renderState.currentFrame || []) {
         const message = event.message || {};
-        if (event.topic === FIX_TOPIC) {
-          if (typeof message.latitude === "number") state.latitude = message.latitude;
-          if (typeof message.longitude === "number") state.longitude = message.longitude;
-        } else if (event.topic === SPEED_TOPIC && typeof message.data === "number") {
-          state.speedMps = message.data;
+        if (event.topic === LOG_TOPIC) {
+          const telemetry = parseTelemetryLog(message.msg);
+          if (telemetry) Object.assign(state, telemetry);
         } else if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
           state.batteryPercent = message.data;
-        } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
-          updateTransforms(message);
         }
       }
       updateMarker();
@@ -324,8 +261,5 @@ function activate(extensionContext) {
 
 module.exports = {
   activate,
-  multiplyQuaternions,
-  normalizeQuaternion,
-  quaternionToBearingDegrees,
-  resolveOrientation,
+  parseTelemetryLog,
 };

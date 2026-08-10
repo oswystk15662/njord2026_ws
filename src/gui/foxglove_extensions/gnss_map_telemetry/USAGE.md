@@ -6,21 +6,17 @@
 
 ## 1. 事前準備
 
-実機の起動構成で、次のトピックがpublishされていることを確認します。
+実機の起動構成で、`foxglove_logger` が次のトピックをpublishしていることを確認します。
 
 | 表示項目 | トピック | 型 |
 | --- | --- | --- |
-| 緯度・経度 | `/sensor/vehicle_gnss/fix/raw` | `sensor_msgs/msg/NavSatFix` |
-| 対地速度 | `/gui/ground_speed_mps` | `std_msgs/msg/Float32` |
-| 船体の向き | `/tf`, `/tf_static` | `tf2_msgs/msg/TFMessage` |
+| 緯度・経度・対地速度・船体方位 | `/foxglove_log` | `rcl_interfaces/msg/Log` |
 
-`/gui/ground_speed_mps` は、このワークスペースの
-`ground_speed_publisher` が `/odometry/feedback` の東西・南北速度から算出します。
+`foxglove_logger` はGNSS、速度、方位を収集して、`NAV LAT/LON`、`SOG`、`HDG`として
+`/foxglove_log` に集約します。
 
 ```bash
-ros2 topic echo /sensor/vehicle_gnss/fix/raw --once
-ros2 topic echo /gui/ground_speed_mps --once
-ros2 run tf2_ros tf2_echo map base_link
+ros2 topic echo /foxglove_log --once
 ```
 
 ## 2. Foxglove拡張を導入する
@@ -28,7 +24,7 @@ ros2 run tf2_ros tf2_echo map base_link
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。
 
 ```text
-src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.2.0.foxe
+src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.2.3.foxe
 ```
 
 Foxgloveの Settings > Extensions に **GNSS Map Telemetry** が表示され、有効になっていることを確認してください。
@@ -40,7 +36,7 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 
 読み込み後、左側下段の **GNSS Course (Map)** は次を表示します。
 
-- OpenStreetMap地図と、`base_link` +X方向を示す現在位置の矢印
+- OpenStreetMap地図と、`/foxglove_log` の `HDG` が示す現在位置の矢印
 - 右上の `VESSEL TELEMETRY` 凡例
   - `LAT`: 緯度
   - `LON`: 経度
@@ -52,7 +48,7 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 
 ## トラブルシューティング
 
-- `--` と表示される: 対応トピックが未publish、またはトピック名が異なります。
-- 位置が円で表示され、`HDG --` になる: `map` から `base_link` までのTF chainを確認してください。
+- `--` と表示される: `/foxglove_log` が未publish、または `NAV LAT/LON`、`SOG`、`HDG` を含むログが未出力です。
+- 位置が円で表示され、`HDG --` になる: `/foxglove_log` の `HDG` 値を確認してください。
 - 地図が表示されない: OpenStreetMapのタイルを使うため、表示PCからインターネットへ接続できるか確認してください。
 - パネルが見つからない: `.foxe` を先に導入してからレイアウトをimportし、Foxgloveを再起動してください。
