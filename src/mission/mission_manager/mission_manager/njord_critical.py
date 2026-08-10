@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import secrets
 import sys
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -86,7 +87,11 @@ def main(argv=None) -> int:
     rclpy.init(args=None)
     node = CriticalClient(args.topic, request_id)
     try:
-        # Discovery is asynchronous; publishing several times is safe because request_id deduplication is mandatory.
+        # Do not finish the short command burst before the local sender discovers us.
+        deadline = time.monotonic() + 2.0
+        while node.publisher.get_subscription_count() == 0 and time.monotonic() < deadline:
+            rclpy.spin_once(node, timeout_sec=0.1)
+        # Publishing several times is safe because request_id deduplication is mandatory.
         for _ in range(3):
             node.publisher.publish(command)
             rclpy.spin_once(node, timeout_sec=0.25)
