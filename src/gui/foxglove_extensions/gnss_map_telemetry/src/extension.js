@@ -119,10 +119,12 @@ function quaternionToBearingDegrees(rotation) {
 }
 
 function vesselIcon() {
-  // A pointed pentagon: the tip is base_link +X (the vessel's bow).
-  // Ground PC code rotates it from the received map -> base_link TF.
+  // Existing catamaran silhouette: its bow is base_link +X. Ground PC code
+  // rotates it from the received map -> base_link TF.
   const points = [
-    [20, 2], [34, 14], [29, 36], [11, 36], [6, 14],
+    [11, 3], [7, 11], [7, 30], [11, 37], [15, 30], [15, 22],
+    [25, 22], [25, 30], [29, 37], [33, 30], [33, 11], [29, 3],
+    [25, 11], [25, 18], [15, 18], [15, 11],
   ];
   const bodyPath = `${points.map(([x, y], index) => `${index === 0 ? "M" : "L"}${x} ${y}`).join(" ")} Z`;
   return L.divIcon({
