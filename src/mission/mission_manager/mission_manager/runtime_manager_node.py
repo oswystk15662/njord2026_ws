@@ -29,8 +29,14 @@ class RuntimeManager(Node):
         self._profile = ""
         self._lock = threading.Lock()
         self._pub = self.create_publisher(Nav2RuntimeStatus, "/runtime/nav2/status", _QOS)
-        self._action = ActionServer(self, ConfigureSystem, "/system/configure",
-                                    self._goal, self._cancel, self._execute)
+        self._action = ActionServer(
+            self,
+            ConfigureSystem,
+            "/system/configure",
+            self._execute,
+            goal_callback=self._goal,
+            cancel_callback=self._cancel,
+        )
         self._publish(Nav2RuntimeStatus.STOPPED, "")
 
     def _goal(self, goal):
