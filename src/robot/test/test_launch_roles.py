@@ -159,6 +159,18 @@ def test_minipc_bringup_uses_canonical_control_manager_by_default():
     assert 'package="twist_mux"' not in source
 
 
+def test_minipc_bringup_selects_sbus_without_bypassing_command_arbitration():
+    source = _read_launch_source("minipc_bringup.launch.py")
+
+    assert 'enable_sbus = LaunchConfiguration("enable_sbus")' in source
+    assert '"sbus_serial_port"' in source
+    assert 'executable="sbus_joy_node"' in source
+    assert 'executable="sbus_joy_converter_node"' in source
+    assert '("joy", "/sbus/joy")' in source
+    assert 'condition=UnlessCondition(enable_sbus)' in source
+    assert source.count('condition=IfCondition(enable_sbus)') == 2
+
+
 def test_resident_nav2_profile_is_selected_by_role_bringup():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     nav2_source = _read_launch_source("nav2.launch.py")
