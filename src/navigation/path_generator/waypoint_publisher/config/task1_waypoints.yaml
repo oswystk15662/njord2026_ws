@@ -138,9 +138,9 @@ task1_config:
 
     - id: 13
       competition_id: "3"
-      latitude: 63.4418690222
-      longitude: 10.4252838931
-      yaw: -2.7744
+      latitude: 63.4404166667
+      longitude: 10.4233361111
+      yaw: 1.1111
       type: "start"
       name: "GPS 3"
       tolerance_m: 2.0
@@ -174,9 +174,9 @@ task1_config:
 
     - id: 17
       competition_id: "4"
-      latitude: 63.4418690222
-      longitude: 10.4242793000
-      yaw: 2.2455
+      latitude: 63.4407333333
+      longitude: 10.4237000000
+      yaw: 0.9094
       type: "goal"
       name: "GPS 4"
       tolerance_m: 2.0

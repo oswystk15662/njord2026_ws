@@ -454,6 +454,20 @@ class MissionManager(Node):
                 except RegistryError as exc:
                     self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
                     return
+                if route.projection_points():
+                    if not self._from_ll_client.service_is_ready():
+                        self._reject_started(
+                            decision.execution_id, ResultCode.CONFIGURATION_FAILED,
+                            "map projection service /fromLL is unavailable",
+                        )
+                        return
+                    self._machine.transition(
+                        MissionState.CONFIGURING, execution_id=decision.execution_id,
+                        stage="project_waypoints", message="projecting latitude/longitude waypoint coordinates",
+                    )
+                    self._start_coordinate_projection(decision.execution_id, task, route, request)
+                    self._publish_status()
+                    return
                 self._configure_route(decision, task, route, request)
             except Exception as exc:
                 self._reject_started(pending[0].execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
