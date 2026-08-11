@@ -247,6 +247,7 @@ def main():
     except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         node.shutdown()
         node.destroy_node()
         if rclpy.ok():
