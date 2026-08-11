@@ -26,8 +26,8 @@ _QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 class RuntimeManager(Node):
     def __init__(self):
         super().__init__("runtime_manager")
-        self.declare_parameter("sigint_timeout_sec", 10.0)
-        self.declare_parameter("sigterm_timeout_sec", 5.0)
+        self.declare_parameter("sigint_timeout_sec", 2.0)
+        self.declare_parameter("sigterm_timeout_sec", 1.0)
         self.declare_parameter("nav2_ready_timeout_sec", 30.0)
         self.declare_parameter("nav2_ready_poll_sec", 0.5)
         self.declare_parameter("nav2_lifecycle_query_timeout_sec", 3.0)
