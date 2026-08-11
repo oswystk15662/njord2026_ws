@@ -139,7 +139,9 @@ void UM982Driver::parse_uniheadinga(const std::string& line)
     try {
         if (fields[0] != "SOL_COMPUTED" ||
             (fields[1] != "NARROW_INT" && fields[1] != "INS_RTKFIXED")) return;
-        const double yaw_rad = utils::deg2rad(90.0 - std::stod(fields[3]));
+        const double yaw_rad = utils::normalize_angle_rad(
+            utils::deg2rad(90.0 - std::stod(fields[3])) -
+            params_.heading_baseline_yaw_rad);
         const double pitch_rad = utils::deg2rad(-std::stod(fields[4]));
         latest_yaw_rad_ = yaw_rad;
         latest_heading_stamp_ = this->now();
@@ -235,7 +237,9 @@ void UM982Driver::parse_ths(const std::string& line)
     const auto parts = utils::split(line.substr(0, line.find('*')), ',');
     if (parts.size() < 3 || parts[2] == "V") return;
     try {
-        const double yaw_rad = utils::deg2rad(90.0 - std::stod(parts[1]));
+        const double yaw_rad = utils::normalize_angle_rad(
+            utils::deg2rad(90.0 - std::stod(parts[1])) -
+            params_.heading_baseline_yaw_rad);
         latest_yaw_rad_ = yaw_rad;
         latest_heading_stamp_ = this->now();
         have_heading_ = true;
@@ -264,7 +268,9 @@ void UM982Driver::parse_uniheadingb(const uint8_t* body, std::size_t body_len)
     const double pitch_deg = utils::read_f32_le(body + 16);
     const bool is_valid = solution_status == kSolComputed &&
         (position_type == kNarrowInt || position_type == kInsRtkFixed);
-    const double yaw_rad = utils::deg2rad(90.0 - heading_deg);
+    const double yaw_rad = utils::normalize_angle_rad(
+        utils::deg2rad(90.0 - heading_deg) -
+        params_.heading_baseline_yaw_rad);
     const double pitch_rad = utils::deg2rad(-pitch_deg);
 
     tf2::Quaternion orientation;

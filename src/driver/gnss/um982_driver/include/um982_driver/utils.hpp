@@ -57,6 +57,11 @@ std::string base64_encode(const std::string & input);
 inline double deg2rad(double deg) { return deg * M_PI / 180.0; }
 
 /**
+ * @brief Wrap an angle to [-pi, pi].
+ */
+double normalize_angle_rad(double angle_rad) noexcept;
+
+/**
  * @brief Unicoreバイナリログのリトルエンディアン整数/浮動小数点読み出し
  */
 inline uint16_t read_u16_le(const uint8_t * p)

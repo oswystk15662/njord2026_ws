@@ -132,6 +132,9 @@ private:
         std::string rtk_status_log_format;
         bool rtk_enable;
         std::string heading_frame_id;
+        // Yaw of the UM982 primary -> secondary antenna baseline in base_link.
+        // It is subtracted from UNIHEADING's baseline yaw to obtain vessel yaw.
+        double heading_baseline_yaw_rad;
         std::string log_file_name;
         bool publish_feedback_odometry;
         std::string feedback_odometry_topic;

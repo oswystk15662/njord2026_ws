@@ -114,6 +114,11 @@ bool parse_int(const std::string & value, int & result) noexcept
     }
 }
 
+double normalize_angle_rad(double angle_rad) noexcept
+{
+    return std::atan2(std::sin(angle_rad), std::cos(angle_rad));
+}
+
 bool convert_nmea_to_latlon(
     const std::string & value, const std::string & direction, double & result) noexcept
 {

@@ -1,12 +1,11 @@
-import os
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
+
 def generate_launch_description():
     # --- 引数の宣言 (デフォルト値はC++コードに合わせつつ、ここで変更可能にする) ---
-    
     # 通信モード: 'uart' or 'tcp'
     arg_mode = DeclareLaunchArgument(
         'uart_or_tcp',
@@ -101,6 +100,17 @@ def generate_launch_description():
         default_value='map',
         description='World frame for the absolute ENU heading message'
     )
+    arg_heading_baseline_yaw = DeclareLaunchArgument(
+        'heading_baseline_yaw_rad',
+        # Primary: gnss_link=(-0.5, +0.4); secondary:
+        # gnss_sub_link=(+0.5, -0.4), in robot.urdf.xacro.
+        # atan2(-0.8, +1.0): UM982 primary -> secondary baseline in base_link.
+        default_value='-0.6747409422235526',
+        description=(
+            'UM982 primary-to-secondary antenna baseline yaw in base_link '
+            '[rad]; subtracted from UNIHEADING to obtain vessel yaw'
+        )
+    )
     arg_publish_feedback_odometry = DeclareLaunchArgument(
         'publish_feedback_odometry',
         default_value='false',
@@ -150,6 +160,7 @@ def generate_launch_description():
             'NTRIP_Username': LaunchConfiguration('ntrip_username'),
             'NTRIP_Password': LaunchConfiguration('ntrip_password'),
             'Heading_FrameID': LaunchConfiguration('heading_frame_id'),
+            'heading_baseline_yaw_rad': LaunchConfiguration('heading_baseline_yaw_rad'),
             'publish_feedback_odometry': LaunchConfiguration('publish_feedback_odometry'),
             'feedback_frame_id': LaunchConfiguration('feedback_frame_id'),
             'feedback_child_frame_id': LaunchConfiguration('feedback_child_frame_id'),
@@ -175,6 +186,7 @@ def generate_launch_description():
         arg_ntrip_username,
         arg_ntrip_password,
         arg_frame_id,
+        arg_heading_baseline_yaw,
         arg_publish_feedback_odometry,
         arg_feedback_frame_id,
         arg_feedback_child_frame_id,
