@@ -12,7 +12,7 @@ Task 2 は 3 台で分担して起動する。
 
 各端末は同じネットワーク、`ROS_DOMAIN_ID`、`NJORD_RMW` を使う。実艇を接続した通常起動では、AUTO にする前に非常停止、通信、自己位置、GNSS、Nav2 の状態を必ず確認する。`check task2` が失敗した場合は開始しない。
 
-以下のコマンド中の `/home/hashilab/Desktop/njord2026_ws` は各端末のワークスペースのパスに読み替える。
+miniPC と Jetson は、ホームディレクトリから `cd ./njord2026_ws` でワークスペースへ移動できるものとする。Ground PC のパスは、その端末のワークスペースに合わせて読み替える。
 
 ## 新しいターミナルを開いたとき
 
@@ -23,7 +23,7 @@ Task 2 は 3 台で分担して起動する。
 Jetson（Jazzy）:
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/jazzy/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
@@ -34,7 +34,7 @@ source install/setup.bash
 miniPC（Humble）:
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
@@ -64,7 +64,7 @@ source install/setup.bash
 JetsonではCUDA・ZED SDK・Livox・GLIM・Task 2知覚を含めてビルドする。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/jazzy/setup.bash
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
@@ -79,7 +79,7 @@ JetsonのROSディストリビューションがJazzy以外の場合だけ、1�
 miniPCはGPUセンサ処理をビルドしない。`njord_env.sh` がLivox SDK・Livox ROS driver・PCL segmentationを除外し、CPUで動くminiPC側のGNSS、Nav2、制御、Mission Manager、ダミーGNSSをビルドする。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
@@ -112,7 +112,7 @@ Ground PCにはJetson用のCUDA/TensorRT/ZED SDKは不要である。`zed2i_driv
 Jetson で Livox と ZED を接続してから実行する。`enable_task2_autonomy:=true` が Task 2 の LiDAR 認識、他船追跡、MPPI、`/task2/safety_points` を起動する。`enable_glim:=true` により、Livox/IMU からの自己位置 `/odom` も起動する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/jazzy/setup.bash
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
@@ -125,7 +125,7 @@ ros2 launch robot jetson_bringup.launch.py enable_task2_autonomy:=true enable_gl
 miniPC に UM982 GNSS、スラスタ用 Micon、BMS を接続してから実行する。UM982 の既定ポートは `/dev/serial/by-id/usb-1a86_USB_Serial-if00-port0` である。機体によって異なる場合は、先に `ls -l /dev/serial/by-id/` で確認し、`um982_port:=...` を指定する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
@@ -187,7 +187,7 @@ Jetson と Ground PC は [通常起動](#1-gnss-接続後の通常起動) とま
 miniPC では実UM982を起動しない以外、通常と同じ Task 2 bringup を起動する。`enable_um982:=false` 以外の既定値は変更しないため、スラスタを含む実機ノード群が起動する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
@@ -200,24 +200,24 @@ ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task2 enable_um9
 別ターミナルで、ダミーGNSSをUM982と同じ `/sensor/vehicle_gnss/fix/raw` へ出す。方位 `/sensor/vehicle_gnss/compass/raw` も同時に出力される。Jetson のGLIMから `/odom` が届くまでメッセージは出ないため、先に `/odom` を確認する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
-source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
+source install/setup.bash
 ros2 topic echo /odom --once
 ```
 
 次の `gps_origin_lat` と `gps_origin_lon` は、屋内確認で地図に表示したい基準位置へ変更する。既定値はGPS 5の約15 m北（GPS 5→6距離の約1/3）である。Task 2 のWPと重ねて確認する場合は、Task 2 水域に近い座標を指定する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
-source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
+source install/setup.bash
 ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
   -r /gps/fix:=/sensor/vehicle_gnss/fix/raw \
   -p gps_origin_lat:=63.4409375 \
@@ -228,7 +228,7 @@ ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
 `sensor_sim_with_noise` が未ビルドの場合は、このコマンドの前にminiPCで一度だけ実行する。
 
 ```bash
-cd /home/hashilab/Desktop/njord2026_ws
+cd ./njord2026_ws
 colcon build --packages-select sensor_sim_with_noise
 source install/setup.bash
 ```
