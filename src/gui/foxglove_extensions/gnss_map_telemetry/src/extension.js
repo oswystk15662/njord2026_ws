@@ -4,7 +4,7 @@ const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
 const GROUND_WAYPOINT_MARKERS_TOPIC = "/ground_waypoint_markers";
-const WORLD_FRAME = "map";
+const WORLD_FRAME = "odom";
 const VESSEL_FRAME = "base_link";
 
 const PANEL_CSS = `

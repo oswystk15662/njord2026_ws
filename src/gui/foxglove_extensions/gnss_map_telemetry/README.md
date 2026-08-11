@@ -16,13 +16,13 @@ after the operator starts a task; it shows no stale WPs while idle.
 
 Waypoint labels show their route order and competition label, a dashed cyan line
 connects the route, and the legend identifies the selected task. Install
-[gnss-map-telemetry-0.3.0.foxe](gnss-map-telemetry-0.3.0.foxe) by dragging it
+[gnss-map-telemetry-0.3.3.foxe](gnss-map-telemetry-0.3.3.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The catamaran's bright cyan bow and darker stern point along the `base_link` +X
 axis. Its orientation is
-resolved on the Ground PC from the `map -> base_link` TF chain, assuming the `map`
-frame is ENU (+X east, +Y north). If the chain is unavailable, the panel shows a
+resolved on the Ground PC from the `odom -> base_link` TF chain, assuming the fixed
+`odom` frame is ENU (+X east, +Y north). If the chain is unavailable, the panel shows a
 position dot and `HDG --`.
 
 Leaflet is distributed under the BSD 2-Clause License. Its license text is included

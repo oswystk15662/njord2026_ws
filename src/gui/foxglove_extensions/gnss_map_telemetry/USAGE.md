@@ -20,7 +20,7 @@
 ```bash
 ros2 topic echo /sensor/vehicle_gnss/fix/raw --once
 ros2 topic echo /gui/ground_speed_mps --once
-ros2 run tf2_ros tf2_echo map base_link
+ros2 run tf2_ros tf2_echo odom base_link
 ```
 
 ## 2. Foxglove拡張を導入する
@@ -54,6 +54,6 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 ## トラブルシューティング
 
 - `--` と表示される: 対応トピックが未publish、またはトピック名が異なります。
-- 位置が円で表示され、`HDG --` になる: `map` から `base_link` までのTF chainを確認してください。
+- 位置が円で表示され、`HDG --` になる: `odom` から `base_link` までのTF chainを確認してください。
 - 地図が表示されない: OpenStreetMapのタイルを使うため、表示PCからインターネットへ接続できるか確認してください。
 - パネルが見つからない: `.foxe` を先に導入してからレイアウトをimportし、Foxgloveを再起動してください。
