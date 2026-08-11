@@ -36,4 +36,5 @@ def test_dry_run_can_complete_after_configuration():
     machine = MissionStateMachine()
     decision = machine.request_start(StartRequest("task1"), task_available=True)
     machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id)
+    assert machine.update_progress(decision.execution_id, "configure", 1.0, "route validated")
     assert machine.finish(decision.execution_id, ResultCode.SUCCEEDED, "dry run complete")

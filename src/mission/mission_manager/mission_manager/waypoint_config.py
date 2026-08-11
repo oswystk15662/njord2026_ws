@@ -8,7 +8,8 @@ place these files can move into this package without changing this API.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
-from math import isfinite
+from itertools import combinations
+from math import hypot, isfinite
 from pathlib import Path
 from typing import Mapping
 
@@ -71,6 +72,28 @@ class Route:
             for w, position in zip(self.waypoints, points)
         )
         return replace(self, waypoints=waypoints)
+
+    def projection_is_degenerate(self, points: tuple[tuple[float, float], ...]) -> bool:
+        """Return true when a geographic route collapsed during ``/fromLL``.
+
+        ``navsat_transform`` can briefly answer ``(0, 0)`` for every request
+        before it has initialized its datum.  A zero coordinate is valid by
+        itself, so reject only a collapsed *multi-point* route whose original
+        geographic points span a meaningful distance.
+        """
+        if len(points) != len(self.waypoints) or not all(
+            isfinite(x) and isfinite(y) for x, y in points
+        ):
+            return True
+        if len(points) < 2:
+            return False
+        # 1e-5 degrees is about one metre at these latitudes.  Do not reject
+        # deliberately repeated waypoints, but catch a partial collapse too.
+        return any(
+            hypot(a.latitude - b.latitude, a.longitude - b.longitude) > 1.0e-5
+            and hypot(pa[0] - pb[0], pa[1] - pb[1]) < 1.0
+            for (a, pa), (b, pb) in combinations(zip(self.waypoints, points), 2)
+        )
 
 
 class WaypointConfigLoader:

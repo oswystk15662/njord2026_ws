@@ -57,9 +57,11 @@ def test_sequence_maps_nav_success_to_result():
     results = []
     executor = WaypointSequenceExecutor(nav)
     executor.start("execution", _route(), lambda *_: None, results.append)
-    _, accepted, completed = nav.sent[0]
-    accepted(True)
-    completed(ExecutorStatus.SUCCEEDED, "ok")
+    for expected_id in ("gate", "dock", "exit"):
+        poses, accepted, completed = nav.sent[-1]
+        assert [pose.waypoint_id for pose in poses] == [expected_id]
+        accepted(True)
+        completed(ExecutorStatus.SUCCEEDED, "ok")
     assert results[0].status == ExecutorStatus.SUCCEEDED
 
 

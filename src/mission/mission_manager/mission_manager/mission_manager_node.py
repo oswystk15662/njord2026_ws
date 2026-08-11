@@ -185,7 +185,10 @@ class MissionManager(Node):
         self.declare_parameter("registry_file", "")
         self.declare_parameter("active_nav2_profile", "")
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
-        self.declare_parameter("coordinate_projection_timeout_sec", 10.0)
+        self.declare_parameter("coordinate_projection_timeout_sec", 30.0)
+        self.declare_parameter("coordinate_projection_retry_sec", 0.5)
+        self.declare_parameter("coordinate_projection_request_interval_sec", 0.5)
+        self.declare_parameter("coordinate_projection_request_timeout_sec", 5.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -531,8 +534,15 @@ class MissionManager(Node):
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
         self._activate_task_readiness(decision.execution_id, task)
-        self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
-                                 stage="configure", message="task route validated")
+        if self._machine.snapshot.state == MissionState.VALIDATING:
+            self._machine.transition(
+                MissionState.CONFIGURING, execution_id=decision.execution_id,
+                stage="configure", message="task route validated",
+            )
+        else:
+            self._machine.update_progress(
+                decision.execution_id, "configure", 1.0, "task route validated"
+            )
         if request.dry_run:
             self._navigation.publish_preview(route.waypoints)
             self._complete(decision.execution_id, ResultCode.SUCCEEDED, "dry run validated route and profile")
@@ -562,49 +572,112 @@ class MissionManager(Node):
     def _start_coordinate_projection(
         self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
     ) -> None:
-        futures = []
-        for point in route.projection_points():
-            projection_request = FromLL.Request()
-            projection_request.ll_point = GeoPoint(
-                latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
-            )
-            futures.append(self._from_ll_client.call_async(projection_request))
-        self._pending_coordinate_projection = (execution_id, task, route, request, futures)
+        points = route.projection_points()
+        self._pending_coordinate_projection = {
+            "execution_id": execution_id,
+            "task": task,
+            "route": route,
+            "request": request,
+            "points": points,
+            "projected": [],
+            "next_index": 0,
+            "attempts": 1,
+            "request_serial": 0,
+        }
         timeout_sec = max(0.0, float(
             self.get_parameter("coordinate_projection_timeout_sec").value
         ))
         self._coordinate_projection_deadline_ns = (
             self.get_clock().now().nanoseconds + int(timeout_sec * 1e9)
         ) if timeout_sec else None
-        for future in futures:
-            future.add_done_callback(self._finish_coordinate_projection)
+        self._request_next_coordinate_projection()
 
-    def _finish_coordinate_projection(self, _future) -> None:
-        with self._lock:
-            pending = self._pending_coordinate_projection
-            if pending is None:
-                return
-            execution_id, task, route, request, futures = pending
-            if not all(future.done() for future in futures):
+    def _request_next_coordinate_projection(self) -> None:
+        """Serialize /fromLL requests; navsat_transform drops bursts of service calls."""
+        pending = self._pending_coordinate_projection
+        if pending is None:
+            return
+        if "retry_after_ns" in pending or "next_request_after_ns" in pending:
+            return
+        points = pending["points"]
+        index = pending["next_index"]
+        if index >= len(points):
+            projected = tuple(pending["projected"])
+            if pending["route"].projection_is_degenerate(projected):
+                retry_sec = float(self.get_parameter("coordinate_projection_retry_sec").value)
+                if retry_sec <= 0.0:
+                    retry_sec = 0.1
+                pending["projected"].clear()
+                pending["next_index"] = 0
+                pending["attempts"] += 1
+                pending["retry_after_ns"] = self.get_clock().now().nanoseconds + int(retry_sec * 1e9)
+                self._machine.update_progress(
+                    pending["execution_id"], "wait_for_map_projection", 0.0,
+                    "/fromLL returned a degenerate route; waiting for map projection initialization",
+                )
                 return
             self._pending_coordinate_projection = None
             self._coordinate_projection_deadline_ns = None
-            if not self._machine.is_current(execution_id):
+            resolved = pending["route"].with_projected_points(projected)
+            decision = type("Decision", (), {"execution_id": pending["execution_id"]})()
+            self._configure_route(decision, pending["task"], resolved, pending["request"])
+            return
+        point = points[index]
+        projection_request = FromLL.Request()
+        projection_request.ll_point = GeoPoint(
+            latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
+        )
+        # The Humble /fromLL service can lose an individual DDS response
+        # while remaining available for the next request.  Associate every
+        # request with a serial so a late reply from a timed-out attempt is
+        # ignored rather than being appended as a duplicate waypoint.
+        pending["request_serial"] += 1
+        request_serial = pending["request_serial"]
+        pending["request_started_ns"] = self.get_clock().now().nanoseconds
+        future = self._from_ll_client.call_async(projection_request)
+        future.add_done_callback(
+            lambda result, serial=request_serial: self._finish_coordinate_projection(result, serial)
+        )
+
+    def _finish_coordinate_projection(self, future, request_serial: int) -> None:
+        with self._lock:
+            pending = self._pending_coordinate_projection
+            if (
+                pending is None
+                or request_serial != pending["request_serial"]
+                or not self._machine.is_current(pending["execution_id"])
+            ):
                 return
             try:
-                points = tuple(
-                    (float(future.result().map_point.x), float(future.result().map_point.y))
-                    for future in futures
-                )
-                resolved = route.with_projected_points(points)
+                response = future.result()
+                pending["projected"].append((
+                    float(response.map_point.x), float(response.map_point.y)
+                ))
             except Exception as exc:
+                execution_id = pending["execution_id"]
+                self._pending_coordinate_projection = None
+                self._coordinate_projection_deadline_ns = None
                 self._complete(
                     execution_id, ResultCode.CONFIGURATION_FAILED,
                     f"map projection for waypoint coordinates failed: {exc}",
                 )
                 return
-            decision = type("Decision", (), {"execution_id": execution_id})()
-            self._configure_route(decision, task, resolved, request)
+            pending.pop("request_started_ns", None)
+            pending["next_index"] += 1
+            self._machine.update_progress(
+                pending["execution_id"], "project_waypoints",
+                pending["next_index"] / len(pending["points"]),
+                f"projected waypoint {pending['next_index']}/{len(pending['points'])}",
+            )
+            # navsat_transform may drop a burst of /fromLL calls while its
+            # datum is settling.  Keep the requests both serialized and
+            # time-separated.
+            interval_sec = float(
+                self.get_parameter("coordinate_projection_request_interval_sec").value
+            )
+            pending["next_request_after_ns"] = self.get_clock().now().nanoseconds + int(
+                max(0.0, interval_sec) * 1e9
+            )
 
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
@@ -621,7 +694,18 @@ class MissionManager(Node):
 
     def _load_route(self, task: TaskDefinition) -> Route:
         root = self._waypoint_share_path() if task.route_package == "waypoint_publisher" else self._registry_path().parent
-        return self._loader.load(root / task.route, task.route_key)
+        route = self._loader.load(root / task.route, task.route_key)
+        if task.task_id != "task1":
+            return route
+        waypoints = tuple(
+            waypoint for waypoint in route.waypoints if waypoint.competition_id != "1"
+        )
+        if not waypoints:
+            raise RegistryError("Task1 route has no navigation waypoints after GPS1")
+        return Route(
+            route.frame_id, waypoints, route.stages,
+            route.full_sequence_stages, route.constraints,
+        )
 
     def _begin_executor(self, execution_id: str, task: TaskDefinition) -> None:
         if not self._machine.is_current(execution_id) or self._active_route is None:
@@ -838,7 +922,7 @@ class MissionManager(Node):
                 and self._coordinate_projection_deadline_ns is not None
                 and self.get_clock().now().nanoseconds >= self._coordinate_projection_deadline_ns
             ):
-                execution_id = pending_projection[0]
+                execution_id = pending_projection["execution_id"]
                 self._pending_coordinate_projection = None
                 self._coordinate_projection_deadline_ns = None
                 self._complete(
@@ -848,6 +932,35 @@ class MissionManager(Node):
                     f"{float(self.get_parameter('coordinate_projection_timeout_sec').value):g} seconds",
                 )
                 snapshot = self._machine.snapshot
+            elif (
+                pending_projection is not None
+                and "request_started_ns" in pending_projection
+                and self.get_clock().now().nanoseconds - pending_projection["request_started_ns"]
+                >= int(max(0.1, float(
+                    self.get_parameter("coordinate_projection_request_timeout_sec").value
+                )) * 1e9)
+            ):
+                self._machine.update_progress(
+                    pending_projection["execution_id"], "project_waypoints",
+                    pending_projection["next_index"] / len(pending_projection["points"]),
+                    f"map projection request {pending_projection['next_index'] + 1}/"
+                    f"{len(pending_projection['points'])} timed out; retrying",
+                )
+                self._request_next_coordinate_projection()
+            elif (
+                pending_projection is not None
+                and "retry_after_ns" in pending_projection
+                and self.get_clock().now().nanoseconds >= pending_projection["retry_after_ns"]
+            ):
+                del pending_projection["retry_after_ns"]
+                self._request_next_coordinate_projection()
+            elif (
+                pending_projection is not None
+                and "next_request_after_ns" in pending_projection
+                and self.get_clock().now().nanoseconds >= pending_projection["next_request_after_ns"]
+            ):
+                del pending_projection["next_request_after_ns"]
+                self._request_next_coordinate_projection()
             if snapshot.state == MissionState.WAITING_FOR_AUTO_PERMISSION:
                 if not self._auto_mode_request_sent:
                     self._request_auto_mode()

@@ -106,6 +106,9 @@ def generate_launch_description():
     active_nav2_profile = LaunchConfiguration("active_nav2_profile")
     enable_control_manager = LaunchConfiguration("enable_control_manager")
     enable_mission_manager = LaunchConfiguration("enable_mission_manager")
+    ground_link_return_monitor_log_level = LaunchConfiguration(
+        "ground_link_return_monitor_log_level"
+    )
     enable_diagnostics = LaunchConfiguration("enable_diagnostics")
     enable_autonomy_supervisor = LaunchConfiguration("enable_autonomy_supervisor")
     use_sim_time = LaunchConfiguration("use_sim_time")
@@ -245,7 +248,10 @@ def generate_launch_description():
         "mission_manager",
         ["launch", "mission.launch.py"],
         IfCondition(enable_mission_manager),
-        {"active_nav2_profile": active_nav2_profile},
+        {
+            "active_nav2_profile": active_nav2_profile,
+            "ground_link_return_monitor_log_level": ground_link_return_monitor_log_level,
+        },
     )
 
     task2_mission_adapter_launch = include_launch(
@@ -616,6 +622,11 @@ def generate_launch_description():
                 "enable_mission_manager",
                 default_value="true",
                 description="Start the persistent Mission Manager; it remains IDLE at startup.",
+            ),
+            DeclareLaunchArgument(
+                "ground_link_return_monitor_log_level",
+                default_value="warn",
+                description="Log level for the ground-link return monitor (warn hides heartbeat status churn).",
             ),
             DeclareLaunchArgument(
                 "active_nav2_profile",

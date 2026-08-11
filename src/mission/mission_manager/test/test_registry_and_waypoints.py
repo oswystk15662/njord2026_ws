@@ -58,6 +58,12 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     ]
 
 
+def test_task1_uses_gps1_as_start_not_navigation_goal():
+    source = (PACKAGE_ROOT / "mission_manager" / "mission_manager_node.py").read_text()
+    assert 'waypoint.competition_id != "1"' in source
+    assert "Task1 route has no navigation waypoints after GPS1" in source
+
+
 def test_route_supports_latitude_longitude_coordinates(tmp_path):
     config = tmp_path / "coordinates.yaml"
     config.write_text(
@@ -67,6 +73,27 @@ def test_route_supports_latitude_longitude_coordinates(tmp_path):
     route = WaypointConfigLoader().load(config, "route")
     assert len(route.projection_points()) == 1
     assert [(w.x, w.y) for w in route.with_projected_points(((1.5, 2.5),)).waypoints] == [(1.5, 2.5)]
+
+
+def test_route_rejects_collapsed_projection_for_separated_geographic_points(tmp_path):
+    config = tmp_path / "coordinates.yaml"
+    config.write_text(
+        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: 35.0, longitude: 139.0, yaw: 0.0}\n    - {id: b, latitude: 35.001, longitude: 139.001, yaw: 0.0}\n""",
+        encoding="utf-8",
+    )
+    route = WaypointConfigLoader().load(config, "route")
+    assert route.projection_is_degenerate(((0.0, 0.0), (0.0, 0.0)))
+    assert not route.projection_is_degenerate(((0.0, 0.0), (100.0, 100.0)))
+
+
+def test_route_rejects_one_collapsed_pair_in_otherwise_spread_projection(tmp_path):
+    config = tmp_path / "coordinates.yaml"
+    config.write_text(
+        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: 35.0, longitude: 139.0, yaw: 0.0}\n    - {id: b, latitude: 35.001, longitude: 139.001, yaw: 0.0}\n    - {id: c, latitude: 35.002, longitude: 139.002, yaw: 0.0}\n""",
+        encoding="utf-8",
+    )
+    route = WaypointConfigLoader().load(config, "route")
+    assert route.projection_is_degenerate(((0.0, 0.0), (100.0, 100.0), (100.0, 100.0)))
 
 
 def test_duplicate_yaml_keys_are_rejected(tmp_path):
