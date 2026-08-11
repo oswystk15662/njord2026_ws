@@ -139,6 +139,8 @@ JetsonのROSディストリビューションがJazzy以外の場合だけ、1�
 
 miniPCは GNSS、自己位置推定、Nav2、制御、Mission Manager、スラスタ、BMS、背面カメラの実行に必要な package だけをビルドする。Livox、PCL segmentation、ZED 2i SDK、GPU知覚はビルドしない。
 
+`pcl_segmentation` がないというエラーが出た場合も、miniPCへPCL packageを追加しない。次のコマンドでminiPC用の `robot` と起動対象を再ビルドしてから、同じターミナルで launch する。
+
 ```bash
 cd ./njord2026_ws
 source /opt/ros/humble/setup.bash

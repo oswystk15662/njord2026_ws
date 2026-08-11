@@ -114,6 +114,23 @@ def test_minipc_bringup_source_has_no_gpu_packages():
         )
 
 
+def test_robot_manifest_gates_jetson_only_task2_dependencies():
+    manifest = ET.parse(Path(_LAUNCH_DIR).parents[0] / "package.xml").getroot()
+    conditions = {
+        element.text: element.attrib.get("condition")
+        for element in manifest.findall("exec_depend")
+    }
+    for package_name in (
+        "pcl_det",
+        "ship_perception_bringup",
+        "task2_perception",
+        "pcl_preprocessing",
+        "pcl_segmentation",
+        "ship_tracking",
+    ):
+        assert conditions[package_name] == "$NJORD_ENABLE_GPU_SENSORS == 1"
+
+
 def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'back_cam_h26x_ground_video.launch.py' in source
