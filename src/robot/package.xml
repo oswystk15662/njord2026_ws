@@ -50,6 +50,7 @@
   <exec_depend>rosbag2_transport</exec_depend>
   <exec_depend>ship_perception_bringup</exec_depend>
   <exec_depend>simple_manual</exec_depend>
+  <exec_depend>task2_perception</exec_depend>
   <exec_depend>tf2_ros</exec_depend>
   <exec_depend>tf_frame_arrow_publisher</exec_depend>
   <exec_depend>usb_cam</exec_depend>

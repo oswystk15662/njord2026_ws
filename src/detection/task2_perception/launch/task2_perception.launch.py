@@ -39,6 +39,10 @@ def generate_launch_description():
             description="Start opponent_selector (/tracked_objects -> "
                         "/other_ship/twist + opponent TF)"),
         DeclareLaunchArgument(
+            "enable_safety_cloud", default_value="true",
+            description="Publish the compact /task2/safety_points cloud for miniPC "
+                        "Collision Monitor."),
+        DeclareLaunchArgument(
             "publish_self_marker", default_value="true",
             description="Publish the visualization-only self-vessel Marker"),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
@@ -65,6 +69,36 @@ def generate_launch_description():
                 },
             ],
             condition=IfCondition(LaunchConfiguration("enable_cloud_filter")),
+        ),
+        Node(
+            package="task2_perception",
+            executable="task2_cloud_filter_node",
+            name="task2_safety_cloud_filter",
+            output="screen",
+            parameters=[
+                params_file,
+                {
+                    # Keep this intentionally small. It is the only cloud sent
+                    # across Jetson -> miniPC and is not used for tracking.
+                    "output_topic": "/task2/safety_points",
+                    "visual_output_topic": "/task2/safety_points_visual",
+                    "min_range_m": 0.45,
+                    "max_range_m": 12.0,
+                    "voxel_leaf_size_m": 0.20,
+                    "process_rate_hz": 5.0,
+                    # Suppress direct deck returns without blanking the forward
+                    # near-obstacle region that Collision Monitor must protect.
+                    "self_crop_min_x": -0.30,
+                    "self_crop_max_x": 0.30,
+                    "self_crop_min_y": -0.30,
+                    "self_crop_max_y": 0.30,
+                    "self_crop_min_z": -0.50,
+                    "self_crop_max_z": 1.50,
+                    "publish_self_marker": False,
+                    "publish_visual_z_mirror": False,
+                },
+            ],
+            condition=IfCondition(LaunchConfiguration("enable_safety_cloud")),
         ),
         Node(
             package="task2_perception",

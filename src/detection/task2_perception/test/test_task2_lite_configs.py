@@ -39,6 +39,7 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["straight_min_hit_count"] == 5
     assert selector["straight_max_velocity_stddev_mps"] == 0.5
+    assert selector["straight_continue_after_loss"] is True
     assert selector["min_absolute_speed_knots"] == 0.3
     assert selector["max_absolute_speed_knots"] == 6.0
     assert selector["straight_coast_timeout_sec"] == 2.0

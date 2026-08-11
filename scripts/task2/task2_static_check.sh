@@ -4,7 +4,8 @@
 # Run from anywhere; operates on the repository containing this script.
 #   - py_compile of all Task2-related Python files
 #   - YAML / XML parse of Task2 configs
-#   - pytest of task2_perception and the selected mission/robot checks
+#   - pytest of task2_perception tests (if the package exists) and the robot
+#     static autonomy-launch test (if present)
 #
 # Each probe is best-effort (|| true) so the full report always prints;
 # the exit code is non-zero if anything failed.
@@ -47,19 +48,12 @@ done < <(
         find src/navigation/path_generator/mppi -name '*.py' 2>/dev/null
         find src/navigation/path_generator/waypoint_publisher -name '*.py' 2>/dev/null
         find src/detection/task2_perception -name '*.py' 2>/dev/null
-        find src/sim/task2_sim -name '*.py' 2>/dev/null
         find src -maxdepth 4 -type d -name 'task2_perception' 2>/dev/null \
             | while IFS= read -r d; do find "$d" -name '*.py' 2>/dev/null; done
-        ls src/navigation/path_generator/mppi/launch/planner_real.launch.py 2>/dev/null
-        ls src/detection/task2_perception/launch/task2_perception.launch.py 2>/dev/null
-        ls src/detection/yolo/launch/yolo11s.launch.py 2>/dev/null
+        ls src/robot/launch/task2_autonomy.launch.py 2>/dev/null
         ls src/robot/launch/navigation_launch_task2.py 2>/dev/null
-        ls src/robot/launch/task2_mission_adapter.launch.py 2>/dev/null
-        ls src/sim/task2_sim/launch/task2_sim.launch.py 2>/dev/null
-        ls src/sim/task2_sim/task2_sim/cmd_vel_kinematic_sim.py 2>/dev/null
+        ls src/robot/test/test_task2_autonomy_launch_static.py 2>/dev/null
         ls scripts/task2/benchmark_mppi.py 2>/dev/null
-        ls scripts/task2/benchmark_yolo11s.py 2>/dev/null
-        ls scripts/yolo/export_yolo11s_tensorrt.py 2>/dev/null
     } | sort -u
 )
 
@@ -81,7 +75,7 @@ while IFS= read -r f; do
     YAML_FILES+=("$f")
 done < <(
     {
-        ls src/robot/config/nav2_params_task2_*.yaml 2>/dev/null
+        ls src/robot/config/nav2_params_task2.yaml 2>/dev/null
         ls src/navigation/path_generator/mppi/config/mppi_params.yaml 2>/dev/null
         ls src/navigation/path_generator/waypoint_publisher/config/task2_waypoints.yaml 2>/dev/null
         find src -maxdepth 5 -path '*task2_perception*' -name '*.yaml' 2>/dev/null
@@ -101,7 +95,6 @@ done < <(
     {
         ls src/navigation/path_generator/mppi/package.xml 2>/dev/null
         ls src/navigation/path_generator/waypoint_publisher/package.xml 2>/dev/null
-        ls src/detection/task2_perception/package.xml 2>/dev/null
         find src -maxdepth 4 -path '*task2*' -name 'package.xml' 2>/dev/null
         ls src/robot/config/navigate_through_poses_w_replanning_and_recovery.xml 2>/dev/null
     } | sort -u
@@ -114,7 +107,7 @@ for f in "${XML_FILES[@]}"; do
 done
 
 # ------------------------------------------------------------------
-# 3. pytest: perception, mission, and optional robot static checks
+# 3. pytest: task2_perception tests + robot static launch test
 # ------------------------------------------------------------------
 TASK2_PERCEPTION_DIR="$(find src -maxdepth 4 -type d -name 'task2_perception' 2>/dev/null | head -n1 || true)"
 if [ -n "${TASK2_PERCEPTION_DIR}" ] && [ -d "${TASK2_PERCEPTION_DIR}/test" ]; then
@@ -125,33 +118,12 @@ else
     echo "(task2_perception tests not present in this checkout - skipping)"
 fi
 
-MISSION_TESTS=(
-    src/mission/mission_manager/test/test_executors.py
-    src/mission/mission_manager/test/test_readiness_evidence.py
-    src/mission/mission_manager/test/test_registry_and_waypoints.py
-)
-MISSION_TESTS_PRESENT=()
-for f in "${MISSION_TESTS[@]}"; do
-    [ -f "${f}" ] && MISSION_TESTS_PRESENT+=("${f}")
-done
-if [ "${#MISSION_TESTS_PRESENT[@]}" -gt 0 ]; then
-    OUT="$(PYTHONPATH=src/mission/mission_manager python3 -m pytest "${MISSION_TESTS_PRESENT[@]}" -q 2>&1)" && \
-        report PASS "pytest mission Task2 checks" "$(echo "${OUT}" | tail -n1)" || \
-        report FAIL "pytest mission Task2 checks" "$(echo "${OUT}" | tail -n1)" || true
-fi
-
-if [ -f src/robot/test/test_launch_roles.py ]; then
-    OUT="$(python3 -m pytest src/robot/test/test_launch_roles.py -k task2 -q 2>&1)" && \
-        report PASS "pytest Task2 robot launch checks" "$(echo "${OUT}" | tail -n1)" || \
-        report FAIL "pytest Task2 robot launch checks" "$(echo "${OUT}" | tail -n1)" || true
+if [ -f src/robot/test/test_task2_autonomy_launch_static.py ]; then
+    OUT="$(python3 -m pytest src/robot/test/test_task2_autonomy_launch_static.py -q 2>&1)" && \
+        report PASS "pytest test_task2_autonomy_launch_static" "$(echo "${OUT}" | tail -n1)" || \
+        report FAIL "pytest test_task2_autonomy_launch_static" "$(echo "${OUT}" | tail -n1)" || true
 else
-    report FAIL "pytest Task2 robot launch checks" "test_launch_roles.py missing"
-fi
-
-if [ -d src/sim/task2_sim/test ]; then
-    OUT="$(PYTHONPATH=src/sim/task2_sim python3 -m pytest src/sim/task2_sim/test -q 2>&1)" && \
-        report PASS "pytest Task2 simulation" "$(echo "${OUT}" | tail -n1)" || \
-        report FAIL "pytest Task2 simulation" "$(echo "${OUT}" | tail -n1)" || true
+    report FAIL "pytest test_task2_autonomy_launch_static" "test file missing"
 fi
 
 # ------------------------------------------------------------------

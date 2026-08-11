@@ -72,6 +72,24 @@ def generate_launch_description():
             }
         ],
     )
+    path_pruner_node = Node(
+        package="asv_trajectory_planner",
+        executable="path_pruner_node",
+        name="path_pruner_node",
+        output="screen",
+        parameters=[{
+            "input_path_topic": "/planned_path",
+            "output_path_topic": "/planned_path_pruned",
+            "skip_points_after_closest": 0,
+            "prepend_current_pose": True,
+            "min_output_points": 3,
+            "min_point_spacing_m": 0.5,
+            "odom_topic": "/odom",
+                                            }],
+    )
+
+
+
     follow_path_client_node = Node(
         package="asv_trajectory_planner",
         executable="follow_path_client_node",
@@ -96,6 +114,7 @@ def generate_launch_description():
             task2_gps_waypoint_publisher,
             opponent_twist_from_tf_node,
             planner_node,
+            path_pruner_node,
             follow_path_client_node,
         ]
     )

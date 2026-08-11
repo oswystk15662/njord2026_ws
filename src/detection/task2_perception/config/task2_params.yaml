@@ -80,6 +80,9 @@ opponent_selector:
     motion_filter_mode: "standard"            # standard|straight_line
     straight_min_hit_count: 5                  # 5 Hz -> roughly 1 s history
     straight_max_velocity_stddev_mps: 0.50     # [m/s] tolerate real LiDAR velocity noise
+    # A confirmed Task 2 target keeps its straight-line prediction through
+    # LiDAR occlusion; tentative tracks never enable this behavior.
+    straight_continue_after_loss: true
     # When LiDAR briefly loses a confirmed vessel, keep publishing this
     # constant-velocity prediction.  0 disables coasting; expiry is silent.
     straight_coast_timeout_sec: 2.0            # [s]
