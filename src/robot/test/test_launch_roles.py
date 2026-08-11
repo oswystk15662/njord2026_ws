@@ -740,6 +740,8 @@ def test_jetson_publishes_livox_static_tf_before_starting_glim():
     assert 'package="tf2_ros"' in source
     assert 'name="jetson_livox_static_tf_pub"' in source
     assert '"--frame-id", "base_link", "--child-frame-id", "livox_frame"' in source
+    assert 'name="jetson_zed_static_tf_pub"' in source
+    assert '"--frame-id", "base_link", "--child-frame-id", "zed2i_left_camera_frame"' in source
     assert '"lidar_start_delay",\n                default_value="0.5"' in source
 
 

@@ -200,6 +200,18 @@ def generate_launch_description():
         ],
     )
 
+    zed_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="jetson_zed_static_tf_pub",
+        output="screen",
+        arguments=[
+            "--x", "0.48", "--y", "0.0", "--z", "0.47",
+            "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "zed2i_left_camera_frame",
+        ],
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -312,7 +324,8 @@ def generate_launch_description():
                 actions=[zed2i_launch],
             ),
             livox_static_tf,
-            task1_safety_points,
+            zed_static_tf,
+            TimerAction(period=0.5, actions=[task1_safety_points]),
             task1_default_buoy_roi,
             task2_autonomy,
             heartbeat_launch,

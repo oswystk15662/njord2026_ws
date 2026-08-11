@@ -82,7 +82,7 @@ def test_lidar_launch_routes_raw_imu_through_si_scaler():
     assert '"acceleration_scale": 9.80665' in source
 
 
-def test_glim_does_not_scale_si_livox_acceleration_twice():
+def test_glim_uses_raw_livox_imu_without_the_scaler_hop():
     share_dir = get_package_share_directory("robot")
     paths = [
         os.path.join(share_dir, "config", "glim_config", "config_ros.json"),
@@ -93,7 +93,8 @@ def test_glim_does_not_scale_si_livox_acceleration_twice():
     for path in paths:
         with open(path, "r") as stream:
             source = stream.read()
-        assert '"acc_scale": 1.0' in source
+        assert '"imu_topic": "/livox/imu_raw"' in source
+        assert '"acc_scale": 9.80665' in source
 
 
 def test_glim_interprets_livox_point_timestamps_as_absolute_nanoseconds():
