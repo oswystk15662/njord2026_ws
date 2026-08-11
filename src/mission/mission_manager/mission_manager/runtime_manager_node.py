@@ -26,8 +26,8 @@ _QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 class RuntimeManager(Node):
     def __init__(self):
         super().__init__("runtime_manager")
-        self.declare_parameter("sigint_timeout_sec", 2.0)
-        self.declare_parameter("sigterm_timeout_sec", 1.0)
+        self.declare_parameter("sigint_timeout_sec", 1.0)
+        self.declare_parameter("sigterm_timeout_sec", 0.5)
         self.declare_parameter("nav2_ready_timeout_sec", 30.0)
         self.declare_parameter("nav2_ready_poll_sec", 0.5)
         self.declare_parameter("nav2_lifecycle_query_timeout_sec", 3.0)
@@ -88,7 +88,7 @@ class RuntimeManager(Node):
     def _terminate_process_group(pgid: int, *, sigint_timeout: float, sigterm_timeout: float) -> bool:
         for sig, timeout in ((signal.SIGINT, sigint_timeout),
                              (signal.SIGTERM, sigterm_timeout),
-                             (signal.SIGKILL, 1.0)):
+                             (signal.SIGKILL, 0.5)):
             try:
                 os.killpg(pgid, sig)
             except ProcessLookupError:
