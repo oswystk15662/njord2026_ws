@@ -89,6 +89,17 @@ def test_route_supports_latitude_longitude_coordinates(tmp_path):
     assert [(w.x, w.y) for w in route.with_projected_points(((1.5, 2.5),)).waypoints] == [(1.5, 2.5)]
 
 
+def test_route_supports_competition_dms_coordinates(tmp_path):
+    config = tmp_path / "coordinates.yaml"
+    config.write_text(
+        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: \"63°26′26.89″ N\", longitude: \"10°25′24.22″ E\", yaw: 0.0}\n""",
+        encoding="utf-8",
+    )
+    waypoint = WaypointConfigLoader().load(config, "route").waypoints[0]
+    assert waypoint.latitude == pytest.approx(63.4408027778)
+    assert waypoint.longitude == pytest.approx(10.4233944444)
+
+
 def test_route_rejects_collapsed_projection_for_separated_geographic_points(tmp_path):
     config = tmp_path / "coordinates.yaml"
     config.write_text(

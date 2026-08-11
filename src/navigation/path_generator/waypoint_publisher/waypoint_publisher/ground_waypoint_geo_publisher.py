@@ -1,6 +1,7 @@
 """Publish the selected local waypoint YAML as geographic display markers."""
 
 from pathlib import Path
+import re
 
 from ament_index_python.packages import get_package_share_directory
 from njord_interfaces.msg import MissionStatus
@@ -19,6 +20,19 @@ _CONFIGS = {
     "task3_1": ("task3_waypoints.yaml", "task3_1_config"),
     "task3_2": ("task3_waypoints.yaml", "task3_2_config"),
 }
+
+
+def _coordinate(value):
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return float(value)
+    match = re.fullmatch(r"\s*(\d+)°(\d+)[′'](\d+(?:\.\d+)?)[″\"]\s*([NSEW])\s*", str(value))
+    if not match:
+        raise ValueError(f"invalid coordinate {value!r}")
+    degrees, minutes, seconds = int(match.group(1)), int(match.group(2)), float(match.group(3))
+    if minutes >= 60 or not 0.0 <= seconds < 60.0:
+        raise ValueError(f"invalid coordinate {value!r}")
+    coordinate = degrees + minutes / 60.0 + seconds / 3600.0
+    return -coordinate if match.group(4) in "SW" else coordinate
 
 
 class GroundWaypointGeoPublisher(Node):
@@ -75,8 +89,8 @@ class GroundWaypointGeoPublisher(Node):
             marker.ns, marker.id = "ground_waypoint_wgs84", index
             marker.type, marker.action = Marker.SPHERE, Marker.ADD
             # This display-only contract uses x=longitude and y=latitude.
-            marker.pose.position.x = float(waypoint["longitude"])
-            marker.pose.position.y = float(waypoint["latitude"])
+            marker.pose.position.x = _coordinate(waypoint["longitude"])
+            marker.pose.position.y = _coordinate(waypoint["latitude"])
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 1.0
             marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.0, 0.9, 1.0, 1.0

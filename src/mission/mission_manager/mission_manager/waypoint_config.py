@@ -11,6 +11,7 @@ from dataclasses import dataclass, replace
 from itertools import combinations
 from math import hypot, isfinite
 from pathlib import Path
+import re
 from typing import Mapping
 
 from .task_registry import RegistryError, load_yaml
@@ -131,6 +132,30 @@ class WaypointConfigLoader:
         )
 
     @staticmethod
+    def _coordinate(value: object, low: float, high: float, hemispheres: str) -> float:
+        if isinstance(value, bool):
+            raise RegistryError("coordinate must be numeric or DMS text")
+        if isinstance(value, (int, float)):
+            coordinate = float(value)
+        elif isinstance(value, str):
+            match = re.fullmatch(
+                r"\s*(\d+)°(\d+)[′'](\d+(?:\.\d+)?)[″\"]\s*([NSEW])\s*", value
+            )
+            if not match or match.group(4) not in hemispheres:
+                raise RegistryError(f"invalid DMS coordinate {value!r}")
+            degrees, minutes, seconds = int(match.group(1)), int(match.group(2)), float(match.group(3))
+            if minutes >= 60 or not 0.0 <= seconds < 60.0:
+                raise RegistryError(f"invalid DMS coordinate {value!r}")
+            coordinate = degrees + minutes / 60.0 + seconds / 3600.0
+            if match.group(4) in "SW":
+                coordinate = -coordinate
+        else:
+            raise RegistryError("coordinate must be numeric or DMS text")
+        if not isfinite(coordinate) or not low <= coordinate <= high:
+            raise RegistryError("coordinate out of range")
+        return coordinate
+
+    @staticmethod
     def _geodetic_point(raw: object, route_key: str, label: str, *, required: bool) -> GeodeticPoint | None:
         if raw is None and not required:
             return None
@@ -143,11 +168,17 @@ class WaypointConfigLoader:
         if has_latitude != has_longitude:
             raise RegistryError(f"route {route_key!r} {label} requires both latitude and longitude")
         values = {}
-        for name, low, high in (("latitude", -90.0, 90.0), ("longitude", -180.0, 180.0)):
-            value = raw.get(name)
-            if isinstance(value, bool) or not isinstance(value, (int, float)) or not isfinite(value) or not low <= value <= high:
-                raise RegistryError(f"route {route_key!r} {label} has invalid {name}")
-            values[name] = float(value)
+        for name, low, high, hemispheres in (
+            ("latitude", -90.0, 90.0, "NS"), ("longitude", -180.0, 180.0, "EW")
+        ):
+            try:
+                values[name] = WaypointConfigLoader._coordinate(
+                    raw.get(name), low, high, hemispheres
+                )
+            except RegistryError as exc:
+                raise RegistryError(
+                    f"route {route_key!r} {label} has invalid {name}: {exc}"
+                ) from exc
         altitude = raw.get("altitude", 0.0)
         if isinstance(altitude, bool) or not isinstance(altitude, (int, float)) or not isfinite(altitude):
             raise RegistryError(f"route {route_key!r} {label} has invalid altitude")
