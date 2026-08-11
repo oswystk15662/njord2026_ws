@@ -49,7 +49,7 @@ def generate_launch_description():
     enable_ship_tracking = LaunchConfiguration("enable_ship_tracking")
     enable_nav2 = LaunchConfiguration("enable_nav2")
     own_odom_topic = LaunchConfiguration("own_odom_topic")
-    opponent_motion_mode = LaunchConfiguration("opponent_motion_mode")
+    params_file = LaunchConfiguration("params_file")
 
     task2_perception = _include(
         "task2_perception",
@@ -60,30 +60,37 @@ def generate_launch_description():
             "enable_safety_cloud": "true",
             "enable_opponent_selector": enable_ship_tracking,
             "publish_self_marker": "false",
-            "motion_filter_mode": opponent_motion_mode,
+            "params_file": params_file,
         },
     )
-    ship_tracking = _include(
-        "ship_perception_bringup",
-        "classical_pipeline.launch.py",
+    ship_tracking = GroupAction(
         condition=IfCondition(enable_ship_tracking),
-        arguments={
-            "lidar_topic": "/task2/points_filtered",
-            "ego_odom_topic": own_odom_topic,
-            "motion_mode": opponent_motion_mode,
-            "preprocessing_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
-            "segmentation_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
-            "tracker_config_file": PathJoinSubstitution(
-                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
-        },
+        actions=[
+            _include("pcl_preprocessing", "preprocessing.launch.py", arguments={
+                "config_file": params_file, "input_topic": "/task2/points_filtered",
+                "output_topic": "/pcl/preprocessed",
+            }),
+            _include("pcl_segmentation", "segmentation.launch.py", arguments={
+                "config_file": params_file, "use_color": "false",
+            }),
+            Node(
+                package="ship_tracking", executable="ship_tracker_node",
+                name="ship_tracker_node", output="screen", parameters=[params_file],
+                remappings=[
+                    ("input/cluster_observations", "/pcl/cluster_observations"),
+                    ("input/ego_odometry", own_odom_topic),
+                    ("output/tracked_objects", "/tracked_objects"),
+                    ("output/tracked_objects/markers", "/tracked_objects/markers"),
+                ],
+            ),
+        ],
     )
     mppi = _include(
         "asv_trajectory_planner",
         "planner_real.launch.py",
         arguments={
             "own_odom_topic": own_odom_topic,
+            "task2_params_file": params_file,
             # In the two-machine deployment FollowPath belongs to miniPC,
             # alongside ControllerServer and the final safety monitor.
             "enable_follow_path_client": enable_nav2,
@@ -107,14 +114,7 @@ def generate_launch_description():
         executable="safety_cloud_gate_node",
         name="task2_safety_cloud_gate",
         output="screen",
-        parameters=[{
-            "safety_topic": "/task2/safety_points",
-            "cmd_vel_in_topic": "/cmd_vel_collision_checked",
-            "cmd_vel_out_topic": "/cmd_vel_nav",
-            "safety_timeout_sec": 1.0,
-            "command_timeout_sec": 0.5,
-            "publish_rate_hz": 20.0,
-        }],
+        parameters=[params_file],
         condition=IfCondition(enable_nav2),
     )
     autonomy_ready = Node(
@@ -135,10 +135,11 @@ def generate_launch_description():
         DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
         DeclareLaunchArgument("enable_nav2", default_value="true"),
         DeclareLaunchArgument(
-            "opponent_motion_mode", default_value="straight_line",
-            choices=["standard", "straight_line"],
-            description="standard: normal vessel tracking; straight_line: "
-                        "Task 2 constant-velocity confidence gates."),
+            "params_file",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
+            description="Single Task 2 perception/opponent tuning YAML.",
+        ),
         DeclareLaunchArgument(
             "own_odom_topic", default_value="/odom",
             description="Ego odometry already published by the manual-control stack.",

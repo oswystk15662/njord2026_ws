@@ -25,8 +25,11 @@ def test_launches_bag_and_perception_chain():
     for required in (
         '"ros2", "bag", "play"',
         '"task2_perception"',
-        '"ship_perception_bringup"',
-        '"classical_pipeline.launch.py"',
+        '"pcl_preprocessing"',
+        '"preprocessing.launch.py"',
+        '"pcl_segmentation"',
+        '"segmentation.launch.py"',
+        'package="ship_tracking", executable="ship_tracker_node"',
         '"use_sim_time": "true"',
         '"ego_odom_topic": LaunchConfiguration("ego_odom_topic")',
         '"task2_params.yaml"',

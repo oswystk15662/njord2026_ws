@@ -20,6 +20,10 @@ task2_cloud_filter:
     output_frame: "base_link"
     min_range_m: 1.5                         # [m] remove own-hull near field
     max_range_m: 40.0                        # [m] required encounter range
+    # Set positive only after checking real sensor point density.  A failed
+    # health check suppresses output instead of claiming an empty sea.
+    min_valid_input_points: 0
+    publish_empty_on_invalid_input: false
     voxel_leaf_size_m: 0.0                   # Downsampling is below (0.15 m)
     accumulation_frames: 1                   # Never merge raw frame history
     process_rate_hz: 5.0                     # [Hz] latest frame only; 0=all
@@ -77,7 +81,7 @@ opponent_selector:
     publish_rate_hz: 10.0                      # [Hz] output update rate
     twist_lowpass_alpha: 0.3
     # Task 2 launch selects straight_line; standard remains available.
-    motion_filter_mode: "standard"            # standard|straight_line
+    motion_filter_mode: "straight_line"       # standard|straight_line
     straight_min_hit_count: 5                  # 5 Hz -> roughly 1 s history
     straight_max_velocity_stddev_mps: 0.50     # [m/s] tolerate real LiDAR velocity noise
     # A confirmed Task 2 target keeps its straight-line prediction through
@@ -144,4 +148,105 @@ cluster_node:
 # ---------------------------------------------------------------------------
 ship_tracker_node:
   ros__parameters:
+    # Keep every tracker threshold here; Task 2 launches load this file
+    # directly rather than hiding values in launch files.
+    motion_model: "cv"                         # cv|ctrv|ca
+    motion_mode: "straight_line"               # standard|straight_line
+    sigma_ax: 0.3
+    sigma_ay: 0.3
+    straight_sigma_ax: 0.12
+    straight_sigma_ay: 0.12
+    sigma_az: 0.05
+    sigma_yaw_acc: 0.05
+    R_diag_x: 0.5
+    R_diag_y: 0.5
+    R_diag_z: 0.3
+    hits_to_confirm: 3
     straight_hits_to_confirm: 5                # 5 Hz -> roughly 1 s to confirm
+    max_misses_confirmed: 8
+    max_misses_tentative: 2
+    mahalanobis_threshold: 9.0
+    euclidean_gate_m: 50.0
+    ego_compensation: true
+    base_frame: "base_link"
+    publish_tentative: false
+    min_marker_speed_knots: 0.3
+    max_marker_speed_knots: 6.0
+
+# ---------------------------------------------------------------------------
+# Safety cloud and Task 2 final automatic-command gate
+# ---------------------------------------------------------------------------
+task2_safety_cloud_filter:
+  ros__parameters:
+    input_topic: "/livox/lidar"
+    output_topic: "/task2/safety_points"
+    visual_output_topic: "/task2/safety_points_visual"
+    output_frame: "base_link"
+    min_range_m: 0.45
+    max_range_m: 12.0
+    min_valid_input_points: 0
+    publish_empty_on_invalid_input: false
+    voxel_leaf_size_m: 0.20
+    accumulation_frames: 1
+    process_rate_hz: 5.0
+    lidar_inverted: false
+    lidar_roll_deg: 0.0
+    lidar_pitch_deg: 0.0
+    lidar_yaw_deg: 0.0
+    waterline_z_m: 0.0
+    water_remove_min_z_m: -0.3
+    water_remove_max_z_m: 0.15
+    water_plane_distance_threshold_m: 0.05
+    water_plane_normal_z_min: 0.9
+    water_plane_max_height_error_m: 0.3
+    use_water_plane_ransac: false
+    self_crop_min_x: -0.30
+    self_crop_max_x: 0.30
+    self_crop_min_y: -0.30
+    self_crop_max_y: 0.30
+    self_crop_min_z: -0.50
+    self_crop_max_z: 1.50
+    object_min_z_m: -0.2
+    object_max_z_m: 4.0
+    publish_visual_z_mirror: false
+    publish_self_marker: false
+    self_marker_topic: "/task2/safety_self_vessel_marker"
+    self_marker_publish_rate_hz: 1.0
+    self_marker_yaw_deg: 0.0
+    publish_debug: false
+
+task2_safety_cloud_gate:
+  ros__parameters:
+    safety_topic: "/task2/safety_points"
+    cmd_vel_in_topic: "/cmd_vel_collision_checked"
+    cmd_vel_out_topic: "/cmd_vel_nav"
+    safety_timeout_sec: 1.0
+    command_timeout_sec: 0.5
+    publish_rate_hz: 20.0
+
+# ---------------------------------------------------------------------------
+# MPPI parameters coupled specifically to a detected opponent
+# ---------------------------------------------------------------------------
+planner_node:
+  ros__parameters:
+    other_ship_twist_topic: "/other_ship/twist"
+    own_frame: "base_link"
+    other_ship_frame: "opponent_vessel"
+    require_other_ship: false
+    other_twist_is_relative: false
+    opponent_corridor_margin_m: 5.0
+    opponent_corridor_half_width_m: 20.0
+    opponent_speed_knots: 2.5
+    # The remaining values define how the generated avoidance path returns to
+    # the GPS 5->6 line.  Keep them alongside target-recognition parameters
+    # so a field profile is entirely in this file.
+    planning_frequency: 2.0
+    point_spacing: 0.5
+    avoid_radius: 2.0
+    avoid_offset: 3.0
+    reconnect_line_distance_m: 1.0
+    reconnect_ahead_length_m: 5.0
+    straight_path_spacing_m: 2.0
+    straight_path_length_m: 60.0
+    mppi_smoothing_window: 3
+    mppi.opponent_loa: 1.8

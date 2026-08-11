@@ -25,11 +25,15 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    params_file = PathJoinSubstitution(
+    default_params_file = PathJoinSubstitution(
         [FindPackageShare("task2_perception"), "config",
          "task2_params.yaml"])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "params_file", default_value=default_params_file,
+            description="Single Task 2 perception-tuning YAML.",
+        ),
         DeclareLaunchArgument(
             "enable_cloud_filter", default_value="true",
             description="Start task2_cloud_filter (/livox/lidar -> "
@@ -50,10 +54,6 @@ def generate_launch_description():
             "ego_odom_topic", default_value="/odometry/filtered/local"),
         DeclareLaunchArgument("map_frame", default_value="map"),
         DeclareLaunchArgument("base_frame", default_value="base_link"),
-        DeclareLaunchArgument(
-            "motion_filter_mode", default_value="standard",
-            choices=["standard", "straight_line"],
-            description="Opponent motion confidence gate mode."),
 
         Node(
             package="task2_perception",
@@ -61,7 +61,7 @@ def generate_launch_description():
             name="task2_cloud_filter",
             output="screen",
             parameters=[
-                params_file,
+                LaunchConfiguration("params_file"),
                 {
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "publish_self_marker": LaunchConfiguration(
@@ -76,27 +76,8 @@ def generate_launch_description():
             name="task2_safety_cloud_filter",
             output="screen",
             parameters=[
-                params_file,
-                {
-                    # Keep this intentionally small. It is the only cloud sent
-                    # across Jetson -> miniPC and is not used for tracking.
-                    "output_topic": "/task2/safety_points",
-                    "visual_output_topic": "/task2/safety_points_visual",
-                    "min_range_m": 0.45,
-                    "max_range_m": 12.0,
-                    "voxel_leaf_size_m": 0.20,
-                    "process_rate_hz": 5.0,
-                    # Suppress direct deck returns without blanking the forward
-                    # near-obstacle region that Collision Monitor must protect.
-                    "self_crop_min_x": -0.30,
-                    "self_crop_max_x": 0.30,
-                    "self_crop_min_y": -0.30,
-                    "self_crop_max_y": 0.30,
-                    "self_crop_min_z": -0.50,
-                    "self_crop_max_z": 1.50,
-                    "publish_self_marker": False,
-                    "publish_visual_z_mirror": False,
-                },
+                LaunchConfiguration("params_file"),
+                {"use_sim_time": LaunchConfiguration("use_sim_time")},
             ],
             condition=IfCondition(LaunchConfiguration("enable_safety_cloud")),
         ),
@@ -106,13 +87,12 @@ def generate_launch_description():
             name="opponent_selector",
             output="screen",
             parameters=[
-                params_file,
+                LaunchConfiguration("params_file"),
                 {
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
                     "map_frame": LaunchConfiguration("map_frame"),
                     "base_frame": LaunchConfiguration("base_frame"),
-                    "motion_filter_mode": LaunchConfiguration("motion_filter_mode"),
                 },
             ],
             condition=IfCondition(

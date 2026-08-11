@@ -20,6 +20,8 @@
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>ament_index_python</exec_depend>
+  <!-- planner_real.launch.py loads the shared Task 2 tuning YAML. -->
+  <exec_depend>task2_perception</exec_depend>
   <!-- task2_waypoint_pose_publisher loads share/waypoint_publisher/config/task2_waypoints.yaml -->
   <exec_depend>waypoint_publisher</exec_depend>
 

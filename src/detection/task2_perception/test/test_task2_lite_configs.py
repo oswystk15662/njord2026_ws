@@ -43,3 +43,15 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["min_absolute_speed_knots"] == 0.3
     assert selector["max_absolute_speed_knots"] == 6.0
     assert selector["straight_coast_timeout_sec"] == 2.0
+
+
+def test_single_task2_yaml_contains_every_opponent_pipeline_node():
+    params = _params()
+    assert {
+        "task2_cloud_filter", "preprocessing_node", "ground_remover_node",
+        "cluster_node", "ship_tracker_node", "opponent_selector",
+        "task2_safety_cloud_filter", "task2_safety_cloud_gate", "planner_node",
+    }.issubset(params)
+    assert params["ship_tracker_node"]["ros__parameters"]["motion_mode"] == "straight_line"
+    assert params["task2_safety_cloud_filter"]["ros__parameters"]["output_topic"] == "/task2/safety_points"
+    assert params["planner_node"]["ros__parameters"]["mppi.opponent_loa"] == 1.8

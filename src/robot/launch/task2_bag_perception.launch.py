@@ -78,28 +78,32 @@ def generate_launch_description():
         {
             "enable_cloud_filter": "true",
             "enable_opponent_selector": "true",
+            "params_file": LaunchConfiguration("params_file"),
             "use_sim_time": "true",
             "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
             "map_frame": "odom",
             "base_frame": "base_link",
         },
     )
-    tracking = _include(
-        "ship_perception_bringup", "classical_pipeline.launch.py",
-        {
-            "lidar_topic": "/task2/points_filtered",
-            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
-            "preprocessing_config_file": PathJoinSubstitution([
-                FindPackageShare("task2_perception"), "config", "task2_params.yaml"
-            ]),
-            "segmentation_config_file": PathJoinSubstitution([
-                FindPackageShare("task2_perception"), "config", "task2_params.yaml"
-            ]),
-            "tracker_config_file": PathJoinSubstitution([
-                FindPackageShare("task2_perception"), "config", "task2_params.yaml"
-            ]),
-        },
-    )
+    tracking = GroupAction(scoped=True, actions=[
+        _include("pcl_preprocessing", "preprocessing.launch.py", {
+            "config_file": LaunchConfiguration("params_file"),
+            "input_topic": "/task2/points_filtered", "output_topic": "/pcl/preprocessed",
+        }),
+        _include("pcl_segmentation", "segmentation.launch.py", {
+            "config_file": LaunchConfiguration("params_file"), "use_color": "false",
+        }),
+        Node(
+            package="ship_tracking", executable="ship_tracker_node", name="ship_tracker_node",
+            output="screen", parameters=[LaunchConfiguration("params_file")],
+            remappings=[
+                ("input/cluster_observations", "/pcl/cluster_observations"),
+                ("input/ego_odometry", LaunchConfiguration("ego_odom_topic")),
+                ("output/tracked_objects", "/tracked_objects"),
+                ("output/tracked_objects/markers", "/tracked_objects/markers"),
+            ],
+        ),
+    ])
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -111,6 +115,13 @@ def generate_launch_description():
             description="Optional rosbag storage plugin; empty auto-detects.",
         ),
         DeclareLaunchArgument("playback_rate", default_value="1.0"),
+        DeclareLaunchArgument(
+            "params_file",
+            default_value=PathJoinSubstitution([
+                FindPackageShare("task2_perception"), "config", "task2_params.yaml"
+            ]),
+            description="Single Task 2 perception/opponent tuning YAML.",
+        ),
         DeclareLaunchArgument(
             "ego_odom_topic", default_value="/odometry/filtered/local",
             description="Own-vessel odometry used for tracking and TF fallback.",

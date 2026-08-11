@@ -30,6 +30,7 @@ def generate_launch_description():
     mission_gate_required = LaunchConfiguration("mission_gate_required")
     start_follow_path_client = LaunchConfiguration("start_follow_path_client")
     start_waypoint_pose_publisher = LaunchConfiguration("start_waypoint_pose_publisher")
+    task2_params_file = LaunchConfiguration("task2_params_file")
     other_ship_twist_topic = PythonExpression([
         "'/other_ship/twist_ignored' if '", ignore_other_ship,
         "' == 'true' else '/other_ship/twist'",
@@ -70,37 +71,20 @@ def generate_launch_description():
         parameters=[
             # MPPI hyperparameters (defaults = historical hardcoded values).
             mppi_params_file,
+            # Task2 perception/opponent settings shared with the detector.
+            task2_params_file,
             # Same planner params as planner_with_follow_path.launch.py,
             # except own_odom_topic which is configurable for the real stack.
             {
                 "own_odom_topic": own_odom_topic,
+                # Keep the explicit launch switch for diagnostic runs; the
+                # normal topic itself is defined in task2_params_file.
                 "other_ship_twist_topic": other_ship_twist_topic,
                 "waypoint1_topic": "/waypoint1_pose",
                 "waypoint2_topic": "/waypoint2_pose",
                 "path_topic": "/planned_path_pruned",
 
-                "own_frame": "base_link",
-                "other_ship_frame": "opponent_vessel",
-
                 "frame_id": "map",
-                "planning_frequency": 2.0,
-                "point_spacing": 0.5,
-                "avoid_radius": 2.0,
-                "avoid_offset": 3.0,
-
-                # 相手船がいれば見る。いなければ相手船なしでPathを出す。
-                "require_other_ship": False,
-
-                # /other_ship/twist は map基準で出す
-                "other_twist_is_relative": False,
-                "opponent_corridor_margin_m": 5.0,
-                "opponent_corridor_half_width_m": 20.0,
-                "opponent_speed_knots": 2.5,
-                "reconnect_line_distance_m": 1.0,
-                "reconnect_ahead_length_m": 5.0,
-                "straight_path_spacing_m": 2.0,
-                "straight_path_length_m": 60.0,
-                "mppi_smoothing_window": 3,
             },
         ],
     )
@@ -137,6 +121,13 @@ def generate_launch_description():
         [
             # GLIM publishes /odom on the real vessel (same topic as sim).
             DeclareLaunchArgument("own_odom_topic", default_value="/odom"),
+            DeclareLaunchArgument(
+                "task2_params_file",
+                default_value=PathJoinSubstitution([
+                    FindPackageShare("task2_perception"), "config", "task2_params.yaml"
+                ]),
+                description="Single Task 2 perception/opponent tuning YAML.",
+            ),
             DeclareLaunchArgument(
                 "mission_gate_required", default_value="false",
                 description="Require Mission Manager's /mission/task2/enabled gate before FollowPath goals.",

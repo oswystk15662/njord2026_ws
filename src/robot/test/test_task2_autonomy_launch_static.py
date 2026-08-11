@@ -8,10 +8,10 @@ def test_task2_autonomy_launch_wires_mppi_velocity_through_arbiter():
     assert '"navigation_launch_task2.py"' in text
     assert '"auto_cmd_vel_topic": "/cmd_vel_nav"' in text
     assert 'executable="task2_autonomy_ready_node"' in text
-    assert '"opponent_motion_mode", default_value="straight_line"' in text
-    assert '"motion_filter_mode": opponent_motion_mode' in text
-    assert '"motion_mode": opponent_motion_mode' in text
-    assert text.count('"task2_params.yaml"') == 3
+    assert '"params_file"' in text
+    assert '"params_file": params_file' in text
+    assert '"task2_params_file": params_file' in text
+    assert '"opponent_motion_mode"' not in text
     assert '"path_topic": "/planned_path_pruned"' in text
     assert '"enable_follow_path_client": enable_nav2' in text
     assert '"enable_safety_cloud": "true"' in text
@@ -51,7 +51,8 @@ def test_task2_two_machine_split_keeps_controller_and_stop_on_minipc():
     assert 'executable="safety_cloud_gate_node"' in controller
     assert "command_arbiter" not in controller
     assert '"enable_safety_cloud"' in perception
-    assert '"output_topic": "/task2/safety_points"' in perception
+    assert '"params_file", default_value=default_params_file' in perception
+    assert 'name="task2_safety_cloud_filter"' in perception
     assert 'package="nav2_collision_monitor"' in (
         root / "launch" / "navigation_launch_task2.py"
     ).read_text()
