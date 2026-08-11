@@ -65,6 +65,7 @@ def generate_launch_description():
             "enable_cloud_filter": "true",
             "enable_safety_cloud": "true",
             "enable_opponent_selector": enable_ship_tracking,
+            "enable_buoy_selector": enable_ship_tracking,
             "publish_self_marker": "false",
             "params_file": params_file,
             "ego_odom_topic": ego_odom_topic,

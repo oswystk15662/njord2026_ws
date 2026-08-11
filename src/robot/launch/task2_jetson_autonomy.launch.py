@@ -26,6 +26,7 @@ def generate_launch_description():
     )
     perception = _include("task2_perception", "task2_perception.launch.py", {
         "enable_cloud_filter": "true", "enable_opponent_selector": tracking,
+        "enable_buoy_selector": tracking,
         "publish_self_marker": "false", "ego_odom_topic": odom,
         "params_file": params,
     })

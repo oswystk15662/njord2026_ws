@@ -43,6 +43,9 @@ def generate_launch_description():
             description="Start opponent_selector (/tracked_objects -> "
                         "/other_ship/twist + opponent TF)"),
         DeclareLaunchArgument(
+            "enable_buoy_selector", default_value="true",
+            description="Start Task 2 route-side stationary-buoy selector"),
+        DeclareLaunchArgument(
             "enable_safety_cloud", default_value="true",
             description="Publish the compact /task2/safety_points cloud for miniPC "
                         "Collision Monitor."),
@@ -97,5 +100,21 @@ def generate_launch_description():
             ],
             condition=IfCondition(
                 LaunchConfiguration("enable_opponent_selector")),
+        ),
+        Node(
+            package="task2_perception",
+            executable="task2_buoy_selector_node",
+            name="task2_buoy_selector",
+            output="screen",
+            parameters=[
+                LaunchConfiguration("params_file"),
+                {
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
+                    "map_frame": LaunchConfiguration("map_frame"),
+                    "base_frame": LaunchConfiguration("base_frame"),
+                },
+            ],
+            condition=IfCondition(LaunchConfiguration("enable_buoy_selector")),
         ),
     ])

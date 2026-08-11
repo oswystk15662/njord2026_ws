@@ -10,6 +10,7 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import PointStamped, PoseStamped, TwistStamped
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
+from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 
 from tf2_ros import Buffer, TransformListener
 
@@ -51,6 +52,7 @@ class PlannerNode(Node):
         self.declare_parameter("waypoint2_topic", "/waypoint2_pose")
         self.declare_parameter("path_topic", "/planned_path")
         self.declare_parameter("buoy_detections_topic", "/buoy_detections")
+        self.declare_parameter("buoy_detection_array_topic", "")
         self.declare_parameter("use_detected_buoys", True)
         self.declare_parameter("use_virtual_buoys", False)
         self.declare_parameter("buoy_detection_timeout_sec", 1.0)
@@ -128,6 +130,8 @@ class PlannerNode(Node):
         self.waypoint2_topic = self.get_parameter("waypoint2_topic").value
         self.path_topic = self.get_parameter("path_topic").value
         self.buoy_detections_topic = self.get_parameter("buoy_detections_topic").value
+        self.buoy_detection_array_topic = self.get_parameter(
+            "buoy_detection_array_topic").value
         self.use_detected_buoys = self.get_parameter("use_detected_buoys").value
         self.use_virtual_buoys = self.get_parameter("use_virtual_buoys").value
         self.buoy_detection_timeout_sec = float(
@@ -219,7 +223,10 @@ class PlannerNode(Node):
         self.latest_other_ship_twist = None
         self.latest_waypoint1_pose = None
         self.latest_waypoint2_pose = None
-        # (x, y, receipt time in seconds), all expressed in frame_id.
+        # (x, y, receipt time in seconds, class_id), all in frame_id.  MPPI's
+        # current buoy cost uses geometry only, but retaining class_id here
+        # makes the red/green route-side classification available at the
+        # planner boundary for diagnostics and future colour-aware costs.
         self.detected_buoys = []
 
         self.tf_buffer = Buffer()
@@ -259,6 +266,11 @@ class PlannerNode(Node):
             self.buoy_detection_callback,
             10,
         )
+        self.buoy_detection_array_sub = None
+        if self.buoy_detection_array_topic:
+            self.buoy_detection_array_sub = self.create_subscription(
+                BuoyDetectionArray, self.buoy_detection_array_topic,
+                self.buoy_detection_array_callback, 10)
 
         self.path_pub = self.create_publisher(
             Path,
@@ -280,6 +292,10 @@ class PlannerNode(Node):
         self.get_logger().info(f"Subscribe waypoint1      : {self.waypoint1_topic}")
         self.get_logger().info(f"Subscribe waypoint2      : {self.waypoint2_topic}")
         self.get_logger().info(f"Subscribe buoy detections: {self.buoy_detections_topic}")
+        if self.buoy_detection_array_topic:
+            self.get_logger().info(
+                f"Subscribe coloured buoy detections: "
+                f"{self.buoy_detection_array_topic}")
         self.get_logger().info(
             f"Buoys detected/virtual  : {self.use_detected_buoys}/"
             f"{self.use_virtual_buoys}")
@@ -311,14 +327,24 @@ class PlannerNode(Node):
 
     def buoy_detection_callback(self, msg: PointStamped):
         """Store a map-frame buoy detection, merging repeated cluster outputs."""
+        self._store_buoy_point(msg.header, msg.point, None)
+
+    def buoy_detection_array_callback(self, msg: BuoyDetectionArray):
+        """Receive Task 2's coloured buoy array at the MPPI boundary."""
+        for detection in msg.detections:
+            self._store_buoy_point(msg.header, detection.position,
+                                   int(detection.class_id))
+
+    def _store_buoy_point(self, header, point, class_id):
+        """Transform and merge one buoy, preserving its optional colour class."""
         try:
             try:
                 tf_msg = self.tf_buffer.lookup_transform(
-                    self.frame_id, msg.header.frame_id,
-                    Time.from_msg(msg.header.stamp))
+                    self.frame_id, header.frame_id,
+                    Time.from_msg(header.stamp))
             except TransformException:
                 tf_msg = self.tf_buffer.lookup_transform(
-                    self.frame_id, msg.header.frame_id, Time())
+                    self.frame_id, header.frame_id, Time())
         except TransformException as e:
             self.get_logger().warning(
                 f"Cannot transform buoy detection to {self.frame_id}: {e}",
@@ -331,15 +357,17 @@ class PlannerNode(Node):
             1.0 - 2.0 * (q.y * q.y + q.z * q.z))
         c, s = math.cos(yaw), math.sin(yaw)
         t = tf_msg.transform.translation
-        x = t.x + c * msg.point.x - s * msg.point.y
-        y = t.y + s * msg.point.x + c * msg.point.y
+        x = t.x + c * point.x - s * point.y
+        y = t.y + s * point.x + c * point.y
         now_sec = self.get_clock().now().nanoseconds * 1e-9
 
-        for i, (old_x, old_y, _) in enumerate(self.detected_buoys):
+        for i, (old_x, old_y, _, old_class_id) in enumerate(self.detected_buoys):
             if math.hypot(x - old_x, y - old_y) <= self.buoy_merge_distance_m:
-                self.detected_buoys[i] = (x, y, now_sec)
+                self.detected_buoys[i] = (
+                    x, y, now_sec,
+                    class_id if class_id is not None else old_class_id)
                 return
-        self.detected_buoys.append((x, y, now_sec))
+        self.detected_buoys.append((x, y, now_sec, class_id))
 
     def timer_callback(self):
         if self.latest_own_odom is None:
@@ -385,7 +413,10 @@ class PlannerNode(Node):
             buoy for buoy in self.detected_buoys
             if now_sec - buoy[2] <= self.buoy_detection_timeout_sec
         ]
-        buoy_positions = [(x, y) for x, y, _ in self.detected_buoys]
+        buoy_positions = [(x, y) for x, y, _, _ in self.detected_buoys]
+        coloured_buoy_count = sum(
+            class_id in (BuoyDetection.CLASS_GREEN, BuoyDetection.CLASS_RED)
+            for _, _, _, class_id in self.detected_buoys)
 
         path = self.trajectory_generator.generate(
             own_odom=self.latest_own_odom,
@@ -415,7 +446,8 @@ class PlannerNode(Node):
 
         self.get_logger().info(
             f"Published path: {len(path.poses)} poses, "
-            f"detected_buoys={len(buoy_positions)}",
+            f"detected_buoys={len(buoy_positions)} "
+            f"(coloured={coloured_buoy_count})",
             throttle_duration_sec=2.0,
         )
 

@@ -47,18 +47,23 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["corridor_start_offset_m"] == 5.0
     assert selector["corridor_end_margin_m"] == 5.0
     assert selector["corridor_half_width_m"] == 20.0
+    buoy = params["task2_buoy_selector"]["ros__parameters"]
+    assert buoy["expected_lateral_offset_m"] == 2.5
+    assert buoy["lateral_tolerance_m"] == 1.0
+    assert buoy["stationary_speed_max_mps"] == 0.35
 
 
 def test_single_task2_yaml_contains_every_opponent_pipeline_node():
     params = _params()
     assert {
         "task2_cloud_filter", "preprocessing_node", "ground_remover_node",
-        "cluster_node", "ship_tracker_node", "opponent_selector",
+        "cluster_node", "ship_tracker_node", "opponent_selector", "task2_buoy_selector",
         "task2_safety_cloud_filter", "task2_safety_cloud_gate",
         "task2_odometry_selector", "planner_node",
     }.issubset(params)
     assert params["ship_tracker_node"]["ros__parameters"]["motion_mode"] == "straight_line"
     assert params["task2_safety_cloud_filter"]["ros__parameters"]["output_topic"] == "/task2/safety_points"
     assert params["planner_node"]["ros__parameters"]["mppi.opponent_loa"] == 1.8
+    assert params["planner_node"]["ros__parameters"]["buoy_detection_array_topic"] == "/task2/buoy_detections"
     assert params["task2_odometry_selector"]["ros__parameters"]["candidate_topics"] == [
         "/odometry/filtered/local", "/odom", "/odometry/filtered/global"]

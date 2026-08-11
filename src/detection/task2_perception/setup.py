@@ -27,6 +27,7 @@ setup(
         "console_scripts": [
             "task2_cloud_filter_node = task2_perception.cloud_filter_node:main",
             "opponent_selector_node = task2_perception.opponent_selector_node:main",
+            "task2_buoy_selector_node = task2_perception.buoy_selector_node:main",
         ],
     },
 )

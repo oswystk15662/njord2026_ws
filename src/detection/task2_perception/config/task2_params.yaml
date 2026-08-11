@@ -106,6 +106,32 @@ opponent_selector:
     corridor_half_width_m: 20.0
 
 # ---------------------------------------------------------------------------
+# Route-side buoy selector: shared tracker -> coloured stationary buoys
+# ---------------------------------------------------------------------------
+task2_buoy_selector:
+  ros__parameters:
+    tracked_objects_topic: "/tracked_objects"
+    ego_odom_topic: "/task2/ego_odom"
+    output_topic: "/task2/buoy_detections"  # njord_interfaces/BuoyDetectionArray
+    legacy_point_topic: "/buoy_detections"  # PointStamped compatibility feed
+    map_frame: "map"
+    base_frame: "base_link"
+    waypoint_start_topic: "/waypoint1_pose" # GPS 5
+    waypoint_end_topic: "/waypoint2_pose"   # GPS 6
+    # Left (+ lateral) is red; right (- lateral) is green.
+    expected_lateral_offset_m: 2.5
+    lateral_tolerance_m: 1.0
+    start_margin_m: 2.0
+    end_margin_m: 2.0
+    confirmed_only: true
+    min_hit_count: 5
+    max_distance_m: 40.0
+    min_point_count: 0
+    stale_timeout_sec: 2.0
+    stationary_speed_max_mps: 0.35
+    publish_rate_hz: 5.0
+
+# ---------------------------------------------------------------------------
 # PCL preprocessing: compact, current-frame cloud for Task 2 only
 # ---------------------------------------------------------------------------
 preprocessing_node:
@@ -255,6 +281,7 @@ task2_odometry_selector:
 # ---------------------------------------------------------------------------
 planner_node:
   ros__parameters:
+    buoy_detection_array_topic: "/task2/buoy_detections"
     other_ship_twist_topic: "/other_ship/twist"
     own_frame: "base_link"
     other_ship_frame: "opponent_vessel"

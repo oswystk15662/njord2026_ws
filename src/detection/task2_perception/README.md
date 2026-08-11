@@ -57,12 +57,21 @@ MPPI planner (asv_trajectory_planner/planner_node.py,
     no opponent published -> plans a straight path — safe degradation)
 ```
 
+Task 2's gate buoys use the same `/tracked_objects` stream but do **not** use
+the former buoy detector. `task2_buoy_selector` accepts only confirmed tracks
+which remain stationary after ego-motion compensation.  Relative to GPS5 ->
+GPS6, a track near the left (+2.5 m) side line is emitted as red and one near
+the right (-2.5 m) side line as green.  It publishes the colour-preserving
+`/task2/buoy_detections` (`njord_interfaces/BuoyDetectionArray`) and the
+legacy PointStamped feed; MPPI subscribes to the former directly.
+
 ## Nodes
 
 | Node (executable) | In | Out |
 |---|---|---|
 | `task2_cloud_filter` (`task2_cloud_filter_node`) | `/livox/lidar`, TF | `/task2/points_filtered`, `/task2/points_filtered_visual` (display only), `/task2/self_vessel_marker`, `/task2/debug/*` (opt.) |
 | `opponent_selector` (`opponent_selector_node`) | `/tracked_objects`, `/odometry/filtered/local`, TF map->base_link | `/other_ship/twist`, TF map->opponent_vessel |
+| `task2_buoy_selector` (`task2_buoy_selector_node`) | `/tracked_objects`, route waypoints, ego odometry, TF | `/task2/buoy_detections` (red/green) and `/buoy_detections` |
 
 認識単体のデバッグでは、以下の2つを起動します。
 
