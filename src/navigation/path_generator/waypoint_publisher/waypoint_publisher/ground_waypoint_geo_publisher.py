@@ -13,12 +13,15 @@ import yaml
 
 
 _CONFIGS = {
-    "task1": ("task1_waypoints.yaml", "task1_config"),
-    "task1_skip_1_1": ("task1_skip_1_1_waypoints.yaml", "task1_skip_1_1_config"),
-    "task1_follow": ("task1_follow_waypoints.yaml", "task1_follow_config"),
-    "task2": ("task2_waypoints.yaml", "task2_config"),
-    "task3_1": ("task3_waypoints.yaml", "task3_1_config"),
-    "task3_2": ("task3_waypoints.yaml", "task3_2_config"),
+    "task1": ("waypoint_publisher", "config/task1_waypoints.yaml", "task1_config"),
+    "task1_skip_1_1": ("waypoint_publisher", "config/task1_skip_1_1_waypoints.yaml", "task1_skip_1_1_config"),
+    "task1_follow": ("waypoint_publisher", "config/task1_follow_waypoints.yaml", "task1_follow_config"),
+    "task2": ("waypoint_publisher", "config/task2_waypoints.yaml", "task2_config"),
+    "task3_1": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_1_config"),
+    "task3_2": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_2_config"),
+    "move_to_exam_field": (
+        "mission_manager", "config/move_to_exam_field_waypoints.yaml", "move_to_exam_field_config"
+    ),
 }
 
 
@@ -68,8 +71,8 @@ class GroundWaypointGeoPublisher(Node):
             self.get_logger().info("No active task waypoint display")
             self._publish()
             return
-        filename, key = _CONFIGS[task_type]
-        config_path = Path(get_package_share_directory("waypoint_publisher")) / "config" / filename
+        package, filename, key = _CONFIGS[task_type]
+        config_path = Path(get_package_share_directory(package)) / filename
         with config_path.open() as stream:
             self.waypoints = yaml.safe_load(stream)[key].get("waypoints", [])
         self.get_logger().info(f"Showing local YAML waypoints for {task_type}")
