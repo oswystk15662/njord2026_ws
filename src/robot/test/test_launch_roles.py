@@ -296,6 +296,8 @@ def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():
 
     assert '"/mission/status"' in ground
     assert '"/mission/status"' in minipc
+    assert '"/task/plan"' in ground
+    assert '"/task/plan"' in minipc
     assert '"/waypoint_markers"' not in ground
 
 
