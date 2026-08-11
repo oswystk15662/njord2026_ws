@@ -61,23 +61,38 @@ class RuntimeManager(Node):
 
     def _stop(self):
         process = self._process
-        if not process or process.poll() is not None:
-            if process:
-                self._clear_runtime_pgid(process.pid)
+        if not process:
             self._process = None
             return
         self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
-        for sig, timeout in ((signal.SIGINT, self.get_parameter("sigint_timeout_sec").value),
-                             (signal.SIGTERM, self.get_parameter("sigterm_timeout_sec").value),
-                             (signal.SIGKILL, 0)):
-            os.killpg(process.pid, sig)
-            try:
-                process.wait(timeout=timeout or None)
-                break
-            except subprocess.TimeoutExpired:
-                continue
+        # The launch parent can exit before one of its lifecycle-managed
+        # children.  The process group remains valid in that case, so do not
+        # merely clear the record based on ``process.poll()``: terminate the
+        # whole group and prevent a PID-1-reparented Nav2 tree from surviving.
+        self._terminate_process_group(
+            process.pid,
+            sigint_timeout=float(self.get_parameter("sigint_timeout_sec").value),
+            sigterm_timeout=float(self.get_parameter("sigterm_timeout_sec").value),
+        )
         self._process = None
         self._clear_runtime_pgid(process.pid)
+
+    @staticmethod
+    def _terminate_process_group(pgid: int, *, sigint_timeout: float, sigterm_timeout: float) -> None:
+        for sig, timeout in ((signal.SIGINT, sigint_timeout),
+                             (signal.SIGTERM, sigterm_timeout),
+                             (signal.SIGKILL, 0.0)):
+            try:
+                os.killpg(pgid, sig)
+            except ProcessLookupError:
+                return
+            deadline = time.monotonic() + timeout
+            while timeout > 0.0 and time.monotonic() < deadline:
+                try:
+                    os.killpg(pgid, 0)
+                except ProcessLookupError:
+                    return
+                time.sleep(0.1)
 
     def _clear_runtime_pgid(self, pgid: int) -> None:
         try:
@@ -115,22 +130,7 @@ class RuntimeManager(Node):
             self._clear_runtime_pgid(pgid)
             return
         self.get_logger().warning("stopping orphaned Nav2 runtime process group %d", pgid)
-        for sig, timeout in ((signal.SIGINT, 10.0), (signal.SIGTERM, 5.0), (signal.SIGKILL, 0.0)):
-            try:
-                os.killpg(pgid, sig)
-            except ProcessLookupError:
-                break
-            deadline = time.monotonic() + timeout
-            while timeout and time.monotonic() < deadline:
-                try:
-                    os.killpg(pgid, 0)
-                except ProcessLookupError:
-                    break
-                time.sleep(0.1)
-            else:
-                if timeout:
-                    continue
-            break
+        self._terminate_process_group(pgid, sigint_timeout=10.0, sigterm_timeout=5.0)
         self._clear_runtime_pgid(pgid)
 
     def _wait_for_bt_navigator_active(self) -> None:
