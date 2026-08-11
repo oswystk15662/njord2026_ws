@@ -69,30 +69,40 @@ class RuntimeManager(Node):
         # children.  The process group remains valid in that case, so do not
         # merely clear the record based on ``process.poll()``: terminate the
         # whole group and prevent a PID-1-reparented Nav2 tree from surviving.
-        self._terminate_process_group(
+        stopped = self._terminate_process_group(
             process.pid,
             sigint_timeout=float(self.get_parameter("sigint_timeout_sec").value),
             sigterm_timeout=float(self.get_parameter("sigterm_timeout_sec").value),
         )
         self._process = None
-        self._clear_runtime_pgid(process.pid)
+        if stopped:
+            self._clear_runtime_pgid(process.pid)
+        else:
+            self.get_logger().error(
+                "Nav2 process group %d survived SIGKILL; retaining recovery record", process.pid
+            )
 
     @staticmethod
-    def _terminate_process_group(pgid: int, *, sigint_timeout: float, sigterm_timeout: float) -> None:
+    def _terminate_process_group(pgid: int, *, sigint_timeout: float, sigterm_timeout: float) -> bool:
         for sig, timeout in ((signal.SIGINT, sigint_timeout),
                              (signal.SIGTERM, sigterm_timeout),
-                             (signal.SIGKILL, 0.0)):
+                             (signal.SIGKILL, 1.0)):
             try:
                 os.killpg(pgid, sig)
             except ProcessLookupError:
-                return
+                return True
             deadline = time.monotonic() + timeout
             while timeout > 0.0 and time.monotonic() < deadline:
                 try:
                     os.killpg(pgid, 0)
                 except ProcessLookupError:
-                    return
+                    return True
                 time.sleep(0.1)
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            return True
+        return False
 
     def _clear_runtime_pgid(self, pgid: int) -> None:
         try:
@@ -130,8 +140,12 @@ class RuntimeManager(Node):
             self._clear_runtime_pgid(pgid)
             return
         self.get_logger().warning("stopping orphaned Nav2 runtime process group %d", pgid)
-        self._terminate_process_group(pgid, sigint_timeout=10.0, sigterm_timeout=5.0)
-        self._clear_runtime_pgid(pgid)
+        if self._terminate_process_group(pgid, sigint_timeout=10.0, sigterm_timeout=5.0):
+            self._clear_runtime_pgid(pgid)
+        else:
+            self.get_logger().error(
+                "orphaned Nav2 process group %d survived SIGKILL; retaining recovery record", pgid
+            )
 
     def _wait_for_bt_navigator_active(self) -> None:
         """Block until Nav2 has activated the action server used by Task 1/3.
