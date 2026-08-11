@@ -94,6 +94,28 @@ colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
 
 `scripts/build.sh` は上記をまとめたラッパ。
 
+### Ground PC（GPUなし）のビルド
+
+Ground PCは船上のGPUセンサ処理を実行しない。`minipc` プロファイルでGPU依存を
+外しつつ、役割だけを `groundpc` に指定する。これによりCPU版ZED driver（映像受信
+launchを提供）、ジョイスティック、critical-link送信、Foxglove、NTRIP caster、
+waypoint表示とTask 4の操作画面をビルドできる。
+
+```bash
+source /opt/ros/humble/setup.bash
+export NJORD_PROFILE=minipc
+export NJORD_ROLE=groundpc
+source scripts/njord_env.sh
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  --packages-up-to robot ntripcaster critical_link simple_manual \
+  tf_frame_arrow_publisher waypoint_publisher zed2i_driver \
+  control_manager mission_manager
+source install/setup.bash
+```
+
+`njord_env.sh` の出力で `detected_cuda=0`、`NJORD_ENABLE_GPU_SENSORS=<unset>`
+であることを確認する。GPU知覚、ZED SDKノード、Livox処理は起動しない。
+
 `scripts/njord_env.sh` がやること:
 
 1. `NJORD_PROFILE` を `jetson` / `minipc` に決定（CUDA と ZED SDK の両方があれば `jetson`）。既に環境変数で設定済みなら**尊重して上書きしない**

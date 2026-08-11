@@ -65,12 +65,28 @@ set(DEPENDENCIES
   pcl_ros
 )
 
-add_library(${PROJECT_NAME}_common
-  src/message_utils.cpp
-  src/perception_logic.cpp
-  src/lidar_fusion.cpp
-  src/detection_message_utils.cpp
-)
+# The ground-PC/CPU build only needs the stereo image conversion helpers.  The
+# GPU perception sources are optional: they may intentionally be absent from a
+# CPU-only checkout, so do not make their presence a configure-time requirement.
+set(ZED2I_DRIVER_COMMON_SOURCES src/message_utils.cpp)
+set(ZED2I_DRIVER_HAS_PERCEPTION_SUPPORT OFF)
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/perception_logic.cpp" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}/perception_types.hpp")
+  list(APPEND ZED2I_DRIVER_COMMON_SOURCES src/perception_logic.cpp)
+  set(ZED2I_DRIVER_HAS_PERCEPTION_SUPPORT ON)
+endif()
+if(ZED2I_DRIVER_HAS_PERCEPTION_SUPPORT AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/lidar_fusion.cpp" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}/lidar_fusion.hpp")
+  list(APPEND ZED2I_DRIVER_COMMON_SOURCES src/lidar_fusion.cpp)
+endif()
+if(ZED2I_DRIVER_HAS_PERCEPTION_SUPPORT AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/detection_message_utils.cpp" AND
+   EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}/detection_message_utils.hpp")
+  list(APPEND ZED2I_DRIVER_COMMON_SOURCES src/detection_message_utils.cpp)
+endif()
+
+add_library(${PROJECT_NAME}_common ${ZED2I_DRIVER_COMMON_SOURCES})
 set_target_properties(${PROJECT_NAME}_common PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_include_directories(${PROJECT_NAME}_common PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
@@ -262,10 +278,17 @@ install(DIRECTORY
 
 if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
-  ament_add_gtest(test_perception_logic test/test_perception_logic.cpp)
-  if(TARGET test_perception_logic)
-    target_link_libraries(test_perception_logic ${PROJECT_NAME}_common)
-    target_include_directories(test_perception_logic PRIVATE include)
+  if(ZED2I_DRIVER_HAS_PERCEPTION_SUPPORT AND
+     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/test/test_perception_logic.cpp" AND
+     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}/lidar_fusion.hpp" AND
+     EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/include/${PROJECT_NAME}/detection_message_utils.hpp")
+    ament_add_gtest(test_perception_logic test/test_perception_logic.cpp)
+    if(TARGET test_perception_logic)
+      target_link_libraries(test_perception_logic ${PROJECT_NAME}_common)
+      target_include_directories(test_perception_logic PRIVATE include)
+    endif()
+  else()
+    message(STATUS "${PROJECT_NAME}: perception unit test omitted; optional perception sources are unavailable")
   endif()
   find_package(ament_lint_auto REQUIRED)
   ament_lint_auto_find_test_dependencies()
