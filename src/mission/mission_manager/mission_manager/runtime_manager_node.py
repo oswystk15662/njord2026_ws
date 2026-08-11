@@ -250,5 +250,4 @@ def main():
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         node.shutdown()
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.try_shutdown()

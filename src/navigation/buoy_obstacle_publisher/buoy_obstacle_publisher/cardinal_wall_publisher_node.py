@@ -9,6 +9,7 @@ from geometry_msgs.msg import PoseWithCovarianceStamped
 from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 import rclpy
 from rclpy.duration import Duration
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
@@ -543,8 +544,8 @@ def main(args=None):
     node = CardinalWallPublisher()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()

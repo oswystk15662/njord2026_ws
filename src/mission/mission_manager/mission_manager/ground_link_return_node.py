@@ -8,6 +8,7 @@ from pathlib import Path
 
 import rclpy
 from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import NavSatFix
@@ -77,6 +78,8 @@ def main(args=None) -> None:
     node = GroundLinkReturnNode()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()

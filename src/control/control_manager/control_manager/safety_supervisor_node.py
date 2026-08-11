@@ -6,6 +6,7 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import Bool, String, UInt8
@@ -164,6 +165,8 @@ def main(args=None) -> None:
     node = SafetySupervisor()
     try:
         rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
         node.destroy_node()
-        rclpy.shutdown()
+        rclpy.try_shutdown()

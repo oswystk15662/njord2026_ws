@@ -18,6 +18,7 @@ from rcl_interfaces.srv import SetParameters
 from robot_localization.srv import FromLL
 from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalResponse
 from rclpy.callback_groups import ReentrantCallbackGroup
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.task import Future
@@ -1080,11 +1081,16 @@ class MissionManager(Node):
 
 def main(args=None) -> None:
     rclpy.init(args=args)
+    node = None
     try:
         node = MissionManager()
         rclpy.spin(node)
     except RegistryError as exc:
         rclpy.logging.get_logger("mission_manager").fatal(f"mission registry invalid: {exc}")
         raise
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
     finally:
-        rclpy.shutdown()
+        if node is not None:
+            node.destroy_node()
+        rclpy.try_shutdown()

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import rclpy
 from rclpy.action import ActionClient
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_srvs.srv import Trigger
@@ -142,7 +143,13 @@ class OperatorDispatcher(Node):
             self._respond(command, OperatorResponse.REJECTED, "unsupported operator command")
 
 
-def main():
-    rclpy.init()
-    rclpy.spin(OperatorDispatcher())
-    rclpy.shutdown()
+def main(args=None):
+    rclpy.init(args=args)
+    node = OperatorDispatcher()
+    try:
+        rclpy.spin(node)
+    except (KeyboardInterrupt, ExternalShutdownException):
+        pass
+    finally:
+        node.destroy_node()
+        rclpy.try_shutdown()
