@@ -92,7 +92,11 @@ def test_route_supports_latitude_longitude_coordinates(tmp_path):
 def test_route_supports_competition_dms_coordinates(tmp_path):
     config = tmp_path / "coordinates.yaml"
     config.write_text(
-        """route:\n  frame_id: map\n  waypoints:\n    - {id: a, latitude: \"63°26′26.89″ N\", longitude: \"10°25′24.22″ E\", yaw: 0.0}\n""",
+        """route:
+  frame_id: map
+  waypoints:
+    - {id: a, latitude: "63°26′26.89″ N", longitude: "10°25′24.22″ E", yaw: 0.0}
+""",
         encoding="utf-8",
     )
     waypoint = WaypointConfigLoader().load(config, "route").waypoints[0]

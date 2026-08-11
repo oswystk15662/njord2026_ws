@@ -143,7 +143,9 @@ class WaypointConfigLoader:
             )
             if not match or match.group(4) not in hemispheres:
                 raise RegistryError(f"invalid DMS coordinate {value!r}")
-            degrees, minutes, seconds = int(match.group(1)), int(match.group(2)), float(match.group(3))
+            degrees, minutes, seconds = (
+                int(match.group(1)), int(match.group(2)), float(match.group(3))
+            )
             if minutes >= 60 or not 0.0 <= seconds < 60.0:
                 raise RegistryError(f"invalid DMS coordinate {value!r}")
             coordinate = degrees + minutes / 60.0 + seconds / 3600.0
