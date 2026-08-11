@@ -81,7 +81,7 @@ class RuntimeManager(Node):
             self._clear_runtime_pgid(process.pid)
         else:
             self.get_logger().error(
-                "Nav2 process group %d survived SIGKILL; retaining recovery record", process.pid
+                f"Nav2 process group {process.pid} survived SIGKILL; retaining recovery record"
             )
 
     @staticmethod
@@ -137,16 +137,16 @@ class RuntimeManager(Node):
         )
         if not nav2_member:
             self.get_logger().warning(
-                "discarding stale Nav2 runtime process-group record %d with no Nav2 members", pgid
+                f"discarding stale Nav2 runtime process-group record {pgid} with no Nav2 members"
             )
             self._clear_runtime_pgid(pgid)
             return
-        self.get_logger().warning("stopping orphaned Nav2 runtime process group %d", pgid)
+        self.get_logger().warning(f"stopping orphaned Nav2 runtime process group {pgid}")
         if self._terminate_process_group(pgid, sigint_timeout=10.0, sigterm_timeout=5.0):
             self._clear_runtime_pgid(pgid)
         else:
             self.get_logger().error(
-                "orphaned Nav2 process group %d survived SIGKILL; retaining recovery record", pgid
+                f"orphaned Nav2 process group {pgid} survived SIGKILL; retaining recovery record"
             )
 
     def _wait_for_bt_navigator_active(self) -> None:
