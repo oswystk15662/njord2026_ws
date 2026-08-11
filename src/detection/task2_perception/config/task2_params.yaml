@@ -78,7 +78,9 @@ opponent_selector:
     max_width_m: 1.5                           # [m], includes measurement error
     min_height_m: 0.15                         # [m], reject water-surface speckle
     max_height_m: 1.5                          # [m], small Task 2 vessel hull/superstructure
-    min_point_count: 0                         # 0 disables this optional gate
+    # The shared tracker also receives sparse buoy clusters. Keep ship
+    # selection strict here so those clusters cannot become an opponent.
+    min_point_count: 15                        # [points], other ships only
     stale_timeout_sec: 2.0                     # [s]
     publish_rate_hz: 10.0                      # [Hz] output update rate
     twist_lowpass_alpha: 0.3
@@ -186,7 +188,10 @@ ground_remover_node:
 cluster_node:
   ros__parameters:
     cluster_tolerance: 1.0                     # [m] neighbouring-point link
-    min_cluster_size: 15                       # [points] retain sparse far-range hull returns
+    # One shared, single-pass cluster stream serves both targets. Five points
+    # preserves the former camera+LiDAR buoy detector threshold; downstream
+    # opponent_selector separately requires 15 points for other ships.
+    min_cluster_size: 5                        # [points]
     max_cluster_size: 10000                    # [points] reject large structures
     min_cluster_height: 0.15                   # [m] reject water-surface speckle
     max_cluster_height: 1.5                    # [m] Task 2 vessel height
