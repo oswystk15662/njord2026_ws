@@ -52,8 +52,8 @@ task2_cloud_filter:
     self_marker_topic: "/task2/self_vessel_marker"
     self_marker_publish_rate_hz: 1.0
     self_marker_yaw_deg: 0.0
-    object_min_z_m: -0.2                     # [m] retained object height
-    object_max_z_m: 4.0                       # [m] retained object height
+    object_min_z_m: 0.15                     # [m] retain objects above water
+    object_max_z_m: 1.5                      # [m] Task 2 vessel height
     publish_debug: false                      # debug clouds stay disabled
 
 # ---------------------------------------------------------------------------
@@ -76,6 +76,8 @@ opponent_selector:
     max_length_m: 2.5                          # [m], includes measurement error
     min_width_m: 0.4                           # [m], retain buoy rejection while allowing sparse returns
     max_width_m: 1.5                           # [m], includes measurement error
+    min_height_m: 0.15                         # [m], reject water-surface speckle
+    max_height_m: 1.5                          # [m], small Task 2 vessel hull/superstructure
     min_point_count: 0                         # 0 disables this optional gate
     stale_timeout_sec: 2.0                     # [s]
     publish_rate_hz: 10.0                      # [Hz] output update rate
@@ -93,6 +95,14 @@ opponent_selector:
     # Operator-facing speed gate. Twist output remains SI m/s.
     min_absolute_speed_knots: 0.3              # [kn] reject stationary buoys, retain slow vessels
     max_absolute_speed_knots: 6.0              # [kn] tolerate estimate error; MPPI remains fixed at 2.5 kn
+    # Recognition rectangle fixed in the map frame to GPS point 5 -> 6.
+    # It begins 5 m before GPS5, ends 5 m past GPS6, and is 40 m wide.
+    # task2_waypoint_pose_publisher resolves the GPS points through /fromLL.
+    corridor_enabled: true
+    corridor_start_topic: "/waypoint1_pose"    # GPS 5, map frame
+    corridor_end_topic: "/waypoint2_pose"      # GPS 6, map frame
+    corridor_longitudinal_margin_m: 5.0
+    corridor_half_width_m: 20.0
 
 # ---------------------------------------------------------------------------
 # PCL preprocessing: compact, current-frame cloud for Task 2 only
@@ -102,12 +112,14 @@ preprocessing_node:
     voxel_leaf_x: 0.15                         # [m] voxel downsampling
     voxel_leaf_y: 0.15
     voxel_leaf_z: 0.15
-    roi_min_x: -10.0                           # [m] retain short rear sector
-    roi_max_x: 40.0                            # [m] forward encounter sector
-    roi_min_y: -25.0                           # [m] port/starboard sector
-    roi_max_y: 25.0
-    roi_min_z: -1.0                            # [m]
-    roi_max_z: 4.0                             # [m]
+    # Do not crop by instantaneous vessel x/y. The map-frame GPS5->6
+    # rectangle above is the authoritative horizontal recognition range.
+    roi_min_x: -40.0
+    roi_max_x: 40.0
+    roi_min_y: -40.0
+    roi_max_y: 40.0
+    roi_min_z: 0.15                            # [m] above water removal band
+    roi_max_z: 1.5                             # [m] Task 2 vessel height
     min_range: 1.5                             # [m]
     max_range: 40.0                            # [m]
     accumulate_frames: false                   # avoids KD-tree inflation
@@ -137,8 +149,8 @@ cluster_node:
     cluster_tolerance: 1.0                     # [m] neighbouring-point link
     min_cluster_size: 15                       # [points] retain sparse far-range hull returns
     max_cluster_size: 10000                    # [points] reject large structures
-    min_cluster_height: 0.1                    # [m] retain low hull returns after water removal
-    max_cluster_height: 4.0                    # [m]
+    min_cluster_height: 0.15                   # [m] reject water-surface speckle
+    max_cluster_height: 1.5                    # [m] Task 2 vessel height
     max_cluster_horizontal_size: 5.0           # [m]
     publish_each_cluster: false
     input_queue_depth: 1                       # drop stale clouds

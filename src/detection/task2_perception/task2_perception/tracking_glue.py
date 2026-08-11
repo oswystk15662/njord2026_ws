@@ -138,6 +138,8 @@ class SelectionParams:
     max_length_m: float = 30.0
     min_width_m: float = 0.0
     max_width_m: float = float("inf")
+    min_height_m: float = 0.0
+    max_height_m: float = float("inf")
     min_point_count: int = 5
     min_hit_count: int = 0
     max_velocity_stddev_mps: float = float("inf")
@@ -164,6 +166,11 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
         return "too narrow"
     if width > params.max_width_m:
         return "too wide"
+    height = float(np.asarray(track.dimensions, dtype=float)[2])
+    if height < params.min_height_m:
+        return "too low"
+    if height > params.max_height_m:
+        return "too high"
     if track.point_count < params.min_point_count:
         return "too few points"
     if track.hit_count < params.min_hit_count:
@@ -171,6 +178,34 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
     if track.velocity_stddev_mps > params.max_velocity_stddev_mps:
         return "velocity estimate too uncertain"
     return None
+
+
+def in_oriented_corridor(
+    point_xy: np.ndarray,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    longitudinal_margin_m: float,
+    half_width_m: float,
+) -> bool:
+    """Return whether a map-frame point is in the GPS5->GPS6 rectangle.
+
+    The rectangle follows the start-to-goal vector, extends by the specified
+    margin past both endpoints, and is independent of vessel heading.
+    """
+    start = np.asarray(start_xy, dtype=float)[:2]
+    end = np.asarray(end_xy, dtype=float)[:2]
+    point = np.asarray(point_xy, dtype=float)[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return False
+    forward = direction / length
+    relative = point - start
+    longitudinal = float(relative @ forward)
+    lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
+    return (-float(longitudinal_margin_m) <= longitudinal <=
+            length + float(longitudinal_margin_m) and
+            abs(lateral) <= float(half_width_m))
 
 
 def select_opponent(

@@ -132,6 +132,29 @@ class TestStaleAndGates:
         assert [track.object_id for track in ranked] == [3]
         assert [reason for _, reason in params.rejected] == ["too narrow", "too wide"]
 
+    def test_height_gate(self):
+        low = make_track(dimensions=np.array([1.8, 0.9, 0.1]))
+        high = make_track(dimensions=np.array([1.8, 0.9, 1.6]))
+        valid = make_track(object_id=3, dimensions=np.array([1.8, 0.9, 0.8]))
+        params = SelectionParams(min_height_m=0.15, max_height_m=1.5)
+        ranked = tracking_glue.select_opponent(
+            [low, high, valid], now_sec=100.5, params=params)
+        assert [track.object_id for track in ranked] == [3]
+        assert [reason for _, reason in params.rejected] == ["too low", "too high"]
+
+    def test_oriented_corridor_is_fixed_to_gps5_to_gps6_line(self):
+        # GPS5->6 is east here; the vessel's own heading is irrelevant.
+        start = np.array([10.0, 20.0])
+        end = np.array([30.0, 20.0])
+        assert tracking_glue.in_oriented_corridor(
+            np.array([5.0, 40.0]), start, end, 5.0, 20.0)
+        assert tracking_glue.in_oriented_corridor(
+            np.array([35.0, 0.0]), start, end, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([35.1, 20.0]), start, end, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([20.0, 40.1]), start, end, 5.0, 20.0)
+
     def test_straight_line_confidence_gate(self):
         short_history = make_track(
             object_id=1, hit_count=8, velocity_stddev_mps=0.10)

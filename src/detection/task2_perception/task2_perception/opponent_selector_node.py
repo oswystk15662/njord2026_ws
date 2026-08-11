@@ -29,7 +29,7 @@ import rclpy.logging
 from rclpy.node import Node
 from rclpy.time import Time
 
-from geometry_msgs.msg import TransformStamped, TwistStamped
+from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
 from nav_msgs.msg import Odometry
 from tf2_ros import Buffer, TransformBroadcaster, TransformListener
 
@@ -77,6 +77,8 @@ class OpponentSelectorNode(Node):
             ("max_length_m", 30.0),
             ("min_width_m", 0.0),
             ("max_width_m", float("inf")),
+            ("min_height_m", 0.0),
+            ("max_height_m", float("inf")),
             ("min_point_count", 5),
             ("stale_timeout_sec", 2.0),
             ("publish_rate_hz", 10.0),
@@ -95,6 +97,12 @@ class OpponentSelectorNode(Node):
             # to be predicted after observations stop.  This is deliberately
             # separate from the short occlusion coast timeout.
             ("straight_continue_after_loss", False),
+            # GPS5->GPS6 map-frame target-recognition rectangle.
+            ("corridor_enabled", True),
+            ("corridor_start_topic", "/waypoint1_pose"),
+            ("corridor_end_topic", "/waypoint2_pose"),
+            ("corridor_longitudinal_margin_m", 5.0),
+            ("corridor_half_width_m", 20.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -118,6 +126,15 @@ class OpponentSelectorNode(Node):
             raise ValueError("straight_coast_timeout_sec must be >= 0")
         self.straight_continue_after_loss = bool(
             gp("straight_continue_after_loss"))
+        self.corridor_enabled = bool(gp("corridor_enabled"))
+        self.corridor_longitudinal_margin_m = float(
+            gp("corridor_longitudinal_margin_m"))
+        self.corridor_half_width_m = float(gp("corridor_half_width_m"))
+        if self.corridor_longitudinal_margin_m < 0.0 or \
+                self.corridor_half_width_m <= 0.0:
+            raise ValueError("Task 2 corridor dimensions must be positive")
+        self.corridor_start_map = None
+        self.corridor_end_map = None
         self.selection_params = SelectionParams(
             confirmed_only=bool(gp("confirmed_only")),
             max_distance_m=float(gp("max_distance_m")),
@@ -125,6 +142,8 @@ class OpponentSelectorNode(Node):
             max_length_m=float(gp("max_length_m")),
             min_width_m=float(gp("min_width_m")),
             max_width_m=float(gp("max_width_m")),
+            min_height_m=float(gp("min_height_m")),
+            max_height_m=float(gp("max_height_m")),
             min_point_count=int(gp("min_point_count")),
             stale_timeout_sec=float(gp("stale_timeout_sec")),
             target_track_id=int(gp("target_track_id")),
@@ -155,6 +174,12 @@ class OpponentSelectorNode(Node):
             self.tracks_callback, 10)
         self.create_subscription(
             Odometry, str(gp("ego_odom_topic")), self.ego_callback, 10)
+        self.create_subscription(
+            PoseStamped, str(gp("corridor_start_topic")),
+            self.corridor_start_callback, 10)
+        self.create_subscription(
+            PoseStamped, str(gp("corridor_end_topic")),
+            self.corridor_end_callback, 10)
 
         self.tracks: list[Track] = []
         self.ego_vel_base = np.zeros(3)  # ego twist linear, base_link (odom child frame)
@@ -176,7 +201,8 @@ class OpponentSelectorNode(Node):
             f"absolute_speed_range={self.min_absolute_speed_knots:.2f}"
             f"-{self.max_absolute_speed_knots:.2f} kn, "
             f"straight_coast={self.straight_coast_timeout_sec:.1f}s, "
-            f"straight_continue_after_loss={self.straight_continue_after_loss}")
+            f"straight_continue_after_loss={self.straight_continue_after_loss}, "
+            f"GPS5->6 corridor={'enabled' if self.corridor_enabled else 'disabled'}")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -209,6 +235,38 @@ class OpponentSelectorNode(Node):
         lin = msg.twist.twist.linear
         self.ego_vel_base = np.array([lin.x, lin.y, lin.z])
         self.ego_yaw_rate = float(msg.twist.twist.angular.z)
+
+    def _store_corridor_endpoint(self, msg: PoseStamped, endpoint: str):
+        if msg.header.frame_id and msg.header.frame_id != self.map_frame:
+            self.get_logger().warning(
+                f"Ignoring Task 2 corridor {endpoint} in frame "
+                f"'{msg.header.frame_id}'; expected '{self.map_frame}'.",
+                throttle_duration_sec=2.0)
+            return
+        point = np.array([msg.pose.position.x, msg.pose.position.y])
+        if endpoint == "start":
+            self.corridor_start_map = point
+        else:
+            self.corridor_end_map = point
+
+    def corridor_start_callback(self, msg: PoseStamped):
+        self._store_corridor_endpoint(msg, "start")
+
+    def corridor_end_callback(self, msg: PoseStamped):
+        self._store_corridor_endpoint(msg, "end")
+
+    def _in_task2_corridor(self, position_map: np.ndarray) -> bool:
+        if not self.corridor_enabled:
+            return True
+        if self.corridor_start_map is None or self.corridor_end_map is None:
+            self.get_logger().warning(
+                "Waiting for /waypoint1_pose and /waypoint2_pose before "
+                "recognizing an opponent in the GPS5->6 corridor.",
+                throttle_duration_sec=2.0)
+            return False
+        return tracking_glue.in_oriented_corridor(
+            position_map, self.corridor_start_map, self.corridor_end_map,
+            self.corridor_longitudinal_margin_m, self.corridor_half_width_m)
 
     def _publish_output(self, now, pos_map, vel_map, opponent_yaw, yaw_rate):
         """Publish one absolute target estimate and its map-frame TF."""
@@ -249,6 +307,11 @@ class OpponentSelectorNode(Node):
             if 0.0 <= elapsed and continue_prediction:
                 pos_map = tracking_glue.predict_straight_motion(
                     coast["position_map"], coast["velocity_map"], elapsed)
+                if not self._in_task2_corridor(pos_map):
+                    self.last_observation = None
+                    self.selected_id = None
+                    self.smoother.reset()
+                    return
                 self._publish_output(
                     now, pos_map, coast["velocity_map"], coast["yaw_map"],
                     coast["yaw_rate"])
@@ -316,6 +379,8 @@ class OpponentSelectorNode(Node):
                 ego_yaw_rate=self.ego_yaw_rate, pos_base=candidate.position)
             candidate_pos_map, candidate_vel_map = tracking_glue.to_map_frame(
                 candidate.position, vel_abs_base, t_map_base)
+            if not self._in_task2_corridor(candidate_pos_map):
+                continue
             speed_knots = mps_to_knots(
                 np.hypot(candidate_vel_map[0], candidate_vel_map[1]))
             if not self.min_absolute_speed_knots <= speed_knots <= \

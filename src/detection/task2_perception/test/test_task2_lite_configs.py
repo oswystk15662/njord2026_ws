@@ -34,7 +34,7 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert ground["ransac_max_iterations"] == 80
     assert cluster["input_queue_depth"] == 1
     assert cluster["min_cluster_size"] == 15
-    assert cluster["min_cluster_height"] == 0.1
+    assert cluster["min_cluster_height"] == 0.15
     assert tracker["straight_hits_to_confirm"] == 5
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["straight_min_hit_count"] == 5
@@ -43,6 +43,9 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["min_absolute_speed_knots"] == 0.3
     assert selector["max_absolute_speed_knots"] == 6.0
     assert selector["straight_coast_timeout_sec"] == 2.0
+    assert selector["corridor_enabled"] is True
+    assert selector["corridor_longitudinal_margin_m"] == 5.0
+    assert selector["corridor_half_width_m"] == 20.0
 
 
 def test_single_task2_yaml_contains_every_opponent_pipeline_node():
