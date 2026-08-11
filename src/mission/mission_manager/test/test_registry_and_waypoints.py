@@ -75,6 +75,7 @@ def test_runtime_profile_switch_projects_geographic_route():
     source = (PACKAGE_ROOT / "mission_manager" / "mission_manager_node.py").read_text()
     runtime_result = source[source.index("def _on_runtime_result"):source.index("def _on_runtime_status")]
     assert "self._start_coordinate_projection(decision.execution_id, task, route, request)" in runtime_result
+    assert "self._machine.transition(" not in runtime_result
 
 
 def test_route_supports_latitude_longitude_coordinates(tmp_path):

@@ -462,10 +462,6 @@ class MissionManager(Node):
                             "map projection service /fromLL is unavailable",
                         )
                         return
-                    self._machine.transition(
-                        MissionState.CONFIGURING, execution_id=decision.execution_id,
-                        stage="project_waypoints", message="projecting latitude/longitude waypoint coordinates",
-                    )
                     self._start_coordinate_projection(decision.execution_id, task, route, request)
                     self._publish_status()
                     return
