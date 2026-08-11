@@ -731,3 +731,15 @@ def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
     assert '"vessel_receiver.launch.py"' in source
     assert '_role_condition("groundpc")' in source
     assert '_role_condition("minipc")' in source
+
+
+def test_foxglove_v3_telemetry_reaches_the_ground_pc():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+    ground = (zenoh_dir / "bridge_groundpc.json5").read_text(encoding="utf-8")
+    for topic in ('"/sensor/vehicle_gnss/fix/raw"', '"/gui/ground_speed_mps"'):
+        assert topic in minipc
+        assert topic in ground
+
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert 'executable="ground_speed_publisher"' in source
