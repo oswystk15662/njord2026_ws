@@ -61,31 +61,17 @@ def _bag_player(context):
 
 
 def generate_launch_description():
-    # Defaults match the July 2026 test rig.  A bag with recorded /tf can
-    # coexist with these static transforms only when it does not publish the
-    # same parent-child pairs.
-    static_tfs = [
-        Node(
-            package="tf2_ros", executable="static_transform_publisher",
-            name="bag_odom_to_base_footprint",
-            arguments=["0", "0", "0", "0", "0", "0", "odom", "base_footprint"],
-        ),
-        Node(
-            package="tf2_ros", executable="static_transform_publisher",
-            name="bag_base_footprint_to_base_link",
-            arguments=[
-                "0", "0", "0", "0", "0", "0", "base_footprint", "base_link"
-            ],
-        ),
-        Node(
-            package="tf2_ros", executable="static_transform_publisher",
-            name="bag_base_link_to_livox",
-            arguments=[
-                "0.5", "0", "0.8", "0", "0", "3.141592653589793",
-                "base_link", "livox_frame",
-            ],
-        ),
-    ]
+    tf_fallback = Node(
+        package="robot",
+        executable="bag_odometry_tf_fallback.py",
+        name="bag_odometry_tf_fallback",
+        output="screen",
+        parameters=[{
+            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
+            "odom_frame": "odom",
+            "base_frame": "base_link",
+        }],
+    )
 
     perception = _include(
         "task2_perception", "task2_perception.launch.py",
@@ -93,7 +79,7 @@ def generate_launch_description():
             "enable_cloud_filter": "true",
             "enable_opponent_selector": "true",
             "use_sim_time": "true",
-            "ego_odom_topic": "/odom",
+            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
             "map_frame": "odom",
             "base_frame": "base_link",
         },
@@ -102,7 +88,7 @@ def generate_launch_description():
         "ship_perception_bringup", "classical_pipeline.launch.py",
         {
             "lidar_topic": "/task2/points_filtered",
-            "ego_odom_topic": "/odom",
+            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
             "preprocessing_config_file": PathJoinSubstitution([
                 FindPackageShare("task2_perception"), "config", "task2_params.yaml"
             ]),
@@ -126,6 +112,10 @@ def generate_launch_description():
         ),
         DeclareLaunchArgument("playback_rate", default_value="1.0"),
         DeclareLaunchArgument(
+            "ego_odom_topic", default_value="/odometry/filtered/local",
+            description="Own-vessel odometry used for tracking and TF fallback.",
+        ),
+        DeclareLaunchArgument(
             "loop", default_value="true",
             description="Repeat the recording after it ends.",
         ),
@@ -136,7 +126,7 @@ def generate_launch_description():
             ]),
             description="rosbag QoS override YAML; set empty to disable.",
         ),
-        *static_tfs,
+        tf_fallback,
         perception,
         tracking,
         OpaqueFunction(function=_bag_player),

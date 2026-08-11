@@ -45,6 +45,11 @@ install(TARGETS pass_through_goal_checker
 )
 install(FILES goal_checker_plugin.xml DESTINATION share/${PROJECT_NAME})
 
+install(PROGRAMS
+  scripts/bag_odometry_tf_fallback.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 install(DIRECTORY
   launch config urdf
   DESTINATION share/${PROJECT_NAME}

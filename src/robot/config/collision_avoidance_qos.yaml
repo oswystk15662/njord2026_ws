@@ -4,7 +4,7 @@
   depth: 10
   reliability: reliable
   durability: volatile
-/odom:
+/odometry/filtered/local:
   history: keep_last
   depth: 10
   reliability: reliable
