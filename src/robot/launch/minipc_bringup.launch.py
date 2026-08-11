@@ -330,6 +330,7 @@ def generate_launch_description():
         package="foxglove_logger",
         executable="foxglove_logger_node",
         name="foxglove_logger",
+        parameters=[{"odometry_topic": "/odometry/filtered/local"}],
         # output="screen",
     )
     ground_speed = Node(
