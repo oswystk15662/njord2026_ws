@@ -278,8 +278,11 @@ def generate_launch_description():
             # to reproduce the pre-split behaviour.
             DeclareLaunchArgument(
                 "lidar_start_delay",
-                default_value="0.0",
-                description="Seconds to wait before starting the MID360 container",
+                default_value="2.0",
+                description=(
+                    "Seconds to wait before starting the MID360 container; lets the "
+                    "Zenoh bridge retrieve the miniPC's transient-local /tf_static history."
+                ),
             ),
             DeclareLaunchArgument(
                 "camera_start_delay",

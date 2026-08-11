@@ -735,6 +735,23 @@ def test_terminal_bringups_include_role_specific_networking():
         assert f'"role": "{role}"' in source
 
 
+def test_jetson_waits_for_tf_static_history_before_starting_glim():
+    source = _read_launch_source("jetson_bringup.launch.py")
+    assert '"lidar_start_delay",\n                default_value="2.0"' in source
+    assert "transient-local /tf_static history" in source
+
+
+def test_zenoh_tf_static_history_settings_are_unique_and_routed_to_jetson():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    jetson = (zenoh_dir / "bridge_jetson.json5").read_text(encoding="utf-8")
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+
+    assert jetson.count("transient_local_cache_multiplier:") == 1
+    assert jetson.count("transient_local_subscribers:") == 1
+    assert '"/tf_static"' in jetson.split("subscribers:", 1)[1]
+    assert '"/tf_static"' in minipc.split("publishers:", 1)[1]
+
+
 def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
     source = _read_launch_source("networking.launch.py")
 
