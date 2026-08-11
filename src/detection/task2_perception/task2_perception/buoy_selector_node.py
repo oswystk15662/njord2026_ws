@@ -84,7 +84,9 @@ class BuoySelectorNode(Node):
                 or self.stationary_confirmation_min_observations < 1):
             raise ValueError("Buoy side-line offset/tolerance/speed parameters must be non-negative (offset > 0)")
         self.selection_params = SelectionParams(
-            confirmed_only=bool(p("confirmed_only")), max_distance_m=float(p("max_distance_m")),
+            confirmed_only=bool(p("confirmed_only")), max_distance_m=(
+                float("inf") if self.tracked_objects_in_map_frame
+                else float(p("max_distance_m"))),
             min_length_m=float(p("min_length_m")), max_length_m=float(p("max_length_m")),
             min_width_m=float(p("min_width_m")), max_width_m=float(p("max_width_m")),
             min_height_m=float(p("min_height_m")), max_height_m=float(p("max_height_m")),

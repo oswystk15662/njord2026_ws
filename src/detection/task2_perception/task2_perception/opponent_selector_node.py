@@ -141,7 +141,8 @@ class OpponentSelectorNode(Node):
         self.corridor_end_map = None
         self.selection_params = SelectionParams(
             confirmed_only=bool(gp("confirmed_only")),
-            max_distance_m=float(gp("max_distance_m")),
+            max_distance_m=(float("inf") if self.tracked_objects_in_map_frame
+                            else float(gp("max_distance_m"))),
             min_length_m=float(gp("min_length_m")),
             max_length_m=float(gp("max_length_m")),
             min_width_m=float(gp("min_width_m")),
