@@ -5,12 +5,12 @@
   //   従来どおりRTP/UDP専用経路を使う。
   mode: "peer",
 
-  // miniPCへの到達経路は確認済みの固定IPで指定する。mDNS の解決待ち／
-  // 誤解決により bridge 接続が遅延することを避ける。
+  // Ground PC と miniPC は 10.42.0.0/24 の直結リンクで接続する。
+  // mDNS の解決待ち／誤解決により bridge 接続が遅延することを避ける。
   // スマートフォンInternet経路を使う場合も7447をInternetへ直接公開せず、
   // WireGuard等のVPN内アドレスをendpointにする。
   connect: {
-    endpoints: ["tcp/192.168.1.2:7447"],
+    endpoints: ["tcp/10.42.0.98:7447"],
   },
 
   scouting: {

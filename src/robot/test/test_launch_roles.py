@@ -701,9 +701,14 @@ def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
 
 def test_verified_wired_link_is_used_for_zenoh_and_critical_link():
     root = Path(_THIS_DIR).parents[2]
-    for filename in ("bridge_groundpc.json5", "bridge_jetson.json5"):
-        source = (root / "config" / "zenoh" / filename).read_text(encoding="utf-8")
-        assert '"tcp/192.168.1.2:7447"' in source
+    ground_bridge = (root / "config" / "zenoh" / "bridge_groundpc.json5").read_text(
+        encoding="utf-8"
+    )
+    jetson_bridge = (root / "config" / "zenoh" / "bridge_jetson.json5").read_text(
+        encoding="utf-8"
+    )
+    assert '"tcp/10.42.0.98:7447"' in ground_bridge
+    assert '"tcp/192.168.1.2:7447"' in jetson_bridge
 
     ground = (root / "src" / "critical_link" / "config" / "ground_sender.yaml").read_text()
     vessel = (root / "src" / "critical_link" / "config" / "vessel_receiver.yaml").read_text()
