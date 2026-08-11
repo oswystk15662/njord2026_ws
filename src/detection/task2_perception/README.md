@@ -64,6 +64,9 @@ GPS6, a track near the left (+2.5 m) side line is emitted as red and one near
 the right (-2.5 m) side line as green.  It publishes the colour-preserving
 `/task2/buoy_detections` (`njord_interfaces/BuoyDetectionArray`) and the
 legacy PointStamped feed; MPPI subscribes to the former directly.
+The size gate uses the former fusion PCL detector's five-point confirmation
+and the former buoy model's 0.45 m physical radius: tracks may be at most
+1.2 m in either horizontal dimension to allow LiDAR clustering error.
 
 ## Nodes
 

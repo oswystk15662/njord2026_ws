@@ -50,7 +50,10 @@ class BuoySelectorNode(Node):
             ("lateral_tolerance_m", 1.0),
             ("start_margin_m", 2.0), ("end_margin_m", 2.0),
             ("confirmed_only", True), ("min_hit_count", 5),
-            ("max_distance_m", 40.0), ("min_point_count", 0),
+            ("max_distance_m", 40.0), ("min_point_count", 5),
+            ("min_length_m", 0.0), ("max_length_m", 1.2),
+            ("min_width_m", 0.0), ("max_width_m", 1.2),
+            ("min_height_m", 0.0), ("max_height_m", 1.5),
             ("stale_timeout_sec", 2.0),
             ("stationary_speed_max_mps", 0.35),
             ("publish_rate_hz", 5.0),
@@ -64,8 +67,9 @@ class BuoySelectorNode(Node):
             raise ValueError("Buoy side-line offset/tolerance/speed parameters must be non-negative (offset > 0)")
         self.selection_params = SelectionParams(
             confirmed_only=bool(p("confirmed_only")), max_distance_m=float(p("max_distance_m")),
-            min_length_m=0.0, max_length_m=float("inf"), min_width_m=0.0,
-            max_width_m=float("inf"), min_height_m=0.0, max_height_m=float("inf"),
+            min_length_m=float(p("min_length_m")), max_length_m=float(p("max_length_m")),
+            min_width_m=float(p("min_width_m")), max_width_m=float(p("max_width_m")),
+            min_height_m=float(p("min_height_m")), max_height_m=float(p("max_height_m")),
             min_point_count=int(p("min_point_count")), min_hit_count=int(p("min_hit_count")),
             stale_timeout_sec=float(p("stale_timeout_sec")))
         self.tracks, self.start_map, self.end_map = [], None, None
