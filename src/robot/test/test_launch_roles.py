@@ -174,6 +174,12 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
 
 
+def test_task1_pass_through_state_is_scoped_to_each_goal():
+    source = (Path(_LAUNCH_DIR).parents[0] / "src" / "pass_through_goal_checker.cpp").read_text()
+    assert "goal_pose.position.x != last_goal_x_" in source
+    assert "last_goal_x_ = goal_pose.position.x" in source
+
+
 def test_task3_uses_its_relaxed_waypoint_behavior_tree():
     source = _read_launch_source("nav2.launch.py")
     task3_bt = (Path(_LAUNCH_DIR).parents[0] / "config" /

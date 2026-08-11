@@ -8,6 +8,7 @@ place these files can move into this package without changing this API.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from itertools import combinations
 from math import hypot, isfinite
 from pathlib import Path
 from typing import Mapping
@@ -86,19 +87,13 @@ class Route:
             return True
         if len(points) < 2:
             return False
-        geographic_span_deg = max(
-            hypot(
-                waypoint.latitude - self.waypoints[0].latitude,
-                waypoint.longitude - self.waypoints[0].longitude,
-            )
-            for waypoint in self.waypoints
-        )
-        projected_span_m = max(
-            hypot(x - points[0][0], y - points[0][1]) for x, y in points
-        )
         # 1e-5 degrees is about one metre at these latitudes.  Do not reject
-        # a deliberately repeated waypoint sequence.
-        return geographic_span_deg > 1.0e-5 and projected_span_m < 1.0
+        # deliberately repeated waypoints, but catch a partial collapse too.
+        return any(
+            hypot(a.latitude - b.latitude, a.longitude - b.longitude) > 1.0e-5
+            and hypot(pa[0] - pb[0], pa[1] - pb[1]) < 1.0
+            for (a, pa), (b, pb) in combinations(zip(self.waypoints, points), 2)
+        )
 
 
 class WaypointConfigLoader:

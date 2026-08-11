@@ -694,7 +694,18 @@ class MissionManager(Node):
 
     def _load_route(self, task: TaskDefinition) -> Route:
         root = self._waypoint_share_path() if task.route_package == "waypoint_publisher" else self._registry_path().parent
-        return self._loader.load(root / task.route, task.route_key)
+        route = self._loader.load(root / task.route, task.route_key)
+        if task.task_id != "task1":
+            return route
+        waypoints = tuple(
+            waypoint for waypoint in route.waypoints if waypoint.competition_id != "1"
+        )
+        if not waypoints:
+            raise RegistryError("Task1 route has no navigation waypoints after GPS1")
+        return Route(
+            route.frame_id, waypoints, route.stages,
+            route.full_sequence_stages, route.constraints,
+        )
 
     def _begin_executor(self, execution_id: str, task: TaskDefinition) -> None:
         if not self._machine.is_current(execution_id) or self._active_route is None:
