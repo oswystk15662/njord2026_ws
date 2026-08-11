@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import rclpy
+from rclpy.action import ActionClient
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_srvs.srv import Trigger
 
+from njord_interfaces.action import RunTask
 from njord_interfaces.msg import MissionStatus, Nav2RuntimeStatus, OperatorCommand, OperatorResponse
 from njord_interfaces.srv import GetMissionStatus, SetControlMode, StartTask, StopTask
 
@@ -32,6 +34,7 @@ class OperatorDispatcher(Node):
         self._mode = self.create_client(SetControlMode, "/control/set_mode")
         self._start = self.create_client(StartTask, "/mission/start_task")
         self._stop = self.create_client(StopTask, "/mission/stop_task")
+        self._check = ActionClient(self, RunTask, "/mission/run_task")
         self._um982 = self.create_client(Trigger, "/sensor/vehicle_gnss/hot_restart")
 
     def _mission(self, message): self._status = message
@@ -66,19 +69,62 @@ class OperatorDispatcher(Node):
         except Exception as error:
             self._respond(command, OperatorResponse.FAILED, str(error))
 
+    def _run_check(self, command):
+        """Respond only after the dry-run action has released the mission slot."""
+        if not self._check.server_is_ready():
+            self._respond(command, OperatorResponse.UNAVAILABLE, "/mission/run_task is unavailable")
+            return
+        goal = RunTask.Goal(
+            task_id=command.task_id,
+            request_auto_mode=False,
+            dry_run=True,
+            request_id=str(command.request_id),
+        )
+        self._check.send_goal_async(goal).add_done_callback(
+            lambda future: self._finish_check_goal(command, future)
+        )
+
+    def _finish_check_goal(self, command, future):
+        try:
+            handle = future.result()
+            if not handle.accepted:
+                self._respond(command, OperatorResponse.REJECTED, "task check rejected")
+                return
+            handle.get_result_async().add_done_callback(
+                lambda result_future: self._finish_check_result(command, result_future)
+            )
+        except Exception as error:
+            self._respond(command, OperatorResponse.FAILED, str(error))
+
+    def _finish_check_result(self, command, future):
+        try:
+            result = future.result().result
+            success = result.result_code == RunTask.Result.SUCCEEDED
+            self._respond(
+                command,
+                OperatorResponse.OK if success else OperatorResponse.REJECTED,
+                result.message,
+            )
+        except Exception as error:
+            self._respond(command, OperatorResponse.FAILED, str(error))
+
     def _command(self, command):
         if command.target != OperatorCommand.MINIPC:
             self._respond(command, OperatorResponse.UNAVAILABLE, "Jetson relay is unavailable")
         elif command.command == OperatorCommand.SET_MODE:
             request = SetControlMode.Request(requested_mode=command.requested_mode, request_id=str(command.request_id))
             self._call(command, self._mode, request)
-        elif command.command in {OperatorCommand.TASK_CHECK, OperatorCommand.TASK_START}:
+        elif command.command == OperatorCommand.TASK_CHECK:
+            if not command.task_id:
+                self._respond(command, OperatorResponse.REJECTED, "task_id is required")
+                return
+            self._run_check(command)
+        elif command.command == OperatorCommand.TASK_START:
             if not command.task_id:
                 self._respond(command, OperatorResponse.REJECTED, "task_id is required")
                 return
             request = StartTask.Request(task_id=command.task_id,
-                request_auto_mode=command.command == OperatorCommand.TASK_START,
-                dry_run=command.command == OperatorCommand.TASK_CHECK, request_id=str(command.request_id))
+                request_auto_mode=True, dry_run=False, request_id=str(command.request_id))
             self._call(command, self._start, request)
         elif command.command == OperatorCommand.TASK_STOP:
             if not self._status.execution_id:

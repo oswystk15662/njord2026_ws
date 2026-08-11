@@ -95,7 +95,14 @@ def main(argv=None) -> int:
         # The critical-link sender polls network responses on a timer, so keep
         # spinning after the burst rather than treating its 0.75 s duration as
         # the response timeout.
-        response_deadline = time.monotonic() + 2.0
+        # A TASK_CHECK completes the full dry-run action (including serialized
+        # map-coordinate projection) before the operator is told it is safe
+        # to issue TASK_START.  Other commands remain short request/response
+        # transactions.
+        response_timeout = 15.0 if (
+            args.command == "task" and args.operation == "check"
+        ) else 2.0
+        response_deadline = time.monotonic() + response_timeout
         for _ in range(3):
             node.publisher.publish(command)
             rclpy.spin_once(node, timeout_sec=0.25)
