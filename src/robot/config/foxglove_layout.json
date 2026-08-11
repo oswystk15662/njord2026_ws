@@ -132,7 +132,7 @@
       "sidebarDimension": 240
     },
     "RawMessages!339jhik": {
-      "topicPath": "/goal_pose",
+      "topicPath": "/other_ship/twist",
       "diffEnabled": false,
       "diffMethod": "custom",
       "diffTopicPath": "",

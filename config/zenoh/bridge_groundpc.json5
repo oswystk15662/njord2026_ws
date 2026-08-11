@@ -27,6 +27,7 @@
         subscribers: [
           "/odom", "/tf", "/tf_static", "/mission/status", "/task/plan",
           "/buoy_detections", "/buoy_detections_3d",
+          "/other_ship/twist",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/zed2i/left/preview/q40/compressed",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
