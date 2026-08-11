@@ -1,4 +1,7 @@
 import os
+from pathlib import Path
+
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
@@ -15,6 +18,9 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     robot_share = FindPackageShare("robot")
     robot_share_path = get_package_share_directory("robot")
+    home_file = Path(get_package_share_directory("mission_manager")) / "config" / "home.yaml"
+    with home_file.open() as stream:
+        home_datum = yaml.safe_load(stream)["home"]
 
     enable_diagnostics_arg = DeclareLaunchArgument(
         "enable_diagnostics",
@@ -206,7 +212,10 @@ def generate_launch_description():
                 "broadcast_utm_transform": True,
                 "publish_filtered_gps": True,
                 "use_odometry_yaw": True,
-                "wait_for_datum": False,
+                "wait_for_datum": True,
+                "datum": [
+                    home_datum["latitude"], home_datum["longitude"], home_datum["yaw"]
+                ],
             }
         ],
         remappings=[

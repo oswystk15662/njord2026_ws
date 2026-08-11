@@ -480,10 +480,12 @@ def test_global_ekf_uses_only_guarded_continuous_inputs():
     ]
 
 
-def test_localization_launch_guards_navsat_output_before_global_ekf():
+def test_localization_launch_uses_the_canonical_fixed_navsat_datum():
     source = _read_launch_source("localization.launch.py")
-    assert 'executable="localization_input_guard"' in source
-    assert '("odometry/gps", "/odometry/gps/um982/raw")' in source
+    navsat = source.split("\n    navsat_transform_node = Node(", 1)[1].split("diagnostics_launch", 1)[0]
+    assert 'get_package_share_directory("mission_manager")' in source
+    assert '"wait_for_datum": True' in navsat
+    assert 'home_datum["latitude"], home_datum["longitude"], home_datum["yaw"]' in navsat
 
 
 def test_camera_frames_match_measured_mounting_geometry():
