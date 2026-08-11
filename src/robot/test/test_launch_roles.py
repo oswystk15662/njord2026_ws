@@ -687,6 +687,18 @@ def test_critical_link_topics_are_excluded_from_all_zenoh_bridges():
             assert topic not in allow_lists
 
 
+def test_verified_wired_link_is_used_for_zenoh_and_critical_link():
+    root = Path(_THIS_DIR).parents[2]
+    for filename in ("bridge_groundpc.json5", "bridge_jetson.json5"):
+        source = (root / "config" / "zenoh" / filename).read_text(encoding="utf-8")
+        assert '"tcp/192.168.1.2:7447"' in source
+
+    ground = (root / "src" / "critical_link" / "config" / "ground_sender.yaml").read_text()
+    vessel = (root / "src" / "critical_link" / "config" / "vessel_receiver.yaml").read_text()
+    assert '"wired_lan|192.168.1.72|192.168.1.2|45100"' in ground
+    assert '"wired_lan|192.168.1.2|45100"' in vessel
+
+
 def test_ground_zenoh_bridge_can_request_mission_manager_tasks():
     path = os.path.normpath(
         os.path.join(_THIS_DIR, "..", "..", "..", "config", "zenoh", "bridge_groundpc.json5")

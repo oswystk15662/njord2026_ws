@@ -8,9 +8,9 @@
   //   閉じ込める。
   mode: "peer",
 
-  // <MINIPC_IP> は miniPC の有線 NIC の IP に置き換える。
+  // Jetson から疎通確認済みの miniPC 有線 NIC へ接続する。
   connect: {
-    endpoints: ["tcp/gembu-EliteMini-Series.local:7447"],
+    endpoints: ["tcp/192.168.1.2:7447"],
   },
 
   scouting: {
