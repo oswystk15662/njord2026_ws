@@ -93,18 +93,43 @@ ros2 pkg prefix robot
 
 ## ビルド方法
 
-`scripts/njord_env.sh` は端末のプロファイルを設定し、GPUがない端末ではGPU専用パッケージをビルド対象から外す。**各端末でビルド前に必ず source する。** 実行後の表示で、Jetson は `NJORD_PROFILE=jetson`、miniPC/Ground PC は `NJORD_PROFILE=minipc` と `NJORD_ENABLE_GPU_SENSORS=<unset>` であることを確認する。
+各端末では、この節に列挙した package だけをビルドする。`scripts/njord_env.sh` はGPUセンサー専用パッケージをminiPC/Ground PCのビルド対象から外すため、必ず `colcon build` の前に source する。
+
+`cd ./njord2026_ws` が失敗する場合は、次で実際のワークスペースを探してから、そのパスへ移動する。`fudaba` を含む名前のディレクトリでも、`src/robot/package.xml` が存在するものを使用する。
+
+```bash
+find "$HOME" -maxdepth 4 -type f -path '*/src/robot/package.xml' -print
+```
 
 ### Jetson（GPUあり）
 
-JetsonではCUDA・ZED SDK・Livox・GLIM・Task 2知覚を含めてビルドする。
+Jetsonは LiDAR、ZED 2i、GLIM、Task 2 の知覚・追跡・MPPIだけを担当する。`glim_ros` はJetsonへ導入済みのROS packageを使うため、ワークスペースでビルドしない。
+
+Task 2 を有効にする場合、`pcl_preprocessing`、`pcl_segmentation`、`ship_tracking` が必要である。最初に存在を確認する。
 
 ```bash
 cd ./njord2026_ws
 source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon list --names-only | grep -Ex 'livox_ros_driver2|pcl_preprocessing|pcl_segmentation|ship_tracking|task2_perception|asv_trajectory_planner|zed2i_driver'
+ros2 pkg prefix glim_ros
+```
+
+上の3つのPCL／追跡 package が表示されない場合は、ビルド前にサブモジュールを取得する。
+
+```bash
+git submodule update --init --recursive src/detection/pcl_segmentation
+```
+
+確認後、次を実行する。
+
+```bash
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  --packages-up-to robot zed2i_driver livox_ros_driver2 task2_perception \
+  pcl_preprocessing pcl_segmentation ship_tracking asv_trajectory_planner \
+  diagnostic_monitors
 source install/setup.bash
 ```
 
@@ -112,34 +137,39 @@ JetsonのROSディストリビューションがJazzy以外の場合だけ、1�
 
 ### miniPC（GPUなし・実艇側）
 
-miniPCはGPUセンサ処理をビルドしない。`njord_env.sh` がLivox SDK・Livox ROS driver・PCL segmentationを除外し、CPUで動くminiPC側のGNSS、Nav2、制御、Mission Manager、ダミーGNSSをビルドする。
+miniPCは GNSS、自己位置推定、Nav2、制御、Mission Manager、スラスタ、BMS、背面カメラの実行に必要な package だけをビルドする。Livox、PCL segmentation、ZED 2i SDK、GPU知覚はビルドしない。
 
 ```bash
 cd ./njord2026_ws
 source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=minipc NJORD_ROLE=minipc
 source scripts/njord_env.sh
-colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  --packages-up-to robot um982_driver um982_feedback_filter simple_manual \
+  control_manager mission_manager asv_trajectory_planner waypoint_publisher \
+  thruster_driver micon_driver_fd bms alert_lamp buoy_obstacle_publisher \
+  foxglove_logger diagnostic_monitors zed2i_driver critical_link
 source install/setup.bash
 ```
 
 ### Ground PC（GPUなし）
 
-Ground PCはGPUセンサ処理をビルドしない。操縦、critical link、Foxglove、映像受信、waypoint表示に必要な範囲だけビルドする。
+Ground PCはジョイスティック、critical link、Foxglove、映像受信、Waypoint表示だけをビルドする。Nav2、Mission Manager、Control Manager、LiDAR、ZED SDK、GPU知覚はビルドしない。
 
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
 source scripts/njord_env.sh
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
   --packages-up-to robot ntripcaster critical_link simple_manual \
-  tf_frame_arrow_publisher waypoint_publisher zed2i_driver \
-  control_manager mission_manager
+  tf_frame_arrow_publisher waypoint_publisher zed2i_driver
 source install/setup.bash
 ```
 
-Ground PCにはJetson用のCUDA/TensorRT/ZED SDKは不要である。`zed2i_driver` はSDKなしではCPU/stub版としてビルドされ、Ground PCでは映像受信launchだけを使用する。
+`zed2i_driver` はSDKなしでCPU/stub版としてビルドされ、Ground PCでは映像受信launchだけを使用する。
 
 ## 1. GNSS 接続後の通常起動
 
