@@ -185,7 +185,7 @@ class MissionManager(Node):
         self.declare_parameter("registry_file", "")
         self.declare_parameter("active_nav2_profile", "")
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
-        self.declare_parameter("coordinate_projection_timeout_sec", 10.0)
+        self.declare_parameter("coordinate_projection_timeout_sec", 30.0)
         self.declare_parameter("coordinate_projection_retry_sec", 0.5)
         self.declare_parameter("coordinate_projection_request_interval_sec", 0.5)
         self._lock = threading.RLock()
