@@ -196,7 +196,12 @@ class RuntimeManager(Node):
         profile = handle.request.value
         with self._lock:
             try:
-                if self._profile != profile:
+                # A child launch can be stopped externally while this manager
+                # remains alive.  Treat a dead or missing child exactly like
+                # a profile change; otherwise a later task request would be
+                # reported READY with no Nav2 action server.
+                runtime_is_alive = self._process is not None and self._process.poll() is None
+                if self._profile != profile or not runtime_is_alive:
                     self._stop()
                     self._profile = profile
                     self._publish(Nav2RuntimeStatus.STARTING, "starting Nav2 runtime")
