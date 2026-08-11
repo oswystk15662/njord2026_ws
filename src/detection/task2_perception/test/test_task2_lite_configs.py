@@ -52,7 +52,8 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert buoy["expected_lateral_offset_m"] == 2.5
     assert buoy["lateral_tolerance_m"] == 1.0
     assert buoy["stationary_speed_max_mps"] == 0.35
-    assert buoy["stationary_confirm_duration_sec"] == 1.0
+    assert buoy["stationary_confirmation_window_sec"] == 3.0
+    assert buoy["stationary_confirmation_min_observations"] == 5
     assert buoy["min_point_count"] == 5
     assert buoy["max_length_m"] == 1.2
     assert buoy["max_width_m"] == 1.2

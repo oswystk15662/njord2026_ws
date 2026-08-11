@@ -142,9 +142,10 @@ task2_buoy_selector:
     max_height_m: 1.5
     stale_timeout_sec: 2.0
     stationary_speed_max_mps: 0.35
-    # A track must stay below the ground-speed threshold for this long after
-    # tracker confirmation before it is emitted as a buoy.
-    stationary_confirm_duration_sec: 1.0
+    # After tracker confirmation, require enough stationary observations in
+    # this rolling window; they do not need to be consecutive.
+    stationary_confirmation_window_sec: 3.0
+    stationary_confirmation_min_observations: 5
     publish_rate_hz: 5.0
 
 # ---------------------------------------------------------------------------

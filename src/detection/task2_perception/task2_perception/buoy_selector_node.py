@@ -8,6 +8,7 @@ TF/ego-motion handling used for other vessels.
 """
 
 import math
+from collections import deque
 
 import numpy as np
 import rclpy
@@ -62,7 +63,8 @@ class BuoySelectorNode(Node):
             ("min_height_m", 0.15), ("max_height_m", 1.5),
             ("stale_timeout_sec", 2.0),
             ("stationary_speed_max_mps", 0.35),
-            ("stationary_confirm_duration_sec", 1.0),
+            ("stationary_confirmation_window_sec", 3.0),
+            ("stationary_confirmation_min_observations", 5),
             ("publish_rate_hz", 5.0),
         ])
         p = lambda name: self.get_parameter(name).value
@@ -70,11 +72,14 @@ class BuoySelectorNode(Node):
         self.expected_offset_m, self.lateral_tolerance_m = float(p("expected_lateral_offset_m")), float(p("lateral_tolerance_m"))
         self.start_margin_m, self.end_margin_m = float(p("start_margin_m")), float(p("end_margin_m"))
         self.stationary_speed_max_mps = float(p("stationary_speed_max_mps"))
-        self.stationary_confirm_duration_sec = float(
-            p("stationary_confirm_duration_sec"))
+        self.stationary_confirmation_window_sec = float(
+            p("stationary_confirmation_window_sec"))
+        self.stationary_confirmation_min_observations = int(
+            p("stationary_confirmation_min_observations"))
         if (self.expected_offset_m <= 0.0 or self.lateral_tolerance_m < 0.0
                 or self.stationary_speed_max_mps < 0.0
-                or self.stationary_confirm_duration_sec < 0.0):
+                or self.stationary_confirmation_window_sec <= 0.0
+                or self.stationary_confirmation_min_observations < 1):
             raise ValueError("Buoy side-line offset/tolerance/speed parameters must be non-negative (offset > 0)")
         self.selection_params = SelectionParams(
             confirmed_only=bool(p("confirmed_only")), max_distance_m=float(p("max_distance_m")),
@@ -84,7 +89,7 @@ class BuoySelectorNode(Node):
             min_point_count=int(p("min_point_count")), min_hit_count=int(p("min_hit_count")),
             stale_timeout_sec=float(p("stale_timeout_sec")))
         self.tracks, self.start_map, self.end_map = [], None, None
-        self.stationary_since_sec = {}
+        self.stationary_observations = {}
         self.ego_vel_base, self.ego_yaw_rate = np.zeros(3), 0.0
         self.tf_buffer = Buffer()
         self.tf_listener = TransformListener(self.tf_buffer, self)
@@ -189,12 +194,17 @@ class BuoySelectorNode(Node):
                     self.start_margin_m, self.end_margin_m)
             is_stationary = buoy_glue.is_stationary(
                 velocity_map, self.stationary_speed_max_mps)
-            if (have_route and colour is None) or not is_stationary:
-                self.stationary_since_sec.pop(track.object_id, None)
+            if have_route and colour is None:
                 continue
-            stationary_since = self.stationary_since_sec.setdefault(
-                track.object_id, now_sec)
-            if now_sec - stationary_since < self.stationary_confirm_duration_sec:
+            observations = self.stationary_observations.setdefault(
+                track.object_id, deque())
+            while (observations and now_sec - observations[0]
+                   > self.stationary_confirmation_window_sec):
+                observations.popleft()
+            if is_stationary:
+                observations.append(now_sec)
+            if (not is_stationary or len(observations)
+                    < self.stationary_confirmation_min_observations):
                 continue
             detection = BuoyDetection()
             if colour == buoy_glue.GREEN:
@@ -226,8 +236,9 @@ class BuoySelectorNode(Node):
                 markers.markers.append(marker)
             self.marker_ids = active_marker_ids
             self.marker_pub.publish(markers)
-        self.stationary_since_sec = {
-            track_id: since for track_id, since in self.stationary_since_sec.items()
+        self.stationary_observations = {
+            track_id: observations
+            for track_id, observations in self.stationary_observations.items()
             if track_id in eligible_ids
         }
         self.array_pub.publish(detections)
