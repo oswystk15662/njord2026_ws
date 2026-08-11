@@ -18,7 +18,7 @@ Task 2 は 3 台で分担して起動する。
 
 ### 1.1 Jetson（知覚・追跡・MPPI）
 
-Jetson で Livox と ZED を接続してから実行する。`enable_task2_autonomy:=true` が Task 2 の LiDAR 認識、他船追跡、MPPI、`/task2/safety_points` を起動する。
+Jetson で Livox と ZED を接続してから実行する。`enable_task2_autonomy:=true` が Task 2 の LiDAR 認識、他船追跡、MPPI、`/task2/safety_points` を起動する。`enable_glim:=true` により、Livox/IMU からの自己位置 `/odom` も起動する。
 
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
@@ -26,7 +26,7 @@ source /opt/ros/humble/setup.bash
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
 source install/setup.bash
-ros2 launch robot jetson_bringup.launch.py enable_task2_autonomy:=true
+ros2 launch robot jetson_bringup.launch.py enable_task2_autonomy:=true enable_glim:=true
 ```
 
 ### 1.2 船体 miniPC（GNSS・航法・制御）
@@ -81,36 +81,68 @@ ros2 run mission_manager njord-task stop
 ros2 run mission_manager njord-task manual
 ```
 
-## 2. 屋内での起動確認（ダミー GNSS を含むシミュレーション）
+## 2. 屋内での起動確認（実機構成 + ダミー GNSS）
 
-屋内では **実機の miniPC/Jetson bringup をダミー GNSS と組み合わせない**。代わりに `task2_sim` を使う。この launch はダミー GNSS (`/gps/fix`)、ダミー IMU、自己位置、相手船、Task 2 用 Nav2、MPPI を起動する。一方で LiDAR、ZED、UM982、Micon、スラスタドライバは起動しないため、室内で安全に起動連鎖を確認できる。
+屋内確認では、GNSS 以外を通常起動と同じにする。つまり Jetson の Livox、ZED、GLIM、Task 2 認識・追跡・MPPI、miniPC の Nav2、Control Manager、Mission Manager、Micon／スラスタ境界、BMS、背面カメラ、Ground PC の操縦・監視をすべて起動する。**置き換えるのは UM982 だけ**である。
+
+安全のため、係留またはプロペラを外した状態で実施し、AUTO は要求しない。ダミーGNSSは起動確認用であり、屋内での自律航行を許可するものではない。
+
+### 2.1 Jetson と Ground PC
+
+Jetson と Ground PC は [通常起動](#1-gnss-接続後の通常起動) とまったく同じコマンドで起動する。Jetson の GLIM が `/odom` を出力し、この値をダミーGNSSの元データとして使う。
+
+### 2.2 miniPC（UM982 だけ無効化）
+
+miniPC では実UM982を起動しない以外、通常と同じ Task 2 bringup を起動する。`enable_um982:=false` 以外の既定値は変更しないため、スラスタを含む実機ノード群が起動する。
 
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
 source install/setup.bash
-ros2 launch task2_sim task2_sim.launch.py
+ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task2 enable_um982:=false
 ```
 
-別ターミナルでダミー GNSS、自己位置、計画経路を確認する。
+### 2.3 miniPC でダミー GNSS を起動
+
+別ターミナルで、ダミーGNSSをUM982と同じ `/sensor/vehicle_gnss/fix/raw` へ出す。方位 `/sensor/vehicle_gnss/compass/raw` も同時に出力される。Jetson のGLIMから `/odom` が届くまでメッセージは出ないため、先に `/odom` を確認する。
 
 ```bash
 source /opt/ros/humble/setup.bash
 source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
-ros2 topic echo /gps/fix --once
+ros2 topic echo /odom --once
+```
+
+次の `gps_origin_lat` と `gps_origin_lon` は、屋内確認で地図に表示したい基準位置へ変更する。Task 2 のWPと重ねて確認する場合は、Task 2 水域に近い座標を指定する。
+
+```bash
+source /opt/ros/humble/setup.bash
+source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
+ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
+  -r /gps/fix:=/sensor/vehicle_gnss/fix/raw \
+  -p gps_origin_lat:=34.5456667 \
+  -p gps_origin_lon:=135.5070556 \
+  -p gps_origin_alt:=0.0
+```
+
+`sensor_sim_with_noise` が未ビルドの場合は、このコマンドの前にminiPCで一度だけ実行する。
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+colcon build --packages-select sensor_sim_with_noise
+source install/setup.bash
+```
+
+起動後は、実GNSS時と同じトピック名で確認できる。
+
+```bash
+ros2 topic echo /sensor/vehicle_gnss/fix/raw --once
+ros2 topic echo /sensor/vehicle_gnss/compass/raw --once
 ros2 topic echo /odometry/filtered/global --once
-ros2 topic echo /planned_path_pruned --once
 ```
 
-シミュレーション用 GNSS を Foxglove の GNSS 地図パネルでも表示する場合は、さらに別ターミナルでトピックを中継する。これはシミュレーション中だけ実行し、実UM982起動中には実行しない（同一トピックへの二重 publish を避けるため）。
-
-```bash
-source /opt/ros/humble/setup.bash
-source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
-ros2 run topic_tools relay /gps/fix /sensor/vehicle_gnss/fix/raw
-```
-
-この確認は仮想船体の動作確認であり、実GNSS・Zenoh 通信・実センサー・推進系の動作確認ではない。GNSS を接続した実機確認へ進むときは、この節の `task2_sim` と `topic_tools relay` を停止してから、[1. GNSS 接続後の通常起動](#1-gnss-接続後の通常起動) を Jetson → miniPC → Ground PC の順で実行する。
+実GNSSに戻す場合はダミーGNSSノードを `Ctrl-C` で停止し、miniPC bringupも停止してから、[1. GNSS 接続後の通常起動](#1-gnss-接続後の通常起動) のminiPCコマンド（`enable_um982:=false` を付けないもの）で再起動する。実UM982とダミーGNSSを同時に起動してはならない。
 
 ## 3. Foxglove で Waypoint だけを見る
 
@@ -129,7 +161,7 @@ ros2 launch robot ground_waypoint_map_only.launch.py task_type:=task2
 
 Foxglove で Bridge に接続し、GNSS Map Telemetry のレイアウト（または同パネル）を開く。Waypoint のトピックを `/ground_waypoint_markers` に設定すると、Task 2 の waypoint を表示できる。
 
-通常起動で UM982 が接続されている場合は、同じパネルの GNSS 入力を `/sensor/vehicle_gnss/fix/raw` に設定する。このトピックは実機位置を表示するため、waypoint と機体の現在地を同時に確認できる。屋内シミュレーションでは前節の relay を起動すれば、同じ入力にダミー GNSS を表示できる。
+通常起動で UM982 が接続されている場合は、同じパネルの GNSS 入力を `/sensor/vehicle_gnss/fix/raw` に設定する。このトピックは実機位置を表示するため、waypoint と機体の現在地を同時に確認できる。屋内確認でもダミーGNSSは同じトピックを使うため、追加設定なしで現在地表示を確認できる。
 
 最小確認コマンドは以下である。
 
