@@ -271,6 +271,7 @@ private:
       case ControlState::SOURCE_ZERO: return "ZERO";
       case ControlState::SOURCE_MANUAL: return "MANUAL";
       case ControlState::SOURCE_AUTO: return "AUTO";
+      case ControlState::SOURCE_SBUS: return "SBUS";
       default: return "UNKNOWN";
     }
   }

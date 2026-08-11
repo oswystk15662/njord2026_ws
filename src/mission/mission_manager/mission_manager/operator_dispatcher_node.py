@@ -53,7 +53,7 @@ class OperatorDispatcher(Node):
         self._response_pub.publish(response)
 
     def _safe_manual_idle(self):
-        return self._control and self._control.requested_mode == 0 and self._control.effective_source in {0, 1} and self._status.state == MissionStatus.STATE_IDLE
+        return self._control and self._control.requested_mode == 0 and self._control.effective_source in {0, 1, 3} and self._status.state == MissionStatus.STATE_IDLE
 
     def _call(self, command, client, request):
         if not client.service_is_ready():

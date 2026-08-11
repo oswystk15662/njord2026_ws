@@ -10,15 +10,10 @@ TEST(SbusJoyConverter, MapsAxesModesAndEmergency)
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.x, 0.555);
   EXPECT_DOUBLE_EQ(output.cmd_vel.linear.y, -0.222);
   EXPECT_DOUBLE_EQ(output.cmd_vel.angular.z, -0.444);
-  EXPECT_TRUE(output.soft_emg);
+  EXPECT_TRUE(output.command_enabled);
 
   joy.buttons[0] = 1;
-  EXPECT_FALSE(simple_manual::convert_sbus_joy(joy, {}).soft_emg);
-
-  joy.axes[4] = -0.8F;
-  EXPECT_EQ(simple_manual::convert_sbus_joy(joy, {}).mode, "auto");
-  joy.axes[4] = 0.0F;
-  EXPECT_EQ(simple_manual::convert_sbus_joy(joy, {}).mode, "manual");
+  EXPECT_FALSE(simple_manual::convert_sbus_joy(joy, {}).command_enabled);
 }
 
 TEST(SbusJoyConverter, FloorsAtThreeDecimalPlaces)

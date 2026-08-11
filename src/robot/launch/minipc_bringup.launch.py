@@ -104,7 +104,6 @@ def generate_launch_description():
     )
     enable_nav2 = LaunchConfiguration("enable_nav2")
     active_nav2_profile = LaunchConfiguration("active_nav2_profile")
-    enable_sbus = LaunchConfiguration("enable_sbus")
     sbus_serial_port = LaunchConfiguration("sbus_serial_port")
     enable_control_manager = LaunchConfiguration("enable_control_manager")
     enable_mission_manager = LaunchConfiguration("enable_mission_manager")
@@ -226,7 +225,6 @@ def generate_launch_description():
             ("/yellow", "/manual_lamp/yellow"),
             ("/red", "/manual_lamp/red"),
         ],
-        condition=UnlessCondition(enable_sbus),
     )
 
     sbus_joy = Node(
@@ -236,7 +234,6 @@ def generate_launch_description():
         output="screen",
         parameters=[{"device": sbus_serial_port}],
         remappings=[("joy", "/sbus/joy")],
-        condition=IfCondition(enable_sbus),
     )
 
     sbus_joy_converter = Node(
@@ -245,7 +242,6 @@ def generate_launch_description():
         name="sbus_joy_converter",
         output="screen",
         remappings=[("joy", "/sbus/joy")],
-        condition=IfCondition(enable_sbus),
     )
 
     command_arbiter = Node(
@@ -531,11 +527,6 @@ def generate_launch_description():
                     "usb-Espressif_USB_JTAG_serial_debug_unit_8C:BF:EA:CF:9A:B0-if00"
                 ),
                 description="Stable /dev/serial/by-id path for the SBUS XIAO ESP32-C6",
-            ),
-            DeclareLaunchArgument(
-                "enable_sbus",
-                default_value="true",
-                description="Use the onboard SBUS receiver instead of the ground-link joystick.",
             ),
             DeclareLaunchArgument(
                 "um982_port",

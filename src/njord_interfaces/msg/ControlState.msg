@@ -12,6 +12,7 @@ uint8 MODE_AUTO=1
 uint8 SOURCE_ZERO=0
 uint8 SOURCE_MANUAL=1
 uint8 SOURCE_AUTO=2
+uint8 SOURCE_SBUS=3
 
 uint16 INHIBIT_NONE=0
 uint16 INHIBIT_EMERGENCY_STOP=1
@@ -34,5 +35,6 @@ bool emergency_stop
 bool auto_permitted
 bool manual_command_fresh
 bool nav_command_fresh
+bool sbus_command_fresh
 uint16[] inhibit_reason_codes
 string[] inhibit_reasons

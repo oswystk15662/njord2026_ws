@@ -7,9 +7,7 @@
 #include <optional>
 
 #include "rclcpp/rclcpp.hpp"
-#include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/empty.hpp"
-#include "std_msgs/msg/string.hpp"
 
 namespace simple_manual
 {
@@ -42,16 +40,10 @@ SbusJoyOutput convert_sbus_joy(
   const sensor_msgs::msg::Joy & joy, const std::vector<double> & offsets)
 {
   SbusJoyOutput output;
-  const double axis4 = axis_value(joy, 4) - offset_value(offsets, 4);
   output.cmd_vel.linear.x = truncate_3(-(axis_value(joy, 1) - offset_value(offsets, 1)));
   output.cmd_vel.linear.y = truncate_3(-(axis_value(joy, 0) - offset_value(offsets, 0)));
   output.cmd_vel.angular.z = truncate_3(-(axis_value(joy, 5) - offset_value(offsets, 5)));
-  output.soft_emg = !button_value(joy, 0) && axis4 >= 0.8;
-  if (axis4 <= -0.8) {
-    output.mode = "auto";
-  } else if (axis4 >= -0.1 && axis4 <= 0.1) {
-    output.mode = "manual";
-  }
+  output.command_enabled = !button_value(joy, 0);
   return output;
 }
 
@@ -63,10 +55,7 @@ public:
   {
     sub_ = create_subscription<sensor_msgs::msg::Joy>(
       "joy", 10, std::bind(&SbusJoyConverter::joy_cb, this, std::placeholders::_1));
-    cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_manual", 10);
-    soft_emg_pub_ = create_publisher<std_msgs::msg::Bool>("/soft_emg", 10);
-    mode_pub_ = create_publisher<std_msgs::msg::String>(
-      "/system/operating_mode", rclcpp::QoS(1).transient_local());
+    cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_sbus", 10);
     heartbeat_pub_ = create_publisher<std_msgs::msg::Empty>("/heartbeat/manual_control", 10);
     heartbeat_timer_ = create_wall_timer(
       std::chrono::seconds(1), [this]() {heartbeat_pub_->publish(std_msgs::msg::Empty{});});
@@ -106,18 +95,14 @@ private:
     if (!calibrated_) {
       calibrated_ = calibrate(*joy);
       if (!calibrated_) {
-        const auto output = convert_sbus_joy(*joy, {});
-        cmd_pub_->publish(geometry_msgs::msg::Twist{});
-        soft_emg_pub_->publish(std_msgs::msg::Bool().set__data(output.soft_emg));
-        mode_pub_->publish(std_msgs::msg::String().set__data(output.mode));
         return;
       }
       RCLCPP_INFO(get_logger(), "SBUS axes calibrated");
     }
     const auto output = convert_sbus_joy(*joy, offsets_);
-    cmd_pub_->publish(output.cmd_vel);
-    soft_emg_pub_->publish(std_msgs::msg::Bool().set__data(output.soft_emg));
-    mode_pub_->publish(std_msgs::msg::String().set__data(output.mode));
+    if (output.command_enabled) {
+      cmd_pub_->publish(output.cmd_vel);
+    }
   }
 
   bool calibrated_{false};
@@ -127,8 +112,6 @@ private:
   std::vector<double> offsets_;
   rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_pub_;
-  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr soft_emg_pub_;
-  rclcpp::Publisher<std_msgs::msg::String>::SharedPtr mode_pub_;
   rclcpp::Publisher<std_msgs::msg::Empty>::SharedPtr heartbeat_pub_;
   rclcpp::TimerBase::SharedPtr heartbeat_timer_;
 };

@@ -1,7 +1,6 @@
 #ifndef SIMPLE_MANUAL__SBUS_JOY_CONVERTER_HPP_
 #define SIMPLE_MANUAL__SBUS_JOY_CONVERTER_HPP_
 
-#include <string>
 #include <vector>
 
 #include "geometry_msgs/msg/twist.hpp"
@@ -13,8 +12,7 @@ namespace simple_manual
 struct SbusJoyOutput
 {
   geometry_msgs::msg::Twist cmd_vel;
-  bool soft_emg{false};
-  std::string mode{"manual"};
+  bool command_enabled{false};
 };
 
 double truncate_3(double value);

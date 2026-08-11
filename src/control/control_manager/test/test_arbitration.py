@@ -42,6 +42,27 @@ def test_auto_armed_is_reachable_before_nav_produces_a_command():
     assert source == Source.ZERO
 
 
+def test_fresh_sbus_command_overrides_manual_and_auto_sources():
+    state, source = derive_control_state(
+        emergency_stop=False,
+        auto_requested=True,
+        auto_permitted=True,
+        manual_command_fresh=True,
+        nav_command_fresh=True,
+        sbus_command_fresh=True,
+    )
+    assert state == State.MANUAL
+    assert source == Source.SBUS
+    assert select_source(
+        emergency_stop=False,
+        effective_source=source,
+        auto_permitted=True,
+        manual_command_fresh=True,
+        nav_command_fresh=True,
+        sbus_command_fresh=True,
+    ) == Source.SBUS
+
+
 def test_arbiter_outputs_zero_when_armed_nav_command_is_stale():
     _, effective_source = derive_control_state(
         emergency_stop=False,

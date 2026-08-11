@@ -16,6 +16,7 @@ uint8 MODE_AUTO=1
 uint8 SOURCE_ZERO=0
 uint8 SOURCE_MANUAL=1
 uint8 SOURCE_AUTO=2
+uint8 SOURCE_SBUS=3
 
 builtin_interfaces/Time stamp
 uint8 state

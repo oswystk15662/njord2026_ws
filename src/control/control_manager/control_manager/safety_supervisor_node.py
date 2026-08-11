@@ -46,6 +46,7 @@ class SafetySupervisor(Node):
         self._health_summary_critical = False
         self._manual_received_ns: int | None = None
         self._nav_received_ns: int | None = None
+        self._sbus_received_ns: int | None = None
 
         self._state_pub = self.create_publisher(ControlState, "/control/state", TRANSIENT_QOS)
         self.create_subscription(UInt8, "/control/requested_mode", self._on_requested_mode, TRANSIENT_QOS)
@@ -57,6 +58,7 @@ class SafetySupervisor(Node):
         from geometry_msgs.msg import Twist  # Imported here to keep policy tests ROS-free.
         self.create_subscription(Twist, "/cmd_vel_manual", self._on_manual_command, 10)
         self.create_subscription(Twist, "/cmd_vel_nav", self._on_nav_command, 10)
+        self.create_subscription(Twist, "/cmd_vel_sbus", self._on_sbus_command, 10)
         self.create_subscription(HealthState, "/health/state", self._on_health_state, TRANSIENT_QOS)
         self.create_timer(self._publish_period_sec, self._publish_state)
         self._publish_state()
@@ -85,6 +87,9 @@ class SafetySupervisor(Node):
 
     def _on_nav_command(self, _message) -> None:
         self._nav_received_ns = self.get_clock().now().nanoseconds
+
+    def _on_sbus_command(self, _message) -> None:
+        self._sbus_received_ns = self.get_clock().now().nanoseconds
 
     def _on_health_state(self, message: HealthState) -> None:
         self._health_states = {signal.name: signal.state for signal in message.signals}
@@ -129,6 +134,7 @@ class SafetySupervisor(Node):
     def _publish_state(self) -> None:
         nav_fresh = self._fresh(self._nav_received_ns, self._policy.nav_command_timeout_sec)
         manual_fresh = self._fresh(self._manual_received_ns, self._policy.nav_command_timeout_sec)
+        sbus_fresh = self._fresh(self._sbus_received_ns, self._policy.nav_command_timeout_sec)
         auto_permitted, reasons = self._decision()
         state = ControlState()
         state.stamp = self.get_clock().now().to_msg()
@@ -137,6 +143,7 @@ class SafetySupervisor(Node):
         state.auto_permitted = auto_permitted
         state.manual_command_fresh = manual_fresh
         state.nav_command_fresh = nav_fresh
+        state.sbus_command_fresh = sbus_fresh
         state.inhibit_reason_codes = [code for code, _ in reasons]
         state.inhibit_reasons = [message for _, message in reasons]
         control_state, effective_source = derive_control_state(
@@ -145,6 +152,7 @@ class SafetySupervisor(Node):
             auto_permitted=auto_permitted,
             manual_command_fresh=manual_fresh,
             nav_command_fresh=nav_fresh,
+            sbus_command_fresh=sbus_fresh,
         )
         state.state = int(control_state)
         state.effective_source = int(effective_source)

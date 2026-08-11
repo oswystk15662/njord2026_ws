@@ -28,13 +28,16 @@ class CommandArbiter(Node):
         self._state: ControlState | None = None
         self._manual_command = Twist()
         self._nav_command = Twist()
+        self._sbus_command = Twist()
         self._manual_received_ns: int | None = None
         self._nav_received_ns: int | None = None
+        self._sbus_received_ns: int | None = None
         self._command_pub = self.create_publisher(Twist, "/cmd_vel", 10)
         self._control_status_pub = self.create_publisher(String, "/system/control_status", TRANSIENT_QOS)
         self.create_subscription(ControlState, "/control/state", self._on_state, TRANSIENT_QOS)
         self.create_subscription(Twist, "/cmd_vel_manual", self._on_manual, 10)
         self.create_subscription(Twist, "/cmd_vel_nav", self._on_nav, 10)
+        self.create_subscription(Twist, "/cmd_vel_sbus", self._on_sbus, 10)
         self.create_timer(self._publish_period_sec, self._publish_command)
 
     def _on_state(self, message: ControlState) -> None:
@@ -52,6 +55,10 @@ class CommandArbiter(Node):
         self._nav_command = message
         self._nav_received_ns = self.get_clock().now().nanoseconds
 
+    def _on_sbus(self, message: Twist) -> None:
+        self._sbus_command = message
+        self._sbus_received_ns = self.get_clock().now().nanoseconds
+
     def _fresh(self, received_ns: int | None) -> bool:
         return received_ns is not None and (self.get_clock().now().nanoseconds - received_ns) <= int(self._command_timeout_sec * 1e9)
 
@@ -65,11 +72,14 @@ class CommandArbiter(Node):
             auto_permitted=self._state.auto_permitted,
             manual_command_fresh=self._fresh(self._manual_received_ns),
             nav_command_fresh=self._fresh(self._nav_received_ns),
+            sbus_command_fresh=self._fresh(self._sbus_received_ns),
         )
         if source == Source.MANUAL:
             self._command_pub.publish(self._manual_command)
         elif source == Source.AUTO:
             self._command_pub.publish(self._nav_command)
+        elif source == Source.SBUS:
+            self._command_pub.publish(self._sbus_command)
         else:
             self._command_pub.publish(Twist())
 
