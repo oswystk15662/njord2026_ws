@@ -32,6 +32,14 @@ target_include_directories(sbus_joy_node PUBLIC
 )
 ament_target_dependencies(sbus_joy_node rclcpp sensor_msgs)
 
+add_executable(sbus_joy_converter_node src/sbus_joy_converter.cpp)
+target_compile_features(sbus_joy_converter_node PUBLIC cxx_std_17)
+target_include_directories(sbus_joy_converter_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(sbus_joy_converter_node rclcpp sensor_msgs geometry_msgs std_msgs)
+
 add_executable(command_arbiter_node src/command_arbiter.cpp)
 target_compile_features(command_arbiter_node PUBLIC cxx_std_17)
 ament_target_dependencies(command_arbiter_node rclcpp geometry_msgs std_msgs)
@@ -63,12 +71,18 @@ if(BUILD_TESTING)
   target_compile_definitions(test_sbus_joy PRIVATE main=sbus_joy_main)
   target_include_directories(test_sbus_joy PRIVATE include)
   ament_target_dependencies(test_sbus_joy rclcpp sensor_msgs)
+  ament_add_gtest(
+    test_sbus_joy_converter test/test_sbus_joy_converter.cpp src/sbus_joy_converter.cpp)
+  target_compile_definitions(test_sbus_joy_converter PRIVATE main=sbus_joy_converter_main)
+  target_include_directories(test_sbus_joy_converter PRIVATE include)
+  ament_target_dependencies(test_sbus_joy_converter rclcpp sensor_msgs geometry_msgs std_msgs)
 endif()
 
 install(TARGETS
   joy_converter_lib
   joy_converter_node
   sbus_joy_node
+  sbus_joy_converter_node
   command_arbiter_node
   ground_station_heartbeat_node
   thruster_id_test
