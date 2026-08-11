@@ -14,6 +14,7 @@
 #include <vector>
 
 #include "action_msgs/msg/goal_status_array.hpp"
+#include "geometry_msgs/msg/pose_with_covariance_stamped.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
@@ -57,6 +58,8 @@ public:
     const auto temperature_topic = declare_parameter<std::string>("temperature_topic", "/bms/temperature_c");
     const auto buoy_topic = declare_parameter<std::string>("buoy_topic", "/buoy_detections_3d");
     const auto fix_topic = declare_parameter<std::string>("fix_topic", "/sensor/vehicle_gnss/fix/raw");
+    const auto heading_topic = declare_parameter<std::string>(
+      "heading_topic", "/sensor/vehicle_gnss/compass/raw");
     const auto odometry_topic = declare_parameter<std::string>("odometry_topic", "/odometry/filtered/global");
     const auto plan_topic = declare_parameter<std::string>("plan_topic", "/plan");
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
@@ -76,6 +79,10 @@ public:
       [this](njord_interfaces::msg::BuoyDetectionArray::SharedPtr msg) {onBuoys(*msg);});
     fix_sub_ = create_subscription<sensor_msgs::msg::NavSatFix>(fix_topic, 10,
       [this](sensor_msgs::msg::NavSatFix::SharedPtr msg) {fix_ = *msg;});
+    heading_sub_ = create_subscription<geometry_msgs::msg::PoseWithCovarianceStamped>(
+      heading_topic, 10, [this](geometry_msgs::msg::PoseWithCovarianceStamped::SharedPtr msg) {
+        heading_orientation_ = msg->pose.pose.orientation;
+      });
     odometry_sub_ = create_subscription<nav_msgs::msg::Odometry>(odometry_topic, 10,
       [this](nav_msgs::msg::Odometry::SharedPtr msg) {odometry_ = *msg;});
     plan_sub_ = create_subscription<nav_msgs::msg::Path>(plan_topic, 10,
@@ -211,10 +218,11 @@ private:
 
   std::optional<double> headingDegrees() const
   {
-    if (!odometry_) {
+    const auto orientation = heading_orientation_ ? *heading_orientation_ :
+      odometry_ ? odometry_->pose.pose.orientation : geometry_msgs::msg::Quaternion{};
+    if (!heading_orientation_ && !odometry_) {
       return std::nullopt;
     }
-    const auto & orientation = odometry_->pose.pose.orientation;
     const double sin_yaw = 2.0 * (orientation.w * orientation.z + orientation.x * orientation.y);
     const double cos_yaw = 1.0 - 2.0 * (orientation.y * orientation.y + orientation.z * orientation.z);
     const double yaw_degrees = std::atan2(sin_yaw, cos_yaw) * 180.0 / kPi;
@@ -359,6 +367,7 @@ private:
   std::optional<std::vector<float>> cells_;
   std::optional<float> temperature_c_;
   std::optional<sensor_msgs::msg::NavSatFix> fix_;
+  std::optional<geometry_msgs::msg::Quaternion> heading_orientation_;
   std::optional<nav_msgs::msg::Odometry> odometry_;
   std::optional<nav_msgs::msg::Path> plan_;
   std::optional<float> ground_speed_mps_;
@@ -371,6 +380,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr temperature_sub_;
   rclcpp::Subscription<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr buoy_sub_;
   rclcpp::Subscription<sensor_msgs::msg::NavSatFix>::SharedPtr fix_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;

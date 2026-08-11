@@ -10,6 +10,7 @@ def generate_launch_description():
         'temperature_topic': '/bms/temperature_c',
         'buoy_topic': '/buoy_detections_3d',
         'fix_topic': '/sensor/vehicle_gnss/fix/raw',
+        'heading_topic': '/sensor/vehicle_gnss/compass/raw',
         'odometry_topic': '/odometry/filtered/global',
         'plan_topic': '/plan',
         'ground_speed_topic': '/gui/ground_speed_mps',
