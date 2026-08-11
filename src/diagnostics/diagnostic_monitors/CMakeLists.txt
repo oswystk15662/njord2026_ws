@@ -104,6 +104,7 @@ ament_target_dependencies(autonomy_supervisor_node
   diagnostic_updater
   nav2_msgs
   nav_msgs
+  njord_interfaces
   rclcpp
   rclcpp_action
   std_msgs

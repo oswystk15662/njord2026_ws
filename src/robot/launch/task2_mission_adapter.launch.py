@@ -36,21 +36,10 @@ def generate_launch_description():
             "goal_reached_topic": "/mission/task2/goal_reached",
         }],
     )
-    ready = Node(
-        package="asv_trajectory_planner",
-        executable="task2_autonomy_ready_node",
-        name="task2_autonomy_ready",
-        output="screen",
-        parameters=[{
-            "path_topic": "/planned_path_pruned",
-            "action_name": "/follow_path",
-            "path_timeout_sec": 2.0,
-        }],
-    )
     readiness = Node(
         package="mission_manager",
         executable="task2_readiness_adapter_node",
         name="task2_readiness_adapter",
         output="screen",
     )
-    return LaunchDescription([waypoint_pose, follow_path, ready, readiness])
+    return LaunchDescription([waypoint_pose, follow_path, readiness])

@@ -236,6 +236,8 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     runtime_source = _read_launch_source("task_runtime.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
     adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
+    supervisor_source = (Path(_LAUNCH_DIR).parents[1] / "diagnostics" /
+                         "diagnostic_monitors" / "src" / "autonomy_supervisor.cpp").read_text()
     task2_params = (Path(_LAUNCH_DIR).parents[0] / "config" /
                     "nav2_params_task2_humble.yaml").read_text()
 
@@ -245,7 +247,10 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "' == 'task2'" in minipc_source
     assert "' != 'task2'" in minipc_source
     assert 'executable="autonomy_supervisor_node"' in minipc_source
-    assert '"task2_autonomy_ready_node"' in adapter_source
+    assert '"task2_autonomy_ready_node"' not in adapter_source
+    assert '"/runtime/nav2/status"' in supervisor_source
+    assert 'active_profile_ == "task2"' in supervisor_source
+    assert '"/planned_path_pruned"' in supervisor_source
     assert '"task2_readiness_adapter_node"' in adapter_source
     assert '"follow_path_client_node"' in adapter_source
     assert '"mission_gate_required": True' in adapter_source
