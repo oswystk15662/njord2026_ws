@@ -11,6 +11,7 @@ from pathlib import Path
 
 import rclpy
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
@@ -64,7 +65,8 @@ class RuntimeManager(Node):
         if not process:
             self._process = None
             return
-        self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
+        if rclpy.ok():
+            self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
         # The launch parent can exit before one of its lifecycle-managed
         # children.  The process group remains valid in that case, so do not
         # merely clear the record based on ``process.poll()``: terminate the
@@ -242,7 +244,7 @@ def main():
     node = RuntimeManager()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.shutdown()
