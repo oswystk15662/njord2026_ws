@@ -134,13 +134,7 @@ def generate_launch_description():
             "enable_glim": "false",
             "enable_local_ekf": use_ekf_local,
             "enable_global_ekf": use_ekf_global,
-            "enable_navsat_transform": PythonExpression(
-                [
-                    "'false' if '",
-                    enable_um982_glim_imu_fusion,
-                    "'.lower() in ('true', '1', 'yes', 'on') else 'true'",
-                ]
-            ),
+            "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
             "use_glim_fb": use_glim_fb,
             "use_sim_time": use_sim_time,
@@ -733,7 +727,7 @@ def generate_launch_description():
                 "enable_um982_glim_imu_fusion",
                 default_value="true",
                 description="Fuse UM982 feedback, Jetson GLIM /odom, and /livox/imu in the "
-                "sole odom->base_link EKF; disables navsat_transform.",
+                "sole odom->base_link EKF; navsat_transform remains available for /fromLL.",
             ),
             DeclareLaunchArgument(
                 "um982_glim_imu_ekf_start_delay_sec",

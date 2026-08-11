@@ -375,11 +375,11 @@ def test_minipc_video_and_glim_feedback_defaults_are_safe():
     assert 'default_value="false"' in source
 
 
-def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_without_navsat():
+def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_with_navsat_projection():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert '"enable_um982_glim_imu_fusion",\n                default_value="true"' in source
     assert '"um982_glim_imu_ekf_start_delay_sec",\n                default_value="30.0"' in source
-    assert '"enable_navsat_transform": PythonExpression(' in source
+    assert '"enable_navsat_transform": "true"' in source
 
     config_path = os.path.normpath(
         os.path.join(
