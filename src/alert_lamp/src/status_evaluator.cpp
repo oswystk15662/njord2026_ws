@@ -50,7 +50,7 @@ LampDisplay StatusEvaluator::displayFor(
     case AlertState::MANUAL_NORMAL:
       return {LampColor::YELLOW, LampPattern::SOLID, 0.0F, duty_ratio, "manual mode normal"};
     case AlertState::AUTO_NORMAL:
-      return {LampColor::GREEN, LampPattern::BLINK, green_period, duty_ratio,
+      return {LampColor::GREEN, LampPattern::SOLID, 0.0F, duty_ratio,
         "automatic mode normal"};
     case AlertState::AUTONOMY_NOT_READY:
       return {LampColor::GREEN_YELLOW, LampPattern::BLINK, green_period, duty_ratio,

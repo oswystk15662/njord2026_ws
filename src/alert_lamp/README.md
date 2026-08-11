@@ -33,7 +33,7 @@ critical/initializing state until they are available.
 | --- | --- |
 | `INITIALIZING` / `CRITICAL_FAULT` | red blink, 0.05 s |
 | `MANUAL_NORMAL` | yellow solid |
-| `AUTO_NORMAL` | green blink, 0.1 s |
+| `AUTO_NORMAL` | green solid |
 | `AUTONOMY_NOT_READY` | green and yellow blink together, 0.1 s |
 | `GROUND_COMMUNICATION_LOST` in AUTO | green and red solid |
 | `GROUND_COMMUNICATION_LOST` in MANUAL | yellow and red solid |

@@ -92,7 +92,7 @@ AlertLampManager::AlertLampManager(const rclcpp::NodeOptions & options)
     "manual_normal", {LampColor::YELLOW, LampPattern::SOLID, 0.0F, 0.5F,
       "manual mode normal"});
   auto_normal_display_ = loadDisplay(
-    "auto_normal", {LampColor::GREEN, LampPattern::BLINK, 1.0F, 0.5F,
+    "auto_normal", {LampColor::GREEN, LampPattern::SOLID, 0.0F, 0.5F,
       "automatic mode normal"});
   autonomy_not_ready_display_ = loadDisplay(
     "autonomy_not_ready",

@@ -2,13 +2,13 @@
 
 #include "alert_lamp/status_evaluator.hpp"
 
-TEST(AlertLampCommandMapping, AutoNormalBlinkTiming)
+TEST(AlertLampCommandMapping, AutoNormalIsGreenSolid)
 {
   const auto display = alert_lamp::StatusEvaluator().displayFor(alert_lamp::AlertState::AUTO_NORMAL,
     0.1F, 0.1F, 0.05F, 0.5F, {});
   EXPECT_EQ(display.color, alert_lamp::LampColor::GREEN);
-  EXPECT_EQ(display.pattern, alert_lamp::LampPattern::BLINK);
-  EXPECT_FLOAT_EQ(display.period, 0.1F);
+  EXPECT_EQ(display.pattern, alert_lamp::LampPattern::SOLID);
+  EXPECT_FLOAT_EQ(display.period, 0.0F);
   EXPECT_FLOAT_EQ(display.duty_ratio, 0.5F);
   EXPECT_FALSE(display.reason.empty());
 }

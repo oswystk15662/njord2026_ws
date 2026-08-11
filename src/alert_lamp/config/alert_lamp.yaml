@@ -43,9 +43,7 @@ alert_lamp_manager_node:
         reason: "manual mode normal"
       auto_normal:
         color: green
-        mode: blink
-        period_sec: 1.0
-        duty_ratio: 0.5
+        mode: solid
         reason: "automatic mode normal"
       autonomy_not_ready:
         color: green_yellow
