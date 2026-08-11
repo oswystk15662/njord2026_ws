@@ -6,17 +6,21 @@
 
 ## 1. 事前準備
 
-実機の起動構成で、`foxglove_logger` が次のトピックをpublishしていることを確認します。
+実機の起動構成で、次のトピックがpublishされていることを確認します。
 
 | 表示項目 | トピック | 型 |
 | --- | --- | --- |
-| 緯度・経度・対地速度・船体方位 | `/foxglove_log` | `rcl_interfaces/msg/Log` |
+| 緯度・経度 | `/sensor/vehicle_gnss/fix/raw` | `sensor_msgs/msg/NavSatFix` |
+| 対地速度 | `/gui/ground_speed_mps` | `std_msgs/msg/Float32` |
+| 船体の向き | `/tf`, `/tf_static` | `tf2_msgs/msg/TFMessage` |
 
-`foxglove_logger` はGNSS、速度、方位を収集して、`NAV LAT/LON`、`SOG`、`HDG`として
-`/foxglove_log` に集約します。
+`/gui/ground_speed_mps` は、このワークスペースの
+`ground_speed_publisher` が `/odometry/feedback` の東西・南北速度から算出します。
 
 ```bash
-ros2 topic echo /foxglove_log --once
+ros2 topic echo /sensor/vehicle_gnss/fix/raw --once
+ros2 topic echo /gui/ground_speed_mps --once
+ros2 run tf2_ros tf2_echo map base_link
 ```
 
 ## 2. Foxglove拡張を導入する
@@ -24,7 +28,7 @@ ros2 topic echo /foxglove_log --once
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。
 
 ```text
-src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.2.3.foxe
+src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.3.0.foxe
 ```
 
 Foxgloveの Settings > Extensions に **GNSS Map Telemetry** が表示され、有効になっていることを確認してください。
@@ -36,19 +40,20 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 
 読み込み後、左側下段の **GNSS Course (Map)** は次を表示します。
 
-- OpenStreetMap地図と、`/foxglove_log` の `HDG` が示す現在位置の矢印
+- OpenStreetMap地図と、`base_link` +X方向を示す現在位置の矢印
 - 右上の `VESSEL TELEMETRY` 凡例
   - `LAT`: 緯度
   - `LON`: 経度
   - `HDG`: `base_link` +Xの地理方位（北0度、時計回り）
   - `SOG`: 対地速度（m/s）
 
-最初の有効なGNSS位置を受信したときだけ地図を中央合わせします。その後は船が移動しても
-地図中心とzoomを変更しません。マウスホイールで拡大縮小、ドラッグで自由に移動できます。
+最初の有効なGNSS位置を受信したときに地図を中央合わせします。WP確認用launchでGNSSを
+起動していない場合は、`/ground_waypoint_markers` のWP群に中央合わせします。その後は船が
+移動しても地図中心とzoomを変更しません。マウスホイールで拡大縮小、ドラッグで自由に移動できます。
 
 ## トラブルシューティング
 
-- `--` と表示される: `/foxglove_log` が未publish、または `NAV LAT/LON`、`SOG`、`HDG` を含むログが未出力です。
-- 位置が円で表示され、`HDG --` になる: `/foxglove_log` の `HDG` 値を確認してください。
+- `--` と表示される: 対応トピックが未publish、またはトピック名が異なります。
+- 位置が円で表示され、`HDG --` になる: `map` から `base_link` までのTF chainを確認してください。
 - 地図が表示されない: OpenStreetMapのタイルを使うため、表示PCからインターネットへ接続できるか確認してください。
 - パネルが見つからない: `.foxe` を先に導入してからレイアウトをimportし、Foxgloveを再起動してください。
