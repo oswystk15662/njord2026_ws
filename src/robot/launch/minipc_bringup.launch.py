@@ -595,15 +595,14 @@ def generate_launch_description():
             DeclareLaunchArgument("zed2i_h264_ground_video_height", default_value="240"),
             DeclareLaunchArgument(
                 "enable_back_cam_ground_video",
-                default_value="false",
+                default_value="true",
                 description="Use the miniPC VA-API H.264/H.265 back-camera stream. "
                 "An empty host leaves the stream inactive.",
             ),
             DeclareLaunchArgument(
                 "back_cam_ground_video_host",
-                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
-                description="Ground-station IPv4 address or Avahi .local hostname for "
-                "the back-camera stream.",
+                default_value="10.42.0.1",
+                description="Ground-station IPv4 address on the direct miniPC link.",
             ),
             DeclareLaunchArgument("back_cam_ground_video_port", default_value="5601"),
             DeclareLaunchArgument(
@@ -620,7 +619,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "back_cam_jpeg_ground_video_host",
-                default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
+                default_value="10.42.0.1",
             ),
             DeclareLaunchArgument(
                 "back_cam_jpeg_ground_video_port", default_value="5602"

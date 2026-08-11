@@ -135,6 +135,13 @@ def test_minipc_bringup_keeps_h26x_and_jpeg_back_camera_paths_separate():
     ) in source
 
 
+def test_minipc_back_camera_h26x_defaults_use_the_ground_direct_link():
+    source = _read_launch_source("minipc_bringup.launch.py")
+
+    assert '"enable_back_cam_ground_video",\n                default_value="true"' in source
+    assert source.count('default_value="10.42.0.1"') == 2
+
+
 def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
     source = _read_launch_source("ground_pc.launch.py")
 

@@ -55,7 +55,7 @@ collision-monitorの実機sourceとdynamic gate TFを検証するまでregistry�
 | `/zed2i/depth/image` | 32FC1 1280x720 @15 | 約 442 Mbps |
 | `/zed2i/points` | PointCloud2 | 数 Gbps（既定で publish 無効） |
 
-Ground PCで映像を見る場合はDDSではなく既存のRTP/UDP経路を使う。前方はJetsonのJPEG、後方はminiPCのH.264/H.265で、既定送信先はGround PCのAvahi名`osw-Stealth-14-AI-Studio-A1VGG.local`、映像サイズとレートはどちらも480x360 @ 4 fpsである。
+Ground PCで映像を見る場合はDDSではなく既存のRTP/UDP経路を使う。前方はJetsonのJPEG、後方はminiPCのH.264/H.265で、back_camの既定送信先はZenohと同じ直結リンク上のGround PC `10.42.0.1`である。
 起動順序(受信側を先に起動)・再ビルド必須・ポート二重起動禁止・実測レートといった手順の詳細は
 最上位 `README.md` と `src/driver/camera/zed2i_driver/README.md` の
 「陸上映像伝送(ground video)の正しい起動手順」を参照。
