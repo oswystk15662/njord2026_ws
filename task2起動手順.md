@@ -14,6 +14,47 @@ Task 2 は 3 台で分担して起動する。
 
 以下のコマンド中の `/home/hashilab/Desktop/njord2026_ws` は各端末のワークスペースのパスに読み替える。
 
+## 新しいターミナルを開いたとき
+
+新しいターミナルにはROSやワークスペースの設定は引き継がれない。**ビルドは不要**だが、`ros2` コマンド、launch、topic確認、ダミーGNSSのどれを実行する場合も、最初にその端末の役割に対応する次の設定を行う。
+
+3台で同じ `ROS_DOMAIN_ID` と `NJORD_RMW` を使う。以下では `ROS_DOMAIN_ID=0` を例にしているため、運用で決めた値が別の場合は3台とも同じ値に置き換える。
+
+Jetson（Jazzy）:
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
+export NJORD_PROFILE=jetson NJORD_ROLE=jetson
+source scripts/njord_env.sh
+source install/setup.bash
+```
+
+miniPC（Humble）:
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
+source install/setup.bash
+```
+
+Ground PC（Humble）:
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
+export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+source scripts/njord_env.sh
+source install/setup.bash
+```
+
+この設定が終わった同じターミナルで、以降に示す `ros2 launch`、`ros2 topic echo`、`njord-task` のいずれかを実行する。別のターミナルを開いた場合も、目的に合う上のブロックを再実行する。
+
 ## ビルド方法
 
 `scripts/njord_env.sh` は端末のプロファイルを設定し、GPUがない端末ではGPU専用パッケージをビルド対象から外す。**各端末でビルド前に必ず source する。** 実行後の表示で、Jetson は `NJORD_PROFILE=jetson`、miniPC/Ground PC は `NJORD_PROFILE=minipc` と `NJORD_ENABLE_GPU_SENSORS=<unset>` であることを確認する。
@@ -72,7 +113,7 @@ Jetson で Livox と ZED を接続してから実行する。`enable_task2_auton
 
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
-source /opt/ros/humble/setup.bash
+source /opt/ros/jazzy/setup.bash
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
 source install/setup.bash
@@ -159,7 +200,11 @@ ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task2 enable_um9
 別ターミナルで、ダミーGNSSをUM982と同じ `/sensor/vehicle_gnss/fix/raw` へ出す。方位 `/sensor/vehicle_gnss/compass/raw` も同時に出力される。Jetson のGLIMから `/odom` が届くまでメッセージは出ないため、先に `/odom` を確認する。
 
 ```bash
+cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
 source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
 ros2 topic echo /odom --once
 ```
@@ -167,7 +212,11 @@ ros2 topic echo /odom --once
 次の `gps_origin_lat` と `gps_origin_lon` は、屋内確認で地図に表示したい基準位置へ変更する。Task 2 のWPと重ねて確認する場合は、Task 2 水域に近い座標を指定する。
 
 ```bash
+cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
+export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
 source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
 ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
   -r /gps/fix:=/sensor/vehicle_gnss/fix/raw \
