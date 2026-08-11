@@ -33,8 +33,8 @@ class TrajectoryGenerator:
         avoid_radius: float = 2.0,
         avoid_offset: float = 3.0,
         other_twist_is_relative: bool = True,
-        opponent_use_distance_m: float = 20.0,
-        opponent_passed_margin_m: float = 2.0,
+        opponent_corridor_margin_m: float = 5.0,
+        opponent_corridor_half_width_m: float = 20.0,
         fixed_opponent_speed_mps: float = 2.5 * 1852.0 / 3600.0,
         reconnect_line_distance_m: float = 1.0,
         reconnect_ahead_length_m: float = 8.0,
@@ -46,8 +46,11 @@ class TrajectoryGenerator:
         self.frame_id = frame_id
         self.other_twist_is_relative = other_twist_is_relative
 
-        self.opponent_use_distance_m = float(opponent_use_distance_m)
-        self.opponent_passed_margin_m = float(opponent_passed_margin_m)
+        self.opponent_corridor_margin_m = float(opponent_corridor_margin_m)
+        self.opponent_corridor_half_width_m = float(opponent_corridor_half_width_m)
+        if self.opponent_corridor_margin_m < 0.0 or \
+                self.opponent_corridor_half_width_m <= 0.0:
+            raise ValueError("Opponent corridor dimensions must be positive")
         self.fixed_opponent_speed_mps = float(fixed_opponent_speed_mps)
         if self.fixed_opponent_speed_mps <= 0.0:
             raise ValueError("fixed_opponent_speed_mps must be positive")
@@ -464,11 +467,6 @@ class TrajectoryGenerator:
         other_x_base = other_transform.translation.x
         other_y_base = other_transform.translation.y
 
-        distance = math.hypot(other_x_base, other_y_base)
-
-        if distance > self.opponent_use_distance_m:
-            return False
-
         other_x_map, other_y_map = self._base_link_to_map(
             x_b=other_x_base,
             y_b=other_y_base,
@@ -487,21 +485,21 @@ class TrajectoryGenerator:
         route_len = math.hypot(route_dx, route_dy)
 
         if route_len < 1e-6:
-            return True
+            return False
 
         ex = route_dx / route_len
         ey = route_dy / route_len
 
-        own_s = (own_map_x - wp1_x) * ex + (own_map_y - wp1_y) * ey
+        other_lateral = -(other_x_map - wp1_x) * ey + \
+            (other_y_map - wp1_y) * ex
         other_s = (other_x_map - wp1_x) * ex + (other_y_map - wp1_y) * ey
 
-        # 自船が航路方向で他船より前に出たら通過後
-        passed = own_s > other_s + self.opponent_passed_margin_m
-
-        if passed:
-            return False
-
-        return True
+        # Task 2 recognizes an avoidance opponent only inside the rectangle
+        # around the GPS5 -> GPS6 route: 5 m before/after its endpoints and
+        # 20 m on either side of the route centreline.
+        return (-self.opponent_corridor_margin_m <= other_s <=
+                route_len + self.opponent_corridor_margin_m and
+                abs(other_lateral) <= self.opponent_corridor_half_width_m)
 
     # ============================================================
     # State conversion
