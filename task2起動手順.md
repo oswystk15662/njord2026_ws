@@ -220,8 +220,8 @@ source scripts/njord_env.sh
 source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
 ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
   -r /gps/fix:=/sensor/vehicle_gnss/fix/raw \
-  -p gps_origin_lat:=63.4417000 \
-  -p gps_origin_lon:=10.4230000 \
+  -p gps_origin_lat:=63.4408000 \
+  -p gps_origin_lon:=10.4233194444 \
   -p gps_origin_alt:=0.0
 ```
 
