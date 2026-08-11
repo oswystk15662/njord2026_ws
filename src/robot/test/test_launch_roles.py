@@ -398,6 +398,7 @@ def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_with_navsat_projection
     assert params["odom0"] == "odometry/feedback"
     assert params["odom1"] == "/odom"
     assert params["odom1_relative"] is True
+    assert params["odom1_config"][5] is False
     assert params["imu0"] == "/livox/imu"
     assert params["publish_tf"] is True
 

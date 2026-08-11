@@ -22,11 +22,12 @@ um982_feedback_ekf:
     odom0_relative: false
     odom0_queue_size: 10
 
-    # GLIM is initialized independently on the Jetson.  Treat its first pose
-    # as this EKF's local origin, then fuse its planar motion.
+    # GLIM is initialized independently on the Jetson. Treat its first pose
+    # as this EKF's local origin and fuse planar motion, but keep yaw from
+    # the UM982's absolute dual-antenna heading.
     odom1: /odom
     odom1_config: [true, true, false,
-                   false, false, true,
+                   false, false, false,
                    true, true, false,
                    false, false, true,
                    false, false, false]
