@@ -36,7 +36,7 @@ ros2 launch robot ground_pc.launch.py
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。
 
 ```text
-src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.2.0.foxe
+src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.3.2.foxe
 ```
 
 Foxgloveの Settings > Extensions に **GNSS Map Telemetry** が表示され、有効になっていることを確認してください。
@@ -48,7 +48,7 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 
 読み込み後、左側下段の **GNSS Course (Map)** は次を表示します。
 
-- OpenStreetMap地図と、`base_link` +X方向を示す現在位置の矢印
+- OpenStreetMap地図と、`base_link` +X方向を示す現在位置の船体アイコン（`SELF` ラベル付き）
 - 右上の `VESSEL TELEMETRY` 凡例
   - `LAT`: 緯度
   - `LON`: 経度

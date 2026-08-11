@@ -16,9 +16,10 @@ after the operator starts a task; it shows no stale WPs while idle.
 
 Each waypoint dot contains its route order; a short cyan leader directly joins
 the dot to its competition label. A dashed cyan line connects the route in that
-order. The legend identifies the Mission
+order. The vessel's current GNSS position is marked with a catamaran icon and a
+`SELF` label. The legend identifies the Mission
 Manager-selected task. Install
-[gnss-map-telemetry-0.3.1.foxe](gnss-map-telemetry-0.3.1.foxe) by dragging it
+[gnss-map-telemetry-0.3.2.foxe](gnss-map-telemetry-0.3.2.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
 The catamaran's bright cyan bow and darker stern point along the `base_link` +X
