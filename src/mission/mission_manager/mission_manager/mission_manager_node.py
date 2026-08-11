@@ -188,6 +188,7 @@ class MissionManager(Node):
         self.declare_parameter("coordinate_projection_timeout_sec", 30.0)
         self.declare_parameter("coordinate_projection_retry_sec", 0.5)
         self.declare_parameter("coordinate_projection_request_interval_sec", 0.5)
+        self.declare_parameter("coordinate_projection_request_timeout_sec", 5.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -581,6 +582,7 @@ class MissionManager(Node):
             "projected": [],
             "next_index": 0,
             "attempts": 1,
+            "request_serial": 0,
         }
         timeout_sec = max(0.0, float(
             self.get_parameter("coordinate_projection_timeout_sec").value
@@ -625,13 +627,26 @@ class MissionManager(Node):
         projection_request.ll_point = GeoPoint(
             latitude=point.latitude, longitude=point.longitude, altitude=point.altitude
         )
+        # The Humble /fromLL service can lose an individual DDS response
+        # while remaining available for the next request.  Associate every
+        # request with a serial so a late reply from a timed-out attempt is
+        # ignored rather than being appended as a duplicate waypoint.
+        pending["request_serial"] += 1
+        request_serial = pending["request_serial"]
+        pending["request_started_ns"] = self.get_clock().now().nanoseconds
         future = self._from_ll_client.call_async(projection_request)
-        future.add_done_callback(self._finish_coordinate_projection)
+        future.add_done_callback(
+            lambda result, serial=request_serial: self._finish_coordinate_projection(result, serial)
+        )
 
-    def _finish_coordinate_projection(self, future) -> None:
+    def _finish_coordinate_projection(self, future, request_serial: int) -> None:
         with self._lock:
             pending = self._pending_coordinate_projection
-            if pending is None or not self._machine.is_current(pending["execution_id"]):
+            if (
+                pending is None
+                or request_serial != pending["request_serial"]
+                or not self._machine.is_current(pending["execution_id"])
+            ):
                 return
             try:
                 response = future.result()
@@ -647,6 +662,7 @@ class MissionManager(Node):
                     f"map projection for waypoint coordinates failed: {exc}",
                 )
                 return
+            pending.pop("request_started_ns", None)
             pending["next_index"] += 1
             self._machine.update_progress(
                 pending["execution_id"], "project_waypoints",
@@ -905,6 +921,21 @@ class MissionManager(Node):
                     f"{float(self.get_parameter('coordinate_projection_timeout_sec').value):g} seconds",
                 )
                 snapshot = self._machine.snapshot
+            elif (
+                pending_projection is not None
+                and "request_started_ns" in pending_projection
+                and self.get_clock().now().nanoseconds - pending_projection["request_started_ns"]
+                >= int(max(0.1, float(
+                    self.get_parameter("coordinate_projection_request_timeout_sec").value
+                )) * 1e9)
+            ):
+                self._machine.update_progress(
+                    pending_projection["execution_id"], "project_waypoints",
+                    pending_projection["next_index"] / len(pending_projection["points"]),
+                    f"map projection request {pending_projection['next_index'] + 1}/"
+                    f"{len(pending_projection['points'])} timed out; retrying",
+                )
+                self._request_next_coordinate_projection()
             elif (
                 pending_projection is not None
                 and "retry_after_ns" in pending_projection
