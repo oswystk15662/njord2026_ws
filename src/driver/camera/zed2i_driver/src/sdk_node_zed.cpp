@@ -23,6 +23,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <memory>
 #include <limits>
@@ -623,6 +624,10 @@ private:
                 static_cast<float>(depth_min_m_), static_cast<float>(depth_max_m_),
                 min_valid_depth_samples_, nullptr);
               if (std::isfinite(depth)) {
+                RCLCPP_INFO_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Buoy detected: class=%d confidence=%.2f ZED depth=%.2f m",
+                  detection.class_id, detection.confidence, depth);
                 geometry_msgs::msg::PointStamped camera_point;
                 camera_point.header.stamp = stamp;
                 camera_point.header.frame_id = left_frame_id_;
@@ -647,6 +652,11 @@ private:
                     "Skipping buoy position: %s -> %s TF unavailable: %s",
                     left_frame_id_.c_str(), output_frame_.c_str(), error.what());
                 }
+              } else {
+                RCLCPP_WARN_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Buoy detected: class=%d confidence=%.2f ZED depth unavailable",
+                  detection.class_id, detection.confidence);
               }
               if (item.source == PositionSource::kNone) {
                 if (const auto fallback = lidar_fallback_position(detection, stamp)) {
