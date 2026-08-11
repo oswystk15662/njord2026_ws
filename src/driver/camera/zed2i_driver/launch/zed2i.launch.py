@@ -60,6 +60,7 @@ def launch_setup(context, *args, **kwargs):
                             "ground_video_jpeg_quality": LaunchConfiguration("ground_video_jpeg_quality"),
                             "ground_video_max_pending_frames": LaunchConfiguration("ground_video_max_pending_frames"),
                             "ground_video_mtu": LaunchConfiguration("ground_video_mtu"),
+                            "ground_video_draw_detections": LaunchConfiguration("ground_video_draw_detections"),
                         },
                     ],
                     extra_arguments=[{"use_intra_process_comms": True}],
@@ -123,6 +124,10 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_jpeg_quality", default_value="70"),
             DeclareLaunchArgument("ground_video_max_pending_frames", default_value="1"),
             DeclareLaunchArgument("ground_video_mtu", default_value="1200"),
+            DeclareLaunchArgument(
+                "ground_video_draw_detections", default_value="false",
+                description="Overlay TensorRT YOLO bounding boxes on the ground video.",
+            ),
             OpaqueFunction(function=launch_setup),
         ]
     )

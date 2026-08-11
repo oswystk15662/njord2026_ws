@@ -435,6 +435,7 @@ def test_jetson_heavy_features_and_startup_are_opt_in_or_staggered():
     assert '"enable_glim",\n                default_value="false"' in source
     assert '"enable_pcl_buoy_detection",\n                default_value="false"' in source
     assert '"enable_ground_video", default_value="true"' in source
+    assert '"ground_video_draw_detections",\n                default_value="true"' in source
     assert '"camera_start_delay",\n                default_value="5.0"' in source
 
 

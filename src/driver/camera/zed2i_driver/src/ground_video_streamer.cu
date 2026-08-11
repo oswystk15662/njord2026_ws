@@ -70,7 +70,8 @@ __device__ void load_resized_bgr(
 
 __global__ void resize_bgra_to_i420(
   const std::uint8_t * source, std::size_t source_pitch, int source_width, int source_height,
-  std::uint8_t * destination, int destination_width, int destination_height)
+  std::uint8_t * destination, int destination_width, int destination_height,
+  const GroundVideoBox * boxes, int box_count)
 {
   const int x = blockIdx.x * blockDim.x + threadIdx.x;
   const int y = blockIdx.y * blockDim.y + threadIdx.y;
@@ -83,6 +84,21 @@ __global__ void resize_bgra_to_i420(
   load_resized_bgr(
     source, source_pitch, source_width, source_height,
     destination_width, destination_height, x, y, b, g, r);
+  for (int i = 0; i < box_count; ++i) {
+    const auto & box = boxes[i];
+    const int x1 = static_cast<int>(box.x1 * destination_width / source_width);
+    const int x2 = static_cast<int>(box.x2 * destination_width / source_width);
+    const int y1 = static_cast<int>(box.y1 * destination_height / source_height);
+    const int y2 = static_cast<int>(box.y2 * destination_height / source_height);
+    if (x >= x1 && x <= x2 && y >= y1 && y <= y2 &&
+      (x - x1 < 2 || x2 - x < 2 || y - y1 < 2 || y2 - y < 2))
+    {
+      b = 0;
+      g = 255;
+      r = 0;
+      break;
+    }
+  }
   destination[static_cast<std::size_t>(y) * destination_width + x] =
     clamp_byte(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
 
@@ -132,6 +148,7 @@ public:
       for (auto & slot : slots_) {
         check_cuda(cudaMalloc(&slot.bgra, max_bgra_bytes()), "cudaMalloc BGRA slot");
         check_cuda(cudaMalloc(&slot.i420, i420_bytes()), "cudaMalloc I420 slot");
+        check_cuda(cudaMalloc(&slot.boxes, sizeof(GroundVideoBox) * 32), "cudaMalloc box slot");
         check_cuda(cudaMallocHost(&slot.host, i420_bytes()), "cudaMallocHost I420 slot");
         check_cuda(cudaEventCreateWithFlags(&slot.ready, cudaEventDisableTiming), "cudaEventCreateWithFlags");
       }
@@ -157,7 +174,9 @@ public:
     release_cuda();
   }
 
-  void submit(const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height)
+  void submit(
+    const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height,
+    const std::vector<GroundVideoBox> & boxes)
   {
     if (bgra_device == nullptr || width != config_.source_width || height != config_.source_height) {
       return;
@@ -190,6 +209,12 @@ public:
           slot->bgra, static_cast<std::size_t>(width) * 4, bgra_device, bgra_pitch,
           static_cast<std::size_t>(width) * 4, static_cast<std::size_t>(height),
           cudaMemcpyDeviceToDevice, stream_), "cudaMemcpy2DAsync stream slot");
+      slot->box_count = std::min(boxes.size(), static_cast<std::size_t>(32));
+      if (slot->box_count > 0) {
+        check_cuda(cudaMemcpyAsync(
+            slot->boxes, boxes.data(), slot->box_count * sizeof(GroundVideoBox),
+            cudaMemcpyHostToDevice, stream_), "cudaMemcpyAsync boxes");
+      }
       check_cuda(cudaEventRecord(slot->ready, stream_), "cudaEventRecord stream slot");
     } catch (const std::exception &) {
       failed_ = true;
@@ -210,6 +235,8 @@ private:
   {
     std::uint8_t * bgra{nullptr};
     std::uint8_t * i420{nullptr};
+    GroundVideoBox * boxes{nullptr};
+    std::size_t box_count{};
     std::uint8_t * host{nullptr};
     cudaEvent_t ready{nullptr};
     int source_width{};
@@ -339,7 +366,7 @@ private:
       static_cast<unsigned int>((config_.height + threads.y - 1) / threads.y));
     resize_bgra_to_i420<<<blocks, threads, 0, stream_>>>(
       slot.bgra, static_cast<std::size_t>(slot.source_width) * 4, slot.source_width, slot.source_height,
-      slot.i420, config_.width, config_.height);
+      slot.i420, config_.width, config_.height, slot.boxes, static_cast<int>(slot.box_count));
     check_cuda(cudaGetLastError(), "resize_bgra_to_i420");
     // JPEG encoding itself happens downstream in the GStreamer pipeline
     // (nvvidconv -> nvjpegenc), because libnvjpeg is broken on this device
@@ -390,6 +417,7 @@ private:
       if (slot.ready != nullptr) {cudaEventDestroy(slot.ready);}
       if (slot.host != nullptr) {cudaFreeHost(slot.host);}
       if (slot.i420 != nullptr) {cudaFree(slot.i420);}
+      if (slot.boxes != nullptr) {cudaFree(slot.boxes);}
       if (slot.bgra != nullptr) {cudaFree(slot.bgra);}
     }
     if (stream_ != nullptr) {cudaStreamDestroy(stream_);}
@@ -423,9 +451,10 @@ GroundVideoStreamer::GroundVideoStreamer(const GroundVideoConfig & config)
 GroundVideoStreamer::~GroundVideoStreamer() = default;
 
 void GroundVideoStreamer::submit(
-  const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height)
+  const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height,
+  const std::vector<GroundVideoBox> & boxes)
 {
-  impl_->submit(bgra_device, bgra_pitch, width, height);
+  impl_->submit(bgra_device, bgra_pitch, width, height, boxes);
 }
 
 }  // namespace zed2i_driver

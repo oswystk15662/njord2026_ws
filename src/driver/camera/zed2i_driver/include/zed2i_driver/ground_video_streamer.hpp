@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace zed2i_driver
 {
@@ -32,6 +33,14 @@ struct GroundVideoConfig
   double fov_ellipse_b_ratio{0.5};
 };
 
+struct GroundVideoBox
+{
+  float x1;
+  float y1;
+  float x2;
+  float y2;
+};
+
 // Owns the stream-only CUDA buffers, nvJPEG state, and RTP/JPEG sender.  submit()
 // never waits for encoding or networking: when all slots are busy, it drops the
 // new frame so the camera and perception paths remain independent.
@@ -44,7 +53,9 @@ public:
   GroundVideoStreamer(const GroundVideoStreamer &) = delete;
   GroundVideoStreamer & operator=(const GroundVideoStreamer &) = delete;
 
-  void submit(const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height);
+  void submit(
+    const std::uint8_t * bgra_device, std::size_t bgra_pitch, int width, int height,
+    const std::vector<GroundVideoBox> & boxes = {});
 
 private:
   class Impl;

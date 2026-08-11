@@ -170,6 +170,7 @@ public:
     ground_video_config_.port = declare_parameter<int>("ground_video_port", 5600);
     ground_video_config_.max_pending_frames = declare_parameter<int>("ground_video_max_pending_frames", 1);
     ground_video_config_.mtu = declare_parameter<int>("ground_video_mtu", 1200);
+    ground_video_draw_detections_ = declare_parameter<bool>("ground_video_draw_detections", false);
     const bool enable_gpu_perception = declare_parameter<bool>("enable_gpu_perception", false);
     if (enable_gpu_perception) {
 #ifndef ZED2I_DRIVER_HAS_GPU_PERCEPTION
@@ -587,14 +588,7 @@ private:
           sl::toString(image_error).c_str());
       } else {
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
-        // Select the ground frame before any GPU-to-CPU download or DDS publish.
-        // submit() only enqueues a latest-wins D2D copy; encoding and networking
-        // continue on the streamer's worker thread.
-        if (ground_video_streamer_) {
-          ground_video_streamer_->submit(
-            left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU), left_gpu_.getStepBytes(sl::MEM::GPU),
-            width_, height_);
-        }
+        std::vector<GroundVideoBox> ground_video_boxes;
 #endif
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
         if (detector_) {
@@ -614,6 +608,12 @@ private:
                   continue;
                 }
               }
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+              if (ground_video_draw_detections_) {
+                ground_video_boxes.push_back(
+                  {detection.x1, detection.y1, detection.x2, detection.y2});
+              }
+#endif
               PositionedDetection item{detection, nan_position(), PositionSource::kNone};
               const auto roi = central_depth_roi(
                 detection, static_cast<float>(depth_center_ratio_), width_, height_);
@@ -709,6 +709,14 @@ private:
               get_logger(), *get_clock(), 2000, "GPU perception stopped: %s", error.what());
             detector_.reset();
           }
+        }
+#endif
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+        // Use the same TensorRT detections for the ground video; no second YOLO pass.
+        if (ground_video_streamer_) {
+          ground_video_streamer_->submit(
+            left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU), left_gpu_.getStepBytes(sl::MEM::GPU),
+            width_, height_, ground_video_boxes);
         }
 #endif
         if (publish_left) {
@@ -823,6 +831,7 @@ private:
     int max_pending_frames{1};
     int mtu{1200};
   } ground_video_config_;
+  bool ground_video_draw_detections_{false};
 #if defined(ZED2I_DRIVER_HAS_GPU_PERCEPTION) || defined(ZED2I_DRIVER_HAS_GROUND_VIDEO)
   sl::Mat left_gpu_;
 #endif
