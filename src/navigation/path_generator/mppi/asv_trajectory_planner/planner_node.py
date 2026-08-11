@@ -75,6 +75,7 @@ class PlannerNode(Node):
         self.declare_parameter("mppi_smoothing_window", 5)
         self.declare_parameter("opponent_use_distance_m", 20.0)
         self.declare_parameter("opponent_passed_margin_m", 2.0)
+        self.declare_parameter("opponent_speed_knots", 2.5)
 
         # ------------------------------------------------------------
         # MPPI hyperparameters.
@@ -101,6 +102,7 @@ class PlannerNode(Node):
         # "safe distance" in the code is the CRM bumper ellipse, expressed as
         # per-side gains in multiples of LOA, plus buoy/gate geometry.
         self.declare_parameter("mppi.loa", 2.0)
+        self.declare_parameter("mppi.opponent_loa", 1.8)
         self.declare_parameter("mppi.safe_distance_right_loa", 3.2)
         self.declare_parameter("mppi.safe_distance_left_loa", 1.6)
         self.declare_parameter("mppi.safe_distance_fore_loa", 6.4)
@@ -150,6 +152,10 @@ class PlannerNode(Node):
         mppi_smoothing_window = self.get_parameter("mppi_smoothing_window").value
         opponent_use_distance_m = self.get_parameter("opponent_use_distance_m").value
         opponent_passed_margin_m = self.get_parameter("opponent_passed_margin_m").value
+        opponent_speed_knots = float(
+            self.get_parameter("opponent_speed_knots").value)
+        if opponent_speed_knots <= 0.0:
+            raise ValueError("opponent_speed_knots must be positive")
 
         # Keyword names match MPPIPlanner's constructor arguments.
         mppi_params = {
@@ -169,6 +175,8 @@ class PlannerNode(Node):
             "speed_cost_weight": float(self.get_parameter("mppi.speed_cost_weight").value),
             "control_cost_weight": float(self.get_parameter("mppi.control_cost_weight").value),
             "loa": float(self.get_parameter("mppi.loa").value),
+            "opponent_loa": float(
+                self.get_parameter("mppi.opponent_loa").value),
             "safe_distance_right_loa": float(
                 self.get_parameter("mppi.safe_distance_right_loa").value
             ),
@@ -196,6 +204,7 @@ class PlannerNode(Node):
             other_twist_is_relative=other_twist_is_relative,
             opponent_use_distance_m=opponent_use_distance_m,
             opponent_passed_margin_m=opponent_passed_margin_m,
+            fixed_opponent_speed_mps=opponent_speed_knots * 1852.0 / 3600.0,
             reconnect_line_distance_m=reconnect_line_distance_m,
             reconnect_ahead_length_m=reconnect_ahead_length_m,
             straight_path_spacing_m=straight_path_spacing_m,
@@ -277,6 +286,10 @@ class PlannerNode(Node):
         self.get_logger().info(f"Publish planned_path     : {self.path_topic}")
         self.get_logger().info(f"Opponent use distance    : {opponent_use_distance_m} m")
         self.get_logger().info(f"Opponent passed margin   : {opponent_passed_margin_m} m")
+        self.get_logger().info(
+            f"Detected opponent model  : "
+            f"LOA={mppi_params['opponent_loa']:.1f} m, "
+            f"speed={opponent_speed_knots:.1f} kn")
         self.get_logger().info(f"Reconnect line distance  : {reconnect_line_distance_m} m")
         self.get_logger().info(f"Reconnect ahead length   : {reconnect_ahead_length_m} m")
 

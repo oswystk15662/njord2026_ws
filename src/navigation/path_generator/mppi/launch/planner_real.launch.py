@@ -95,6 +95,7 @@ def generate_launch_description():
                 "other_twist_is_relative": False,
                 "opponent_use_distance_m": 20.0,
                 "opponent_passed_margin_m": 10.0,
+                "opponent_speed_knots": 2.5,
                 "reconnect_line_distance_m": 1.0,
                 "reconnect_ahead_length_m": 5.0,
                 "straight_path_spacing_m": 2.0,
