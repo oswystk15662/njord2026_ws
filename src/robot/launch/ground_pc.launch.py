@@ -67,6 +67,11 @@ def generate_launch_description():
                 [FindPackageShare("foxglove_bridge"), "launch", "foxglove_bridge_launch.xml"]
             )
         ),
+        launch_arguments={
+            "port": "8765",
+            "address": "0.0.0.0",
+            "tls": "false",
+        }.items(),
         condition=IfCondition(enable_foxglove_bridge),
     )
 

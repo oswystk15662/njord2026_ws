@@ -314,6 +314,9 @@ def test_ground_pc_enables_foxglove_by_default_for_waypoint_visualization():
     source = _read_launch_source("ground_pc.launch.py")
 
     assert '"enable_foxglove_bridge",\n                default_value="true"' in source
+    assert '"port": "8765"' in source
+    assert '"address": "0.0.0.0"' in source
+    assert '"tls": "false"' in source
 
 
 def test_ground_pc_reads_the_active_mission_waypoint_yaml_locally():
