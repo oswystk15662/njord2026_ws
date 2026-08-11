@@ -223,6 +223,8 @@ source install/setup.bash
 ros2 launch robot ground_pc.launch.py
 ```
 
+Foxglove は Ground PC 上では `ws://localhost:8765` へ接続する。別のPCから表示する場合は、`ws://<Ground-PCのIPv4アドレス>:8765` へ接続する。Bridge は `0.0.0.0:8765` で待ち受け、TLS は使用しない。
+
 ### 1.4 開始前確認とミッション開始
 
 Jetson、miniPC、Ground PC が起動してから、Ground PC で dry-run を行う。`check` は推進・ミッションを開始しない。
