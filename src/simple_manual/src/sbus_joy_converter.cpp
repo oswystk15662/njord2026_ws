@@ -46,7 +46,7 @@ SbusJoyOutput convert_sbus_joy(
   output.cmd_vel.linear.x = truncate_3(-(axis_value(joy, 1) - offset_value(offsets, 1)));
   output.cmd_vel.linear.y = truncate_3(-(axis_value(joy, 0) - offset_value(offsets, 0)));
   output.cmd_vel.angular.z = truncate_3(-(axis_value(joy, 5) - offset_value(offsets, 5)));
-  output.soft_emg = button_value(joy, 0) && axis4 >= 0.8;
+  output.soft_emg = !button_value(joy, 0) && axis4 >= 0.8;
   if (axis4 <= -0.8) {
     output.mode = "auto";
   } else if (axis4 >= -0.1 && axis4 <= 0.1) {
