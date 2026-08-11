@@ -21,6 +21,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_1").executor == "staged_docking"
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
+    assert registry.get("task4").runnable
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
@@ -35,7 +36,11 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task2 = loader.load(WAYPOINT_ROOT / "config/task2_waypoints.yaml", "task2_config")
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
     task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
+    task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
     assert len(task1.waypoints) == 11
+    assert [waypoint.waypoint_id for waypoint in task4.waypoints] == [
+        waypoint.waypoint_id for waypoint in task1.waypoints
+    ]
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"

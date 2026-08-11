@@ -67,26 +67,27 @@ private:
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   {
     latest_odom_ = msg;
-    has_odom_ = true;
   }
 
   void timerCallback()
   {
-    if (!has_odom_ || !latest_odom_) {
-      return;
-    }
-
     const auto now = this->now();
-    const auto & odom = *latest_odom_;
+    double x = 0.0;
+    double y = 0.0;
+    double yaw = 0.0;
 
-    // Extract orientation
-    tf2::Quaternion q(
-      odom.pose.pose.orientation.x,
-      odom.pose.pose.orientation.y,
-      odom.pose.pose.orientation.z,
-      odom.pose.pose.orientation.w);
-    double roll, pitch, yaw;
-    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+    if (latest_odom_) {
+      const auto & pose = latest_odom_->pose.pose;
+      x = pose.position.x;
+      y = pose.position.y;
+      tf2::Quaternion q(
+        pose.orientation.x, pose.orientation.y,
+        pose.orientation.z, pose.orientation.w);
+      double roll, pitch;
+      tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+    }
+    // ponytail: publishes the configured origin until /odom arrives; add a
+    // trajectory parameter only if standalone motion simulation is needed.
 
     // Generate Gaussian Noise
     std::normal_distribution<double> noise_gps_pos(0.0, gps_pos_noise_std_);
@@ -100,8 +101,8 @@ private:
     const double R_EARTH = 6378137.0; // Equatorial radius
     double lat_rad = gps_origin_lat_ * M_PI / 180.0;
 
-    double dx = odom.pose.pose.position.x + noise_gps_pos(rng_);
-    double dy = odom.pose.pose.position.y + noise_gps_pos(rng_);
+    double dx = x + noise_gps_pos(rng_);
+    double dy = y + noise_gps_pos(rng_);
 
     double dlat = dy / R_EARTH;
     double dlon = dx / (R_EARTH * std::cos(lat_rad));
@@ -167,7 +168,6 @@ private:
 
   // State
   nav_msgs::msg::Odometry::SharedPtr latest_odom_;
-  bool has_odom_{false};
 
   // Random number generator
   std::mt19937 rng_;

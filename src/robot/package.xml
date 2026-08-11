@@ -42,7 +42,7 @@
   <exec_depend>nav2_velocity_smoother</exec_depend>
   <exec_depend>micon_driver_fd</exec_depend>
   <exec_depend>ntripcaster</exec_depend>
-  <exec_depend>pcl_det</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">pcl_det</exec_depend>
   <exec_depend>rclcpp_components</exec_depend>
   <exec_depend>rclpy</exec_depend>
   <exec_depend>robot_localization</exec_depend>
@@ -60,10 +60,10 @@
   <exec_depend>control_manager</exec_depend>
   <exec_depend>mission_manager</exec_depend>
   <exec_depend>asv_trajectory_planner</exec_depend>
-  <exec_depend>pcl_preprocessing</exec_depend>
-  <exec_depend>pcl_segmentation</exec_depend>
-  <exec_depend>ship_tracking</exec_depend>
-  <exec_depend>task2_perception</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">pcl_preprocessing</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">pcl_segmentation</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">ship_tracking</exec_depend>
+  <exec_depend condition="$NJORD_ENABLE_GPU_SENSORS == 1">task2_perception</exec_depend>
   <exec_depend>task1_buoy_roi</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>

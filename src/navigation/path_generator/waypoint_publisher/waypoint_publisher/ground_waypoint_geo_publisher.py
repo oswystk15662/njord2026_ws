@@ -19,6 +19,7 @@ _CONFIGS = {
     "task2": ("waypoint_publisher", "config/task2_waypoints.yaml", "task2_config"),
     "task3_1": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_1_config"),
     "task3_2": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_2_config"),
+    "task4": ("waypoint_publisher", "config/task4_waypoints.yaml", "task4_config"),
     "move_to_exam_field": (
         "mission_manager", "config/move_to_exam_field_waypoints.yaml", "move_to_exam_field_config"
     ),
@@ -45,6 +46,7 @@ class GroundWaypointGeoPublisher(Node):
         super().__init__("ground_waypoint_geo_publisher")
         self.declare_parameter("marker_topic", "/ground_waypoint_markers")
         self.declare_parameter("publish_rate_hz", 1.0)
+        task_type = self.declare_parameter("task_type", "").value
         self.waypoints = []
         self.active_task = ""
         self.publisher = self.create_publisher(
@@ -55,14 +57,19 @@ class GroundWaypointGeoPublisher(Node):
         rate = float(self.get_parameter("publish_rate_hz").value)
         if rate <= 0.0:
             raise ValueError("publish_rate_hz must be positive")
-        status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
-        self.status_sub = self.create_subscription(
-            MissionStatus, "/mission/status", self._on_status, status_qos)
+        if task_type:
+            self._select_task(str(task_type))
+        else:
+            status_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
+            self.status_sub = self.create_subscription(
+                MissionStatus, "/mission/status", self._on_status, status_qos)
         self.timer = self.create_timer(1.0 / rate, self._publish)
 
     def _on_status(self, message):
         """Load only the YAML selected by the task command sent from ground."""
-        task_type = message.task_id.strip()
+        self._select_task(message.task_id.strip())
+
+    def _select_task(self, task_type):
         if task_type == self.active_task:
             return
         self.active_task = task_type
