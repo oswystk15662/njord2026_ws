@@ -209,7 +209,7 @@ source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
 ros2 topic echo /odom --once
 ```
 
-次の `gps_origin_lat` と `gps_origin_lon` は、屋内確認で地図に表示したい基準位置へ変更する。Task 2 のWPと重ねて確認する場合は、Task 2 水域に近い座標を指定する。
+次の `gps_origin_lat` と `gps_origin_lon` は、屋内確認で地図に表示したい基準位置へ変更する。既定値はGPS 5の約15 m北（GPS 5→6距離の約1/3）である。Task 2 のWPと重ねて確認する場合は、Task 2 水域に近い座標を指定する。
 
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
@@ -220,7 +220,7 @@ source scripts/njord_env.sh
 source /home/hashilab/Desktop/njord2026_ws/install/setup.bash
 ros2 run sensor_sim_with_noise gnss_noise_simulator --ros-args \
   -r /gps/fix:=/sensor/vehicle_gnss/fix/raw \
-  -p gps_origin_lat:=63.4408000 \
+  -p gps_origin_lat:=63.4409375 \
   -p gps_origin_lon:=10.4233194444 \
   -p gps_origin_alt:=0.0
 ```
