@@ -149,6 +149,11 @@ bool parse_gst_standard_deviations(
     return latitude > 0.0 && longitude > 0.0 && altitude > 0.0;
 }
 
+double normalize_angle_rad(double angle_rad) noexcept
+{
+    return std::atan2(std::sin(angle_rad), std::cos(angle_rad));
+}
+
 bool convert_nmea_to_latlon(
     const std::string & value, const std::string & direction, double & result) noexcept
 {

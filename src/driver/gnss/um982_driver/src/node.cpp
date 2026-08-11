@@ -161,6 +161,7 @@ void UM982Driver::init_parameters()
     this->declare_parameter("RTK_STATUS_FORMAT", "B");
     this->declare_parameter("GNSS_RTK_Enable", true);
     this->declare_parameter("Heading_FrameID", "odom");
+    this->declare_parameter("heading_baseline_yaw_rad", 0.0);
     this->declare_parameter("log_file_name", "um982.log"); // 簡易化のため固定名デフォルト
     this->declare_parameter("publish_feedback_odometry", false);
     // A relative name keeps the published Odometry independent from the
@@ -192,6 +193,11 @@ void UM982Driver::init_parameters()
         this->get_parameter("RTK_STATUS_FORMAT").as_string(), "RTK_STATUS_FORMAT");
     params_.rtk_enable = this->get_parameter("GNSS_RTK_Enable").as_bool();
     params_.heading_frame_id = this->get_parameter("Heading_FrameID").as_string();
+    params_.heading_baseline_yaw_rad =
+        this->get_parameter("heading_baseline_yaw_rad").as_double();
+    if (!std::isfinite(params_.heading_baseline_yaw_rad)) {
+        throw std::invalid_argument("heading_baseline_yaw_rad must be finite");
+    }
     params_.log_file_name = this->get_parameter("log_file_name").as_string();
     params_.publish_feedback_odometry =
         this->get_parameter("publish_feedback_odometry").as_bool();

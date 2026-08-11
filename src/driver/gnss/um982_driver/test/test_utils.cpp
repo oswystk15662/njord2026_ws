@@ -54,6 +54,18 @@ TEST(NumericParsing, AcceptsOnlyCompleteFiniteValues)
     EXPECT_FALSE(um982_driver::utils::parse_int("invalid", integer));
 }
 
+TEST(HeadingMounting, ConvertsPrimaryToSecondaryBaselineToVesselYaw)
+{
+    constexpr double kBaselineYawRad = -0.6747409422235526;
+    const double reported_baseline_yaw = um982_driver::utils::deg2rad(20.0);
+    const double vessel_yaw = um982_driver::utils::normalize_angle_rad(
+        reported_baseline_yaw - kBaselineYawRad);
+
+    EXPECT_NEAR(vessel_yaw, um982_driver::utils::deg2rad(58.6598082541), 1e-10);
+    EXPECT_NEAR(
+        um982_driver::utils::normalize_angle_rad(4.0 * M_PI), 0.0, 1e-12);
+}
+
 TEST(NmeaParsing, ChecksumRequiresExactlyTwoHexDigits)
 {
     EXPECT_TRUE(um982_driver::utils::validate_checksum("$GPGGA*56"));
