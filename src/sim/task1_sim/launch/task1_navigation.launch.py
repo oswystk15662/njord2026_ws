@@ -84,7 +84,7 @@ def generate_launch_description():
         OpaqueFunction(function=_configure_bt_xmls),
         Node(package="nav2_controller", executable="controller_server",
              name="controller_server", output="screen", parameters=params,
-             remappings=remappings + [("cmd_vel", "cmd_vel_nav")]),
+             remappings=remappings + [("cmd_vel", "/cmd_vel_nav_raw")]),
         Node(package="nav2_smoother", executable="smoother_server",
              name="smoother_server", output="screen", parameters=params,
              remappings=remappings),
@@ -93,10 +93,13 @@ def generate_launch_description():
              remappings=remappings),
         Node(package="nav2_behaviors", executable="behavior_server",
              name="behavior_server", output="screen", parameters=params,
-             remappings=remappings + [("cmd_vel", "cmd_vel_nav")]),
+             remappings=remappings + [("cmd_vel", "/cmd_vel_nav_raw")]),
         Node(package="nav2_velocity_smoother", executable="velocity_smoother",
              name="velocity_smoother", output="screen", parameters=params,
-             remappings=remappings + [("cmd_vel", "cmd_vel_nav")]),
+             remappings=remappings + [
+                 ("cmd_vel", "/cmd_vel_nav_raw"),
+                 ("cmd_vel_smoothed", "/cmd_vel_smoothed"),
+             ]),
         Node(package="nav2_collision_monitor", executable="collision_monitor",
              name="collision_monitor", output="screen", parameters=params,
              remappings=remappings),
@@ -111,6 +114,10 @@ def generate_launch_description():
              parameters=[{
                  "autostart": autostart,
                  "node_names": lifecycle_nodes,
+                 # The simulation starts GNSS projection and all Nav2
+                 # servers concurrently.  Give lifecycle bonds enough time
+                 # to form on a loaded development machine.
+                 "bond_timeout": 10.0,
                  "use_sim_time": use_sim_time,
              }]),
     ])

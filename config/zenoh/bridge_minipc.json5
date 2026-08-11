@@ -39,7 +39,11 @@
       // 大容量の/livox/lidarはJetson内に閉じ込める。
       allow: {
         publishers: [
-          "/odom", "/tf", "/tf_static", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/tf", "/tf_static", "/livox/imu",
+          "/mission/status",
+          "/task1/safety_points",
+          "/task2/safety_points", "/planned_path_pruned",
+          "/waypoint1_pose", "/waypoint2_pose",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
@@ -48,7 +52,10 @@
           "/gui/battery_percent",
         ],
         subscribers: [
-          "/odom", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/livox/imu",
+          "/task1/safety_points",
+          "/task2/safety_points", "/planned_path_pruned",
+          "/waypoint1_pose", "/waypoint2_pose",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

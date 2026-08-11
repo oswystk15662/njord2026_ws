@@ -1,0 +1,16 @@
+# Force replay publishers to offer QoS compatible with the Task 2 consumers.
+/livox/lidar:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
+/odometry/filtered/local:
+  history: keep_last
+  depth: 10
+  reliability: reliable
+  durability: volatile
+/tf:
+  history: keep_last
+  depth: 100
+  reliability: reliable
+  durability: volatile

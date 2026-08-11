@@ -3,6 +3,7 @@ const SPEED_TOPIC = "/gui/ground_speed_mps";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
+const GROUND_WAYPOINT_MARKERS_TOPIC = "/ground_waypoint_markers";
 const WORLD_FRAME = "map";
 const VESSEL_FRAME = "base_link";
 
@@ -36,7 +37,10 @@ const PANEL_CSS = `
 .gnss-telemetry{position:absolute;right:12px;top:12px;z-index:1100;min-width:225px;padding:10px 12px;border:1px solid #526375;border-radius:6px;background:rgba(12,18,28,.92);color:#f4f7fb;font:14px/1.5 system-ui,sans-serif;pointer-events:none}
 .gnss-telemetry-title{color:#a9c7e8;font-size:12px;font-weight:700;letter-spacing:.06em}.gnss-telemetry-separator{border-top:1px solid #526375;margin-top:5px;padding-top:5px}
 .gnss-map-error{display:none;position:absolute;left:50%;bottom:34px;z-index:1100;transform:translateX(-50%);padding:7px 10px;border-radius:4px;background:rgba(137,28,28,.92);color:#fff;font:13px system-ui,sans-serif;pointer-events:none}.gnss-map-error.visible{display:block}
-	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{fill:#00cceb;stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
+.waypoint-pin{position:relative;width:24px;height:24px;border:2px solid #003b4a;border-radius:50%;background:#00e5ff;color:#00303b;font:800 11px/20px system-ui,sans-serif;text-align:center;box-sizing:border-box;box-shadow:0 1px 3px rgba(0,0,0,.85)}
+.waypoint-pin-leader{position:absolute;left:21px;top:10px;width:10px;border-top:2px solid #00e5ff;filter:drop-shadow(0 1px 1px rgba(0,0,0,.85))}
+.waypoint-pin-label{position:absolute;left:31px;top:0;padding:2px 5px;border:1px solid #00e5ff;border-radius:3px;background:rgba(5,25,35,.92);color:#fff;font:600 11px/1.3 system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.85);white-space:nowrap}
+	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
 	.vessel-dot{display:none;position:absolute;left:13px;top:13px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
 	`;
 
@@ -118,6 +122,8 @@ function quaternionToBearingDegrees(rotation) {
 }
 
 function vesselIcon() {
+  // Existing catamaran silhouette: its bow is base_link +X. Ground PC code
+  // rotates it from the received map -> base_link TF.
   const points = [
     [11, 3], [7, 11], [7, 30], [11, 37], [15, 30], [15, 22],
     [25, 22], [25, 30], [29, 37], [33, 30], [33, 11], [29, 3],
@@ -128,7 +134,7 @@ function vesselIcon() {
     className: "",
     iconSize: [40, 40],
     iconAnchor: [20, 20],
-    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><path class="vessel-body" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
+    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><defs><linearGradient id="vessel-hull-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="48%" stop-color="#008ca5"/><stop offset="100%" stop-color="#022f3a"/></linearGradient></defs><path class="vessel-body" fill="url(#vessel-hull-gradient)" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
   });
 }
 
@@ -164,16 +170,86 @@ function initGnssMapTelemetry(context) {
 
   const state = {};
   const transforms = new Map();
+  const waypointMarkers = new Map();
   let marker;
+  let waypointRoute;
+  let activeWaypointTask = "";
   let centered = false;
+  let waypointSignature = "";
 
   function updateTransforms(message) {
     for (const stamped of message?.transforms || []) {
       const parent = normalizeFrame(stamped.header?.frame_id);
       const child = normalizeFrame(stamped.child_frame_id);
       const rotation = normalizeQuaternion(stamped.transform?.rotation);
-      if (parent && child && rotation) transforms.set(child, {parent, rotation});
+      const translation = stamped.transform?.translation;
+      if (parent && child && rotation && Number.isFinite(translation?.x) && Number.isFinite(translation?.y)) {
+        transforms.set(child, {parent, rotation, translation});
+      }
     }
+  }
+
+  function updateWaypointMarkers(message) {
+    for (const waypoint of message?.markers || []) {
+      if (waypoint.action === 3) {
+        for (const marker of waypointMarkers.values()) map.removeLayer(marker);
+        waypointMarkers.clear();
+        if (waypointRoute) map.removeLayer(waypointRoute);
+        waypointRoute = undefined;
+        activeWaypointTask = "";
+        continue;
+      }
+      if (!waypoint.ns?.startsWith("ground_waypoint_wgs84") || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      const selectedTask = waypoint.ns.split("/", 2)[1];
+      if (selectedTask) activeWaypointTask = selectedTask;
+      // The Ground PC publisher deliberately stores longitude in x and
+      // latitude in y, so this panel can render YAML waypoints without
+      // receiving the vessel's map-frame MarkerArray over Zenoh.
+      const position = [waypoint.pose.position.y, waypoint.pose.position.x];
+      const id = String(waypoint.id);
+      let waypointMarker = waypointMarkers.get(id);
+      if (!waypointMarker) {
+        const order = String(Number(waypoint.id) + 1).padStart(2, "0");
+        waypointMarker = L.marker(position, {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [220, 24],
+            iconAnchor: [12, 12],
+            html: `<div class="waypoint-pin">${order}<span class="waypoint-pin-leader"></span><span class="waypoint-pin-label">${order} · ${waypoint.text || "WP"}</span></div>`,
+          }),
+          interactive: false,
+        });
+        waypointMarker.addTo(map);
+        waypointMarkers.set(id, waypointMarker);
+      } else {
+        waypointMarker.setLatLng(position);
+      }
+    }
+    const orderedWaypoints = [...waypointMarkers.entries()]
+      .sort(([left], [right]) => Number(left) - Number(right));
+    if (waypointRoute) map.removeLayer(waypointRoute);
+    if (orderedWaypoints.length > 1) {
+      waypointRoute = L.polyline(
+        orderedWaypoints.map(([, item]) => item.getLatLng()),
+        {color: "#00e5ff", weight: 2, opacity: 0.8, dashArray: "6 5", interactive: false},
+      ).addTo(map);
+    }
+    const nextWaypointSignature = [...waypointMarkers.entries()].map(([id, item]) => {
+      const position = item.getLatLng();
+      return `${id}:${position.lat.toFixed(8)}:${position.lng.toFixed(8)}`;
+    }).join("|");
+    // The source republishes DELETEALL followed by the complete identical
+    // route every second.  Refit only when that actual route changes, so a
+    // user's manual pan/zoom is never overwritten by the periodic update.
+    if (nextWaypointSignature && nextWaypointSignature !== waypointSignature) {
+      // Waypoint-only inspection intentionally runs without a vessel GNSS
+      // fix. Center on the route itself in that case; include the vessel when
+      // it is available so the normal ground-station view is unchanged.
+      const positions = [...waypointMarkers.values()].map((item) => item.getLatLng());
+      if (marker) positions.unshift(marker.getLatLng());
+      map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
+    }
+    waypointSignature = nextWaypointSignature;
   }
 
   function updateMarker() {
@@ -207,12 +283,15 @@ function initGnssMapTelemetry(context) {
       '<div class="gnss-telemetry-separator">',
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
       `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
+      '<div class="gnss-telemetry-separator">',
+      `TASK&nbsp; ${activeWaypointTask || "--"}</div>`,
+      `WP&nbsp;&nbsp;&nbsp; ${waypointMarkers.size}</div>`,
     ].join("");
   }
 
   context.subscribe([
     {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
-    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC},
+    {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC}, {topic: GROUND_WAYPOINT_MARKERS_TOPIC},
   ]);
   context.watch("currentFrame");
   context.onRender = (renderState, done) => {
@@ -228,9 +307,16 @@ function initGnssMapTelemetry(context) {
           state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {
           updateTransforms(message);
+        } else if (event.topic === GROUND_WAYPOINT_MARKERS_TOPIC) {
+          updateWaypointMarkers(message);
         }
       }
       updateMarker();
+      // MarkerArray is transient-local, but re-applying it also handles a
+      // GNSS fix arriving after the ground-side waypoint list.
+      for (const event of renderState.currentFrame || []) {
+        if (event.topic === GROUND_WAYPOINT_MARKERS_TOPIC) updateWaypointMarkers(event.message || {});
+      }
       renderLegend();
     } finally {
       done();

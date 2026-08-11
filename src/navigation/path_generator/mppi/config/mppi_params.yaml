@@ -72,8 +72,11 @@ planner_node:
       # Input-deviation ("norm") cost (code: norm_cost).
       control_cost_weight: 0.2  # current default - human tuning expected; record any change
 
-      # Own/other ship length overall [m] used by CRM bumper scaling.
+      # Own-ship length overall [m] used by CRM bumper scaling.
       loa: 2.0                # current default - human tuning expected; record any change
+
+      # Every LiDAR-detected opponent is represented by this fixed length.
+      opponent_loa: 1.8
 
       # CRM bumper safe distances, in multiples of LOA
       # (code: crm_torch RIGHT/LEFT/FORE/AFT_AX_GAIN).

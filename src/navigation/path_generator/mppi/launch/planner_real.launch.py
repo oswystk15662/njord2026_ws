@@ -18,6 +18,7 @@ process is needed in the real-vessel launch.
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.substitutions import FindPackageShare
@@ -27,6 +28,8 @@ def generate_launch_description():
     own_odom_topic = LaunchConfiguration("own_odom_topic")
     ignore_other_ship = LaunchConfiguration("ignore_other_ship")
     mission_gate_required = LaunchConfiguration("mission_gate_required")
+    start_follow_path_client = LaunchConfiguration("start_follow_path_client")
+    start_waypoint_pose_publisher = LaunchConfiguration("start_waypoint_pose_publisher")
     other_ship_twist_topic = PythonExpression([
         "'/other_ship/twist_ignored' if '", ignore_other_ship,
         "' == 'true' else '/other_ship/twist'",
@@ -56,6 +59,7 @@ def generate_launch_description():
                 "publish_frequency": 2.0,
             }
         ],
+        condition=IfCondition(start_waypoint_pose_publisher),
     )
 
     planner_node = Node(
@@ -89,8 +93,9 @@ def generate_launch_description():
 
                 # /other_ship/twist は map基準で出す
                 "other_twist_is_relative": False,
-                "opponent_use_distance_m": 20.0,
-                "opponent_passed_margin_m": 10.0,
+                "opponent_corridor_margin_m": 5.0,
+                "opponent_corridor_half_width_m": 20.0,
+                "opponent_speed_knots": 2.5,
                 "reconnect_line_distance_m": 1.0,
                 "reconnect_ahead_length_m": 5.0,
                 "straight_path_spacing_m": 2.0,
@@ -120,6 +125,7 @@ def generate_launch_description():
                 "mission_gate_required": mission_gate_required,
             }
         ],
+        condition=IfCondition(start_follow_path_client),
     )
     crm_costmap = Node(
         package="asv_trajectory_planner", executable="crm_costmap_node",
@@ -134,6 +140,14 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "mission_gate_required", default_value="false",
                 description="Require Mission Manager's /mission/task2/enabled gate before FollowPath goals.",
+            ),
+            DeclareLaunchArgument(
+                "start_follow_path_client", default_value="true",
+                description="Run FollowPath on this host; false when miniPC owns Nav2.",
+            ),
+            DeclareLaunchArgument(
+                "start_waypoint_pose_publisher", default_value="true",
+                description="Run GPS /fromLL conversion on this host.",
             ),
             DeclareLaunchArgument(
                 "ignore_other_ship", default_value="false",

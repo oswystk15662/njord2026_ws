@@ -1,7 +1,7 @@
-"""Task 2's FollowPath-only Nav2 graph.
+"""Task 2 final command graph on miniPC.
 
-MPPI supplies the path, so this graph needs only the controller, velocity
-smoother, and their lifecycle manager.  It deliberately has no obstacle input.
+MPPI supplies paths from Jetson; miniPC owns FollowPath, the final collision
+monitor and therefore the only /cmd_vel_nav publisher.
 """
 
 import os
@@ -67,6 +67,13 @@ def generate_launch_description():
             **common,
         ),
         Node(
+            package="nav2_collision_monitor",
+            executable="collision_monitor",
+            name="collision_monitor",
+            remappings=remappings,
+            **common,
+        ),
+        Node(
             package="nav2_lifecycle_manager",
             executable="lifecycle_manager",
             name="lifecycle_manager_navigation",
@@ -74,7 +81,7 @@ def generate_launch_description():
             arguments=["--ros-args", "--log-level", log_level],
             parameters=[
                 {"use_sim_time": use_sim_time, "autostart": autostart},
-                {"node_names": ["controller_server", "velocity_smoother"]},
+                {"node_names": ["controller_server", "velocity_smoother", "collision_monitor"]},
             ],
         ),
     ])

@@ -91,6 +91,10 @@ class OpponentSelectorNode(Node):
             ("straight_min_hit_count", 15),
             ("straight_max_velocity_stddev_mps", 0.30),
             ("straight_coast_timeout_sec", 2.0),
+            # If enabled, a fully confirmed straight-line vessel continues
+            # to be predicted after observations stop.  This is deliberately
+            # separate from the short occlusion coast timeout.
+            ("straight_continue_after_loss", False),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -112,6 +116,8 @@ class OpponentSelectorNode(Node):
         self.straight_coast_timeout_sec = float(gp("straight_coast_timeout_sec"))
         if self.straight_coast_timeout_sec < 0.0:
             raise ValueError("straight_coast_timeout_sec must be >= 0")
+        self.straight_continue_after_loss = bool(
+            gp("straight_continue_after_loss"))
         self.selection_params = SelectionParams(
             confirmed_only=bool(gp("confirmed_only")),
             max_distance_m=float(gp("max_distance_m")),
@@ -154,9 +160,9 @@ class OpponentSelectorNode(Node):
         self.ego_vel_base = np.zeros(3)  # ego twist linear, base_link (odom child frame)
         self.ego_yaw_rate = 0.0          # ego twist angular z, base_link [rad/s]
         self.selected_id = None
-        # Last *measured* and fully gated target state.  It is used only by
-        # the bounded straight-line coast path below, never as a replacement
-        # for an unconfirmed detection.
+        # Last *measured* and fully gated target state. It is never used as a
+        # replacement for an unconfirmed detection; the Task 2 setting can
+        # continue prediction after the observation is lost.
         self.last_observation = None
 
         period = 1.0 / max(float(gp("publish_rate_hz")), 1e-6)
@@ -169,7 +175,8 @@ class OpponentSelectorNode(Node):
             f"+ TF {self.map_frame} -> {self.opponent_frame}, "
             f"absolute_speed_range={self.min_absolute_speed_knots:.2f}"
             f"-{self.max_absolute_speed_knots:.2f} kn, "
-            f"straight_coast={self.straight_coast_timeout_sec:.1f}s")
+            f"straight_coast={self.straight_coast_timeout_sec:.1f}s, "
+            f"straight_continue_after_loss={self.straight_continue_after_loss}")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -233,25 +240,30 @@ class OpponentSelectorNode(Node):
         self.tf_broadcaster.sendTransform(tf_out)
 
     def _coast_or_silence(self, now, now_sec: float):
-        """Bridge brief occlusions with constant-velocity prediction only."""
+        """Predict only a confirmed straight-line target after observations end."""
         coast = self.last_observation
         if self.motion_filter_mode == "straight_line" and coast is not None:
             elapsed = now_sec - coast["stamp_sec"]
-            if 0.0 <= elapsed <= self.straight_coast_timeout_sec:
+            continue_prediction = self.straight_continue_after_loss or \
+                elapsed <= self.straight_coast_timeout_sec
+            if 0.0 <= elapsed and continue_prediction:
                 pos_map = tracking_glue.predict_straight_motion(
                     coast["position_map"], coast["velocity_map"], elapsed)
                 self._publish_output(
                     now, pos_map, coast["velocity_map"], coast["yaw_map"],
                     coast["yaw_rate"])
+                mode = ("continuing" if self.straight_continue_after_loss
+                        else "coasting")
                 self.get_logger().info(
-                    f"Coasting confirmed opponent id={coast['object_id']} "
-                    f"for {elapsed:.1f}s without a LiDAR observation.",
+                    f"{mode.capitalize()} confirmed straight opponent "
+                    f"id={coast['object_id']} for {elapsed:.1f}s without "
+                    "a LiDAR observation.",
                     throttle_duration_sec=1.0)
                 return
 
-        # Safe silence: MPPI plans a straight path without the opponent.
+        # No confirmed straight target remains: MPPI plans without it.
         self.get_logger().warning(
-            "No valid opponent track or bounded straight-line coast. "
+            "No valid opponent track or straight-line prediction. "
             "Publishing nothing on /other_ship/twist and no opponent TF.",
             throttle_duration_sec=2.0)
         self.selected_id = None
@@ -358,8 +370,7 @@ def main(args=None):
         pass
     finally:
         node.destroy_node()
-        if rclpy.ok():
-            rclpy.shutdown()
+        rclpy.shutdown()
 
 
 if __name__ == "__main__":

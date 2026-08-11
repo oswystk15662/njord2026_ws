@@ -2,21 +2,21 @@ task1_orchestrator:
   ros__parameters:
     frame_id: "map"
 
-    # Full Task1 course (Cartesian sim approximation): task1-1's ten-point
-    # maneuvering section, then the cardinal-marker S/N/S slalom. GPS
-    # checkpoints bookend the two sections; waypoint1_xy and waypoint2_xy
-    # hold their interior points so task evaluation matches the Nav2 route.
-    gps_checkpoint_xy: "[[0.0, 0.0], [50.0, 0.0], [50.0, -25.0], [0.0, -25.0]]"
-    waypoint1_xy: >-
-      [[10.0, 5.0], [13.0, 0.0], [16.0, -5.0], [19.0, -0.5], [22.0, 6.0],
-       [25.0, 0.0], [28.0, -5.0], [31.0, -1.0], [34.0, 2.0], [40.0, 0.0]]
-    waypoint2_xy: "[[24.0, -35.0], [15.0, -15.0], [8.0, -35.0]]"
+    # Surveyed Task 1 geometry from "GPS points for tasks.xlsx", converted
+    # to local ENU metres with GPS1 (63.4408000000, 10.4233194444) as map
+    # (0, 0).  The checkpoints are GPS1 -> GPS2 -> GPS3 -> GPS4.
+    gps_checkpoint_xy: "[[0.000, 0.000], [-27.099, -29.685], [5.403, -42.969], [23.089, -3.401]]"
+    waypoint1_xy: "[[-8.434, -3.711], [-5.807, -11.132], [-4.977, -19.481], [-20.739, -18.862]]"
+    waypoint2_xy: "[[-0.830, -25.047], [10.231, -28.758], [17.598, -17.922]]"
 
-    buoy_position_xy: "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
-    # Cardinal orientation per marker, aligned index-wise with
-    # buoy_position_xy: S (pass south), N (pass north), S (pass south) --
-    # this is what makes the route above a slalom instead of a straight line.
-    buoy_marks: "[\"S\", \"N\", \"S\"]"
+    # Buoys in task1monday.kmz: red, east, west, green. Cardinal directions
+    # are evaluated against geographic north (+Y in this ENU map).
+    buoy_position_xy: "[[1.864, -38.592], [10.610, -27.048], [-0.072, -23.976], [10.809, -9.827]]"
+    buoy_marks: "[\"RED\", \"E\", \"W\", \"GREEN\"]"
+    # GPS3 -> GPS4 bearing in the same ENU frame: 65.916 degrees.
+    course_heading_rad: 1.1504545903685037
+    # GPS3 starts the cardinal-wall stage.
+    wall_retirement_start_xy: [5.403, -42.969]
     wall_radius: 2.5
     wall_points: 24
     goal_radius: 2.0
@@ -24,17 +24,16 @@ task1_orchestrator:
     avoidance_eval_radius: 10.0
     avoidance_margin: 0.5
     # Testing override only: forces every marker (not just one) to this
-    # cardinal mark, ignoring buoy_marks above. Leave empty for the
-    # competition S/N/S slalom.
+    # buoy class, ignoring buoy_marks above. Leave empty for the
+    # competition cardinal-mark slalom.
     forced_mark: ""
 
-    # This visual boundary includes spawn and every Task1-1/slalom waypoint.
-    # It is not added to /sim_obstacles, but cardinal_wall_publisher uses it
-    # as the far edge of a detected marker's one-sided exclusion wall.
-    course_bounds: [-5.0, 55.0, -40.0, 35.0]
-    # Physical divider between the task1-1 maneuvering section and the
-    # slalom. The route reaches the slalom via x=50, beyond this divider.
-    center_line: [0.0, 40.0, -10.0, 0.05]
+    # Visual bounds around every surveyed point. Cardinal walls themselves
+    # are independently capped at 13 m by cardinal_wall_publisher.
+    course_bounds: [-30.0, 30.0, -55.0, 15.0]
+    # The KMZ has no physical divider; keep this legacy synthetic obstacle off.
+    enable_center_line: false
+    center_line: [0.0, 0.0, 0.0, 0.0]
     # Optional [min_x, max_x, min_y, max_y] blocker before marker detection.
     # Keep disabled by default because the full NavigateThroughPoses request
     # includes post-inference waypoints; blocking that area makes those goals

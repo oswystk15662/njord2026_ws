@@ -33,6 +33,12 @@ public:
 
     gps_pos_noise_std_ = this->declare_parameter<double>("gps_pos_noise_std", 0.02); // 2 cm
     gps_heading_noise_std_deg_ = this->declare_parameter<double>("gps_heading_noise_std_deg", 2.5); // 2.5 deg
+    // Direction of geographical true north expressed in the simulation map
+    // frame (ENU default: +Y == pi/2).  Keeping this separate from sensor
+    // noise lets Task1 exercise sites whose navigation axes are rotated from
+    // true north, as on the real vessel.
+    true_north_yaw_rad_ = this->declare_parameter<double>(
+      "true_north_yaw_rad", M_PI / 2.0);
 
     double publish_rate_hz = this->declare_parameter<double>("publish_rate_hz", 10.0);
 
@@ -122,7 +128,11 @@ private:
     compass_msg.header.stamp = now;
     compass_msg.header.frame_id = frame_id_compass_;
 
-    double compass_yaw = yaw + noise_gps_yaw(rng_);
+    // The simulated odometry yaw is expressed in the map frame.  Convert it
+    // to an ENU heading reported by a true-north-referenced dual-antenna
+    // GNSS: yaw=0 points along map +X, whose bearing from north is
+    // pi/2-true_north_yaw_rad_.
+    double compass_yaw = yaw + M_PI / 2.0 - true_north_yaw_rad_ + noise_gps_yaw(rng_);
     tf2::Quaternion q_compass;
     q_compass.setRPY(0.0, 0.0, compass_yaw);
     compass_msg.pose.pose.orientation.x = q_compass.x();
@@ -145,6 +155,7 @@ private:
   double gps_origin_alt_;
   double gps_pos_noise_std_;
   double gps_heading_noise_std_deg_;
+  double true_north_yaw_rad_;
   std::string frame_id_gps_;
   std::string frame_id_compass_;
 

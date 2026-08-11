@@ -40,4 +40,11 @@ std::vector<WallPoint> virtual_wall_points(
   int class_id, float buoy_x, float buoy_y, float channel_heading_rad,
   float radius_m = 2.0F, int points_per_full_circle = 40);
 
+// Connect adjacent buoys on one lateral-mark boundary.  The points are
+// ordered along channel_heading_rad, so a row of same-colour buoys becomes a
+// continuous Nav2 obstacle without joining detections across a large gap.
+std::vector<WallPoint> same_color_wall_points(
+  const std::vector<WallPoint> & buoy_positions, float channel_heading_rad,
+  float max_gap_m = 12.0F, float point_spacing_m = 0.2F);
+
 }  // namespace zed2i_driver

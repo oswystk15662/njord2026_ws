@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""Publish the sole Task 2 readiness state for FollowPath-only bringup.
+"""Publish Task 2 autonomy readiness for the final velocity command gate.
 
-Task 2 keeps the generic ``autonomy_supervisor`` disabled, so this node owns
-``/autonomy/ready`` while the persistent Mission/Control graph is active.
+This deliberately does not decide whether it is safe to move.  The command
+arbiter independently requires an explicit emergency-stop release.  This node
+only verifies that MPPI is still producing a usable pruned path and that Nav2's
+FollowPath controller action server is reachable.
 """
 
 from __future__ import annotations
@@ -39,7 +41,7 @@ class Task2AutonomyReadyNode(Node):
         self.timer = self.create_timer(1.0 / max(frequency, 1e-3), self._publish_ready)
 
         self.get_logger().info(
-            f"Task2 readiness requires {path_topic} and FollowPath action {action_name}"
+            f"Readiness requires {path_topic} and FollowPath action {action_name}"
         )
 
     def _path_callback(self, msg: Path) -> None:

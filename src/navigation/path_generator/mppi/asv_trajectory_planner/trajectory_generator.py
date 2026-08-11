@@ -33,8 +33,9 @@ class TrajectoryGenerator:
         avoid_radius: float = 2.0,
         avoid_offset: float = 3.0,
         other_twist_is_relative: bool = True,
-        opponent_use_distance_m: float = 20.0,
-        opponent_passed_margin_m: float = 2.0,
+        opponent_corridor_margin_m: float = 5.0,
+        opponent_corridor_half_width_m: float = 20.0,
+        fixed_opponent_speed_mps: float = 2.5 * 1852.0 / 3600.0,
         reconnect_line_distance_m: float = 1.0,
         reconnect_ahead_length_m: float = 8.0,
         straight_path_spacing_m: float = 2.0,
@@ -45,8 +46,14 @@ class TrajectoryGenerator:
         self.frame_id = frame_id
         self.other_twist_is_relative = other_twist_is_relative
 
-        self.opponent_use_distance_m = float(opponent_use_distance_m)
-        self.opponent_passed_margin_m = float(opponent_passed_margin_m)
+        self.opponent_corridor_margin_m = float(opponent_corridor_margin_m)
+        self.opponent_corridor_half_width_m = float(opponent_corridor_half_width_m)
+        if self.opponent_corridor_margin_m < 0.0 or \
+                self.opponent_corridor_half_width_m <= 0.0:
+            raise ValueError("Opponent corridor dimensions must be positive")
+        self.fixed_opponent_speed_mps = float(fixed_opponent_speed_mps)
+        if self.fixed_opponent_speed_mps <= 0.0:
+            raise ValueError("fixed_opponent_speed_mps must be positive")
 
         # GPS直線に何m以内まで近づいたら完全直線Pathへ切り替えるか
         self.reconnect_line_distance_m = float(reconnect_line_distance_m)
@@ -460,11 +467,6 @@ class TrajectoryGenerator:
         other_x_base = other_transform.translation.x
         other_y_base = other_transform.translation.y
 
-        distance = math.hypot(other_x_base, other_y_base)
-
-        if distance > self.opponent_use_distance_m:
-            return False
-
         other_x_map, other_y_map = self._base_link_to_map(
             x_b=other_x_base,
             y_b=other_y_base,
@@ -483,21 +485,21 @@ class TrajectoryGenerator:
         route_len = math.hypot(route_dx, route_dy)
 
         if route_len < 1e-6:
-            return True
+            return False
 
         ex = route_dx / route_len
         ey = route_dy / route_len
 
-        own_s = (own_map_x - wp1_x) * ex + (own_map_y - wp1_y) * ey
+        other_lateral = -(other_x_map - wp1_x) * ey + \
+            (other_y_map - wp1_y) * ex
         other_s = (other_x_map - wp1_x) * ex + (other_y_map - wp1_y) * ey
 
-        # 自船が航路方向で他船より前に出たら通過後
-        passed = own_s > other_s + self.opponent_passed_margin_m
-
-        if passed:
-            return False
-
-        return True
+        # Task 2 recognizes an avoidance opponent only inside the rectangle
+        # around the GPS5 -> GPS6 route: 5 m before/after its endpoints and
+        # 20 m on either side of the route centreline.
+        return (-self.opponent_corridor_margin_m <= other_s <=
+                route_len + self.opponent_corridor_margin_m and
+                abs(other_lateral) <= self.opponent_corridor_half_width_m)
 
     # ============================================================
     # State conversion
@@ -548,32 +550,17 @@ class TrajectoryGenerator:
         other_yaw_rad = self._yaw_from_quaternion(q.x, q.y, q.z, q.w)
         other_yaw_deg = math.degrees(other_yaw_rad)
 
-        twist_msg = other_twist.twist if hasattr(other_twist, "twist") else other_twist
-
-        tw_x = twist_msg.linear.x
-        tw_y = twist_msg.linear.y
-        tw_r_deg = math.degrees(twist_msg.angular.z)
-
-        if self.other_twist_is_relative:
-            # tw_x, tw_y が自船基準の相対速度として与えられる場合
-            other_vx = own_state_base.vx + tw_x
-            other_vy = own_state_base.vy + tw_y
-            other_r_deg = own_state_base.r + tw_r_deg
-        else:
-            # /other_ship/twist は map基準速度としてpublishされている想定。
-            # MPPIはbase_link基準で計算するので、map -> base_link へ回転変換する。
-            c_own = math.cos(own_map_yaw)
-            s_own = math.sin(own_map_yaw)
-
-            other_vx = c_own * tw_x + s_own * tw_y
-            other_vy = -s_own * tw_x + c_own * tw_y
-            other_r_deg = tw_r_deg
-
-        cy = math.cos(math.radians(other_yaw_deg))
-        sy = math.sin(math.radians(other_yaw_deg))
-
-        other_u = cy * other_vx + sy * other_vy
-        other_v = -sy * other_vx + cy * other_vy
+        del own_state_base, other_twist, own_map_yaw
+        # Detection supplies opponent pose/existence.  MPPI deliberately uses
+        # a fixed-speed target along the detected hull heading so noisy LiDAR
+        # velocity estimates cannot alter the collision model.
+        cy = math.cos(other_yaw_rad)
+        sy = math.sin(other_yaw_rad)
+        other_vx = self.fixed_opponent_speed_mps * cy
+        other_vy = self.fixed_opponent_speed_mps * sy
+        other_u = self.fixed_opponent_speed_mps
+        other_v = 0.0
+        other_r_deg = 0.0
 
         # debug: MPPIへ渡す他船状態を確認
         dist_dbg = math.hypot(other_x, other_y)
@@ -582,7 +569,8 @@ class TrajectoryGenerator:
             f"pos_base=({other_x:.2f}, {other_y:.2f}) m, "
             f"dist={dist_dbg:.2f} m, "
             f"yaw_base={other_yaw_deg:.1f} deg, "
-            f"vel_base=({other_vx:.2f}, {other_vy:.2f}) m/s, "
+            f"vel_base=({other_vx:.2f}, {other_vy:.2f}) m/s "
+            f"(fixed {self.fixed_opponent_speed_mps:.2f} m/s), "
             f"r={other_r_deg:.2f} deg/s"
         )
 

@@ -1,13 +1,22 @@
 import os
+import json
+import math
 
 import yaml
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, LogInfo, OpaqueFunction, TimerAction
+from launch.actions import (
+    DeclareLaunchArgument,
+    IncludeLaunchDescription,
+    LogInfo,
+    OpaqueFunction,
+    SetEnvironmentVariable,
+    TimerAction,
+)
 from launch.conditions import IfCondition
 from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 
 
@@ -27,6 +36,8 @@ def launch_cardinal_walls(context):
     bounds = params.get("task1_orchestrator", {}).get("ros__parameters", {}).get(
         "course_bounds", [-5.0, 55.0, -40.0, 35.0]
     )
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    course_heading = float(orchestrator_params.get("course_heading_rad", 0.0))
     return [Node(
         package="buoy_obstacle_publisher",
         executable="cardinal_wall_publisher",
@@ -37,8 +48,31 @@ def launch_cardinal_walls(context):
             "map_frame": "map",
             "course_bounds": bounds,
             "wall_width_m": 0.2,
+            "max_wall_length_m": 13.0,
             "point_spacing_m": 0.05,
             "confirmations_required": 2,
+            # Keep the nearest four not-yet-passed marks in the GPS3->GPS4
+            # direction; newly detected marks are re-ranked immediately.
+            "max_active_wall_tracks": 4,
+            # Surveyed Task1 GPS3 -> GPS4 direction in the local ENU map.
+            "course_heading_rad": course_heading,
+            "retirement_course_heading_rad": course_heading,
+            "retire_passed_cardinal_walls_from_base_pose": True,
+            "retirement_margin_m": 1.0,
+            "retirement_confirmations_required": 5,
+            "return_confirmations_required": 5,
+            "retirement_heading_topic": "/task1/gps3_to_gps4_heading",
+            # The simulator publishes the same UM982 true-heading contract
+            # used by the vessel's dual-antenna GNSS receiver.
+            "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
+            "true_north_confirmations_required": 10,
+            "wall_enable_topic": "/task1/cardinal_wall_enable",
+            "retirement_frontier_topic": "/sim/task1_wall_retirement_frontier",
+            # Show the known simulator marks faintly before perception
+            # confirms them. The wall node keeps these out of Nav2's actual
+            # /virtual_obstacles output.
+            "preview_buoy_positions": orchestrator_params.get("buoy_position_xy", "[]"),
+            "preview_buoy_marks": orchestrator_params.get("buoy_marks", "[]"),
         }],
         output="screen",
     )]
@@ -54,6 +88,7 @@ def launch_cardinal_perception_sim(context):
     buoy_position_xy = orchestrator_params.get(
         "buoy_position_xy", "[[28.0, -25.0], [18.0, -25.0], [11.0, -25.0]]"
     )
+    buoy_marks = orchestrator_params.get("buoy_marks", "[]")
     return [Node(
         package="task1_sim",
         executable="cardinal_perception_sim",
@@ -62,11 +97,65 @@ def launch_cardinal_perception_sim(context):
             "odom_topic": "/odom",
             "cardinal_mark_topic": "/sim/cardinal_mark",
             "detection_topic": "/buoy_detections_3d",
-            "output_frame": "base_link",
+            # buoy_position_xy is map-frame simulator ground truth.  Keeping
+            # the output in map avoids creating duplicate wall tracks when
+            # map and odom diverge during the simulated run.
+            "output_frame": "map",
             "buoy_position_xy": buoy_position_xy,
+            "buoy_marks": buoy_marks,
+            "recognition_range_m": 100.0,
         }],
         output="screen",
         condition=IfCondition(LaunchConfiguration("use_cardinal_perception_sim")),
+    )]
+
+
+def launch_dynamics(context, pkg_dutyed):
+    """Create the dynamics node at GPS1, optionally staged just before WP3."""
+    start_at_wp3 = LaunchConfiguration("start_at_wp3").perform(context).lower() == "true"
+    with open(LaunchConfiguration("params").perform(context), "r") as params_file:
+        params = yaml.safe_load(params_file) or {}
+    orchestrator_params = params.get("task1_orchestrator", {}).get("ros__parameters", {})
+    checkpoints = json.loads(orchestrator_params.get("gps_checkpoint_xy", "[]"))
+    heading = float(orchestrator_params.get("course_heading_rad", 0.0))
+    # Stage five metres before GPS3, opposite the GPS3 -> GPS4 direction.
+    if start_at_wp3 and len(checkpoints) >= 3:
+        gps3_x, gps3_y = checkpoints[2]
+        initial_pose = [gps3_x - 5.0 * math.cos(heading),
+                        gps3_y - 5.0 * math.sin(heading), heading]
+    elif checkpoints:
+        # GPS1 is the starting pose.  WP 1.1 is deliberately the first
+        # NavigateThroughPoses goal, so the boat must travel to it rather than
+        # accepting it immediately at startup.
+        start_x, start_y = checkpoints[0]
+        waypoint1 = json.loads(orchestrator_params.get("waypoint1_xy", "[]"))
+        if waypoint1:
+            next_x, next_y = waypoint1[0]
+        else:
+            next_x, next_y = start_x + 1.0, start_y
+        initial_pose = [
+            start_x,
+            start_y,
+            math.atan2(next_y - start_y, next_x - start_x),
+        ]
+    else:
+        initial_pose = [0.0, 0.0, 0.0]
+    return [Node(
+        package="dutyed_tf_pub_with_disturbance",
+        executable="dutyed_tf_pub_with_disturbance_node",
+        name="dutyed_tf_pub_with_disturbance_node",
+        parameters=[
+            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
+            {
+                "publish_tf": True,
+                "initial_pose_xyyaw": initial_pose,
+                # Simulation uses geometric body-frame forces directly; do
+                # not apply the real vessel's port-side wiring correction.
+                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
+            },
+        ],
+        output="screen",
+        condition=IfCondition(LaunchConfiguration("use_dynamics")),
     )]
 
 
@@ -78,7 +167,12 @@ def generate_launch_description():
     pkg_thruster = get_package_share_directory("thruster_driver")
 
     config = os.path.join(pkg_share, "config", "task1_params.yaml")
-    nav2_params = os.path.join(pkg_share, "config", "task1_nav2_params_jazzy.yaml")
+    ros_distro = os.environ.get("ROS_DISTRO", "").lower()
+    nav2_params_name = (
+        "task1_nav2_params_jazzy.yaml" if ros_distro == "jazzy"
+        else "task1_nav2_params_humble.yaml"
+    )
+    nav2_params = os.path.join(pkg_share, "config", nav2_params_name)
     nav_through_poses_bt_xml = os.path.join(
         pkg_share,
         "behavior_trees",
@@ -119,12 +213,26 @@ def generate_launch_description():
         description="Emit simulated /buoy_detections_3d once the boat is within ZED2i/Mid-360 "
                      "range+FOV of a cardinal marker, so cardinal_wall_publisher can build /virtual_obstacles",
     )
+    use_navsat_arg = DeclareLaunchArgument(
+        "use_navsat", default_value="true",
+        description="Run navsat_transform_node to provide /fromLL for GPS waypoints",
+    )
     use_local_ekf_arg = DeclareLaunchArgument("use_local_ekf", default_value="true")
     use_global_ekf_arg = DeclareLaunchArgument("use_global_ekf", default_value="true")
     task_type_arg = DeclareLaunchArgument(
         "task_type",
         default_value="task1",
         description="Waypoint set: 'task1' (competition scenario) or 'task1_follow' (lawnmower survey)",
+    )
+    start_at_wp3_arg = DeclareLaunchArgument(
+        "start_at_wp3",
+        default_value="false",
+        description="Start Task1 sim 5 m before competition WP3 and navigate from WP3 onward",
+    )
+    sim_true_north_yaw_arg = DeclareLaunchArgument(
+        "sim_true_north_yaw_rad",
+        default_value="1.5707963267948966",
+        description="Geographical true-north direction in the task1monday ENU map (rad)",
     )
     driver_delay_arg = DeclareLaunchArgument(
         "driver_delay",
@@ -147,22 +255,7 @@ def generate_launch_description():
     # ── SENSOR / PHYSICS LAYER (t=0) ─────────────────────────────────────────
     # SimNode is the sole simulation TF authority (publish_tf=True). Both EKFs
     # run with publish_tf=False so they only produce filtered odometry topics.
-    dynamics = Node(
-        package="dutyed_tf_pub_with_disturbance",
-        executable="dutyed_tf_pub_with_disturbance_node",
-        name="dutyed_tf_pub_with_disturbance_node",
-        parameters=[
-            os.path.join(pkg_dutyed, "config", "node_config.yaml"),
-            {
-                "publish_tf": True,
-                # Simulation uses geometric body-frame forces directly; do
-                # not apply the real vessel's port-side wiring correction.
-                "thruster_force_sign": [1.0, 1.0, 1.0, 1.0],
-            },
-        ],
-        output="screen",
-        condition=IfCondition(LaunchConfiguration("use_dynamics")),
-    )
+    dynamics = OpaqueFunction(function=lambda context: launch_dynamics(context, pkg_dutyed))
 
     sensor_noise_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -172,6 +265,10 @@ def generate_launch_description():
         launch_arguments={
             # Match the GNSS topic consumed by the bundled Foxglove extension.
             "fix_topic": "/sensor/vehicle_gnss/fix/raw",
+            "gps_origin_lat": "63.4408027778",
+            "gps_origin_lon": "10.4233944444",
+            "gps_origin_alt": "0.0",
+            "true_north_yaw_rad": LaunchConfiguration("sim_true_north_yaw_rad"),
         }.items(),
     )
 
@@ -186,7 +283,14 @@ def generate_launch_description():
             {
                 "robot_description": robot_description,
                 "control.dob.enable": False,
-                "allocation.wrench_sign": [1.0, 1.0, 1.0],
+                # The simulator consumes forces in [FR, FL, RR, RL] order,
+                # while the shared driver is configured as [FL, FR, RL, RR].
+                # Surge is invariant under that permutation, but sway and
+                # yaw are reversed. Correct before allocation so a positive
+                # Nav2 yaw command produces a positive simulated yaw rate;
+                # otherwise the velocity feedback loop turns in place and
+                # diverges continuously.
+                "allocation.wrench_sign": [1.0, -1.0, -1.0],
                 "thrusters.reverse": [False, False, False, False],
             },
         ],
@@ -244,6 +348,35 @@ def generate_launch_description():
         condition=IfCondition(LaunchConfiguration("use_global_ekf")),
     )
 
+    # waypoint_publisher resolves the surveyed latitude/longitude route via
+    # /fromLL.  Keep navsat's odometry output separate from the simulated
+    # UM982 feed, which is already the input of the global EKF.
+    navsat_transform_node = Node(
+        package="robot_localization",
+        executable="navsat_transform_node",
+        name="navsat_transform_node",
+        output="screen",
+        parameters=[{
+            "world_frame": "map",
+            "frequency": 10.0,
+            "magnetic_declination_radians": 0.0,
+            "yaw_offset": 0.0,
+            "zero_altitude": True,
+            "broadcast_utm_transform": False,
+            "publish_filtered_gps": False,
+            "use_odometry_yaw": True,
+            # The simulator starts at GPS1, so navsat can establish the
+            # task1monday map origin directly from the initial GNSS fix.
+            "wait_for_datum": False,
+        }],
+        remappings=[
+            ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
+            ("odometry/filtered", "odometry/filtered/global"),
+            ("odometry/gps", "/odometry/gps/navsat"),
+        ],
+        condition=IfCondition(LaunchConfiguration("use_navsat")),
+    )
+
     orchestrator = Node(
         package="task1_sim",
         executable="task1_orchestrator",
@@ -267,6 +400,7 @@ def generate_launch_description():
             "marker_topic": "/actual_path_marker",
             "parent_frame": "odom",
             "child_frame": "base_link",
+            "line_width": 0.08,
         }],
     )
     ground_speed = Node(
@@ -331,6 +465,7 @@ def generate_launch_description():
             robot_state_pub_node,
             local_ekf_node,
             global_ekf_node,
+            navsat_transform_node,
             validator,
             orchestrator,
             cardinal_walls,
@@ -365,6 +500,12 @@ def generate_launch_description():
             "task_type": LaunchConfiguration("task_type"),
             "frame_id": "map",
             "publish_rate_hz": "2.0",
+            "waypoint_marker_topic": "/sim/task1_waypoint_markers",
+            "nav2_goal_tolerance_m": "2.0",
+            "start_competition_waypoint": PythonExpression([
+                "'3' if '", LaunchConfiguration("start_at_wp3"), "' == 'true' else ''"
+            ]),
+            "show_waypoint_route_line": "false",
         },
     )
 
@@ -376,6 +517,11 @@ def generate_launch_description():
     startup_message = LogInfo(msg="========== Task1 Sim Bringup Started ==========")
 
     return LaunchDescription([
+        # Fast DDS shared-memory ports can remain locked by unrelated ROS
+        # sessions, which leaves Nav2's lifecycle bringup stuck before the
+        # NavigateThroughPoses action exists.  Cyclone DDS avoids that shared
+        # memory transport and is installed with the Humble workspace.
+        SetEnvironmentVariable("RMW_IMPLEMENTATION", "rmw_cyclonedds_cpp"),
         use_dynamics_arg,
         use_nav2_arg,
         use_thruster_driver_arg,
@@ -385,9 +531,12 @@ def generate_launch_description():
         use_gui_dummy_publishers_arg,
         use_foxglove_bridge_arg,
         use_cardinal_perception_sim_arg,
+        use_navsat_arg,
         use_local_ekf_arg,
         use_global_ekf_arg,
         task_type_arg,
+        start_at_wp3_arg,
+        sim_true_north_yaw_arg,
         driver_delay_arg,
         nav2_delay_arg,
         goal_delay_arg,

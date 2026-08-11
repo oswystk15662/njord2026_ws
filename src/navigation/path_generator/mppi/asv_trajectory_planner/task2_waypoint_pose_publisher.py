@@ -5,7 +5,7 @@
 Why this node exists (waypoint-source decision):
     The waypoint_publisher package delivers Task2 waypoints only as a
     NavigateThroughPoses action goal plus /task_waypoints // /plan Path
-    topics containing ALL configured waypoints (start, gates, goal). The
+    topics containing all configured waypoints. The
     MPPI planner_node instead needs exactly two PoseStamped topics
     (/waypoint1_pose, /waypoint2_pose) defining the GPS reference line, and
     waypoint_publisher offers no parameter or remap that can produce them.
@@ -34,6 +34,8 @@ from pathlib import Path
 from ament_index_python.packages import get_package_share_directory
 
 from geometry_msgs.msg import PoseStamped
+from geographic_msgs.msg import GeoPoint
+from robot_localization.srv import FromLL
 
 
 class Task2WaypointPosePublisher(Node):
@@ -65,7 +67,7 @@ class Task2WaypointPosePublisher(Node):
         publish_frequency = self.get_parameter("publish_frequency").value
         timer_period = 1.0 / max(publish_frequency, 1e-6)
 
-        self.waypoint1_xy, self.waypoint2_xy = self._load_waypoints(
+        self.start_wp, self.goal_wp = self._load_waypoints(
             config_package=config_package,
             config_file=config_file,
             config_key=config_key,
@@ -73,8 +75,18 @@ class Task2WaypointPosePublisher(Node):
 
         self.wp1_pub = self.create_publisher(PoseStamped, self.waypoint1_topic, 10)
         self.wp2_pub = self.create_publisher(PoseStamped, self.waypoint2_topic, 10)
+        self.from_ll_client = self.create_client(FromLL, "/fromLL")
+        self.waypoint1_xy = None
+        self.waypoint2_xy = None
+        # navsat_transform's /fromLL service is serial on the vessel.  Keep
+        # exactly one request in flight so GPS5/GPS6 cannot deadlock each
+        # other during startup.
+        self.projection_future = None
+        self.projection_index = 0
+        self.projected_positions = []
 
         self.timer = self.create_timer(timer_period, self.timer_callback)
+        self.create_timer(0.2, self._resolve_coordinates)
 
         self.get_logger().info("task2_waypoint_pose_publisher started.")
         self.get_logger().info(
@@ -123,12 +135,48 @@ class Task2WaypointPosePublisher(Node):
             waypoints[-1],
         )
 
-        wp1 = (float(start_wp.get("x", 0.0)), float(start_wp.get("y", 0.0)))
-        wp2 = (float(goal_wp.get("x", 0.0)), float(goal_wp.get("y", 0.0)))
+        return start_wp, goal_wp
 
-        return wp1, wp2
+    @staticmethod
+    def _request(point):
+        request = FromLL.Request()
+        request.ll_point = GeoPoint(
+            latitude=float(point["latitude"]), longitude=float(point["longitude"]),
+            altitude=float(point.get("altitude", 0.0)))
+        return request
+
+    def _resolve_coordinates(self):
+        if self.waypoint1_xy is not None:
+            return
+        if not self.from_ll_client.service_is_ready():
+            self.get_logger().warning("Waiting for /fromLL to resolve Task2 GPS waypoints.", throttle_duration_sec=2.0)
+            return
+        points = [self.start_wp, self.goal_wp]
+        if any(not isinstance(point, dict) or "latitude" not in point or "longitude" not in point for point in points):
+            self.get_logger().error("Invalid Task2 waypoint GPS configuration")
+            return
+        if self.projection_future is None and self.projection_index < len(points):
+            self.projection_future = self.from_ll_client.call_async(
+                self._request(points[self.projection_index])
+            )
+            return
+        if self.projection_future is None or not self.projection_future.done():
+            return
+        try:
+            point = self.projection_future.result().map_point
+            self.projected_positions.append((point.x, point.y))
+            self.projection_index += 1
+            self.projection_future = None
+            if self.projection_index == len(points):
+                self.waypoint1_xy, self.waypoint2_xy = self.projected_positions
+                self.get_logger().info("Resolved Task2 GPS5 then GPS6 coordinates in map frame.")
+        except Exception as error:
+            self.projection_future = None
+            self.get_logger().error(f"Task2 GPS waypoint projection failed: {error}")
 
     def timer_callback(self):
+        if self.waypoint1_xy is None or self.waypoint2_xy is None:
+            return
         x1, y1 = self.waypoint1_xy
         x2, y2 = self.waypoint2_xy
 

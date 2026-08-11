@@ -20,18 +20,11 @@ def generate_launch_description():
     robot_description_file = os.path.join(pkg_robot, "urdf", "robot.urdf_modified.urdf")
     robot_description = open(robot_description_file, "r").read()
 
-    use_cmd_vel_kinematics = DeclareLaunchArgument(
-        "use_cmd_vel_kinematics", default_value="true"
-    )
+    use_cmd_vel_kinematics = DeclareLaunchArgument("use_cmd_vel_kinematics", default_value="true")
     use_nav2 = DeclareLaunchArgument("use_nav2", default_value="true")
     use_mppi = DeclareLaunchArgument(
         "use_mppi", default_value="true",
-        description="Run the MPPI to FollowPath chain",
-    )
-    use_sim_time = DeclareLaunchArgument(
-        "use_sim_time",
-        default_value="false",
-        description="Use the /clock topic when an external simulator provides it.",
+        description="Run the recognition-assumed MPPI -> FollowPath chain",
     )
     params_arg = DeclareLaunchArgument("params", default_value=config)
     opponent_params_arg = DeclareLaunchArgument("opponent_params", default_value=opponent_config)
@@ -56,11 +49,8 @@ def generate_launch_description():
     goal_delay = LaunchConfiguration("goal_delay")
 
     kinematic_plant = Node(
-        package="task2_sim",
-        executable="cmd_vel_kinematic_sim",
-        name="cmd_vel_kinematic_sim",
-        output="screen",
-        parameters=[{"cmd_vel_topic": "/cmd_vel_nav"}],
+        package="task2_sim", executable="cmd_vel_kinematic_sim",
+        name="cmd_vel_kinematic_sim", output="screen",
         condition=IfCondition(LaunchConfiguration("use_cmd_vel_kinematics")),
     )
 
@@ -175,29 +165,43 @@ def generate_launch_description():
         ],
     )
 
+    # Same minimal FollowPath Nav2 stack as task2_autonomy.launch.py.  MPPI
+    # sends /planned_path_pruned directly to ControllerServer's FollowPath
+    # action; full Nav2 planning/BT servers are intentionally not launched.
     nav2_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_robot, "launch", "navigation_launch_task2.py")
         ),
         launch_arguments={
-            "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2_humble.yaml"),
+            "params_file": os.path.join(pkg_robot, "config", "nav2_params_task2_jazzy.yaml"),
             "use_sim_time": "false",
             "autostart": "true",
+            # No manual-control arbiter exists in simulation, so the
+            # velocity-smoother output drives the simulated thruster driver.
+            "auto_cmd_vel_topic": "/cmd_vel",
         }.items(),
         condition=IfCondition(LaunchConfiguration("use_nav2")),
     )
 
     nav2_layer_timer = TimerAction(period=nav2_delay, actions=[nav2_launch])
 
+    # Recognition-assumed bridge: the simulated opponent TF is converted to
+    # the same /other_ship/twist interface that the real LiDAR tracker emits.
     mppi_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_mppi, "launch", "planner_with_follow_path.launch.py")
         )
     )
 
+    # Put the condition on the timer, rather than on the nested include.  A
+    # condition on the include was not reliably expanded when it was executed
+    # from TimerAction, leaving Nav2 active but no planner/follow-path nodes.
     goal_layer_timer = TimerAction(
         period=goal_delay,
-        actions=[LogInfo(msg="Starting Task2 MPPI -> FollowPath chain"), mppi_launch],
+        actions=[
+            LogInfo(msg="Starting Task2 MPPI -> FollowPath chain"),
+            mppi_launch,
+        ],
         condition=IfCondition(LaunchConfiguration("use_mppi")),
     )
 
@@ -208,7 +212,6 @@ def generate_launch_description():
         use_cmd_vel_kinematics,
         use_nav2,
         use_mppi,
-        use_sim_time,
         params_arg,
         opponent_params_arg,
         driver_delay_arg,

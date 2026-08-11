@@ -366,7 +366,8 @@ def make_virtual_gate_from_path(
     return gate_center, buoys
 
 class MPPItorch():
-    def __init__(self,horizon,pred_dt,nb_sample,sigma,_lambda,umin,umax,loa,targU):
+    def __init__(self, horizon, pred_dt, nb_sample, sigma, _lambda, umin,
+                 umax, loa, opponent_loa, targU):
         self._device = 'cuda' if torch.cuda.is_available() else 'cpu'
         self.horizon = horizon
         self.pred_dt = pred_dt
@@ -382,6 +383,7 @@ class MPPItorch():
         self._caldt = self.pred_dt/self._nbcalloop
 
         self.ships_mppi = ship_torch(loa)
+        self.opponent_loa = opponent_loa
         self.targU = targU
 
     def prediction(self, x, y, psi, U, r, rudders, accs, seed=None, straight_time = 0):
@@ -577,7 +579,7 @@ class MPPItorch():
                     oth.x,
                     oth.u,
                     (-oth.yaw) % 360.0,
-                    loa,
+                    self.opponent_loa,
                 ]
                 for oth in others
             ]
@@ -814,6 +816,7 @@ class MPPIPlanner():
         gate_cost_weight: float = 3.0,         # was: literal in get_opt call
         # --- safe distances / geometry ---
         loa: float = 2.0,
+        opponent_loa: float = 1.8,
         gate_half_width_m: float = 4.0,        # was: literal in make_virtual_gate_from_path call
         buoy_margin_m: float = 1.0,            # was: margin_m literal in buoy_outside_cost call
         buoy_longitudinal_sigma_m: float = 8.0,  # was: longitudinal_sigma_m literal
@@ -829,6 +832,7 @@ class MPPIPlanner():
         self.avoid_offset = avoid_offset
 
         self.loa = loa
+        self.opponent_loa = opponent_loa
         self.target_speed = target_speed
 
         self.speed_cost = speed_cost_weight
@@ -865,6 +869,7 @@ class MPPIPlanner():
             umin = [-20,-0.1],
             umax = [ 20, 0.1],
             loa = self.loa,
+            opponent_loa = self.opponent_loa,
             targU = target_speed,
         )
 

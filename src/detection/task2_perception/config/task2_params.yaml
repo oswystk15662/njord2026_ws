@@ -68,9 +68,9 @@ opponent_selector:
     selection_policy: "nearest"               # nearest|min_tcpa|track_id
     target_track_id: -1
     # Catamaran horizontal dimensions. Height is intentionally not gated.
-    min_length_m: 1.2                          # [m], expected about 1.8 m
+    min_length_m: 0.9                          # [m], allow sparse far-range hull returns
     max_length_m: 2.5                          # [m], includes measurement error
-    min_width_m: 0.5                           # [m], expected about 0.9 m
+    min_width_m: 0.4                           # [m], retain buoy rejection while allowing sparse returns
     max_width_m: 1.5                           # [m], includes measurement error
     min_point_count: 0                         # 0 disables this optional gate
     stale_timeout_sec: 2.0                     # [s]
@@ -78,14 +78,17 @@ opponent_selector:
     twist_lowpass_alpha: 0.3
     # Task 2 launch selects straight_line; standard remains available.
     motion_filter_mode: "standard"            # standard|straight_line
-    straight_min_hit_count: 10                 # 5 Hz -> roughly 2 s history
-    straight_max_velocity_stddev_mps: 0.30     # [m/s] largest horizontal std-dev
+    straight_min_hit_count: 5                  # 5 Hz -> roughly 1 s history
+    straight_max_velocity_stddev_mps: 0.50     # [m/s] tolerate real LiDAR velocity noise
+    # A confirmed Task 2 target keeps its straight-line prediction through
+    # LiDAR occlusion; tentative tracks never enable this behavior.
+    straight_continue_after_loss: true
     # When LiDAR briefly loses a confirmed vessel, keep publishing this
     # constant-velocity prediction.  0 disables coasting; expiry is silent.
     straight_coast_timeout_sec: 2.0            # [s]
     # Operator-facing speed gate. Twist output remains SI m/s.
-    min_absolute_speed_knots: 2.0              # [kn]
-    max_absolute_speed_knots: 3.0              # [kn]
+    min_absolute_speed_knots: 0.3              # [kn] reject stationary buoys, retain slow vessels
+    max_absolute_speed_knots: 6.0              # [kn] tolerate estimate error; MPPI remains fixed at 2.5 kn
 
 # ---------------------------------------------------------------------------
 # PCL preprocessing: compact, current-frame cloud for Task 2 only
@@ -128,9 +131,9 @@ ground_remover_node:
 cluster_node:
   ros__parameters:
     cluster_tolerance: 1.0                     # [m] neighbouring-point link
-    min_cluster_size: 30                       # [points] reject tiny clutter
+    min_cluster_size: 15                       # [points] retain sparse far-range hull returns
     max_cluster_size: 10000                    # [points] reject large structures
-    min_cluster_height: 0.2                    # [m]
+    min_cluster_height: 0.1                    # [m] retain low hull returns after water removal
     max_cluster_height: 4.0                    # [m]
     max_cluster_horizontal_size: 5.0           # [m]
     publish_each_cluster: false
@@ -141,4 +144,4 @@ cluster_node:
 # ---------------------------------------------------------------------------
 ship_tracker_node:
   ros__parameters:
-    straight_hits_to_confirm: 10               # 5 Hz -> roughly 2 s to confirm
+    straight_hits_to_confirm: 5                # 5 Hz -> roughly 1 s to confirm

@@ -11,6 +11,7 @@ the ASV track against the planned route.
 - `task2`: collision-avoidance route
 - `task3_1`: normal docking sequence
 - `task3_2`: parallel docking sequence
+- `task4`: temporary surprise-task waypoint baseline (currently mirrors Task 1)
 
 ## Interfaces
 
@@ -28,6 +29,21 @@ the ASV track against the planned route.
 ```bash
 ros2 launch waypoint_publisher waypoint_publisher.launch.py task_type:=task1
 ```
+
+### FoxgloveでのWP位置確認（航行なし）
+
+次のlaunchは指定したYAMLの緯度・経度を、Foxglove地図拡張用の
+`/ground_waypoint_markers` にpublishするだけです。Mission Manager、Nav2 action、
+GNSS、推進指令には接続しないため、実機を航行させずにWP位置を確認できます。
+
+```bash
+ros2 launch waypoint_publisher waypoint_map.launch.py task_type:=task1
+# task2 / task3_1 / task3_2 も指定可能
+```
+
+Foxglove Bridgeと `gnss_map_telemetry` 拡張を起動したFoxgloveで地図パネルを開くと、
+指定したWPが表示されます。`task_type` を省略した `ground_waypoint_geo_publisher` は、
+従来どおりMission Managerの選択タスクに追従します。
 
 For Task1 simulation, prefer launching through `task1_sim` so dynamics,
 Nav2, waypoint publishing, and validation use the same configuration:
@@ -50,3 +66,12 @@ The Task1 config uses a simulation-local Cartesian approximation of the NJORD
 
 `task1_sim` owns the cardinal-mark stub, virtual obstacles on
 `/virtual_obstacles`, route/avoidance status, and `/sim/goal_reached`.
+
+### Real-vessel GPS waypoint mode
+
+Every waypoint must provide `latitude` and `longitude`; the publisher always
+projects them through `navsat_transform_node`'s `/fromLL` service. Any number
+of waypoint records (including sub-waypoints such as `1.1`) may be added or
+removed; their YAML order is the route order. `x`/`y`, `origin`, and
+coordinate-mode launch options are unsupported, so every projected goal uses
+the same datum and map axes as GNSS localization and the virtual buoy walls.

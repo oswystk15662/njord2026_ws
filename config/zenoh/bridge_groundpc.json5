@@ -26,7 +26,7 @@
         publishers: [
         ],
         subscribers: [
-          "/odom", "/tf", "/tf_static",
+          "/odom", "/tf", "/tf_static", "/mission/status",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

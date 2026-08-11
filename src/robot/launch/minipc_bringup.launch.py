@@ -312,6 +312,31 @@ def generate_launch_description():
         IfCondition(enable_buoy_costmap),
     )
 
+    cardinal_wall_publisher = Node(
+        package="buoy_obstacle_publisher",
+        executable="cardinal_wall_publisher",
+        name="cardinal_wall_publisher",
+        output="screen",
+        parameters=[{
+            "detection_topic": "/buoy_detections_3d",
+            "output_topic": "/virtual_obstacles",
+            "map_frame": "map",
+            "max_wall_length_m": 13.0,
+            "max_active_wall_tracks": 4,
+            "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
+            "true_north_confirmations_required": 10,
+            "wall_enable_topic": "/task1/cardinal_wall_enable",
+            "retire_passed_cardinal_walls_from_base_pose": True,
+            "retirement_margin_m": 1.0,
+            "retirement_confirmations_required": 5,
+            "return_confirmations_required": 5,
+            "retirement_heading_topic": "/task1/gps3_to_gps4_heading",
+        }],
+        condition=IfCondition(PythonExpression([
+            "'", enable_buoy_costmap, "' == 'true' and '", active_nav2_profile, "' == 'task1'"
+        ])),
+    )
+
     back_cam_launch = include_launch(
         "robot",
         ["launch", "back_cam.launch.py"],
@@ -592,6 +617,7 @@ def generate_launch_description():
             foxglove_logger,
             alert_lamp_launch,
             buoy_obstacle_launch,
+            cardinal_wall_publisher,
             back_cam_launch,
             back_cam_ground_video_launch,
             back_cam_jpeg_ground_video_launch,

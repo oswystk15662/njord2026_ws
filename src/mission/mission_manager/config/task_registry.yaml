@@ -13,7 +13,7 @@ tasks:
     frame_id: map
     nav2_profile: task1
     control_policy: task1
-    features: {cardinal_walls: true}
+    features: {cardinal_walls: true, heading_required_competition_ids: ["3"]}
   task1_skip_1_1:
     display_name: Task 1 GPS smoke test
     availability: experimental
@@ -38,15 +38,46 @@ tasks:
     frame_id: map
     nav2_profile: task2
     control_policy: task2
-    features: {buoy_perception: true}
+    # Task2 can run the straight GPS5->GPS6 route without a detected vessel.
+    # MPPI paths, FollowPath, and the active Collision Monitor remain AUTO
+    # interlocks; live buoy perception refines avoidance when available.
+    features: {buoy_perception: false}
   task3_1:
     display_name: Task 3-1
-    availability: disabled
-    reason: Nav2 profile and dynamic gate TF readiness are not verified
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_1_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
   task3_2:
     display_name: Task 3-2
-    availability: disabled
-    reason: Nav2 profile and dynamic gate TF readiness are not verified
+    availability: experimental
+    executor: staged_docking
+    route_package: waypoint_publisher
+    route: config/task3_waypoints.yaml
+    route_key: task3_2_config
+    frame_id: map
+    nav2_profile: task3
+    control_policy: task3
+  # Surprise-task baseline: common waypoint execution over the temporary
+  # Task1-derived route.  Every optional behavior is explicit and off.
+  task4:
+    display_name: Task 4 (temporary waypoint baseline)
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task4_waypoints.yaml
+    route_key: task4_config
+    frame_id: map
+    nav2_profile: task1
+    control_policy: task1
+    features:
+      cardinal_walls: false
+      buoy_perception: false
+      heading_required_competition_ids: []
   return_home:
     display_name: Ground-link failsafe return home
     availability: experimental

@@ -13,8 +13,8 @@ control_policy:
   # 全タスク共通の要求。タスク側キーとマージされ、タスク側が優先される。
   common:
     require_emergency_stop_clear: true    # 非常停止が解除されていること
-    require_nav2_ready: false              # Nav2 のアクションサーバが利用可能であること
-    require_task_ready: false              # Mission Manager がタスク準備完了を報告していること
+    require_nav2_ready: true               # Nav2 のアクションサーバが利用可能であること
+    require_task_ready: true               # Mission Manager がタスク準備完了を報告していること
     # Nav 指令の鮮度は Command Arbiter の出力ゲートで判定する。
     nav_command_timeout_sec: 0.5          # 出力の鮮度判定閾値（秒、正数のみ）
     require_ground_station: false         # ground_station_heartbeat が OK であること
@@ -35,16 +35,16 @@ control_policy:
   task2:
     require_ground_station: true
     require_waypoint_plan: true
-    require_collision_monitor: true
-    require_buoy_perception: true
+    require_collision_monitor: false
+    require_buoy_perception: false
     require_dynamic_gate_tf: false
 
   task3:
     require_ground_station: true
     require_waypoint_plan: true
-    require_collision_monitor: true
+    require_collision_monitor: false
     require_buoy_perception: false
-    require_dynamic_gate_tf: true
+    require_dynamic_gate_tf: false
 
   # Ground link loss cannot permit normal AUTO continuation.  This dedicated
   # policy is used only after the timed GNSS/compass return-home failsafe gate.
