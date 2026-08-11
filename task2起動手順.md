@@ -14,6 +14,56 @@ Task 2 は 3 台で分担して起動する。
 
 以下のコマンド中の `/home/hashilab/Desktop/njord2026_ws` は各端末のワークスペースのパスに読み替える。
 
+## ビルド方法
+
+`scripts/njord_env.sh` は端末のプロファイルを設定し、GPUがない端末ではGPU専用パッケージをビルド対象から外す。**各端末でビルド前に必ず source する。** 実行後の表示で、Jetson は `NJORD_PROFILE=jetson`、miniPC/Ground PC は `NJORD_PROFILE=minipc` と `NJORD_ENABLE_GPU_SENSORS=<unset>` であることを確認する。
+
+### Jetson（GPUあり）
+
+JetsonではCUDA・ZED SDK・Livox・GLIM・Task 2知覚を含めてビルドする。
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/jazzy/setup.bash
+export NJORD_PROFILE=jetson NJORD_ROLE=jetson
+source scripts/njord_env.sh
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+```
+
+JetsonのROSディストリビューションがJazzy以外の場合だけ、1行目の `jazzy` をその端末のディストリビューション名に置き換える。
+
+### miniPC（GPUなし・実艇側）
+
+miniPCはGPUセンサ処理をビルドしない。`njord_env.sh` がLivox SDK・Livox ROS driver・PCL segmentationを除外し、CPUで動くminiPC側のGNSS、Nav2、制御、Mission Manager、ダミーGNSSをビルドする。
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/humble/setup.bash
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release
+source install/setup.bash
+```
+
+### Ground PC（GPUなし）
+
+Ground PCはGPUセンサ処理をビルドしない。操縦、critical link、Foxglove、映像受信、waypoint表示に必要な範囲だけビルドする。
+
+```bash
+cd /home/hashilab/Desktop/njord2026_ws
+source /opt/ros/humble/setup.bash
+export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+source scripts/njord_env.sh
+colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
+  --packages-up-to robot ntripcaster critical_link simple_manual \
+  tf_frame_arrow_publisher waypoint_publisher zed2i_driver \
+  control_manager mission_manager
+source install/setup.bash
+```
+
+Ground PCにはJetson用のCUDA/TensorRT/ZED SDKは不要である。`zed2i_driver` はSDKなしではCPU/stub版としてビルドされ、Ground PCでは映像受信launchだけを使用する。
+
 ## 1. GNSS 接続後の通常起動
 
 ### 1.1 Jetson（知覚・追跡・MPPI）
