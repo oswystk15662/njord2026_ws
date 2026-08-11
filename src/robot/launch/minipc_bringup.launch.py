@@ -105,6 +105,7 @@ def generate_launch_description():
     enable_nav2 = LaunchConfiguration("enable_nav2")
     active_nav2_profile = LaunchConfiguration("active_nav2_profile")
     sbus_serial_port = LaunchConfiguration("sbus_serial_port")
+    sbus_zero_axes_on_startup = LaunchConfiguration("sbus_zero_axes_on_startup")
     enable_control_manager = LaunchConfiguration("enable_control_manager")
     enable_mission_manager = LaunchConfiguration("enable_mission_manager")
     ground_link_return_monitor_log_level = LaunchConfiguration(
@@ -272,6 +273,7 @@ def generate_launch_description():
         executable="sbus_joy_converter_node",
         name="sbus_joy_converter",
         output="screen",
+        parameters=[{"zero_axes_on_startup": sbus_zero_axes_on_startup}],
         remappings=[("joy", "/sbus/joy")],
     )
 
@@ -553,6 +555,11 @@ def generate_launch_description():
                     "usb-Espressif_USB_JTAG_serial_debug_unit_8C:BF:EA:CF:9A:B0-if00"
                 ),
                 description="Stable /dev/serial/by-id path for the SBUS XIAO ESP32-C6",
+            ),
+            DeclareLaunchArgument(
+                "sbus_zero_axes_on_startup",
+                default_value="false",
+                description="Calibrate SBUS stick centers for two seconds at startup.",
             ),
             DeclareLaunchArgument(
                 "um982_port",

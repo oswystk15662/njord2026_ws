@@ -342,11 +342,12 @@ private:
     }
     out << '\n' << "NAV_TARGET=";
     const auto * plan = activePlan();
+    const bool task2_active = mission_status_ && mission_status_->task_id == "task2";
+    if (task2_active) {
+      out << "task2 ";
+    }
     if (plan != nullptr && !plan->poses.empty()) {
       const auto & target = plan->poses.back().pose.position;
-      if (mission_status_ && mission_status_->task_id == "task2") {
-        out << "task2 ";
-      }
       out << plan->header.frame_id << " (" << target.x << ',' << target.y << ')';
       const auto distance = targetDistance();
       out << " DIST=" << (distance ? std::to_string(*distance) : "N/A") << "m";

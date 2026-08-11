@@ -141,6 +141,7 @@ void UM982Driver::parse_gga(const std::string& line)
 
 void UM982Driver::parse_gst(const std::string& line)
 {
+    constexpr double kMinimumGstStdDevM = 0.01;
     double latitude_stddev = 0.0;
     double longitude_stddev = 0.0;
     double altitude_stddev = 0.0;
@@ -151,9 +152,9 @@ void UM982Driver::parse_gst(const std::string& line)
         return;
     }
     latest_gst_variance_ = {
-        latitude_stddev * latitude_stddev,
-        longitude_stddev * longitude_stddev,
-        altitude_stddev * altitude_stddev};
+        std::pow(std::max(latitude_stddev, kMinimumGstStdDevM), 2),
+        std::pow(std::max(longitude_stddev, kMinimumGstStdDevM), 2),
+        std::pow(std::max(altitude_stddev, kMinimumGstStdDevM), 2)};
     latest_gst_stamp_ = this->now();
     have_gst_ = true;
 }

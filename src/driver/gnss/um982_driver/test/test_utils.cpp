@@ -87,6 +87,16 @@ TEST(NmeaParsing, ExtractsGstPositionStandardDeviations)
     EXPECT_DOUBLE_EQ(altitude, 3.761);
 }
 
+TEST(NmeaParsing, AcceptsZeroGstStandardDeviations)
+{
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double altitude = 0.0;
+    EXPECT_TRUE(um982_driver::utils::parse_gst_standard_deviations(
+        "$GPGST,060458.00,0.00,0.00,0.00,0.0000,0.000,0.000,0.000*58",
+        latitude, longitude, altitude));
+}
+
 TEST(NmeaParsing, RejectsNonFiniteMalformedAndOutOfRangeCoordinates)
 {
     double coordinate = 0.0;

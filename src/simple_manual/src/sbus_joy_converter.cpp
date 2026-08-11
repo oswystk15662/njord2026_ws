@@ -49,7 +49,7 @@ SbusJoyOutput convert_sbus_joy(
   if (!output.command_enabled) {
     return output;
   }
-  const double axis4 = axis_value(joy, 4) - offset_value(offsets, 4);
+  const double axis4 = axis_value(joy, 4);
   output.soft_emg = axis4 >= 0.8;
   if (axis4 <= -0.8) {
     output.operating_mode = "auto";
@@ -65,6 +65,8 @@ public:
   SbusJoyConverter()
   : Node("sbus_joy_converter")
   {
+    zero_axes_on_startup_ = declare_parameter<bool>("zero_axes_on_startup", false);
+    calibrated_ = !zero_axes_on_startup_;
     sub_ = create_subscription<sensor_msgs::msg::Joy>(
       "joy", 10, std::bind(&SbusJoyConverter::joy_cb, this, std::placeholders::_1));
     cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_sbus", 10);
@@ -125,6 +127,7 @@ private:
   }
 
   bool calibrated_{false};
+  bool zero_axes_on_startup_{false};
   size_t calibration_count_{0};
   std::optional<std::chrono::steady_clock::time_point> calibration_start_;
   std::vector<double> calibration_sum_;

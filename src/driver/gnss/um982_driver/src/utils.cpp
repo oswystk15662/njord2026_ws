@@ -146,7 +146,7 @@ bool parse_gst_standard_deviations(
     {
         return false;
     }
-    return latitude > 0.0 && longitude > 0.0 && altitude > 0.0;
+    return latitude >= 0.0 && longitude >= 0.0 && altitude >= 0.0;
 }
 
 double normalize_angle_rad(double angle_rad) noexcept

@@ -24,6 +24,9 @@ TEST(SbusJoyConverter, MapsAxesModesAndEmergency)
   EXPECT_EQ(simple_manual::convert_sbus_joy(joy, {}).operating_mode, "auto");
   joy.axes[4] = 0.0F;
   EXPECT_EQ(simple_manual::convert_sbus_joy(joy, {}).operating_mode, "manual");
+
+  joy.axes[4] = 0.9F;
+  EXPECT_TRUE(simple_manual::convert_sbus_joy(joy, {0.0, 0.0, 0.0, 0.0, 0.9}).soft_emg);
 }
 
 TEST(SbusJoyConverter, FloorsAtThreeDecimalPlaces)
