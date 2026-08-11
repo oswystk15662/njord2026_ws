@@ -7,7 +7,7 @@ import time
 from pathlib import Path
 
 import rclpy
-from geometry_msgs.msg import PoseWithCovarianceStamped
+from geometry_msgs.msg import PoseWithCovarianceStamped, Twist
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from sensor_msgs.msg import NavSatFix
@@ -30,6 +30,7 @@ class GroundLinkReturnNode(Node):
         self._return_pub = self.create_publisher(Empty, "/mission/failsafe/return_home", TRANSIENT_QOS)
         self._status_pub = self.create_publisher(String, "/mission/failsafe/status", TRANSIENT_QOS)
         self.create_subscription(Empty, "/heartbeat/ground_station", self._heartbeat, 10)
+        self.create_subscription(Twist, "/cmd_vel_sbus", self._sbus_command, 10)
         self.create_subscription(NavSatFix, "/sensor/vehicle_gnss/fix/raw", self._position, 10)
         self.create_subscription(PoseWithCovarianceStamped, "/sensor/vehicle_gnss/compass/raw", self._heading, 10)
         self.create_timer(0.1, self._tick)
@@ -42,6 +43,10 @@ class GroundLinkReturnNode(Node):
     def _heartbeat(self, _message: Empty) -> None:
         self._evaluator.heartbeat(self._now())
         self._publish_status("ground heartbeat healthy")
+
+    def _sbus_command(self, _message: Twist) -> None:
+        self._evaluator.heartbeat(self._now())
+        self._publish_status("SBUS command active; ground heartbeat bypassed")
 
     def _position(self, message: NavSatFix) -> None:
         if math.isfinite(message.latitude) and math.isfinite(message.longitude):

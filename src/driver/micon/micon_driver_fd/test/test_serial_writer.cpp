@@ -166,12 +166,16 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
 
   if (!rclcpp::ok()) {rclcpp::init(0, nullptr);}
   rclcpp::NodeOptions options;
-  options.parameter_overrides({rclcpp::Parameter("serial_port", std::string(slave_name))});
+  options.parameter_overrides({
+    rclcpp::Parameter("serial_port", std::string(slave_name)),
+    rclcpp::Parameter("ground_station_heartbeat_timeout_sec", 0.05),
+  });
   auto writer = std::make_shared<micon_driver_fd::SerialWriter>(options);
   auto publisher_node = std::make_shared<rclcpp::Node>("serial_writer_test_publisher");
   auto thrust_pub = publisher_node->create_publisher<std_msgs::msg::Float32MultiArray>(
     "/thruster_command", 10);
   auto soft_emg_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/soft_emg", 10);
+  auto sbus_pub = publisher_node->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel_sbus", 10);
   auto green_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/green", 10);
   auto red_pub = publisher_node->create_publisher<std_msgs::msg::Bool>("/red", 10);
 
@@ -183,7 +187,8 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   const auto receive_deadline = std::chrono::steady_clock::now() + 300ms;
   while (std::chrono::steady_clock::now() < receive_deadline) {
     thrust_pub->publish(thrust);
-    soft_emg_pub->publish(std_msgs::msg::Bool().set__data(true));
+    soft_emg_pub->publish(std_msgs::msg::Bool().set__data(false));
+    sbus_pub->publish(geometry_msgs::msg::Twist{});
     green_pub->publish(std_msgs::msg::Bool().set__data(true));
     red_pub->publish(std_msgs::msg::Bool().set__data(true));
     executor.spin_some();
@@ -207,7 +212,7 @@ TEST(SerialWriterIntegration, WritesRosInputsToPseudoTerminal)
   const micon_driver_fd::Packet packet(
     received.begin() + static_cast<std::ptrdiff_t>(frame_begin),
     received.begin() + static_cast<std::ptrdiff_t>(last_delimiter_index + 1U));
-  expect_thruster_command_frame(packet, {0.1F, -0.2F, 0.3F, -0.4F}, 0x0D, 0, false);
+  expect_thruster_command_frame(packet, {0.1F, -0.2F, 0.3F, -0.4F}, 0x05, 0, false);
 
   close(master_fd);
   executor.remove_node(publisher_node);

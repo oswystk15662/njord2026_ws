@@ -139,6 +139,9 @@ SerialWriter::SerialWriter(const rclcpp::NodeOptions & options)
     sub_ground_station_heartbeat_ = create_subscription<std_msgs::msg::Empty>(
       ground_station_heartbeat_topic_, 10,
       std::bind(&SerialWriter::ground_station_heartbeat_cb, this, std::placeholders::_1));
+    sub_sbus_command_ = create_subscription<geometry_msgs::msg::Twist>(
+      "/cmd_vel_sbus", 10,
+      std::bind(&SerialWriter::sbus_command_cb, this, std::placeholders::_1));
   }
   pub_relay_active_ = create_publisher<std_msgs::msg::Bool>("/micon/relay_active", 10);
   pub_safety_emergency_ = create_publisher<std_msgs::msg::UInt8>(
@@ -223,6 +226,16 @@ void SerialWriter::green_cb(const std_msgs::msg::Bool::SharedPtr msg)
 }
 
 void SerialWriter::ground_station_heartbeat_cb(const std_msgs::msg::Empty::SharedPtr)
+{
+  refresh_ground_station_watchdog();
+}
+
+void SerialWriter::sbus_command_cb(const geometry_msgs::msg::Twist::SharedPtr)
+{
+  refresh_ground_station_watchdog();
+}
+
+void SerialWriter::refresh_ground_station_watchdog()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   ground_station_heartbeat_received_ = true;

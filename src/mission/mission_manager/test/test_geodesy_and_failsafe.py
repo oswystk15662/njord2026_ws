@@ -50,7 +50,7 @@ def test_ground_link_failsafe_refuses_unstable_position():
     assert "position stddev" in decision.status
 
 
-def test_ground_link_failsafe_resets_when_heartbeat_returns():
+def test_ground_link_failsafe_resets_when_any_keepalive_arrives():
     evaluator = GroundLinkReturnEvaluator(HOME)
     evaluator.heartbeat(0.0)
     evaluator.heartbeat(25.0)

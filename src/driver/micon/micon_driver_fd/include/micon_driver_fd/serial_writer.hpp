@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "std_msgs/msg/bool.hpp"
 #include "std_msgs/msg/empty.hpp"
 #include "std_msgs/msg/float32_multi_array.hpp"
@@ -60,6 +61,8 @@ private:
   void yellow_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void green_cb(const std_msgs::msg::Bool::SharedPtr msg);
   void ground_station_heartbeat_cb(const std_msgs::msg::Empty::SharedPtr msg);
+  void sbus_command_cb(const geometry_msgs::msg::Twist::SharedPtr msg);
+  void refresh_ground_station_watchdog();
   void timer_cb();
   void update_ground_station_watchdog();
   void read_relay_state();
@@ -87,6 +90,7 @@ private:
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_yellow_;
   rclcpp::Subscription<std_msgs::msg::Bool>::SharedPtr sub_green_;
   rclcpp::Subscription<std_msgs::msg::Empty>::SharedPtr sub_ground_station_heartbeat_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr sub_sbus_command_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr pub_relay_active_;
   rclcpp::Publisher<std_msgs::msg::UInt8>::SharedPtr pub_safety_emergency_;
   rclcpp::TimerBase::SharedPtr timer_;
