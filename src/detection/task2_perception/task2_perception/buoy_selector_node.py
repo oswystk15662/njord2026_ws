@@ -16,6 +16,7 @@ from nav_msgs.msg import Odometry
 from rclpy.node import Node
 from rclpy.time import Time
 from tf2_ros import Buffer, TransformListener
+from visualization_msgs.msg import Marker, MarkerArray
 
 from njord_interfaces.msg import BuoyDetection, BuoyDetectionArray
 
@@ -43,6 +44,11 @@ class BuoySelectorNode(Node):
             ("ego_odom_topic", "/task2/ego_odom"),
             ("output_topic", "/task2/buoy_detections"),
             ("legacy_point_topic", "/buoy_detections"),
+            # Disabled for normal operation.  The rosbag launch enables this
+            # so an operator can see precisely which tracked clusters passed
+            # the buoy-selection gates.
+            ("publish_detection_markers", False),
+            ("detection_markers_topic", "/task2/buoy_detection_markers"),
             ("map_frame", "map"), ("base_frame", "base_link"),
             ("waypoint_start_topic", "/waypoint1_pose"),
             ("waypoint_end_topic", "/waypoint2_pose"),
@@ -78,6 +84,11 @@ class BuoySelectorNode(Node):
         self.tf_listener = TransformListener(self.tf_buffer, self)
         self.array_pub = self.create_publisher(BuoyDetectionArray, str(p("output_topic")), 10)
         self.point_pub = self.create_publisher(PointStamped, str(p("legacy_point_topic")), 10)
+        self.marker_pub = None
+        self.marker_ids = set()
+        if bool(p("publish_detection_markers")):
+            self.marker_pub = self.create_publisher(
+                MarkerArray, str(p("detection_markers_topic")), 10)
         self.create_subscription(TrackedObjectArray, str(p("tracked_objects_topic")), self.tracks_callback, 10)
         self.create_subscription(Odometry, str(p("ego_odom_topic")), self.ego_callback, 10)
         self.create_subscription(PoseStamped, str(p("waypoint_start_topic")), lambda msg: self.endpoint_callback(msg, True), 10)
@@ -106,11 +117,50 @@ class BuoySelectorNode(Node):
         else:
             self.end_map = np.array([msg.pose.position.x, msg.pose.position.y])
 
+    def _marker_pair(self, detection, track):
+        """Build a bounding-box and label for one buoy-selected cluster."""
+        colour = {
+            BuoyDetection.CLASS_GREEN: (0.1, 0.9, 0.1),
+            BuoyDetection.CLASS_RED: (0.95, 0.1, 0.1),
+        }.get(detection.class_id, (1.0, 0.8, 0.0))
+        label = {
+            BuoyDetection.CLASS_GREEN: "BUOY green",
+            BuoyDetection.CLASS_RED: "BUOY red",
+        }.get(detection.class_id, "BUOY unknown")
+        marker_id = int(track.object_id) * 2
+        box = Marker()
+        box.header.frame_id = self.map_frame
+        box.header.stamp = self.get_clock().now().to_msg()
+        box.ns, box.id = "task2_buoy_clusters", marker_id
+        box.type, box.action = Marker.CUBE, Marker.ADD
+        box.pose.position = detection.position
+        box.pose.orientation.w = 1.0
+        box.scale.x = max(0.1, float(track.dimensions[0]))
+        box.scale.y = max(0.1, float(track.dimensions[1]))
+        box.scale.z = max(0.1, float(track.dimensions[2]))
+        box.color.r, box.color.g, box.color.b = colour
+        box.color.a = 0.8
+
+        text = Marker()
+        text.header = box.header
+        text.ns, text.id = box.ns, marker_id + 1
+        text.type, text.action = Marker.TEXT_VIEW_FACING, Marker.ADD
+        text.pose.position = detection.position
+        text.pose.position.z += box.scale.z * 0.5 + 0.35
+        text.pose.orientation.w = 1.0
+        text.scale.z = 0.35
+        text.color.r, text.color.g, text.color.b = colour
+        text.color.a = 1.0
+        text.text = f"{label}  id={track.object_id}"
+        return box, text
+
     def timer_callback(self):
         now = self.get_clock().now()
         detections = BuoyDetectionArray()
         detections.header.stamp = now.to_msg()
         detections.header.frame_id = self.map_frame
+        markers = MarkerArray()
+        active_marker_ids = set()
         for track in tracking_glue.select_opponent(self.tracks, now.nanoseconds * 1e-9, params=self.selection_params):
             try:
                 tf = self.tf_buffer.lookup_transform(self.map_frame, self.base_frame, Time(seconds=track.stamp_sec))
@@ -148,6 +198,18 @@ class BuoySelectorNode(Node):
             point.header = detections.header
             point.point = detection.position
             self.point_pub.publish(point)
+            if self.marker_pub is not None:
+                box, text = self._marker_pair(detection, track)
+                markers.markers.extend((box, text))
+                active_marker_ids.update((box.id, text.id))
+        if self.marker_pub is not None:
+            for marker_id in self.marker_ids - active_marker_ids:
+                marker = Marker()
+                marker.header.frame_id = self.map_frame
+                marker.ns, marker.id, marker.action = "task2_buoy_clusters", marker_id, Marker.DELETE
+                markers.markers.append(marker)
+            self.marker_ids = active_marker_ids
+            self.marker_pub.publish(markers)
         self.array_pub.publish(detections)
 
 

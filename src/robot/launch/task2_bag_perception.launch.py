@@ -87,6 +87,7 @@ def generate_launch_description():
             "enable_cloud_filter": "true",
             "enable_opponent_selector": "true",
             "enable_buoy_selector": "true",
+            "publish_buoy_detection_markers": "true",
             "params_file": LaunchConfiguration("params_file"),
             "use_sim_time": "true",
             "ego_odom_topic": ego_odom_topic,

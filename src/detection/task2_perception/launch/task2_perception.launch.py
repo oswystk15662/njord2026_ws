@@ -52,6 +52,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "publish_self_marker", default_value="true",
             description="Publish the visualization-only self-vessel Marker"),
+        DeclareLaunchArgument(
+            "publish_buoy_detection_markers", default_value="false",
+            description="Publish MarkerArray boxes for buoy-selected clusters"),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "ego_odom_topic", default_value="/odometry/filtered/local"),
@@ -113,6 +116,8 @@ def generate_launch_description():
                     "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
                     "map_frame": LaunchConfiguration("map_frame"),
                     "base_frame": LaunchConfiguration("base_frame"),
+                    "publish_detection_markers": LaunchConfiguration(
+                        "publish_buoy_detection_markers"),
                 },
             ],
             condition=IfCondition(LaunchConfiguration("enable_buoy_selector")),
