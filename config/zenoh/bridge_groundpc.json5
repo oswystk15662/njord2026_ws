@@ -26,7 +26,8 @@
         publishers: [
         ],
         subscribers: [
-          "/odom", "/tf", "/tf_static", "/mission/status",
+          "/odom", "/odometry/filtered/global", "/sensor/vehicle_gnss/fix/raw",
+          "/sensor/vehicle_gnss/compass/raw", "/tf", "/tf_static", "/mission/status",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

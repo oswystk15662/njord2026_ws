@@ -338,6 +338,20 @@ def test_ground_zenoh_bridge_receives_only_the_active_mission_metadata():
     assert '"/waypoint_markers"' not in ground
 
 
+def test_ground_zenoh_bridge_forwards_vessel_position_for_foxglove():
+    root = Path(_LAUNCH_DIR).parents[2]
+    ground = (root / "config" / "zenoh" / "bridge_groundpc.json5").read_text()
+    minipc = (root / "config" / "zenoh" / "bridge_minipc.json5").read_text()
+
+    for topic in (
+        '"/odometry/filtered/global"',
+        '"/sensor/vehicle_gnss/fix/raw"',
+        '"/sensor/vehicle_gnss/compass/raw"',
+    ):
+        assert topic in ground
+        assert topic in minipc
+
+
 def test_disabled_minipc_serial_drivers_default_to_false():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert '"enable_drogger_rzs", default_value="false"' in source

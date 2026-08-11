@@ -39,7 +39,8 @@
       // 大容量の/livox/lidarはJetson内に閉じ込める。
       allow: {
         publishers: [
-          "/odom", "/odometry/filtered/global", "/tf", "/tf_static", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/sensor/vehicle_gnss/fix/raw",
+          "/sensor/vehicle_gnss/compass/raw", "/tf", "/tf_static", "/livox/imu",
           "/mission/status",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",

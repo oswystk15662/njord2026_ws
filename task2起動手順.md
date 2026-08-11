@@ -214,7 +214,7 @@ ros2 launch robot ground_pc.launch.py
 
 Foxglove は Ground PC 上では `ws://localhost:8765`、別のPCからは `ws://<Ground-PCのIPv4アドレス>:8765` へ接続する。
 
-Ground PC の Zenoh Bridge は miniPC の `192.168.1.2:7447` へ接続する。`config/zenoh/bridge_groundpc.json5` を更新した場合は、Ground PC で `colcon build --packages-select robot` を実行してから `ground_pc.launch.py` を再起動する。
+Zenoh Bridge設定を更新した場合は、対象端末で `colcon build --packages-select robot` を実行してから、その端末のbringupを再起動する。
 
 ### 1.4 開始前確認とミッション開始
 
