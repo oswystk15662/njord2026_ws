@@ -67,6 +67,10 @@ legacy PointStamped feed; MPPI subscribes to the former directly.
 The size gate uses the former fusion PCL detector's five-point confirmation
 and the former buoy model's 0.45 m physical radius: tracks may be at most
 1.2 m in either horizontal dimension to allow LiDAR clustering error.
+If either route waypoint is unavailable (including the rosbag launch), both
+selectors remove their GPS5->GPS6 position restriction. Buoys are still
+published to MPPI but use `CLASS_UNKNOWN`, because red/green cannot be
+inferred without the route direction.
 
 ## Nodes
 

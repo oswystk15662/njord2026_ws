@@ -262,10 +262,10 @@ class OpponentSelectorNode(Node):
             return True
         if self.corridor_start_map is None or self.corridor_end_map is None:
             self.get_logger().warning(
-                "Waiting for /waypoint1_pose and /waypoint2_pose before "
-                "recognizing an opponent in the GPS5->6 corridor.",
+                "No /waypoint1_pose and /waypoint2_pose yet; recognizing "
+                "opponents without the GPS5->6 corridor restriction.",
                 throttle_duration_sec=2.0)
-            return False
+            return True
         return tracking_glue.in_oriented_corridor(
             position_map, self.corridor_start_map, self.corridor_end_map,
             self.corridor_start_offset_m, self.corridor_end_margin_m,

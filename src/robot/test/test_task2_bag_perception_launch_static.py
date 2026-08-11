@@ -25,6 +25,7 @@ def test_launches_bag_and_perception_chain():
     for required in (
         '"ros2", "bag", "play"',
         '"task2_perception"',
+        '"enable_buoy_selector": "true"',
         '"pcl_preprocessing"',
         '"preprocessing.launch.py"',
         '"pcl_segmentation"',

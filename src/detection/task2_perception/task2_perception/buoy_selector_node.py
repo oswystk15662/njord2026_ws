@@ -107,8 +107,6 @@ class BuoySelectorNode(Node):
             self.end_map = np.array([msg.pose.position.x, msg.pose.position.y])
 
     def timer_callback(self):
-        if self.start_map is None or self.end_map is None:
-            return
         now = self.get_clock().now()
         detections = BuoyDetectionArray()
         detections.header.stamp = now.to_msg()
@@ -122,11 +120,26 @@ class BuoySelectorNode(Node):
             transform = cloud_ops.make_transform(cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w), [t.x, t.y, t.z])
             absolute_base = tracking_glue.ego_compensate(track.velocity_base, self.ego_vel_base, self.ego_yaw_rate, track.position)
             position_map, velocity_map = tracking_glue.to_map_frame(track.position, absolute_base, transform)
-            colour = buoy_glue.classify_route_side(position_map, self.start_map, self.end_map, self.expected_offset_m, self.lateral_tolerance_m, self.start_margin_m, self.end_margin_m)
-            if colour is None or not buoy_glue.is_stationary(velocity_map, self.stationary_speed_max_mps):
+            have_route = self.start_map is not None and self.end_map is not None
+            colour = None
+            if have_route:
+                colour = buoy_glue.classify_route_side(
+                    position_map, self.start_map, self.end_map,
+                    self.expected_offset_m, self.lateral_tolerance_m,
+                    self.start_margin_m, self.end_margin_m)
+            if (have_route and colour is None) or not buoy_glue.is_stationary(
+                    velocity_map, self.stationary_speed_max_mps):
                 continue
             detection = BuoyDetection()
-            detection.class_id = BuoyDetection.CLASS_GREEN if colour == buoy_glue.GREEN else BuoyDetection.CLASS_RED
+            if colour == buoy_glue.GREEN:
+                detection.class_id = BuoyDetection.CLASS_GREEN
+            elif colour == buoy_glue.RED:
+                detection.class_id = BuoyDetection.CLASS_RED
+            else:
+                # Route direction is unavailable, so red/green cannot be
+                # inferred honestly. Keep the stationary buoy position for
+                # rosbag/MPPI validation and mark its colour as unknown.
+                detection.class_id = BuoyDetection.CLASS_UNKNOWN
             detection.confidence = min(1.0, float(track.hit_count) / max(1, int(self.selection_params.min_hit_count)))
             detection.position.x, detection.position.y, detection.position.z = map(float, position_map)
             detection.position_source = BuoyDetection.POSITION_LIDAR_FUSED

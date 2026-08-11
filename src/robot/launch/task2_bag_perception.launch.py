@@ -1,4 +1,4 @@
-"""Replay a Task 2 rosbag through the other-vessel perception pipeline.
+"""Replay a Task 2 rosbag through Task 2 vessel and buoy perception.
 
 This launch is perception-only: it does not start propulsion, navigation,
 cameras, or physical sensors.  It supplies the TFs required by the recorded
@@ -86,6 +86,7 @@ def generate_launch_description():
         {
             "enable_cloud_filter": "true",
             "enable_opponent_selector": "true",
+            "enable_buoy_selector": "true",
             "params_file": LaunchConfiguration("params_file"),
             "use_sim_time": "true",
             "ego_odom_topic": ego_odom_topic,
