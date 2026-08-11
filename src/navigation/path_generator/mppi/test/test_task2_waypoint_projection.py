@@ -32,3 +32,12 @@ def test_task2_autonomy_readiness_requires_path_and_follow_path_only():
               "task2_autonomy_ready_node.py").read_text(encoding="utf-8")
     assert "path_fresh and self.follow_path_client.server_is_ready()" in source
     assert "collision_monitor_active" not in source
+
+
+def test_crm_visualization_includes_the_detected_buoy_outside_cost():
+    source = (Path(__file__).parents[1] / "asv_trajectory_planner" /
+              "planner_node.py").read_text(encoding="utf-8")
+    assert "def _buoy_outside_risk_map(" in source
+    assert "risk = np.maximum(risk, buoy_risk)" in source
+    assert "outside_amount = d - (d_b - margin_m)" in source
+    assert "outside_amount = (d_b + margin_m) - d" in source

@@ -462,7 +462,7 @@ class PlannerNode(Node):
     def publish_mppi_crm_costmap(
         self, own_map_x: float, own_map_y: float, own_map_yaw: float
     ) -> None:
-        """Publish the complete instantaneous CRM field used by MPPI.
+        """Publish the MPPI collision-risk and buoy-boundary field.
 
         Each forward map cell is evaluated at the time the vessel would reach
         it by continuing straight ahead at its current speed.  The opponent is
@@ -545,6 +545,15 @@ class PlannerNode(Node):
             ).cpu().numpy()
         risk[~valid_straight] = 0.0
 
+        # A detected buoy is not a circular obstacle in Task 2.  It creates a
+        # cost on the *outside* of the GPS5->GPS6 corridor.  Reproduce that
+        # same geometry here so RViz shows why MPPI rejects a trajectory.
+        # The buoy term and CRM term use different internal normalizations;
+        # normalize the former by MPPI's collision-cost ceiling and show the
+        # stronger of the two in the 0--100 OccupancyGrid visualization.
+        buoy_risk = self._buoy_outside_risk_map(map_x, map_y)
+        risk = np.maximum(risk, buoy_risk)
+
         msg = OccupancyGrid()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.frame_id
@@ -556,6 +565,54 @@ class PlannerNode(Node):
         msg.info.origin.orientation.w = 1.0
         msg.data = np.rint(np.clip(risk, 0.0, 1.0) * 100.0).astype(np.int8).ravel().tolist()
         self.crm_costmap_pub.publish(msg)
+
+    def _buoy_outside_risk_map(
+        self, map_x: np.ndarray, map_y: np.ndarray
+    ) -> np.ndarray:
+        """Return Task 2's detected-buoy cost as a normalized map field.
+
+        This is the numpy equivalent of ``mppi_torch.buoy_outside_cost`` for
+        a single predicted point.  Keeping it here avoids making the RViz
+        visualization depend on a sampled MPPI rollout.
+        """
+        empty = np.zeros_like(map_x, dtype=np.float32)
+        if (not self.use_detected_buoys or not self.detected_buoys or
+                self.latest_waypoint1_pose is None or
+                self.latest_waypoint2_pose is None):
+            return empty
+
+        p0 = self.latest_waypoint1_pose.pose.position
+        p1 = self.latest_waypoint2_pose.pose.position
+        route_x, route_y = p1.x - p0.x, p1.y - p0.y
+        route_norm = math.hypot(route_x, route_y)
+        if route_norm <= 1.0e-6:
+            return empty
+
+        e_x, e_y = route_x / route_norm, route_y / route_norm
+        n_x, n_y = -e_y, e_x
+        s = (map_x - p0.x) * e_x + (map_y - p0.y) * e_y
+        d = (map_x - p0.x) * n_x + (map_y - p0.y) * n_y
+        margin_m = float(self.get_parameter("mppi.buoy_margin_m").value)
+        sigma_m = max(
+            float(self.get_parameter("mppi.buoy_longitudinal_sigma_m").value),
+            1.0e-6,
+        )
+        cost = np.zeros_like(map_x, dtype=np.float32)
+        for buoy_x, buoy_y, _, _ in self.detected_buoys:
+            s_b = (buoy_x - p0.x) * e_x + (buoy_y - p0.y) * e_y
+            d_b = (buoy_x - p0.x) * n_x + (buoy_y - p0.y) * n_y
+            longitudinal_gate = np.exp(-((s - s_b) ** 2) / (2.0 * sigma_m ** 2))
+            if d_b >= 0.0:
+                outside_amount = d - (d_b - margin_m)
+            else:
+                outside_amount = (d_b + margin_m) - d
+            cost += np.maximum(outside_amount, 0.0) ** 2 * longitudinal_gate
+
+        buoy_weight = float(self.get_parameter("mppi.buoy_cost_weight").value)
+        collision_scale = max(
+            float(self.get_parameter("mppi.collision_cost_max").value), 1.0e-6
+        )
+        return np.clip(buoy_weight * cost / collision_scale, 0.0, 1.0)
 
     def _other_ship_crm_state_in_map(self):
         """Return opponent CRM state from absolute TF and velocity data."""
