@@ -272,11 +272,12 @@ void UM982Driver::configure_gnss_output()
 
     write_to_gnss("MODE ROVER\r\n");
     write_to_gnss("GPGGA " + fix_period + "\r\n");
+    write_to_gnss("GPGST " + fix_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
     write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
 
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
+        "Configured volatile UM982 output: GPGGA/GPGST(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
         fix_period.c_str(), heading_period.c_str(),
         params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
 }
@@ -295,7 +296,7 @@ void UM982Driver::hot_restart(
         // RESET restarts the receiver without clearing its stored navigation information.
         write_to_gnss("RESET\r\n");
         gnss_parse_buf_.clear();
-        have_heading_ = have_previous_fix_ = have_previous_yaw_ = false;
+        have_heading_ = have_previous_fix_ = have_previous_yaw_ = have_gst_ = false;
         filtered_surge_mps_ = filtered_sway_mps_ = filtered_yaw_rate_rps_ = 0.0;
         hot_restart_reconfigure_timer_ = create_wall_timer(3s, [this]() {
             configure_gnss_output();

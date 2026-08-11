@@ -52,11 +52,13 @@ private:
     void process_gnss_buffer();
     void process_gnss_line(std::string line);
     void parse_gga(const std::string& line);
+    void parse_gst(const std::string& line);
     void parse_uniheadinga(const std::string& line);
     void parse_uniheadingb(const uint8_t* body, std::size_t body_len);
     void parse_ths(const std::string& line);
     void publish_feedback_odometry(
-        double latitude_deg, double longitude_deg, const rclcpp::Time& stamp);
+        double latitude_deg, double longitude_deg, const rclcpp::Time& stamp,
+        const std::array<double, 9>& position_covariance);
 
     // --- ROS Callbacks/Timers ---
     void ctrl_callback(const std_msgs::msg::String::SharedPtr msg);
@@ -121,6 +123,9 @@ private:
     double filtered_yaw_rate_rps_{0.0};
     double previous_yaw_rad_{0.0};
     bool have_previous_yaw_{false};
+    bool have_gst_{false};
+    rclcpp::Time latest_gst_stamp_{0, 0, RCL_ROS_TIME};
+    std::array<double, 3> latest_gst_variance_{};
     std::atomic_bool hot_restart_in_progress_{false};
     
     // Parameters

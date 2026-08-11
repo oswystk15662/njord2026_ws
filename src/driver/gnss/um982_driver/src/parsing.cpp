@@ -78,6 +78,8 @@ void UM982Driver::process_gnss_line(std::string line)
     if (line.rfind("$GNGGA", 0) == 0 || line.rfind("$GPGGA", 0) == 0) {
         parse_gga(line);
         last_gpgga_ = line;
+    } else if (line.rfind("$GNGST", 0) == 0 || line.rfind("$GPGST", 0) == 0) {
+        parse_gst(line);
     } else if (line.rfind("#UNIHEADINGA", 0) == 0) {
         parse_uniheadinga(line);
     } else if (line.rfind("$GNTHS", 0) == 0 || line.rfind("$GPTHS", 0) == 0) {
@@ -114,16 +116,46 @@ void UM982Driver::parse_gga(const std::string& line)
     if (!parts[6].empty() && !utils::parse_int(parts[6], quality)) {
         return;
     }
-    if (quality >= 1) {
-        msg.position_covariance[0] = 0.02 * 0.02;
-        msg.position_covariance[4] = 0.02 * 0.02;
-        msg.position_covariance[8] = 0.02 * 0.02;
-        msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_APPROXIMATED;
-    } else {
+    if (quality < 1) {
         msg.position_covariance[0] = -1;
+    } else {
+        constexpr double kGstMaxAgeSec = 0.25;
+        if (!have_gst_ ||
+            (rclcpp::Time(msg.header.stamp) - latest_gst_stamp_).seconds() > kGstMaxAgeSec) {
+            RCLCPP_WARN_THROTTLE(
+                this->get_logger(), *this->get_clock(), 2000,
+                "Discarding GGA without a fresh GPGST covariance");
+            return;
+        }
+        msg.position_covariance[0] = latest_gst_variance_[0];
+        msg.position_covariance[4] = latest_gst_variance_[1];
+        msg.position_covariance[8] = latest_gst_variance_[2];
+        msg.position_covariance_type = sensor_msgs::msg::NavSatFix::COVARIANCE_TYPE_DIAGONAL_KNOWN;
     }
     if (!stop_publish_) fix_pub_->publish(msg);
-    if (quality >= 1) publish_feedback_odometry(msg.latitude, msg.longitude, msg.header.stamp);
+    if (quality >= 1) {
+        publish_feedback_odometry(
+            msg.latitude, msg.longitude, msg.header.stamp, msg.position_covariance);
+    }
+}
+
+void UM982Driver::parse_gst(const std::string& line)
+{
+    double latitude_stddev = 0.0;
+    double longitude_stddev = 0.0;
+    double altitude_stddev = 0.0;
+    if (!utils::parse_gst_standard_deviations(
+            line, latitude_stddev, longitude_stddev, altitude_stddev))
+    {
+        RCLCPP_WARN(this->get_logger(), "Discarding malformed GPGST covariance");
+        return;
+    }
+    latest_gst_variance_ = {
+        latitude_stddev * latitude_stddev,
+        longitude_stddev * longitude_stddev,
+        altitude_stddev * altitude_stddev};
+    latest_gst_stamp_ = this->now();
+    have_gst_ = true;
 }
 
 void UM982Driver::parse_uniheadinga(const std::string& line)
@@ -160,7 +192,8 @@ void UM982Driver::parse_uniheadinga(const std::string& line)
 }
 
 void UM982Driver::publish_feedback_odometry(
-    double latitude_deg, double longitude_deg, const rclcpp::Time& stamp)
+    double latitude_deg, double longitude_deg, const rclcpp::Time& stamp,
+    const std::array<double, 9>& position_covariance)
 {
     if (!params_.publish_feedback_odometry || !feedback_odom_pub_ || !have_heading_) return;
 
@@ -223,8 +256,8 @@ void UM982Driver::publish_feedback_odometry(
     odom.twist.covariance[0] = 0.25;
     odom.twist.covariance[7] = 0.25;
     odom.twist.covariance[35] = 0.05;
-    odom.pose.covariance[0] = 0.25;
-    odom.pose.covariance[7] = 0.25;
+    odom.pose.covariance[0] = position_covariance[0];
+    odom.pose.covariance[7] = position_covariance[4];
     odom.pose.covariance[35] = 0.02;
     feedback_odom_pub_->publish(odom);
 }
