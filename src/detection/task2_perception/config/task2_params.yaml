@@ -133,16 +133,18 @@ task2_buoy_selector:
     min_point_count: 5
     # The former buoy costmap used physical radius 0.45 m (diameter 0.9 m).
     # Permit 0.3 m of LiDAR clustering error, while rejecting vessel-sized
-    # stationary tracks. Track dimensions are extents, not the old detector's
-    # raw-sensor z height band (-1.0..0.5 m), so that old band is not copied.
+    # stationary tracks. Use the same vertical extent gate as other ships.
     min_length_m: 0.0
     max_length_m: 1.2
     min_width_m: 0.0
     max_width_m: 1.2
-    min_height_m: 0.0
+    min_height_m: 0.15
     max_height_m: 1.5
     stale_timeout_sec: 2.0
     stationary_speed_max_mps: 0.35
+    # A track must stay below the ground-speed threshold for this long after
+    # tracker confirmation before it is emitted as a buoy.
+    stationary_confirm_duration_sec: 1.0
     publish_rate_hz: 5.0
 
 # ---------------------------------------------------------------------------

@@ -52,9 +52,12 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert buoy["expected_lateral_offset_m"] == 2.5
     assert buoy["lateral_tolerance_m"] == 1.0
     assert buoy["stationary_speed_max_mps"] == 0.35
+    assert buoy["stationary_confirm_duration_sec"] == 1.0
     assert buoy["min_point_count"] == 5
     assert buoy["max_length_m"] == 1.2
     assert buoy["max_width_m"] == 1.2
+    assert buoy["min_height_m"] == selector["min_height_m"]
+    assert buoy["max_height_m"] == selector["max_height_m"]
 
 
 def test_single_task2_yaml_contains_every_opponent_pipeline_node():
