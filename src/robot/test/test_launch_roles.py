@@ -845,6 +845,20 @@ def test_zenoh_tf_static_history_settings_are_unique_and_routed_to_jetson():
     assert '"/tf_static"' in minipc.split("publishers:", 1)[1]
 
 
+def test_zenoh_local_odometry_has_one_minipc_publisher():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+    jetson = (zenoh_dir / "bridge_jetson.json5").read_text(encoding="utf-8")
+    topic = '"/odometry/filtered/local"'
+    minipc_allow = minipc.split("allow:", 1)[1]
+    jetson_allow = jetson.split("allow:", 1)[1]
+
+    assert topic in minipc_allow.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    assert topic not in minipc_allow.split("subscribers:", 1)[1]
+    assert topic not in jetson_allow.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    assert topic in jetson_allow.split("subscribers:", 1)[1]
+
+
 def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
     source = _read_launch_source("networking.launch.py")
 
