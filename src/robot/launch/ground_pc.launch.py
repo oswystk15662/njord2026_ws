@@ -162,7 +162,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_ntrip_caster", default_value="true"),
             DeclareLaunchArgument(
                 "enable_foxglove_bridge",
-                default_value="true",
+                default_value="false",
                 description="Expose vessel telemetry and waypoint markers to the Ground PC Foxglove GUI.",
             ),
             DeclareLaunchArgument(
