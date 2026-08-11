@@ -31,10 +31,10 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
     task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
     task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
-    assert len(task1.waypoints) == 11
+    assert len(task1.waypoints) == 12
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
-    assert task1.waypoints[-1].competition_id == "3.4"
+    assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "6"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["8"]
