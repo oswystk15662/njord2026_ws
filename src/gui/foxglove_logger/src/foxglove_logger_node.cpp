@@ -19,6 +19,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "njord_interfaces/msg/buoy_detection_array.hpp"
 #include "njord_interfaces/msg/control_state.hpp"
+#include "njord_interfaces/msg/mission_status.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rcl_interfaces/msg/log.hpp"
 #include "sensor_msgs/msg/nav_sat_fix.hpp"
@@ -62,6 +63,8 @@ public:
       "heading_topic", "/sensor/vehicle_gnss/compass/raw");
     const auto odometry_topic = declare_parameter<std::string>("odometry_topic", "/odometry/filtered/global");
     const auto plan_topic = declare_parameter<std::string>("plan_topic", "/plan");
+    const auto task2_plan_topic = declare_parameter<std::string>("task2_plan_topic", "/planned_path_pruned");
+    const auto mission_status_topic = declare_parameter<std::string>("mission_status_topic", "/mission/status");
     const auto speed_topic = declare_parameter<std::string>("ground_speed_topic", "/gui/ground_speed_mps");
     const auto control_topic = declare_parameter<std::string>("control_status_topic", "/system/control_status");
     const auto control_state_topic = declare_parameter<std::string>("control_state_topic", "/control/state");
@@ -87,6 +90,11 @@ public:
       [this](nav_msgs::msg::Odometry::SharedPtr msg) {odometry_ = *msg;});
     plan_sub_ = create_subscription<nav_msgs::msg::Path>(plan_topic, 10,
       [this](nav_msgs::msg::Path::SharedPtr msg) {plan_ = *msg;});
+    task2_plan_sub_ = create_subscription<nav_msgs::msg::Path>(task2_plan_topic, 10,
+      [this](nav_msgs::msg::Path::SharedPtr msg) {task2_plan_ = *msg;});
+    mission_status_sub_ = create_subscription<njord_interfaces::msg::MissionStatus>(
+      mission_status_topic, rclcpp::QoS(1).transient_local(),
+      [this](njord_interfaces::msg::MissionStatus::SharedPtr msg) {mission_status_ = *msg;});
     speed_sub_ = create_subscription<std_msgs::msg::Float32>(speed_topic, 10,
       [this](std_msgs::msg::Float32::SharedPtr msg) {ground_speed_mps_ = msg->data;});
     control_sub_ = create_subscription<std_msgs::msg::String>(control_topic, rclcpp::QoS(1).transient_local(),
@@ -170,14 +178,23 @@ private:
 
   std::optional<double> targetDistance() const
   {
-    if (!odometry_ || !plan_ || plan_->poses.empty() ||
-      (!plan_->header.frame_id.empty() && plan_->header.frame_id != odometry_->header.frame_id))
+    const auto * plan = activePlan();
+    if (!odometry_ || plan == nullptr || plan->poses.empty() ||
+      (!plan->header.frame_id.empty() && plan->header.frame_id != odometry_->header.frame_id))
     {
       return std::nullopt;
     }
-    const auto & target = plan_->poses.back().pose.position;
+    const auto & target = plan->poses.back().pose.position;
     const auto & position = odometry_->pose.pose.position;
     return std::hypot(target.x - position.x, target.y - position.y);
+  }
+
+  const nav_msgs::msg::Path * activePlan() const
+  {
+    if (mission_status_ && mission_status_->task_id == "task2") {
+      return task2_plan_ ? &*task2_plan_ : nullptr;
+    }
+    return plan_ ? &*plan_ : nullptr;
   }
 
   std::string buoyText()
@@ -324,9 +341,13 @@ private:
       out << "N/A";
     }
     out << '\n' << "NAV_TARGET=";
-    if (plan_ && !plan_->poses.empty()) {
-      const auto & target = plan_->poses.back().pose.position;
-      out << plan_->header.frame_id << " (" << target.x << ',' << target.y << ')';
+    const auto * plan = activePlan();
+    if (plan != nullptr && !plan->poses.empty()) {
+      const auto & target = plan->poses.back().pose.position;
+      if (mission_status_ && mission_status_->task_id == "task2") {
+        out << "task2 ";
+      }
+      out << plan->header.frame_id << " (" << target.x << ',' << target.y << ')';
       const auto distance = targetDistance();
       out << " DIST=" << (distance ? std::to_string(*distance) : "N/A") << "m";
     } else {
@@ -370,6 +391,8 @@ private:
   std::optional<geometry_msgs::msg::Quaternion> heading_orientation_;
   std::optional<nav_msgs::msg::Odometry> odometry_;
   std::optional<nav_msgs::msg::Path> plan_;
+  std::optional<nav_msgs::msg::Path> task2_plan_;
+  std::optional<njord_interfaces::msg::MissionStatus> mission_status_;
   std::optional<float> ground_speed_mps_;
   std::optional<std::string> control_status_;
   std::optional<njord_interfaces::msg::ControlState> control_state_;
@@ -383,6 +406,8 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseWithCovarianceStamped>::SharedPtr heading_sub_;
   rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odometry_sub_;
   rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr plan_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr task2_plan_sub_;
+  rclcpp::Subscription<njord_interfaces::msg::MissionStatus>::SharedPtr mission_status_sub_;
   rclcpp::Subscription<std_msgs::msg::Float32>::SharedPtr speed_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr control_sub_;
   rclcpp::Subscription<njord_interfaces::msg::ControlState>::SharedPtr control_state_sub_;
