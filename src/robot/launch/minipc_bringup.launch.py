@@ -198,23 +198,48 @@ def generate_launch_description():
         condition=IfCondition(enable_spatial),
     )
 
-    # Both filters publish /odometry/filtered/local.  The local Livox-IMU EKF
-    # therefore replaces, rather than supplements, the UM982 feedback EKF.
-    um982_feedback_launch = GroupAction(
-        scoped=True,
-        condition=UnlessCondition(use_ekf_local),
+    um982_feedback_launch_arguments = {
+        "feedback_mode": um982_feedback_mode,
+        "raw_topic": "/odometry/feedback",
+        "output_topic": "/odometry/filtered/local",
+        "enable_glim_imu_fusion": enable_um982_glim_imu_fusion,
+    }
+    # The non-fusion filter can start immediately.  In fusion mode, defer the
+    # include itself: a TimerAction inside an included scoped launch loses its
+    # launch arguments before it fires.
+    um982_feedback_launch = include_launch(
+        "um982_feedback_filter",
+        ["launch", "um982_feedback.launch.py"],
+        IfCondition(
+            PythonExpression(
+                [
+                    "'", enable_um982, "'.lower() in ('true', '1', 'yes', 'on') and '",
+                    use_ekf_local, "'.lower() not in ('true', '1', 'yes', 'on') and '",
+                    enable_um982_glim_imu_fusion,
+                    "'.lower() not in ('true', '1', 'yes', 'on')",
+                ]
+            )
+        ),
+        um982_feedback_launch_arguments,
+    )
+    delayed_um982_glim_imu_ekf_launch = TimerAction(
+        period=um982_glim_imu_ekf_start_delay_sec,
+        condition=IfCondition(
+            PythonExpression(
+                [
+                    "'", enable_um982, "'.lower() in ('true', '1', 'yes', 'on') and '",
+                    use_ekf_local, "'.lower() not in ('true', '1', 'yes', 'on') and '",
+                    enable_um982_glim_imu_fusion,
+                    "'.lower() in ('true', '1', 'yes', 'on')",
+                ]
+            )
+        ),
         actions=[
             include_launch(
                 "um982_feedback_filter",
                 ["launch", "um982_feedback.launch.py"],
-                IfCondition(enable_um982),
-                {
-                    "feedback_mode": um982_feedback_mode,
-                    "raw_topic": "/odometry/feedback",
-                    "output_topic": "/odometry/filtered/local",
-                    "enable_glim_imu_fusion": enable_um982_glim_imu_fusion,
-                    "glim_imu_ekf_start_delay_sec": um982_glim_imu_ekf_start_delay_sec,
-                },
+                None,
+                um982_feedback_launch_arguments,
             )
         ],
     )
@@ -712,7 +737,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "um982_glim_imu_ekf_start_delay_sec",
-                default_value="60.0",
+                default_value="30.0",
                 description="Seconds to wait for Jetson GLIM before starting the fusion EKF.",
             ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
@@ -729,6 +754,7 @@ def generate_launch_description():
             spatial_driver,
             spatial_ntrip,
             um982_feedback_launch,
+            delayed_um982_glim_imu_ekf_launch,
             # drogger_launch,
             # imu_node,
             joy_converter,

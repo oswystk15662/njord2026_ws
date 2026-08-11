@@ -378,7 +378,7 @@ def test_minipc_video_and_glim_feedback_defaults_are_safe():
 def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_without_navsat():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert '"enable_um982_glim_imu_fusion",\n                default_value="true"' in source
-    assert '"um982_glim_imu_ekf_start_delay_sec",\n                default_value="60.0"' in source
+    assert '"um982_glim_imu_ekf_start_delay_sec",\n                default_value="30.0"' in source
     assert '"enable_navsat_transform": PythonExpression(' in source
 
     config_path = os.path.normpath(
@@ -410,7 +410,8 @@ def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_without_navsat():
         / "um982_feedback.launch.py"
     ).read_text(encoding="utf-8")
     assert "um982_glim_imu_ekf.yaml" in feedback_launch
-    assert "period=LaunchConfiguration('glim_imu_ekf_start_delay_sec')" in feedback_launch
+    assert "condition=ekf_fusion_is(True)" in feedback_launch
+    assert "period=um982_glim_imu_ekf_start_delay_sec" in source
 
 
 def test_local_ekf_is_opt_in_and_replaces_um982_feedback_ekf():

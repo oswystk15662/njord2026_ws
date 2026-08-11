@@ -1,6 +1,6 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, TimerAction
+from launch.actions import DeclareLaunchArgument
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
@@ -29,13 +29,13 @@ def generate_launch_description():
     )
     um982_ekf_node = Node(
         package='robot_localization', executable='ekf_node', name='um982_feedback_ekf',
-        output='screen',
+        output='screen', condition=ekf_fusion_is(False),
         parameters=[package_share + '/config/um982_feedback_ekf.yaml'],
         remappings=[('odometry/feedback', raw_topic), ('odometry/filtered', output_topic)],
     )
     glim_imu_ekf_node = Node(
         package='robot_localization', executable='ekf_node', name='um982_feedback_ekf',
-        output='screen',
+        output='screen', condition=ekf_fusion_is(True),
         parameters=[package_share + '/config/um982_glim_imu_ekf.yaml'],
         remappings=[('odometry/feedback', raw_topic), ('odometry/filtered', output_topic)],
     )
@@ -47,15 +47,7 @@ def generate_launch_description():
             'enable_glim_imu_fusion', default_value='false',
             description='Fuse Jetson GLIM odometry and Livox IMU with UM982 feedback.',
         ),
-        DeclareLaunchArgument(
-            'glim_imu_ekf_start_delay_sec', default_value='60.0',
-            description='Wait for Jetson GLIM to initialize before starting the fusion EKF.',
-        ),
         window_node,
-        TimerAction(actions=[um982_ekf_node], period=0.0, condition=ekf_fusion_is(False)),
-        TimerAction(
-            actions=[glim_imu_ekf_node],
-            period=LaunchConfiguration('glim_imu_ekf_start_delay_sec'),
-            condition=ekf_fusion_is(True),
-        ),
+        um982_ekf_node,
+        glim_imu_ekf_node,
     ])
