@@ -18,4 +18,7 @@ def generate_launch_description():
     task2 = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare("robot"), "launch", "navigation_launch_task2.py"])),
         condition=IfCondition(PythonExpression(["'", profile, "' == 'task2'"])))
-    return LaunchDescription([DeclareLaunchArgument("profile", choices=["task1", "task2", "task3"]), nav2, task2])
+    task2_adapter = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(PathJoinSubstitution([FindPackageShare("robot"), "launch", "task2_mission_adapter.launch.py"])),
+        condition=IfCondition(PythonExpression(["'", profile, "' == 'task2'"])))
+    return LaunchDescription([DeclareLaunchArgument("profile", choices=["task1", "task2", "task3"]), nav2, task2, task2_adapter])

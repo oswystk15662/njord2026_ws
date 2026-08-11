@@ -47,4 +47,10 @@ def generate_launch_description():
             "path_timeout_sec": 2.0,
         }],
     )
-    return LaunchDescription([waypoint_pose, follow_path, ready])
+    readiness = Node(
+        package="mission_manager",
+        executable="task2_readiness_adapter_node",
+        name="task2_readiness_adapter",
+        output="screen",
+    )
+    return LaunchDescription([waypoint_pose, follow_path, ready, readiness])

@@ -2,8 +2,7 @@
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
-from launch.conditions import IfCondition
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
@@ -25,13 +24,6 @@ def generate_launch_description():
                 "--log-level",
                 LaunchConfiguration("ground_link_return_monitor_log_level"),
             ],
-        ),
-        Node(
-            package="mission_manager",
-            executable="task2_readiness_adapter_node",
-            name="task2_readiness_adapter",
-            output="screen",
-            condition=IfCondition(PythonExpression(["'", LaunchConfiguration("active_nav2_profile"), "' == 'task2'"])),
         ),
         Node(
             package="mission_manager",

@@ -272,12 +272,6 @@ def generate_launch_description():
         },
     )
 
-    task2_mission_adapter_launch = include_launch(
-        "robot",
-        ["launch", "task2_mission_adapter.launch.py"],
-        IfCondition(PythonExpression(["'", active_nav2_profile, "' == 'task2'"])),
-    )
-
     thruster_launch = include_launch(
         "thruster_driver",
         ["launch", "thruster_driver.launch.py"],
@@ -720,7 +714,6 @@ def generate_launch_description():
             command_arbiter,
             control_manager_launch,
             mission_manager_launch,
-            task2_mission_adapter_launch,
             thruster_launch,
             thruster_serial,
             bms_serial,

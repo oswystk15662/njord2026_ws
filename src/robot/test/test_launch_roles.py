@@ -213,17 +213,20 @@ def test_task3_uses_its_relaxed_waypoint_behavior_tree():
 
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
+    runtime_source = _read_launch_source("task_runtime.launch.py")
     task2_nav_source = _read_launch_source("navigation_launch_task2.py")
     adapter_source = _read_launch_source("task2_mission_adapter.launch.py")
     task2_params = (Path(_LAUNCH_DIR).parents[0] / "config" /
                     "nav2_params_task2_humble.yaml").read_text()
 
     assert '"navigation_launch_task2.py"' in minipc_source
-    assert '"task2_mission_adapter.launch.py"' in minipc_source
+    assert '"task2_mission_adapter.launch.py"' not in minipc_source
+    assert '"task2_mission_adapter.launch.py"' in runtime_source
     assert "' == 'task2'" in minipc_source
     assert "' != 'task2'" in minipc_source
     assert 'executable="autonomy_supervisor_node"' in minipc_source
     assert '"task2_autonomy_ready_node"' in adapter_source
+    assert '"task2_readiness_adapter_node"' in adapter_source
     assert '"follow_path_client_node"' in adapter_source
     assert '"mission_gate_required": True' in adapter_source
     assert '"preprocessing.launch.py"' not in adapter_source
