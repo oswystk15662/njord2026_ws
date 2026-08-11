@@ -70,7 +70,7 @@ Ground PC（Humble）:
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
-export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+export NJORD_PROFILE=groundpc NJORD_ROLE=groundpc
 source scripts/njord_env.sh
 source install/setup.bash
 ```
@@ -93,7 +93,11 @@ ros2 pkg prefix robot
 
 ## ビルド方法
 
-各端末では、この節に列挙した package だけをビルドする。`scripts/njord_env.sh` はGPUセンサー専用パッケージをminiPC/Ground PCのビルド対象から外すため、必ず `colcon build` の前に source する。
+各端末では、この節に列挙した package だけをビルドする。`scripts/njord_env.sh` はGPUセンサー専用パッケージをminiPC/Ground PCのビルド対象から外すため、必ず `colcon build` の前に source する。初回とサブモジュール不足時は、各端末で先に実行する。
+
+```bash
+git submodule update --init --recursive
+```
 
 `cd ./njord2026_ws` が失敗する場合は、次で実際のワークスペースを探してから、そのパスへ移動する。`fudaba` を含む名前のディレクトリでも、`src/robot/package.xml` が存在するものを使用する。
 
@@ -105,27 +109,12 @@ find "$HOME" -maxdepth 4 -type f -path '*/src/robot/package.xml' -print
 
 Jetsonは LiDAR、ZED 2i、GLIM、Task 2 の知覚・追跡・MPPIだけを担当する。`glim_ros` はJetsonへ導入済みのROS packageを使うため、ワークスペースでビルドしない。
 
-Task 2 を有効にする場合、`pcl_preprocessing`、`pcl_segmentation`、`ship_tracking` が必要である。最初に存在を確認する。
-
 ```bash
 cd ./njord2026_ws
 source /opt/ros/jazzy/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
 export NJORD_PROFILE=jetson NJORD_ROLE=jetson
 source scripts/njord_env.sh
-colcon list --names-only | grep -Ex 'livox_ros_driver2|pcl_preprocessing|pcl_segmentation|ship_tracking|task2_perception|asv_trajectory_planner|zed2i_driver'
-ros2 pkg prefix glim_ros
-```
-
-上の3つのPCL／追跡 package が表示されない場合は、ビルド前にサブモジュールを取得する。
-
-```bash
-git submodule update --init --recursive src/detection/pcl_segmentation
-```
-
-確認後、次を実行する。
-
-```bash
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
   --packages-up-to robot zed2i_driver livox_ros_driver2 task2_perception \
   pcl_preprocessing pcl_segmentation ship_tracking asv_trajectory_planner \
@@ -163,7 +152,7 @@ Ground PCはジョイスティック、critical link、Foxglove、映像受信�
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
 export ROS_DOMAIN_ID=0 NJORD_RMW=fastrtps
-export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+export NJORD_PROFILE=groundpc NJORD_ROLE=groundpc
 source scripts/njord_env.sh
 colcon build --symlink-install --cmake-args -DCMAKE_BUILD_TYPE=Release \
   --packages-up-to robot ntripcaster critical_link simple_manual \
@@ -217,13 +206,13 @@ Ground PC で次を実行する。Foxglove Bridge は既定で起動する。
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
-export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+export NJORD_PROFILE=groundpc NJORD_ROLE=groundpc
 source scripts/njord_env.sh
 source install/setup.bash
 ros2 launch robot ground_pc.launch.py
 ```
 
-Foxglove は Ground PC 上では `ws://localhost:8765` へ接続する。別のPCから表示する場合は、`ws://<Ground-PCのIPv4アドレス>:8765` へ接続する。Bridge は `0.0.0.0:8765` で待ち受け、TLS は使用しない。起動後は Ground PC で `ss -ltnp | rg ':8765\\b'` を実行し、`foxglove_bridge` の待受を確認する。
+Foxglove は Ground PC 上では `ws://localhost:8765`、別のPCからは `ws://<Ground-PCのIPv4アドレス>:8765` へ接続する。
 
 Ground PC の Zenoh Bridge は miniPC の `192.168.1.2:7447` へ接続する。`config/zenoh/bridge_groundpc.json5` を更新した場合は、Ground PC で `colcon build --packages-select robot` を実行してから `ground_pc.launch.py` を再起動する。
 
@@ -322,7 +311,7 @@ ros2 topic echo /odometry/filtered/global --once
 ```bash
 cd /home/hashilab/Desktop/njord2026_ws
 source /opt/ros/humble/setup.bash
-export NJORD_PROFILE=minipc NJORD_ROLE=groundpc
+export NJORD_PROFILE=groundpc NJORD_ROLE=groundpc
 source scripts/njord_env.sh
 source install/setup.bash
 ros2 launch robot ground_waypoint_map_only.launch.py task_type:=task2
