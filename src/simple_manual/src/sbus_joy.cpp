@@ -22,10 +22,10 @@ namespace simple_manual
 
 bool parse_sbus_line(std::string_view line, SbusFrame & frame)
 {
-  std::array<int, 9> values{};
+  std::array<int, 22> values{};
   size_t offset = 0;
   for (auto & value : values) {
-    const size_t end = line.find_first_of("\t\r", offset);
+    const size_t end = line.find_first_of(",\r", offset);
     const auto token = line.substr(offset, end == std::string_view::npos ? end : end - offset);
     const auto result = std::from_chars(token.data(), token.data() + token.size(), value);
     if (result.ec != std::errc{} || result.ptr != token.data() + token.size()) {
@@ -43,8 +43,9 @@ bool parse_sbus_line(std::string_view line, SbusFrame & frame)
   if (offset != line.size()) {
     return false;
   }
-  std::copy_n(values.begin(), frame.channels.size(), frame.channels.begin());
-  frame.lost_frame = values.back() != 0;
+  std::copy_n(values.begin() + 2, frame.channels.size(), frame.channels.begin());
+  frame.lost_frame = values[20] != 0;
+  frame.failsafe = values[21] != 0;
   return true;
 }
 
@@ -61,7 +62,7 @@ sensor_msgs::msg::Joy sbus_to_joy(
         (frame.channels[i] - center) / denominator, -1.0, 1.0)) : 0.0F;
     joy.buttons[i] = frame.channels[i] >= button_threshold;
   }
-  if (frame.lost_frame) {
+  if (frame.lost_frame || frame.failsafe) {
     std::fill(joy.axes.begin(), joy.axes.end(), 0.0F);
     std::fill(joy.buttons.begin(), joy.buttons.end(), 0);
     if (failsafe_button >= 0 && static_cast<size_t>(failsafe_button) < joy.buttons.size()) {
@@ -76,7 +77,7 @@ namespace
 
 speed_t baud_flag(int baud)
 {
-  return baud == 115200 ? B115200 : 0;
+  return baud == 230400 ? B230400 : 0;
 }
 
 int open_serial_port(const std::string & device, int baud)
@@ -117,7 +118,7 @@ public:
   : Node("sbus_joy")
   {
     device_ = declare_parameter<std::string>("device", "/dev/ttyACM0");
-    baud_ = declare_parameter<int>("baud", 115200);
+    baud_ = declare_parameter<int>("baud", 230400);
     minimum_ = declare_parameter<int>("minimum", 172);
     center_ = declare_parameter<int>("center", 992);
     maximum_ = declare_parameter<int>("maximum", 1811);

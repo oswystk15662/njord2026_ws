@@ -13,6 +13,7 @@ struct SbusFrame
 {
   std::array<int, 8> channels{};
   bool lost_frame{false};
+  bool failsafe{false};
 };
 
 bool parse_sbus_line(std::string_view line, SbusFrame & frame);
