@@ -183,6 +183,23 @@ def generate_launch_description():
         },
     )
 
+    # GLIM must always have the LiDAR's rigid extrinsic transform locally.
+    # Do not depend on the miniPC's robot_state_publisher crossing Zenoh: a
+    # late or missing /tf_static route otherwise leaves livox_frame unknown.
+    # This topic remains local to the Jetson; bridge_jetson.json5 does not
+    # export /tf_static, so it cannot duplicate the miniPC's shared TF edge.
+    livox_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="jetson_livox_static_tf_pub",
+        output="screen",
+        arguments=[
+            "--x", "0.5", "--y", "0.0", "--z", "0.8",
+            "--roll", "3.141592653589793", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "livox_frame",
+        ],
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -278,11 +295,8 @@ def generate_launch_description():
             # to reproduce the pre-split behaviour.
             DeclareLaunchArgument(
                 "lidar_start_delay",
-                default_value="2.0",
-                description=(
-                    "Seconds to wait before starting the MID360 container; lets the "
-                    "Zenoh bridge retrieve the miniPC's transient-local /tf_static history."
-                ),
+                default_value="0.5",
+                description="Seconds to wait for the local livox static TF publisher before GLIM starts",
             ),
             DeclareLaunchArgument(
                 "camera_start_delay",
@@ -297,6 +311,7 @@ def generate_launch_description():
                 period=LaunchConfiguration("camera_start_delay"),
                 actions=[zed2i_launch],
             ),
+            livox_static_tf,
             task1_safety_points,
             task1_default_buoy_roi,
             task2_autonomy,

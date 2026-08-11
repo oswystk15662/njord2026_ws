@@ -735,10 +735,12 @@ def test_terminal_bringups_include_role_specific_networking():
         assert f'"role": "{role}"' in source
 
 
-def test_jetson_waits_for_tf_static_history_before_starting_glim():
+def test_jetson_publishes_livox_static_tf_before_starting_glim():
     source = _read_launch_source("jetson_bringup.launch.py")
-    assert '"lidar_start_delay",\n                default_value="2.0"' in source
-    assert "transient-local /tf_static history" in source
+    assert 'package="tf2_ros"' in source
+    assert 'name="jetson_livox_static_tf_pub"' in source
+    assert '"--frame-id", "base_link", "--child-frame-id", "livox_frame"' in source
+    assert '"lidar_start_delay",\n                default_value="0.5"' in source
 
 
 def test_zenoh_tf_static_history_settings_are_unique_and_routed_to_jetson():
