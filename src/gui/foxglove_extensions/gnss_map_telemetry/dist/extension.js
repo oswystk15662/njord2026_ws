@@ -51,7 +51,9 @@ const PANEL_CSS = `
 .gnss-telemetry{position:absolute;right:12px;top:12px;z-index:1100;min-width:225px;padding:10px 12px;border:1px solid #526375;border-radius:6px;background:rgba(12,18,28,.92);color:#f4f7fb;font:14px/1.5 system-ui,sans-serif;pointer-events:none}
 .gnss-telemetry-title{color:#a9c7e8;font-size:12px;font-weight:700;letter-spacing:.06em}.gnss-telemetry-separator{border-top:1px solid #526375;margin-top:5px;padding-top:5px}
 .gnss-map-error{display:none;position:absolute;left:50%;bottom:34px;z-index:1100;transform:translateX(-50%);padding:7px 10px;border-radius:4px;background:rgba(137,28,28,.92);color:#fff;font:13px system-ui,sans-serif;pointer-events:none}.gnss-map-error.visible{display:block}
-.waypoint-order-tooltip{padding:1px 4px;border:1px solid #00e5ff;border-radius:3px;background:rgba(5,25,35,.88);color:#fff;font:600 11px/1.3 system-ui,sans-serif;box-shadow:none;white-space:nowrap}
+.waypoint-pin{position:relative;width:24px;height:24px;border:2px solid #003b4a;border-radius:50%;background:#00e5ff;color:#00303b;font:800 11px/20px system-ui,sans-serif;text-align:center;box-sizing:border-box;box-shadow:0 1px 3px rgba(0,0,0,.85)}
+.waypoint-pin-leader{position:absolute;left:21px;top:10px;width:10px;border-top:2px solid #00e5ff;filter:drop-shadow(0 1px 1px rgba(0,0,0,.85))}
+.waypoint-pin-label{position:absolute;left:31px;top:0;padding:2px 5px;border:1px solid #00e5ff;border-radius:3px;background:rgba(5,25,35,.92);color:#fff;font:600 11px/1.3 system-ui,sans-serif;box-shadow:0 1px 3px rgba(0,0,0,.85);white-space:nowrap}
 	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
 	.vessel-dot{display:none;position:absolute;left:13px;top:13px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
 	`;
@@ -221,12 +223,16 @@ function initGnssMapTelemetry(context) {
       const id = String(waypoint.id);
       let waypointMarker = waypointMarkers.get(id);
       if (!waypointMarker) {
-        waypointMarker = L.circleMarker(position, {
-          radius: 7, color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 0.9, weight: 2,
-        }).bindTooltip(
-          `${String(Number(waypoint.id) + 1).padStart(2, "0")} · ${waypoint.text || "WP"}`,
-          {permanent: true, direction: "top", offset: [0, -7], className: "waypoint-order-tooltip"},
-        );
+        const order = String(Number(waypoint.id) + 1).padStart(2, "0");
+        waypointMarker = L.marker(position, {
+          icon: L.divIcon({
+            className: "",
+            iconSize: [220, 24],
+            iconAnchor: [12, 12],
+            html: `<div class="waypoint-pin">${order}<span class="waypoint-pin-leader"></span><span class="waypoint-pin-label">${order} · ${waypoint.text || "WP"}</span></div>`,
+          }),
+          interactive: false,
+        });
         waypointMarker.addTo(map);
         waypointMarkers.set(id, waypointMarker);
       } else {
