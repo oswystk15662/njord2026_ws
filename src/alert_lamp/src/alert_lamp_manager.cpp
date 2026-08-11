@@ -216,11 +216,6 @@ SystemStatus AlertLampManager::collectStatus(const rclcpp::Time & current) const
     status.state_unknown = status.state_unknown ||
       health_state_.summary_state == njord_interfaces::msg::HealthState::UNKNOWN ||
       health_state_.summary_state == njord_interfaces::msg::HealthState::STALE;
-    if (status.mode == OperatingMode::AUTO &&
-      health_state_.summary_state == njord_interfaces::msg::HealthState::DEGRADED)
-    {
-      status.required_sensor_not_ready = true;
-    }
   }
   return status;
 }
