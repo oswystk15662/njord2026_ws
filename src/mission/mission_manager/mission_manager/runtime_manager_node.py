@@ -7,6 +7,7 @@ import signal
 import subprocess
 import threading
 import time
+from pathlib import Path
 
 import rclpy
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
@@ -32,6 +33,8 @@ class RuntimeManager(Node):
         self._process = None
         self._profile = ""
         self._lock = threading.Lock()
+        self._runtime_pgid_file = Path("/tmp/njord_nav2_runtime.pgid")
+        self._cleanup_orphaned_runtime()
         self._pub = self.create_publisher(Nav2RuntimeStatus, "/runtime/nav2/status", _QOS)
         self._action = ActionServer(
             self,
@@ -59,6 +62,8 @@ class RuntimeManager(Node):
     def _stop(self):
         process = self._process
         if not process or process.poll() is not None:
+            if process:
+                self._clear_runtime_pgid(process.pid)
             self._process = None
             return
         self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
@@ -72,6 +77,61 @@ class RuntimeManager(Node):
             except subprocess.TimeoutExpired:
                 continue
         self._process = None
+        self._clear_runtime_pgid(process.pid)
+
+    def _clear_runtime_pgid(self, pgid: int) -> None:
+        try:
+            if self._runtime_pgid_file.read_text(encoding="utf-8").strip() == str(pgid):
+                self._runtime_pgid_file.unlink()
+        except FileNotFoundError:
+            pass
+
+    def _cleanup_orphaned_runtime(self) -> None:
+        """Stop Nav2 children left behind by a previous RuntimeManager process."""
+        try:
+            pgid = int(self._runtime_pgid_file.read_text(encoding="utf-8").strip())
+        except (FileNotFoundError, ValueError):
+            return
+        if pgid <= 1:
+            self._clear_runtime_pgid(pgid)
+            return
+        try:
+            os.killpg(pgid, 0)
+        except ProcessLookupError:
+            self._clear_runtime_pgid(pgid)
+            return
+        members = subprocess.run(
+            ["ps", "-eo", "pgid=,args="], capture_output=True, text=True, check=False
+        ).stdout.splitlines()
+        nav2_member = any(
+            line.lstrip().startswith(f"{pgid} ") and
+            ("task_runtime.launch.py" in line or "nav2_" in line)
+            for line in members
+        )
+        if not nav2_member:
+            self.get_logger().warning(
+                "discarding stale Nav2 runtime process-group record %d with no Nav2 members", pgid
+            )
+            self._clear_runtime_pgid(pgid)
+            return
+        self.get_logger().warning("stopping orphaned Nav2 runtime process group %d", pgid)
+        for sig, timeout in ((signal.SIGINT, 10.0), (signal.SIGTERM, 5.0), (signal.SIGKILL, 0.0)):
+            try:
+                os.killpg(pgid, sig)
+            except ProcessLookupError:
+                break
+            deadline = time.monotonic() + timeout
+            while timeout and time.monotonic() < deadline:
+                try:
+                    os.killpg(pgid, 0)
+                except ProcessLookupError:
+                    break
+                time.sleep(0.1)
+            else:
+                if timeout:
+                    continue
+            break
+        self._clear_runtime_pgid(pgid)
 
     def _wait_for_bt_navigator_active(self) -> None:
         """Block until Nav2 has activated the action server used by Task 1/3.
@@ -143,6 +203,7 @@ class RuntimeManager(Node):
                     self._process = subprocess.Popen(
                         ["ros2", "launch", "robot", "task_runtime.launch.py", f"profile:={profile}"],
                         start_new_session=True)
+                    self._runtime_pgid_file.write_text(f"{self._process.pid}\n", encoding="utf-8")
                     if profile in {"task1", "task3"}:
                         self._wait_for_bt_navigator_active()
                 self._publish(Nav2RuntimeStatus.READY, "Nav2 runtime started")
