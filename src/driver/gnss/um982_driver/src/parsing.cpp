@@ -40,7 +40,7 @@ void UM982Driver::process_gnss_buffer()
             const bool crc_ok = utils::calculate_unicore_crc32(gnss_parse_buf_.data(), total_len - 4) ==
                 utils::read_u32_le(&gnss_parse_buf_[total_len - 4]);
             if (!crc_ok) {
-                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
+                RCLCPP_DEBUG(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
                 gnss_parse_buf_.erase(gnss_parse_buf_.begin());
                 continue;
             }
