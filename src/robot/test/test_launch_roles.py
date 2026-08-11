@@ -375,6 +375,44 @@ def test_minipc_video_and_glim_feedback_defaults_are_safe():
     assert 'default_value="false"' in source
 
 
+def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_without_navsat():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"enable_um982_glim_imu_fusion",\n                default_value="true"' in source
+    assert '"um982_glim_imu_ekf_start_delay_sec",\n                default_value="60.0"' in source
+    assert '"enable_navsat_transform": PythonExpression(' in source
+
+    config_path = os.path.normpath(
+        os.path.join(
+            _THIS_DIR,
+            "..",
+            "..",
+            "localization",
+            "um982_feedback_filter",
+            "config",
+            "um982_glim_imu_ekf.yaml",
+        )
+    )
+    with open(config_path, encoding="utf-8") as stream:
+        params = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
+
+    assert params["odom0"] == "odometry/feedback"
+    assert params["odom1"] == "/odom"
+    assert params["odom1_relative"] is True
+    assert params["imu0"] == "/livox/imu"
+    assert params["publish_tf"] is True
+
+    feedback_launch = (
+        Path(_THIS_DIR)
+        .parent.parent
+        / "localization"
+        / "um982_feedback_filter"
+        / "launch"
+        / "um982_feedback.launch.py"
+    ).read_text(encoding="utf-8")
+    assert "um982_glim_imu_ekf.yaml" in feedback_launch
+    assert "period=LaunchConfiguration('glim_imu_ekf_start_delay_sec')" in feedback_launch
+
+
 def test_local_ekf_is_opt_in_and_replaces_um982_feedback_ekf():
     minipc_source = _read_launch_source("minipc_bringup.launch.py")
     localization_source = _read_launch_source("localization.launch.py")
