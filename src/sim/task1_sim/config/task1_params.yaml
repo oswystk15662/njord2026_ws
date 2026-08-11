@@ -5,18 +5,18 @@ task1_orchestrator:
     # Surveyed Task 1 geometry from "GPS points for tasks.xlsx", converted
     # to local ENU metres with GPS1 (63.4408000000, 10.4233194444) as map
     # (0, 0).  The checkpoints are GPS1 -> GPS2 -> GPS3 -> GPS4.
-    gps_checkpoint_xy: "[[0.000, 0.000], [-27.099, -29.685], [13.826, -34.324], [18.942, -7.421]]"
+    gps_checkpoint_xy: "[[0.000, 0.000], [-27.099, -29.685], [5.403, -42.969], [23.089, -3.401]]"
     waypoint1_xy: "[[-8.434, -3.711], [-5.807, -11.132], [-4.977, -19.481], [-20.739, -18.862]]"
-    waypoint2_xy: "[[-0.830, -25.047], [10.231, -28.758], [15.485, -22.264], [23.089, -3.401]]"
+    waypoint2_xy: "[[-0.830, -25.047], [10.231, -28.758], [17.598, -17.922]]"
 
     # Buoys in task1monday.kmz: red, east, west, green. Cardinal directions
     # are evaluated against geographic north (+Y in this ENU map).
     buoy_position_xy: "[[1.864, -38.592], [10.610, -27.048], [-0.072, -23.976], [10.809, -9.827]]"
     buoy_marks: "[\"RED\", \"E\", \"W\", \"GREEN\"]"
-    # GPS3 -> GPS4 bearing in the same ENU frame: 79.233 degrees.
-    course_heading_rad: 1.3828842975932156
+    # GPS3 -> GPS4 bearing in the same ENU frame: 65.916 degrees.
+    course_heading_rad: 1.1504545903685037
     # GPS3 starts the cardinal-wall stage.
-    wall_retirement_start_xy: [13.826, -34.324]
+    wall_retirement_start_xy: [5.403, -42.969]
     wall_radius: 2.5
     wall_points: 24
     goal_radius: 2.0

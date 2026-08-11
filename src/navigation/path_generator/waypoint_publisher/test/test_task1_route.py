@@ -14,8 +14,8 @@ SIM_PARAMS_PATH = PACKAGE_ROOT.parents[2] / "sim" / "task1_sim" / "config" / "ta
 def test_task1_navigates_from_wp_1_1_through_gps4_in_survey_order():
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))["task1_config"]
     ids = [waypoint["competition_id"] for waypoint in config["waypoints"]]
-    assert ids == ["1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "3.4", "4"]
-    assert ids[1:] == ["1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "3.4", "4"]
+    assert ids == ["1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"]
+    assert ids[1:] == ["1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"]
 
 
 def test_task1_treats_gps1_as_start_pose_not_navigation_goal():
@@ -46,9 +46,9 @@ def test_task1_sim_geometry_and_yaws_match_the_surveyed_geodetic_route():
         json.loads(sim["waypoint2_xy"]),
     )
     source_groups = (
-        [projected[index] for index in (0, 5, 6, 11)],
+        [projected[index] for index in (0, 5, 6, 10)],
         projected[1:5],
-        projected[7:11],
+        projected[7:10],
     )
     for actual_group, expected_group in zip(expected_sim_points, source_groups):
         for actual, expected in zip(actual_group, expected_group):
