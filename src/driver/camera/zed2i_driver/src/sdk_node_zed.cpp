@@ -10,6 +10,7 @@
 #endif
 
 #include <opencv2/core.hpp>
+#include <opencv2/imgproc.hpp>
 #include <rclcpp/rclcpp.hpp>
 #include <sensor_msgs/msg/camera_info.hpp>
 #include <sensor_msgs/msg/image.hpp>
@@ -23,6 +24,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 #include <limits>
@@ -127,6 +130,34 @@ void apply_ellipse_mask_depth(cv::Mat & depth, const EllipseRowSpans & spans)
   }
 }
 
+struct DepthAnnotatedDetection
+{
+  Detection2D detection;
+  float depth_m{};
+};
+
+void draw_depth_annotations(
+  cv::Mat & image, const std::vector<DepthAnnotatedDetection> & detections)
+{
+  for (const auto & item : detections) {
+    const auto & box = item.detection;
+    const cv::Point top_left{cvRound(box.x1), cvRound(box.y1)};
+    const cv::Point bottom_right{cvRound(box.x2), cvRound(box.y2)};
+    cv::rectangle(image, top_left, bottom_right, cv::Scalar(0, 255, 0, 255), 2);
+    char label[64];
+    if (std::isfinite(item.depth_m)) {
+      std::snprintf(label, sizeof(label), "id=%d %.0f%% depth=%.2fm", box.class_id,
+        box.confidence * 100.0F, item.depth_m);
+    } else {
+      std::snprintf(label, sizeof(label), "id=%d %.0f%% depth=N/A", box.class_id,
+        box.confidence * 100.0F);
+    }
+    cv::putText(
+      image, label, {top_left.x, std::max(16, top_left.y - 6)}, cv::FONT_HERSHEY_SIMPLEX,
+      0.5, cv::Scalar(0, 255, 0, 255), 1, cv::LINE_AA);
+  }
+}
+
 }  // namespace
 
 class SdkNode : public rclcpp::Node
@@ -190,6 +221,7 @@ public:
       detection_topic_ = declare_parameter<std::string>("detection_topic", "/buoy_detections_3d");
       output_frame_ = declare_parameter<std::string>("output_frame", "base_link");
       publish_debug_detections_ = declare_parameter<bool>("publish_debug_detections", false);
+      publish_debug_image_ = declare_parameter<bool>("publish_debug_image", true);
       depth_center_ratio_ = declare_parameter<double>("depth_center_ratio", 0.5);
       depth_sample_stride_ = declare_parameter<int>("depth_sample_stride", 2);
       min_valid_depth_samples_ = declare_parameter<int>("min_valid_depth_samples", 16);
@@ -232,6 +264,12 @@ public:
     image_qos.durability_volatile();
 
     left_image_pub_ = create_publisher<sensor_msgs::msg::Image>("left/image_rect", image_qos);
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    if (detector_) {
+      debug_image_pub_ = create_publisher<sensor_msgs::msg::Image>(
+        "debug/detections_image", image_qos);
+    }
+#endif
     right_image_pub_ = create_publisher<sensor_msgs::msg::Image>("right/image_rect", image_qos);
     left_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("left/camera_info", image_qos);
     right_info_pub_ = create_publisher<sensor_msgs::msg::CameraInfo>("right/camera_info",
@@ -550,6 +588,10 @@ private:
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
     run_gpu = run_gpu || static_cast<bool>(ground_video_streamer_);
 #endif
+    bool publish_debug_image = false;
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    publish_debug_image = publish_debug_image_ && has_subscribers(debug_image_pub_);
+#endif
     const bool publish_left = has_subscribers(left_image_pub_);
     const bool publish_right = has_subscribers(right_image_pub_);
     const bool publish_left_info = has_subscribers(left_info_pub_);
@@ -558,7 +600,7 @@ private:
     const bool publish_points = publish_pointcloud_ && has_subscribers(pointcloud_pub_);
 
     if (!publish_left && !publish_right && !publish_left_info && !publish_right_info &&
-      !publish_depth && !publish_points && !run_gpu)
+      !publish_depth && !publish_points && !publish_debug_image && !run_gpu)
     {
       return;
     }
@@ -589,6 +631,9 @@ private:
       } else {
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
         std::vector<GroundVideoBox> ground_video_boxes;
+#endif
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+        std::vector<DepthAnnotatedDetection> debug_detections;
 #endif
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
         if (detector_) {
@@ -622,7 +667,14 @@ private:
                 roi.x0, roi.y0, roi.x1, roi.y1, depth_sample_stride_,
                 static_cast<float>(depth_min_m_), static_cast<float>(depth_max_m_),
                 min_valid_depth_samples_, nullptr);
+              if (publish_debug_image) {
+                debug_detections.push_back({detection, depth});
+              }
               if (std::isfinite(depth)) {
+                RCLCPP_INFO_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Buoy detected: class=%d confidence=%.2f ZED depth=%.2f m",
+                  detection.class_id, detection.confidence, depth);
                 geometry_msgs::msg::PointStamped camera_point;
                 camera_point.header.stamp = stamp;
                 camera_point.header.frame_id = left_frame_id_;
@@ -647,6 +699,11 @@ private:
                     "Skipping buoy position: %s -> %s TF unavailable: %s",
                     left_frame_id_.c_str(), output_frame_.c_str(), error.what());
                 }
+              } else {
+                RCLCPP_WARN_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Buoy detected: class=%d confidence=%.2f ZED depth unavailable",
+                  detection.class_id, detection.confidence);
               }
               if (item.source == PositionSource::kNone) {
                 if (const auto fallback = lidar_fallback_position(detection, stamp)) {
@@ -719,16 +776,26 @@ private:
             width_, height_, ground_video_boxes);
         }
 #endif
-        if (publish_left) {
+        if (publish_left || publish_debug_image) {
           const auto download_error = left_gpu_.updateCPUfromGPU();
           if (download_error == sl::ERROR_CODE::SUCCESS) {
             auto left_bgra = sl_mat_to_cv_bgra_view(left_gpu_);
             if (fov_ellipse_enable_) {
               apply_ellipse_mask_bgra(left_bgra, ellipse_row_spans_);
             }
-            left_image_pub_->publish(
-              mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
-            left_published = true;
+            if (publish_left) {
+              left_image_pub_->publish(
+                mat_to_image_msg(left_bgra, "bgra8", left_frame_id_, stamp));
+              left_published = true;
+            }
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+            if (publish_debug_image) {
+              auto debug_image = left_bgra.clone();
+              draw_depth_annotations(debug_image, debug_detections);
+              debug_image_pub_->publish(
+                mat_to_image_msg(debug_image, "bgra8", left_frame_id_, stamp));
+            }
+#endif
           } else {
             RCLCPP_WARN_THROTTLE(
               get_logger(), *get_clock(), 2000,
@@ -843,6 +910,7 @@ private:
   double confidence_threshold_{};
   int max_detections_{};
   bool publish_debug_detections_{};
+  bool publish_debug_image_{true};
   double depth_center_ratio_{};
   int depth_sample_stride_{};
   int min_valid_depth_samples_{};
@@ -856,6 +924,7 @@ private:
   double same_color_wall_max_gap_m_{};
   double same_color_wall_point_spacing_m_{};
   rclcpp::Publisher<njord_interfaces::msg::BuoyDetectionArray>::SharedPtr detection_pub_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr debug_image_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr virtual_wall_pub_;
   std::string lidar_topic_;
   double lidar_max_age_sec_{};

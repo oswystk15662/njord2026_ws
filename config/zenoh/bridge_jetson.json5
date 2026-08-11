@@ -21,11 +21,6 @@
     ros2dds: {
       domain: 7,
 
-      transient_local_cache_multiplier: 20,
-      queries_timeout: {
-        transient_local_subscribers: 10.0,
-      },
-
       // The Jetson joins after the miniPC's robot_state_publisher in normal
       // operation.  Request the TRANSIENT_LOCAL /tf_static history instead
       // of relying on a fresh static-TF publication after startup.

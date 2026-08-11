@@ -10,7 +10,7 @@
   //
   // --- IMU config ---
   // imu_time_offset        : Time offset for IMU data (in seconds)
-  // acc_scale              : /livox/imu is already converted from g to m/s^2
+  // acc_scale              : /livox/imu_raw is expressed in g
   //
   // --- TF config ---
   // GLIM publishes TF subtrees "map -> odom -> base_frame" and "imu -> lidar".
@@ -52,7 +52,7 @@
     // IMU config
     "imu_time_offset": 0.0,
     "points_time_offset": 0.0,
-    "acc_scale": 1.0,
+    "acc_scale": 9.80665,
     // TF config
     "imu_frame_id": "livox_frame",
     "lidar_frame_id": "livox_frame",
@@ -69,7 +69,7 @@
       // "libimu_validator.so"
     ],
     // Topics
-    "imu_topic": "/livox/imu",
+    "imu_topic": "/livox/imu_raw",
     "points_topic": "/livox/lidar",
     "image_topic": "/image",
     // QoS options

@@ -56,7 +56,8 @@ def generate_launch_description():
     engine_path = LaunchConfiguration("engine_path")
     camera_resolution = LaunchConfiguration("camera_resolution")
     camera_framerate = LaunchConfiguration("camera_framerate")
-    enable_ground_video = LaunchConfiguration("enable_ground_video")
+    enable_ground_video_h264 = LaunchConfiguration("enable_ground_video_h264")
+    enable_ground_video_jpeg = LaunchConfiguration("enable_ground_video_jpeg")
     ground_video_host = LaunchConfiguration("ground_video_host")
     ground_video_port = LaunchConfiguration("ground_video_port")
     ground_video_width = LaunchConfiguration("ground_video_width")
@@ -95,12 +96,20 @@ def generate_launch_description():
             "engine_path": engine_path,
             "camera_resolution": camera_resolution,
             "framerate": camera_framerate,
-            "enable_ground_video": enable_ground_video,
+            # Jetson JPEG uses nvvidconv + nvjpegenc (the Tegra NVJPG
+            # hardware encoder). H.264 is deliberately not launched here:
+            # its inter-frame latency causes visible image misalignment.
+            "enable_ground_video": PythonExpression([
+                "'", enable_ground_video_jpeg, "' == 'true' and '",
+                enable_ground_video_h264, "' != 'true'",
+            ]),
+            "ground_video_codec": "jpeg",
             "ground_video_host": ground_video_host,
             "ground_video_port": ground_video_port,
             "ground_video_width": ground_video_width,
             "ground_video_height": ground_video_height,
             "ground_video_fps": ground_video_fps,
+            "ground_video_jpeg_quality": LaunchConfiguration("ground_video_jpeg_quality"),
             "ground_video_draw_detections": ground_video_draw_detections,
         },
     )
@@ -174,6 +183,35 @@ def generate_launch_description():
         },
     )
 
+    # GLIM must always have the LiDAR's rigid extrinsic transform locally.
+    # Do not depend on the miniPC's robot_state_publisher crossing Zenoh: a
+    # late or missing /tf_static route otherwise leaves livox_frame unknown.
+    # This topic remains local to the Jetson; bridge_jetson.json5 does not
+    # export /tf_static, so it cannot duplicate the miniPC's shared TF edge.
+    livox_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="jetson_livox_static_tf_pub",
+        output="screen",
+        arguments=[
+            "--x", "0.5", "--y", "0.0", "--z", "0.8",
+            "--roll", "3.141592653589793", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "livox_frame",
+        ],
+    )
+
+    zed_static_tf = Node(
+        package="tf2_ros",
+        executable="static_transform_publisher",
+        name="jetson_zed_static_tf_pub",
+        output="screen",
+        arguments=[
+            "--x", "0.48", "--y", "0.0", "--z", "0.47",
+            "--roll", "0.0", "--pitch", "0.0", "--yaw", "0.0",
+            "--frame-id", "base_link", "--child-frame-id", "zed2i_left_camera_frame",
+        ],
+    )
+
     return LaunchDescription(
         [
             DeclareLaunchArgument(
@@ -183,7 +221,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
                 "enable_glim",
-                default_value="false",
+                default_value="true",
                 description="Load GLIM into the Livox component container",
             ),
             DeclareLaunchArgument(
@@ -212,7 +250,16 @@ def generate_launch_description():
                 description="ZED camera resolution: HD2K, HD1080, HD720, or VGA",
             ),
             DeclareLaunchArgument("camera_framerate", default_value="15"),
-            DeclareLaunchArgument("enable_ground_video", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_ground_video_h264",
+                default_value="false",
+                description="H.264 ground-video is disabled; use the hardware JPEG stream instead.",
+            ),
+            DeclareLaunchArgument(
+                "enable_ground_video_jpeg",
+                default_value="true",
+                description="Send ground video as JPEG via Jetson's nvjpegenc hardware encoder.",
+            ),
             DeclareLaunchArgument(
                 "ground_video_host",
                 default_value="osw-Stealth-14-AI-Studio-A1VGG.local",
@@ -221,6 +268,7 @@ def generate_launch_description():
             DeclareLaunchArgument("ground_video_width", default_value="360"),
             DeclareLaunchArgument("ground_video_height", default_value="240"),
             DeclareLaunchArgument("ground_video_fps", default_value="3.0"),
+            DeclareLaunchArgument("ground_video_jpeg_quality", default_value="70"),
             DeclareLaunchArgument(
                 "ground_video_draw_detections",
                 default_value="true",
@@ -259,8 +307,8 @@ def generate_launch_description():
             # to reproduce the pre-split behaviour.
             DeclareLaunchArgument(
                 "lidar_start_delay",
-                default_value="0.0",
-                description="Seconds to wait before starting the MID360 container",
+                default_value="0.5",
+                description="Seconds to wait for the local livox static TF publisher before GLIM starts",
             ),
             DeclareLaunchArgument(
                 "camera_start_delay",
@@ -275,7 +323,9 @@ def generate_launch_description():
                 period=LaunchConfiguration("camera_start_delay"),
                 actions=[zed2i_launch],
             ),
-            task1_safety_points,
+            livox_static_tf,
+            zed_static_tf,
+            TimerAction(period=0.5, actions=[task1_safety_points]),
             task1_default_buoy_roi,
             task2_autonomy,
             heartbeat_launch,
