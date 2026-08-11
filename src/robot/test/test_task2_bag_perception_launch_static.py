@@ -73,3 +73,13 @@ def test_bag_player_is_non_interactive():
 def test_bag_uses_the_packaged_qos_override_by_default():
     source = _source()
     assert '"collision_avoidance_qos.yaml"' in source
+
+
+def test_odometry_selector_keeps_ros_node_subscription_attribute_intact():
+    selector = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+        "scripts", "bag_odometry_selector.py",
+    )
+    text = open(selector, encoding="utf-8").read()
+    assert "self.odom_subscriptions" in text
+    assert "self.subscriptions =" not in text

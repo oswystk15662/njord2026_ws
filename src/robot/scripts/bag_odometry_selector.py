@@ -51,7 +51,7 @@ class Task2OdometrySelector(Node):
         source_qos = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)
         self.source_publisher = self.create_publisher(
             String, "/task2/ego_odom_source", source_qos)
-        self.subscriptions = [
+        self.odom_subscriptions = [
             self.create_subscription(
                 Odometry, topic,
                 lambda message, source=topic: self._odom_callback(message, source),
