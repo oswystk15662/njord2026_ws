@@ -64,6 +64,7 @@ class OpponentSelectorNode(Node):
 
         self.declare_parameters("", [
             ("tracked_objects_topic", "/tracked_objects"),
+            ("tracked_objects_in_map_frame", False),
             ("ego_odom_topic", "/odometry/filtered/local"),
             ("twist_topic", "/other_ship/twist"),
             ("map_frame", "map"),
@@ -109,6 +110,7 @@ class OpponentSelectorNode(Node):
 
         self.map_frame = str(gp("map_frame"))
         self.base_frame = str(gp("base_frame"))
+        self.tracked_objects_in_map_frame = bool(gp("tracked_objects_in_map_frame"))
         self.opponent_frame = str(gp("opponent_frame"))
         self.policy = str(gp("selection_policy"))
         self.motion_filter_mode = str(gp("motion_filter_mode"))
@@ -352,6 +354,43 @@ class OpponentSelectorNode(Node):
         pos_map = None
         vel_map = None
         for candidate in ranked:
+            if self.tracked_objects_in_map_frame:
+                candidate_pos_map = candidate.position
+                candidate_vel_map = candidate.velocity_base
+                candidate_tf = None
+            else:
+                try:
+                    try:
+                        candidate_tf = self.tf_buffer.lookup_transform(
+                            self.map_frame, self.base_frame,
+                            Time(seconds=candidate.stamp_sec))
+                    except TransformException:
+                        candidate_tf = self.tf_buffer.lookup_transform(
+                            self.map_frame, self.base_frame, Time())
+                except TransformException as e:
+                    self.get_logger().warning(
+                        f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
+                        throttle_duration_sec=2.0)
+                    return
+                q = candidate_tf.transform.rotation
+                t = candidate_tf.transform.translation
+                t_map_base = cloud_ops.make_transform(
+                    cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w),
+                    [t.x, t.y, t.z])
+                vel_abs_base = tracking_glue.ego_compensate(
+                    candidate.velocity_base, self.ego_vel_base,
+                    ego_yaw_rate=self.ego_yaw_rate, pos_base=candidate.position)
+                candidate_pos_map, candidate_vel_map = tracking_glue.to_map_frame(
+                    candidate.position, vel_abs_base, t_map_base)
+            if not self._in_task2_corridor(candidate_pos_map):
+                continue
+            speed_knots = mps_to_knots(
+                np.hypot(candidate_vel_map[0], candidate_vel_map[1]))
+            if not self.min_absolute_speed_knots <= speed_knots <= self.max_absolute_speed_knots:
+                continue
+            selected, tf_msg, pos_map, vel_map = candidate, candidate_tf, candidate_pos_map, candidate_vel_map
+            break
+            """
             try:
                 # Look up map<-base_link at the track's own stamp so an
                 # up-to-stale_timeout_sec old track is composed with the
@@ -395,6 +434,7 @@ class OpponentSelectorNode(Node):
             pos_map = candidate_pos_map
             vel_map = candidate_vel_map
             break
+            """
 
         if selected is None:
             self._coast_or_silence(now, now_sec)
@@ -407,9 +447,11 @@ class OpponentSelectorNode(Node):
                 f"Selected moving opponent track id={selected.object_id} "
                 f"(dist={selected.distance:.1f} m)")
 
-        q = tf_msg.transform.rotation
-        base_yaw = _yaw_from_quaternion(q)
-        opponent_yaw = base_yaw + selected.yaw
+        if self.tracked_objects_in_map_frame:
+            opponent_yaw = selected.yaw
+        else:
+            q = tf_msg.transform.rotation
+            opponent_yaw = _yaw_from_quaternion(q) + selected.yaw
         self.last_observation = {
             "object_id": selected.object_id,
             "stamp_sec": now_sec,

@@ -42,6 +42,7 @@ class BuoySelectorNode(Node):
         super().__init__("task2_buoy_selector")
         self.declare_parameters("", [
             ("tracked_objects_topic", "/tracked_objects"),
+            ("tracked_objects_in_map_frame", False),
             ("ego_odom_topic", "/task2/ego_odom"),
             ("output_topic", "/task2/buoy_detections"),
             ("legacy_point_topic", "/buoy_detections"),
@@ -69,6 +70,7 @@ class BuoySelectorNode(Node):
         ])
         p = lambda name: self.get_parameter(name).value
         self.map_frame, self.base_frame = str(p("map_frame")), str(p("base_frame"))
+        self.tracked_objects_in_map_frame = bool(p("tracked_objects_in_map_frame"))
         self.expected_offset_m, self.lateral_tolerance_m = float(p("expected_lateral_offset_m")), float(p("lateral_tolerance_m"))
         self.start_margin_m, self.end_margin_m = float(p("start_margin_m")), float(p("end_margin_m"))
         self.stationary_speed_max_mps = float(p("stationary_speed_max_mps"))
@@ -177,14 +179,17 @@ class BuoySelectorNode(Node):
             self.tracks, now_sec, params=self.selection_params)
         eligible_ids = {track.object_id for track in eligible_tracks}
         for track in eligible_tracks:
-            try:
-                tf = self.tf_buffer.lookup_transform(self.map_frame, self.base_frame, Time(seconds=track.stamp_sec))
-            except TransformException:
-                continue
-            q, t = tf.transform.rotation, tf.transform.translation
-            transform = cloud_ops.make_transform(cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w), [t.x, t.y, t.z])
-            absolute_base = tracking_glue.ego_compensate(track.velocity_base, self.ego_vel_base, self.ego_yaw_rate, track.position)
-            position_map, velocity_map = tracking_glue.to_map_frame(track.position, absolute_base, transform)
+            if self.tracked_objects_in_map_frame:
+                position_map, velocity_map = track.position, track.velocity_base
+            else:
+                try:
+                    tf = self.tf_buffer.lookup_transform(self.map_frame, self.base_frame, Time(seconds=track.stamp_sec))
+                except TransformException:
+                    continue
+                q, t = tf.transform.rotation, tf.transform.translation
+                transform = cloud_ops.make_transform(cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w), [t.x, t.y, t.z])
+                absolute_base = tracking_glue.ego_compensate(track.velocity_base, self.ego_vel_base, self.ego_yaw_rate, track.position)
+                position_map, velocity_map = tracking_glue.to_map_frame(track.position, absolute_base, transform)
             have_route = self.start_map is not None and self.end_map is not None
             colour = None
             if have_route:
