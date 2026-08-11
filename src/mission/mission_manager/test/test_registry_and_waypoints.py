@@ -64,6 +64,13 @@ def test_task1_uses_gps1_as_start_not_navigation_goal():
     assert "Task1 route has no navigation waypoints after GPS1" in source
 
 
+def test_action_waits_for_ros_timer_not_asyncio_loop():
+    source = (PACKAGE_ROOT / "mission_manager" / "mission_manager_node.py").read_text()
+    assert "from rclpy.task import Future" in source
+    assert "await self._action_tick" in source
+    assert "asyncio" not in source
+
+
 def test_runtime_profile_switch_projects_geographic_route():
     source = (PACKAGE_ROOT / "mission_manager" / "mission_manager_node.py").read_text()
     runtime_result = source[source.index("def _on_runtime_result"):source.index("def _on_runtime_status")]

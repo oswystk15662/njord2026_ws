@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import math
 import threading
 from pathlib import Path
@@ -21,6 +20,7 @@ from rclpy.action import ActionClient, ActionServer, CancelResponse, GoalRespons
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from rclpy.task import Future
 from std_msgs.msg import Bool, Empty, Float64, String
 from visualization_msgs.msg import Marker, MarkerArray
 
@@ -206,6 +206,7 @@ class MissionManager(Node):
         self._auto_mode_request_sent = False
         self._manual_mode_requested: set[str] = set()
         self._action_results: dict[str, tuple[ResultCode, str]] = {}
+        self._action_tick = Future()
         self._auto_permitted = False
         self._requested_mode = MissionStatus.MODE_MANUAL
         self._effective_source = MissionStatus.SOURCE_ZERO
@@ -344,7 +345,7 @@ class MissionManager(Node):
                 else:
                     goal_handle.abort()
                 return self._action_result(code, message, execution_id)
-            await asyncio.sleep(0.1)
+            await self._action_tick
         return self._action_result(ResultCode.INTERNAL_ERROR, "ROS shutdown", execution_id)
 
     def _on_start(self, request, response):
@@ -921,6 +922,8 @@ class MissionManager(Node):
 
     def _tick(self) -> None:
         with self._lock:
+            self._action_tick.set_result(None)
+            self._action_tick = Future()
             snapshot = self._machine.snapshot
             pending_projection = self._pending_coordinate_projection
             if (
