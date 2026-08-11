@@ -2,22 +2,21 @@ task1_orchestrator:
   ros__parameters:
     frame_id: "map"
 
-    # Surveyed task1monday.kmz geometry, converted to local ENU metres with
-    # GPS1 (63.4408027778, 10.4233944444) as map (0, 0).  The checkpoint
-    # order is GPS1 -> GPS2 -> GPS3 -> GPS4; the two waypoint arrays retain
-    # every intermediate GPS point from the KMZ route.
-    gps_checkpoint_xy: "[[0.000, 0.000], [-16.729, -32.159], [-2.903, -42.982], [15.209, -7.731]]"
-    waypoint1_xy: "[[-4.977, -0.309], [-2.765, -7.112], [-2.350, -11.441], [-7.190, -14.533], [-17.697, -14.533]]"
-    waypoint2_xy: "[[1.383, -34.324], [-3.871, -24.428], [12.167, -25.975], [8.710, -16.079]]"
+    # Surveyed Task 1 geometry from "GPS points for tasks.xlsx", converted
+    # to local ENU metres with GPS1 (63.4408000000, 10.4233194444) as map
+    # (0, 0).  The checkpoints are GPS1 -> GPS2 -> GPS3 -> GPS3.4.
+    gps_checkpoint_xy: "[[0.000, 0.000], [-27.099, -29.685], [13.826, -34.324], [23.089, -3.401]]"
+    waypoint1_xy: "[[-8.434, -3.711], [-5.807, -11.132], [-4.977, -19.481], [-20.739, -18.862]]"
+    waypoint2_xy: "[[-0.830, -25.047], [10.231, -28.758], [15.485, -22.264]]"
 
     # Buoys in task1monday.kmz: red, east, west, green. Cardinal directions
     # are evaluated against geographic north (+Y in this ENU map).
     buoy_position_xy: "[[1.864, -38.592], [10.610, -27.048], [-0.072, -23.976], [10.809, -9.827]]"
     buoy_marks: "[\"RED\", \"E\", \"W\", \"GREEN\"]"
-    # GPS3 -> GPS4 bearing in the same ENU frame: 62.806 degrees.
-    course_heading_rad: 1.0961701371973742
+    # GPS3 -> GPS3.4 bearing in the same ENU frame: 73.324 degrees.
+    course_heading_rad: 1.279751971948381
     # GPS3 starts the cardinal-wall stage.
-    wall_retirement_start_xy: [-2.903, -42.982]
+    wall_retirement_start_xy: [13.826, -34.324]
     wall_radius: 2.5
     wall_points: 24
     goal_radius: 2.0

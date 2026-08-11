@@ -8,7 +8,7 @@ import yaml
 PARAMS_PATH = Path(__file__).resolve().parents[1] / "config" / "task1_params.yaml"
 
 
-def test_task1monday_layout_uses_gps1_enu_origin_and_surveyed_buoys():
+def test_task1_layout_uses_gps1_enu_origin_and_surveyed_buoys():
     params = yaml.safe_load(PARAMS_PATH.read_text(encoding="utf-8"))[
         "task1_orchestrator"]["ros__parameters"]
     checkpoints = json.loads(params["gps_checkpoint_xy"])
@@ -19,10 +19,10 @@ def test_task1monday_layout_uses_gps1_enu_origin_and_surveyed_buoys():
     assert len(buoys) == 4
     assert json.loads(params["buoy_marks"]) == ["RED", "E", "W", "GREEN"]
 
-    gps3, gps4 = checkpoints[2], checkpoints[3]
+    gps3, final_waypoint = checkpoints[2], checkpoints[3]
     assert math.isclose(
         params["course_heading_rad"],
-        math.atan2(gps4[1] - gps3[1], gps4[0] - gps3[0]),
+        math.atan2(final_waypoint[1] - gps3[1], final_waypoint[0] - gps3[0]),
         abs_tol=1.0e-3,
     )
 

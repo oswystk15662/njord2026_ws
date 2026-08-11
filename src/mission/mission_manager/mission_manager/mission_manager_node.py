@@ -614,13 +614,13 @@ class MissionManager(Node):
             return
         by_competition_id = {waypoint.competition_id: waypoint for waypoint in route.waypoints}
         gps3 = by_competition_id.get("3")
-        gps4 = by_competition_id.get("4")
-        if gps3 is None or gps4 is None:
-            self.get_logger().error("Task1 route has no GPS3/GPS4; cardinal walls remain disabled")
+        final_waypoint = route.waypoints[-1] if route.waypoints else None
+        if gps3 is None or final_waypoint is None:
+            self.get_logger().error("Task1 route has no GPS3/final waypoint; cardinal walls remain disabled")
             return
-        dx, dy = gps4.x - gps3.x, gps4.y - gps3.y
+        dx, dy = final_waypoint.x - gps3.x, final_waypoint.y - gps3.y
         if dx * dx + dy * dy < 1.0e-8:
-            self.get_logger().error("Task1 GPS3 and GPS4 coincide; cardinal walls remain disabled")
+            self.get_logger().error("Task1 GPS3 and final waypoint coincide; cardinal walls remain disabled")
             return
         gps3_index = route.waypoints.index(gps3)
         self._task1_wall_enable_after_remaining = len(route.waypoints) - gps3_index

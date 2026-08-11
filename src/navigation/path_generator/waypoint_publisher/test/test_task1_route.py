@@ -11,11 +11,11 @@ NODE_PATH = PACKAGE_ROOT / "waypoint_publisher" / "waypoint_publisher_node.py"
 SIM_PARAMS_PATH = PACKAGE_ROOT.parents[2] / "sim" / "task1_sim" / "config" / "task1_params.yaml"
 
 
-def test_task1_navigates_from_wp_1_1_through_gps4_in_survey_order():
+def test_task1_navigates_from_wp_1_1_through_gps3_4_in_survey_order():
     config = yaml.safe_load(CONFIG_PATH.read_text(encoding="utf-8"))["task1_config"]
     ids = [waypoint["competition_id"] for waypoint in config["waypoints"]]
-    assert ids == ["1", "1.1", "1.2", "1.3", "1.4", "1.5", "2", "3", "3.1", "3.2", "3.3", "3.4", "4"]
-    assert ids[1:] == ["1.1", "1.2", "1.3", "1.4", "1.5", "2", "3", "3.1", "3.2", "3.3", "3.4", "4"]
+    assert ids == ["1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "3.4"]
+    assert ids[1:] == ["1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "3.4"]
 
 
 def test_task1_treats_gps1_as_start_pose_not_navigation_goal():
@@ -46,16 +46,16 @@ def test_task1_sim_geometry_and_yaws_match_the_surveyed_geodetic_route():
         json.loads(sim["waypoint2_xy"]),
     )
     source_groups = (
-        [projected[index] for index in (0, 6, 7, 12)],
-        projected[1:6],
-        projected[8:12],
+        [projected[index] for index in (0, 5, 6, 10)],
+        projected[1:5],
+        projected[7:10],
     )
     for actual_group, expected_group in zip(expected_sim_points, source_groups):
         for actual, expected in zip(actual_group, expected_group):
             assert math.isclose(actual[0], expected[0], abs_tol=0.02)
             assert math.isclose(actual[1], expected[1], abs_tol=0.02)
 
-    # A waypoint arrow faces the following surveyed point; GPS4 retains the
+    # A waypoint arrow faces the following surveyed point; GPS3.4 retains the
     # incoming direction because it has no following route point.
     for index, waypoint in enumerate(route):
         here = projected[index]
