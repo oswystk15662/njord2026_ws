@@ -31,7 +31,9 @@ def test_launches_bag_and_perception_chain():
         '"segmentation.launch.py"',
         'package="ship_tracking", executable="ship_tracker_node"',
         '"use_sim_time": "true"',
-        '"ego_odom_topic": LaunchConfiguration("ego_odom_topic")',
+        'executable="bag_odometry_selector.py"',
+        '"/task2/ego_odom"',
+        'parameters=[LaunchConfiguration("params_file"), {"use_sim_time": True}]',
         '"task2_params.yaml"',
         '"map_frame": "odom"',
     ):

@@ -54,8 +54,11 @@ def test_single_task2_yaml_contains_every_opponent_pipeline_node():
     assert {
         "task2_cloud_filter", "preprocessing_node", "ground_remover_node",
         "cluster_node", "ship_tracker_node", "opponent_selector",
-        "task2_safety_cloud_filter", "task2_safety_cloud_gate", "planner_node",
+        "task2_safety_cloud_filter", "task2_safety_cloud_gate",
+        "bag_odometry_selector", "planner_node",
     }.issubset(params)
     assert params["ship_tracker_node"]["ros__parameters"]["motion_mode"] == "straight_line"
     assert params["task2_safety_cloud_filter"]["ros__parameters"]["output_topic"] == "/task2/safety_points"
     assert params["planner_node"]["ros__parameters"]["mppi.opponent_loa"] == 1.8
+    assert params["bag_odometry_selector"]["ros__parameters"]["candidate_topics"] == [
+        "/odometry/filtered/local", "/odom", "/odometry/filtered/global"]

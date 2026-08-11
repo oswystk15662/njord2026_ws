@@ -61,13 +61,21 @@ def _bag_player(context):
 
 
 def generate_launch_description():
+    ego_odom_topic = "/task2/ego_odom"
+    odom_selector = Node(
+        package="robot",
+        executable="bag_odometry_selector.py",
+        name="bag_odometry_selector",
+        output="screen",
+        parameters=[LaunchConfiguration("params_file"), {"use_sim_time": True}],
+    )
     tf_fallback = Node(
         package="robot",
         executable="bag_odometry_tf_fallback.py",
         name="bag_odometry_tf_fallback",
         output="screen",
         parameters=[{
-            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
+            "ego_odom_topic": ego_odom_topic,
             "odom_frame": "odom",
             "base_frame": "base_link",
         }],
@@ -80,7 +88,7 @@ def generate_launch_description():
             "enable_opponent_selector": "true",
             "params_file": LaunchConfiguration("params_file"),
             "use_sim_time": "true",
-            "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
+            "ego_odom_topic": ego_odom_topic,
             "map_frame": "odom",
             "base_frame": "base_link",
         },
@@ -98,7 +106,7 @@ def generate_launch_description():
             output="screen", parameters=[LaunchConfiguration("params_file")],
             remappings=[
                 ("input/cluster_observations", "/pcl/cluster_observations"),
-                ("input/ego_odometry", LaunchConfiguration("ego_odom_topic")),
+                ("input/ego_odometry", ego_odom_topic),
                 ("output/tracked_objects", "/tracked_objects"),
                 ("output/tracked_objects/markers", "/tracked_objects/markers"),
             ],
@@ -122,10 +130,7 @@ def generate_launch_description():
             ]),
             description="Single Task 2 perception/opponent tuning YAML.",
         ),
-        DeclareLaunchArgument(
-            "ego_odom_topic", default_value="/odometry/filtered/local",
-            description="Own-vessel odometry used for tracking and TF fallback.",
-        ),
+        odom_selector,
         DeclareLaunchArgument(
             "loop", default_value="true",
             description="Repeat the recording after it ends.",

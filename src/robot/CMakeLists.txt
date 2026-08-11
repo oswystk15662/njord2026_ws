@@ -47,6 +47,7 @@ install(FILES goal_checker_plugin.xml DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS
   scripts/bag_odometry_tf_fallback.py
+  scripts/bag_odometry_selector.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

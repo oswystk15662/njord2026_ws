@@ -238,6 +238,19 @@ task2_safety_cloud_gate:
     publish_rate_hz: 20.0
 
 # ---------------------------------------------------------------------------
+# rosbag replay: select exactly one odometry source for all perception nodes
+# ---------------------------------------------------------------------------
+bag_odometry_selector:
+  ros__parameters:
+    # First available topic after the short selection window wins by order.
+    candidate_topics:
+      - "/odometry/filtered/local"
+      - "/odom"
+      - "/odometry/filtered/global"
+    output_topic: "/task2/ego_odom"
+    selection_window_sec: 1.0
+
+# ---------------------------------------------------------------------------
 # MPPI parameters coupled specifically to a detected opponent
 # ---------------------------------------------------------------------------
 planner_node:
