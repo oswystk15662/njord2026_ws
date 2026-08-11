@@ -31,6 +31,7 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import TransformStamped, TwistStamped
 from nav_msgs.msg import Odometry
+from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformBroadcaster, TransformListener
 
 try:
@@ -66,6 +67,7 @@ class OpponentSelectorNode(Node):
             ("tracked_objects_topic", "/tracked_objects"),
             ("ego_odom_topic", "/odometry/filtered/local"),
             ("twist_topic", "/other_ship/twist"),
+            ("detection_status_topic", "/task2/opponent_detected"),
             ("map_frame", "map"),
             ("base_frame", "base_link"),
             ("opponent_frame", "opponent_vessel"),
@@ -144,6 +146,8 @@ class OpponentSelectorNode(Node):
         self.tf_broadcaster = TransformBroadcaster(self)
 
         self.pub = self.create_publisher(TwistStamped, str(gp("twist_topic")), 10)
+        self.detection_status_pub = self.create_publisher(
+            Bool, str(gp("detection_status_topic")), 10)
         self.create_subscription(
             TrackedObjectArray, str(gp("tracked_objects_topic")),
             self.tracks_callback, 10)
@@ -210,6 +214,7 @@ class OpponentSelectorNode(Node):
             self.get_logger().warning(
                 "Opponent velocity spike rejected; skipping this cycle.",
                 throttle_duration_sec=2.0)
+            self._publish_detection_status(False)
             return
         vx, vy, wz = smoothed
 
@@ -231,6 +236,10 @@ class OpponentSelectorNode(Node):
         tf_out.transform.rotation.z = math.sin(opponent_yaw / 2.0)
         tf_out.transform.rotation.w = math.cos(opponent_yaw / 2.0)
         self.tf_broadcaster.sendTransform(tf_out)
+        self._publish_detection_status(True)
+
+    def _publish_detection_status(self, detected: bool):
+        self.detection_status_pub.publish(Bool(data=detected))
 
     def _coast_or_silence(self, now, now_sec: float):
         """Bridge brief occlusions with constant-velocity prediction only."""
@@ -257,6 +266,7 @@ class OpponentSelectorNode(Node):
         self.selected_id = None
         self.last_observation = None
         self.smoother.reset()
+        self._publish_detection_status(False)
 
     # ------------------------------------------------------------------
     def timer_callback(self):
@@ -289,6 +299,7 @@ class OpponentSelectorNode(Node):
                 self.get_logger().warning(
                     f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
                     throttle_duration_sec=2.0)
+                self._publish_detection_status(False)
                 return
 
             q = candidate_tf.transform.rotation
