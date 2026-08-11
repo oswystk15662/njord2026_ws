@@ -14,6 +14,28 @@ Task 2 は 3 台で分担して起動する。
 
 miniPC と Jetson は、ホームディレクトリから `cd ./njord2026_ws` でワークスペースへ移動できるものとする。Ground PC のパスは、その端末のワークスペースに合わせて読み替える。
 
+## miniPC／Jetson への SSH 接続
+
+接続先のIPが分からない場合は、まずminiPCのmDNS名または記録済みのネットワーク経路を試す。`<user>` は各端末のログインユーザー名に置き換える。
+
+```bash
+ssh <user>@gembu-EliteMini-Series.local
+ssh <user>@192.168.212.210  # miniPC USB Wi-Fi
+ssh <user>@192.168.212.22   # miniPC 内蔵 Wi-Fi
+ssh <user>@100.123.47.2     # miniPC VPN（利用中の場合）
+```
+
+JetsonのIPは固定値として管理していない。同じネットワークにいるPCで次を実行し、Jetsonのホスト名またはIPを見つけてから接続する。
+
+```bash
+avahi-browse -art | rg -i 'jetson|nvidia|ssh'
+ip neigh
+# Tailscaleを使っている場合
+tailscale status
+```
+
+端末へ直接ログインできる場合は、その端末で `hostname -I` を実行してIPv4アドレスを確認する。Jetsonは通常Jazzy、miniPCはHumbleを使用する。
+
 ## 新しいターミナルを開いたとき
 
 新しいターミナルにはROSやワークスペースの設定は引き継がれない。**ビルドは不要**だが、`ros2` コマンド、launch、topic確認、ダミーGNSSのどれを実行する場合も、最初にその端末の役割に対応する次の設定を行う。
