@@ -12,7 +12,8 @@ const L = (() => {
   return leafletModule.exports;
 })();
 
-const LOG_TOPIC = "/foxglove_log";
+const FIX_TOPIC = "/sensor/vehicle_gnss/fix/raw";
+const SPEED_TOPIC = "/gui/ground_speed_mps";
 const BATTERY_PERCENT_TOPIC = "/gui/battery_percent";
 const TF_TOPIC = "/tf";
 const TF_STATIC_TOPIC = "/tf_static";
@@ -50,7 +51,8 @@ const PANEL_CSS = `
 .gnss-telemetry{position:absolute;right:12px;top:12px;z-index:1100;min-width:225px;padding:10px 12px;border:1px solid #526375;border-radius:6px;background:rgba(12,18,28,.92);color:#f4f7fb;font:14px/1.5 system-ui,sans-serif;pointer-events:none}
 .gnss-telemetry-title{color:#a9c7e8;font-size:12px;font-weight:700;letter-spacing:.06em}.gnss-telemetry-separator{border-top:1px solid #526375;margin-top:5px;padding-top:5px}
 .gnss-map-error{display:none;position:absolute;left:50%;bottom:34px;z-index:1100;transform:translateX(-50%);padding:7px 10px;border-radius:4px;background:rgba(137,28,28,.92);color:#fff;font:13px system-ui,sans-serif;pointer-events:none}.gnss-map-error.visible{display:block}
-	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{fill:#00cceb;stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
+.waypoint-order-tooltip{padding:1px 4px;border:1px solid #00e5ff;border-radius:3px;background:rgba(5,25,35,.88);color:#fff;font:600 11px/1.3 system-ui,sans-serif;box-shadow:none;white-space:nowrap}
+	.vessel-icon{height:40px;width:40px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.8))}.vessel-arrow{height:40px;width:40px;transform-origin:20px 20px}.vessel-body{stroke:#063946;stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round;fill-rule:evenodd}
 	.vessel-dot{display:none;position:absolute;left:13px;top:13px;width:14px;height:14px;border:3px solid #063946;border-radius:50%;background:#00cceb;box-sizing:border-box}.vessel-icon.no-heading .vessel-arrow{display:none}.vessel-icon.no-heading .vessel-dot{display:block}
 	`;
 
@@ -78,16 +80,6 @@ function batteryColor(percent) {
   if (percent <= 20) return "#ef4444";
   if (percent <= 50) return "#eab308";
   return "#22c55e";
-}
-
-function parseTelemetryLog(text) {
-  if (typeof text !== "string") return undefined;
-  const match = /NAV LAT=([-+]?\d+(?:\.\d+)?) LON=([-+]?\d+(?:\.\d+)?)\nSOG=([-+]?\d+(?:\.\d+)?)m\/s HDG=([-+]?\d+(?:\.\d+)?)deg/.exec(text);
-  if (!match) return undefined;
-  const [latitude, longitude, speedMps, headingDegrees] = match.slice(1).map(Number);
-  return [latitude, longitude, speedMps, headingDegrees].every(Number.isFinite)
-    ? {latitude, longitude, speedMps, headingDegrees}
-    : undefined;
 }
 
 function normalizeFrame(frame) {
@@ -154,7 +146,7 @@ function vesselIcon() {
     className: "",
     iconSize: [40, 40],
     iconAnchor: [20, 20],
-    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><path class="vessel-body" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
+    html: `<div class="vessel-icon no-heading"><svg class="vessel-arrow" viewBox="0 0 40 40" aria-label="Catamaran vessel heading"><defs><linearGradient id="vessel-hull-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#00e5ff"/><stop offset="48%" stop-color="#008ca5"/><stop offset="100%" stop-color="#022f3a"/></linearGradient></defs><path class="vessel-body" fill="url(#vessel-hull-gradient)" d="${bodyPath}"/></svg><div class="vessel-dot"></div></div>`,
   });
 }
 
@@ -192,8 +184,10 @@ function initGnssMapTelemetry(context) {
   const transforms = new Map();
   const waypointMarkers = new Map();
   let marker;
+  let waypointRoute;
+  let activeWaypointTask = "";
   let centered = false;
-  let waypointsCentered = false;
+  let waypointSignature = "";
 
   function updateTransforms(message) {
     for (const stamped of message?.transforms || []) {
@@ -212,10 +206,14 @@ function initGnssMapTelemetry(context) {
       if (waypoint.action === 3) {
         for (const marker of waypointMarkers.values()) map.removeLayer(marker);
         waypointMarkers.clear();
-        waypointsCentered = false;
+        if (waypointRoute) map.removeLayer(waypointRoute);
+        waypointRoute = undefined;
+        activeWaypointTask = "";
         continue;
       }
-      if (waypoint.ns !== "ground_waypoint_wgs84" || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      if (!waypoint.ns?.startsWith("ground_waypoint_wgs84") || !Number.isFinite(waypoint.pose?.position?.x) || !Number.isFinite(waypoint.pose?.position?.y)) continue;
+      const selectedTask = waypoint.ns.split("/", 2)[1];
+      if (selectedTask) activeWaypointTask = selectedTask;
       // The Ground PC publisher deliberately stores longitude in x and
       // latitude in y, so this panel can render YAML waypoints without
       // receiving the vessel's map-frame MarkerArray over Zenoh.
@@ -225,18 +223,38 @@ function initGnssMapTelemetry(context) {
       if (!waypointMarker) {
         waypointMarker = L.circleMarker(position, {
           radius: 7, color: "#00e5ff", fillColor: "#00e5ff", fillOpacity: 0.9, weight: 2,
-        }).bindTooltip(waypoint.text || `WP ${Number(waypoint.id) + 1}`, {direction: "top", offset: [0, -7]});
+        }).bindTooltip(
+          `${String(Number(waypoint.id) + 1).padStart(2, "0")} · ${waypoint.text || "WP"}`,
+          {permanent: true, direction: "top", offset: [0, -7], className: "waypoint-order-tooltip"},
+        );
         waypointMarker.addTo(map);
         waypointMarkers.set(id, waypointMarker);
       } else {
         waypointMarker.setLatLng(position);
       }
     }
-    if (!waypointsCentered && waypointMarkers.size && marker) {
-      const positions = [marker.getLatLng(), ...[...waypointMarkers.values()].map((item) => item.getLatLng())];
-      map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
-      waypointsCentered = true;
+    const orderedWaypoints = [...waypointMarkers.entries()]
+      .sort(([left], [right]) => Number(left) - Number(right));
+    if (waypointRoute) map.removeLayer(waypointRoute);
+    if (orderedWaypoints.length > 1) {
+      waypointRoute = L.polyline(
+        orderedWaypoints.map(([, item]) => item.getLatLng()),
+        {color: "#00e5ff", weight: 2, opacity: 0.8, dashArray: "6 5", interactive: false},
+      ).addTo(map);
     }
+    const nextWaypointSignature = [...waypointMarkers.entries()].map(([id, item]) => {
+      const position = item.getLatLng();
+      return `${id}:${position.lat.toFixed(8)}:${position.lng.toFixed(8)}`;
+    }).join("|");
+    // The source republishes DELETEALL followed by the complete identical
+    // route every second. Refit only when that actual route changes.
+    if (nextWaypointSignature && nextWaypointSignature !== waypointSignature) {
+      // A waypoint-only view has no vessel fix; center on the route itself.
+      const positions = [...waypointMarkers.values()].map((item) => item.getLatLng());
+      if (marker) positions.unshift(marker.getLatLng());
+      map.fitBounds(L.latLngBounds(positions), {padding: [40, 40], maxZoom: 17, animate: false});
+    }
+    waypointSignature = nextWaypointSignature;
   }
 
   function updateMarker() {
@@ -271,12 +289,13 @@ function initGnssMapTelemetry(context) {
       `SOG&nbsp;&nbsp; ${format(state.speedMps, 2, " m/s")}</div>`,
       `BAT&nbsp;&nbsp; ${format(state.batteryPercent, 0, " %")}</div>`,
       '<div class="gnss-telemetry-separator">',
+      `TASK&nbsp; ${activeWaypointTask || "--"}</div>`,
       `WP&nbsp;&nbsp;&nbsp; ${waypointMarkers.size}</div>`,
     ].join("");
   }
 
   context.subscribe([
-    {topic: LOG_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
+    {topic: FIX_TOPIC}, {topic: SPEED_TOPIC}, {topic: BATTERY_PERCENT_TOPIC},
     {topic: TF_TOPIC}, {topic: TF_STATIC_TOPIC}, {topic: GROUND_WAYPOINT_MARKERS_TOPIC},
   ]);
   context.watch("currentFrame");
@@ -284,9 +303,11 @@ function initGnssMapTelemetry(context) {
     try {
       for (const event of renderState.currentFrame || []) {
         const message = event.message || {};
-        if (event.topic === LOG_TOPIC) {
-          const telemetry = parseTelemetryLog(message.msg);
-          if (telemetry) Object.assign(state, telemetry);
+        if (event.topic === FIX_TOPIC) {
+          if (typeof message.latitude === "number") state.latitude = message.latitude;
+          if (typeof message.longitude === "number") state.longitude = message.longitude;
+        } else if (event.topic === SPEED_TOPIC && typeof message.data === "number") {
+          state.speedMps = message.data;
         } else if (event.topic === BATTERY_PERCENT_TOPIC && typeof message.data === "number") {
           state.batteryPercent = message.data;
         } else if (event.topic === TF_TOPIC || event.topic === TF_STATIC_TOPIC) {

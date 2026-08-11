@@ -49,6 +49,7 @@
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/joy/set_feedback",
           "/foxglove_log",
+          "/sensor/vehicle_gnss/fix/raw", "/gui/ground_speed_mps",
           "/mission/waypoint_markers",
           "/gui/battery_percent",
         ],

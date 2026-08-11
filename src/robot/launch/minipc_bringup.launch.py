@@ -320,6 +320,12 @@ def generate_launch_description():
         name="foxglove_logger",
         # output="screen",
     )
+    ground_speed = Node(
+        package="tf_frame_arrow_publisher",
+        executable="ground_speed_publisher",
+        name="ground_speed_publisher",
+        parameters=[{"odometry_topic": "/odometry/feedback"}],
+    )
 
     alert_lamp_launch = include_launch(
         "alert_lamp",
@@ -692,6 +698,7 @@ def generate_launch_description():
             bms_serial,
             bms_launch,
             foxglove_logger,
+            ground_speed,
             alert_lamp_launch,
             buoy_obstacle_launch,
             cardinal_wall_publisher,

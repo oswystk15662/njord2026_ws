@@ -62,6 +62,19 @@ TEST(NmeaParsing, ChecksumRequiresExactlyTwoHexDigits)
     EXPECT_FALSE(um982_driver::utils::validate_checksum("$GPGGA*ZZ"));
 }
 
+TEST(NmeaParsing, ExtractsGstPositionStandardDeviations)
+{
+    double latitude = 0.0;
+    double longitude = 0.0;
+    double altitude = 0.0;
+    EXPECT_TRUE(um982_driver::utils::parse_gst_standard_deviations(
+        "$GNGST,060458.00,0.71,1.62,1.44,9.1113,1.618,1.441,3.761*42",
+        latitude, longitude, altitude));
+    EXPECT_DOUBLE_EQ(latitude, 1.618);
+    EXPECT_DOUBLE_EQ(longitude, 1.441);
+    EXPECT_DOUBLE_EQ(altitude, 3.761);
+}
+
 TEST(NmeaParsing, RejectsNonFiniteMalformedAndOutOfRangeCoordinates)
 {
     double coordinate = 0.0;

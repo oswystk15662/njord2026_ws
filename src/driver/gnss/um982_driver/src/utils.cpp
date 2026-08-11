@@ -130,6 +130,25 @@ bool parse_int(const std::string & value, int & result) noexcept
     }
 }
 
+bool parse_gst_standard_deviations(
+    const std::string & sentence, double & latitude, double & longitude,
+    double & altitude) noexcept
+{
+    if (!validate_checksum(sentence)) {
+        return false;
+    }
+    const auto parts = split(sentence.substr(0, sentence.find('*')), ',');
+    if (parts.size() < 9 ||
+        (parts[0] != "$GPGST" && parts[0] != "$GNGST") ||
+        !parse_finite_double(parts[6], latitude) ||
+        !parse_finite_double(parts[7], longitude) ||
+        !parse_finite_double(parts[8], altitude))
+    {
+        return false;
+    }
+    return latitude > 0.0 && longitude > 0.0 && altitude > 0.0;
+}
+
 bool convert_nmea_to_latlon(
     const std::string & value, const std::string & direction, double & result) noexcept
 {

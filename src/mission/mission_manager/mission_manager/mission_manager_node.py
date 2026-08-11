@@ -187,7 +187,6 @@ class MissionManager(Node):
         self.declare_parameter("auto_permission_timeout_sec", 30.0)
         self.declare_parameter("coordinate_projection_timeout_sec", 30.0)
         self.declare_parameter("coordinate_projection_retry_sec", 0.5)
-        self.declare_parameter("coordinate_projection_request_interval_sec", 0.5)
         self.declare_parameter("coordinate_projection_request_timeout_sec", 5.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
@@ -597,7 +596,7 @@ class MissionManager(Node):
         pending = self._pending_coordinate_projection
         if pending is None:
             return
-        if "retry_after_ns" in pending or "next_request_after_ns" in pending:
+        if "retry_after_ns" in pending:
             return
         points = pending["points"]
         index = pending["next_index"]
@@ -669,15 +668,8 @@ class MissionManager(Node):
                 pending["next_index"] / len(pending["points"]),
                 f"projected waypoint {pending['next_index']}/{len(pending['points'])}",
             )
-            # navsat_transform may drop a burst of /fromLL calls while its
-            # datum is settling.  Keep the requests both serialized and
-            # time-separated.
-            interval_sec = float(
-                self.get_parameter("coordinate_projection_request_interval_sec").value
-            )
-            pending["next_request_after_ns"] = self.get_clock().now().nanoseconds + int(
-                max(0.0, interval_sec) * 1e9
-            )
+            # Keep requests serial, but do not impose a per-waypoint delay.
+            self._request_next_coordinate_projection()
 
     def _reject_started(self, execution_id: str, code: ResultCode, message: str):
         self._machine.finish(execution_id, code, message)
@@ -953,13 +945,6 @@ class MissionManager(Node):
                 and self.get_clock().now().nanoseconds >= pending_projection["retry_after_ns"]
             ):
                 del pending_projection["retry_after_ns"]
-                self._request_next_coordinate_projection()
-            elif (
-                pending_projection is not None
-                and "next_request_after_ns" in pending_projection
-                and self.get_clock().now().nanoseconds >= pending_projection["next_request_after_ns"]
-            ):
-                del pending_projection["next_request_after_ns"]
                 self._request_next_coordinate_projection()
             if snapshot.state == MissionState.WAITING_FOR_AUTO_PERMISSION:
                 if not self._auto_mode_request_sent:

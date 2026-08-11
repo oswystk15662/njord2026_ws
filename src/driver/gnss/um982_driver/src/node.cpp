@@ -296,7 +296,7 @@ void UM982Driver::hot_restart(
         // RESET restarts the receiver without clearing its stored navigation information.
         write_to_gnss("RESET\r\n");
         gnss_parse_buf_.clear();
-        have_heading_ = have_previous_fix_ = have_previous_yaw_ = false;
+        have_heading_ = have_previous_fix_ = have_previous_yaw_ = have_gst_ = false;
         filtered_surge_mps_ = filtered_sway_mps_ = filtered_yaw_rate_rps_ = 0.0;
         hot_restart_reconfigure_timer_ = create_wall_timer(3s, [this]() {
             configure_gnss_output();

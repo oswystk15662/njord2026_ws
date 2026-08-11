@@ -1,11 +1,12 @@
 # GNSS Map Telemetry
 
 Foxglove custom Map panel with a fixed top-right legend for latitude, longitude,
-base_link heading, and speed over ground. It consumes `/foxglove_log`, `/tf`, and
-`/tf_static`.
+base_link heading, and speed over ground. It consumes
+`/sensor/vehicle_gnss/fix/raw`, `/gui/ground_speed_mps`, `/tf`, and `/tf_static`.
 The panel renders OpenStreetMap tiles with its bundled Leaflet 1.9.4 runtime.
-After centering on the first valid fix, the map remains under manual pan and zoom
-control while the vessel arrow moves and rotates.  It also consumes the
+After centering on the first valid fix (or on the waypoint set when no fix is
+available), the map remains under manual pan and zoom control while the vessel
+arrow moves and rotates. It also consumes the
 transient-local `/ground_waypoint_markers` `visualization_msgs/msg/MarkerArray`
 from the Ground PC's local `waypoint_publisher` configuration and overlays each
 configured WP.  This marker list is generated from the installed waypoint YAML;
@@ -13,10 +14,13 @@ it does not depend on waypoint-marker traffic from the vessel.  The ground PC
 selects the YAML from the lightweight `/mission/status.task_id` value published
 after the operator starts a task; it shows no stale WPs while idle.
 
-Install [gnss-map-telemetry-0.2.4.foxe](gnss-map-telemetry-0.2.4.foxe) by dragging it
+Waypoint labels show their route order and competition label, a dashed cyan line
+connects the route, and the legend identifies the selected task. Install
+[gnss-map-telemetry-0.3.0.foxe](gnss-map-telemetry-0.3.0.foxe) by dragging it
 into Foxglove, then import `foxglove_setting.json`.
 
-The cyan catamaran's bow points along the `base_link` +X axis. Its orientation is
+The catamaran's bright cyan bow and darker stern point along the `base_link` +X
+axis. Its orientation is
 resolved on the Ground PC from the `map -> base_link` TF chain, assuming the `map`
 frame is ENU (+X east, +Y north). If the chain is unavailable, the panel shows a
 position dot and `HDG --`.

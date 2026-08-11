@@ -11,6 +11,7 @@ from pathlib import Path
 
 import rclpy
 from rclpy.action import ActionServer, GoalResponse, CancelResponse
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import QoSProfile, DurabilityPolicy, ReliabilityPolicy
 
@@ -25,8 +26,8 @@ _QOS = QoSProfile(depth=1, reliability=ReliabilityPolicy.RELIABLE,
 class RuntimeManager(Node):
     def __init__(self):
         super().__init__("runtime_manager")
-        self.declare_parameter("sigint_timeout_sec", 10.0)
-        self.declare_parameter("sigterm_timeout_sec", 5.0)
+        self.declare_parameter("sigint_timeout_sec", 1.0)
+        self.declare_parameter("sigterm_timeout_sec", 0.5)
         self.declare_parameter("nav2_ready_timeout_sec", 30.0)
         self.declare_parameter("nav2_ready_poll_sec", 0.5)
         self.declare_parameter("nav2_lifecycle_query_timeout_sec", 3.0)
@@ -64,7 +65,8 @@ class RuntimeManager(Node):
         if not process:
             self._process = None
             return
-        self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
+        if rclpy.ok():
+            self._publish(Nav2RuntimeStatus.STOPPING, "stopping previous Nav2 runtime")
         # The launch parent can exit before one of its lifecycle-managed
         # children.  The process group remains valid in that case, so do not
         # merely clear the record based on ``process.poll()``: terminate the
@@ -79,14 +81,14 @@ class RuntimeManager(Node):
             self._clear_runtime_pgid(process.pid)
         else:
             self.get_logger().error(
-                "Nav2 process group %d survived SIGKILL; retaining recovery record", process.pid
+                f"Nav2 process group {process.pid} survived SIGKILL; retaining recovery record"
             )
 
     @staticmethod
     def _terminate_process_group(pgid: int, *, sigint_timeout: float, sigterm_timeout: float) -> bool:
         for sig, timeout in ((signal.SIGINT, sigint_timeout),
                              (signal.SIGTERM, sigterm_timeout),
-                             (signal.SIGKILL, 1.0)):
+                             (signal.SIGKILL, 0.5)):
             try:
                 os.killpg(pgid, sig)
             except ProcessLookupError:
@@ -135,16 +137,16 @@ class RuntimeManager(Node):
         )
         if not nav2_member:
             self.get_logger().warning(
-                "discarding stale Nav2 runtime process-group record %d with no Nav2 members", pgid
+                f"discarding stale Nav2 runtime process-group record {pgid} with no Nav2 members"
             )
             self._clear_runtime_pgid(pgid)
             return
-        self.get_logger().warning("stopping orphaned Nav2 runtime process group %d", pgid)
+        self.get_logger().warning(f"stopping orphaned Nav2 runtime process group {pgid}")
         if self._terminate_process_group(pgid, sigint_timeout=10.0, sigterm_timeout=5.0):
             self._clear_runtime_pgid(pgid)
         else:
             self.get_logger().error(
-                "orphaned Nav2 process group %d survived SIGKILL; retaining recovery record", pgid
+                f"orphaned Nav2 process group {pgid} survived SIGKILL; retaining recovery record"
             )
 
     def _wait_for_bt_navigator_active(self) -> None:
@@ -242,9 +244,10 @@ def main():
     node = RuntimeManager()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
         node.shutdown()
         node.destroy_node()
         if rclpy.ok():

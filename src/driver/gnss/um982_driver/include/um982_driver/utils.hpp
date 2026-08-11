@@ -51,6 +51,10 @@ bool parse_nmea_utc_seconds(const std::string & value, double & result) noexcept
  */
 bool parse_int(const std::string & value, int & result) noexcept;
 
+bool parse_gst_standard_deviations(
+    const std::string & sentence, double & latitude, double & longitude,
+    double & altitude) noexcept;
+
 /**
  * @brief Base64エンコード (NTRIP認証用)
  */
