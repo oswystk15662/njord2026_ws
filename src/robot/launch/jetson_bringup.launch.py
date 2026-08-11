@@ -18,7 +18,7 @@ from launch.actions import (
 )
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
 
@@ -66,6 +66,7 @@ def generate_launch_description():
     heartbeat_monitor_zed2i = LaunchConfiguration("heartbeat_monitor_zed2i")
     heartbeat_monitor_lidar = LaunchConfiguration("heartbeat_monitor_lidar")
     enable_task1_safety_points = LaunchConfiguration("enable_task1_safety_points")
+    enable_task1_default_buoy_roi = LaunchConfiguration("enable_task1_default_buoy_roi")
     enable_task2_autonomy = LaunchConfiguration("enable_task2_autonomy")
 
     mid360_launch = include_launch(
@@ -74,7 +75,10 @@ def generate_launch_description():
         IfCondition(enable_mid360),
         {
             "lidar_model": lidar_model,
-            "enable_buoy_detection": enable_pcl_buoy_detection,
+            "enable_buoy_detection": PythonExpression([
+                "'", enable_pcl_buoy_detection, "' == 'true' or '",
+                enable_task1_default_buoy_roi, "' == 'true'",
+            ]),
             "enable_glim": enable_glim,
             "glim_headless": glim_headless,
             "glim_backend": glim_backend,
@@ -143,6 +147,14 @@ def generate_launch_description():
             "publish_debug": False,
         }],
         condition=IfCondition(enable_task1_safety_points),
+    )
+
+    task1_default_buoy_roi = Node(
+        package="task1_buoy_roi",
+        executable="task1_buoy_roi",
+        name="task1_buoy_roi",
+        output="screen",
+        condition=IfCondition(enable_task1_default_buoy_roi),
     )
 
     task2_autonomy = include_launch(
@@ -224,6 +236,11 @@ def generate_launch_description():
                 ),
             ),
             DeclareLaunchArgument(
+                "enable_task1_default_buoy_roi",
+                default_value="false",
+                description="Use surveyed Task 1 buoy positions to publish /buoy_roi within 10 m.",
+            ),
+            DeclareLaunchArgument(
                 "enable_task2_autonomy", default_value="false",
                 description="Run Task 2 LiDAR perception, tracking and MPPI on Jetson.",
             ),
@@ -259,6 +276,7 @@ def generate_launch_description():
                 actions=[zed2i_launch],
             ),
             task1_safety_points,
+            task1_default_buoy_roi,
             task2_autonomy,
             heartbeat_launch,
             networking_launch,

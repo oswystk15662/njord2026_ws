@@ -64,6 +64,7 @@
   <exec_depend>pcl_segmentation</exec_depend>
   <exec_depend>ship_tracking</exec_depend>
   <exec_depend>task2_perception</exec_depend>
+  <exec_depend>task1_buoy_roi</exec_depend>
 
   <test_depend>ament_cmake_pytest</test_depend>
   <test_depend>ament_lint_auto</test_depend>

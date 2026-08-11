@@ -54,6 +54,7 @@ def generate_launch_description():
             "enable_glim": LaunchConfiguration("enable_glim"),
             "glim_backend": LaunchConfiguration("glim_backend"),
             "enable_pcl_buoy_detection": LaunchConfiguration("enable_pcl_buoy_detection"),
+            "enable_task1_default_buoy_roi": LaunchConfiguration("enable_task1_default_buoy_roi"),
             "enable_gpu_perception": LaunchConfiguration("enable_gpu_perception"),
             "engine_path": LaunchConfiguration("engine_path"),
             "camera_resolution": LaunchConfiguration("camera_resolution"),
@@ -123,6 +124,7 @@ def generate_launch_description():
                 "glim_backend", default_value="gpu", choices=["gpu", "cpu"]
             ),
             DeclareLaunchArgument("enable_pcl_buoy_detection", default_value="false"),
+            DeclareLaunchArgument("enable_task1_default_buoy_roi", default_value="false"),
             DeclareLaunchArgument("enable_gpu_perception", default_value="true"),
             DeclareLaunchArgument("engine_path", default_value=default_engine),
             DeclareLaunchArgument("camera_resolution", default_value="HD720"),
