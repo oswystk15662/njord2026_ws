@@ -77,6 +77,20 @@ source install/setup.bash
 
 この設定が終わった同じターミナルで、以降に示す `ros2 launch`、`ros2 topic echo`、`njord-task` のいずれかを実行する。別のターミナルを開いた場合も、目的に合う上のブロックを再実行する。
 
+## `robot` パッケージが見つからない場合
+
+`ros2 launch robot ...` の実行時に `Package 'robot' not found` と表示された場合は、miniPCで次を実行する。
+
+```bash
+cd ./njord2026_ws
+source /opt/ros/humble/setup.bash
+export NJORD_PROFILE=minipc NJORD_ROLE=minipc
+source scripts/njord_env.sh
+colcon build --symlink-install --packages-up-to robot
+source install/setup.bash
+ros2 pkg prefix robot
+```
+
 ## ビルド方法
 
 `scripts/njord_env.sh` は端末のプロファイルを設定し、GPUがない端末ではGPU専用パッケージをビルド対象から外す。**各端末でビルド前に必ず source する。** 実行後の表示で、Jetson は `NJORD_PROFILE=jetson`、miniPC/Ground PC は `NJORD_PROFILE=minipc` と `NJORD_ENABLE_GPU_SENSORS=<unset>` であることを確認する。
