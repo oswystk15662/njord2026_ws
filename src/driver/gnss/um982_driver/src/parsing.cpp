@@ -40,7 +40,7 @@ void UM982Driver::process_gnss_buffer()
             const bool crc_ok = utils::calculate_unicore_crc32(gnss_parse_buf_.data(), total_len - 4) ==
                 utils::read_u32_le(&gnss_parse_buf_[total_len - 4]);
             if (!crc_ok) {
-                RCLCPP_DEBUG(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
+                RCLCPP_WARN(this->get_logger(), "Binary log CRC mismatch (msg_id=%u); resynchronizing", msg_id);
                 gnss_parse_buf_.erase(gnss_parse_buf_.begin());
                 continue;
             }
@@ -141,7 +141,6 @@ void UM982Driver::parse_gga(const std::string& line)
 
 void UM982Driver::parse_gst(const std::string& line)
 {
-    constexpr double kMinimumGstStdDevM = 0.01;
     double latitude_stddev = 0.0;
     double longitude_stddev = 0.0;
     double altitude_stddev = 0.0;
@@ -152,9 +151,9 @@ void UM982Driver::parse_gst(const std::string& line)
         return;
     }
     latest_gst_variance_ = {
-        std::pow(std::max(latitude_stddev, kMinimumGstStdDevM), 2),
-        std::pow(std::max(longitude_stddev, kMinimumGstStdDevM), 2),
-        std::pow(std::max(altitude_stddev, kMinimumGstStdDevM), 2)};
+        latitude_stddev * latitude_stddev,
+        longitude_stddev * longitude_stddev,
+        altitude_stddev * altitude_stddev};
     latest_gst_stamp_ = this->now();
     have_gst_ = true;
 }

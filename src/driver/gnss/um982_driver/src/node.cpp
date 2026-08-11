@@ -248,10 +248,8 @@ void UM982Driver::configure_gnss_output()
 {
     double fix_p = 1.0 / params_.fix_freq;
     double head_p = 1.0 / params_.heading_freq;
-    double rtk_status_p = 1.0 / params_.rtk_status_freq;
     std::string fix_period = format_period(fix_p);
     std::string heading_period = format_period(head_p);
-    std::string rtk_status_period = format_period(rtk_status_p);
 
     // Apply volatile startup configuration only. Do not send SAVECONFIG.
     // GPGGA has no binary counterpart (GPGGAB is rejected by the receiver: "PARSING
@@ -280,12 +278,9 @@ void UM982Driver::configure_gnss_output()
     write_to_gnss("GPGGA " + fix_period + "\r\n");
     write_to_gnss("GPGST " + fix_period + "\r\n");
     write_to_gnss("GPTHS " + heading_period + "\r\n");
-    write_to_gnss("RTKSTATUS" + params_.rtk_status_log_format + " " + rtk_status_period + "\r\n");
-
     RCLCPP_INFO(this->get_logger(),
-        "Configured volatile UM982 output: GPGGA/GPGST(ASCII)=%ss, GPTHS(ASCII)=%ss, RTKSTATUS%s=%ss",
-        fix_period.c_str(), heading_period.c_str(),
-        params_.rtk_status_log_format.c_str(), rtk_status_period.c_str());
+        "Configured volatile UM982 output: GPGGA/GPGST(ASCII)=%ss, GPTHS(ASCII)=%ss",
+        fix_period.c_str(), heading_period.c_str());
 }
 
 void UM982Driver::hot_restart(
