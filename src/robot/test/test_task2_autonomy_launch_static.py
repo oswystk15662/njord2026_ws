@@ -16,6 +16,10 @@ def test_task2_autonomy_launch_wires_mppi_velocity_through_arbiter():
     assert '"enable_follow_path_client": enable_nav2' in text
     assert '"enable_safety_cloud": "true"' in text
     assert 'executable="safety_cloud_gate_node"' in text
+    assert 'executable="bag_odometry_selector.py"' in text
+    assert 'name="task2_odometry_selector"' in text
+    assert '"ego_odom_topic": ego_odom_topic' in text
+    assert '"own_odom_topic": ego_odom_topic' in text
     assert "manual_control.launch.py" in text
     assert "command_arbiter_node" not in text
     assert "real_bringup.launch.py" not in text
@@ -49,6 +53,8 @@ def test_task2_two_machine_split_keeps_controller_and_stop_on_minipc():
     assert 'executable="follow_path_client_node"' in controller
     assert 'executable="task2_autonomy_ready_node"' in controller
     assert 'executable="safety_cloud_gate_node"' in controller
+    assert 'task2_params_file = LaunchConfiguration("task2_params_file")' in controller
+    assert 'parameters=[task2_params_file]' in controller
     assert "command_arbiter" not in controller
     assert '"enable_safety_cloud"' in perception
     assert '"params_file", default_value=default_params_file' in perception

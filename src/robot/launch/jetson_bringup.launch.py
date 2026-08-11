@@ -146,7 +146,7 @@ def generate_launch_description():
     task2_autonomy = include_launch(
         "robot", ["launch", "task2_jetson_autonomy.launch.py"],
         IfCondition(enable_task2_autonomy),
-        {"own_odom_topic": "/odometry/filtered/global", "enable_ship_tracking": "true"},
+        {"enable_ship_tracking": "true"},
     )
 
     networking_launch = include_launch(

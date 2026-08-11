@@ -27,9 +27,9 @@ def choose_preferred_topic(candidate_topics, available_topics):
     return next((topic for topic in candidate_topics if topic in available_topics), None)
 
 
-class BagOdometrySelector(Node):
+class Task2OdometrySelector(Node):
     def __init__(self):
-        super().__init__("bag_odometry_selector")
+        super().__init__("task2_odometry_selector")
         self.declare_parameter("candidate_topics", DEFAULT_CANDIDATE_TOPICS)
         self.declare_parameter("output_topic", "/task2/ego_odom")
         # Wait briefly after the first received sample so the preferred local
@@ -91,7 +91,7 @@ class BagOdometrySelector(Node):
 
 def main():
     rclpy.init()
-    node = BagOdometrySelector()
+    node = Task2OdometrySelector()
     try:
         rclpy.spin(node)
     finally:

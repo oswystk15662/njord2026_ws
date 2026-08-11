@@ -65,7 +65,7 @@ def generate_launch_description():
     odom_selector = Node(
         package="robot",
         executable="bag_odometry_selector.py",
-        name="bag_odometry_selector",
+        name="task2_odometry_selector",
         output="screen",
         parameters=[LaunchConfiguration("params_file"), {"use_sim_time": True}],
     )

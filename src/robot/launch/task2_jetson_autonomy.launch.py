@@ -17,9 +17,13 @@ def _include(package, launch_file, arguments):
 
 
 def generate_launch_description():
-    odom = LaunchConfiguration("own_odom_topic")
     tracking = LaunchConfiguration("enable_ship_tracking")
     params = LaunchConfiguration("params_file")
+    odom = "/task2/ego_odom"
+    odom_selector = Node(
+        package="robot", executable="bag_odometry_selector.py",
+        name="task2_odometry_selector", output="screen", parameters=[params],
+    )
     perception = _include("task2_perception", "task2_perception.launch.py", {
         "enable_cloud_filter": "true", "enable_opponent_selector": tracking,
         "publish_self_marker": "false", "ego_odom_topic": odom,
@@ -51,7 +55,6 @@ def generate_launch_description():
         name="task2_safety_cloud_filter", output="screen", parameters=[params],
     )
     return LaunchDescription([
-        DeclareLaunchArgument("own_odom_topic", default_value="/odometry/filtered/global"),
         DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
         DeclareLaunchArgument(
             "params_file",
@@ -59,6 +62,7 @@ def generate_launch_description():
                 [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
             description="Single Task 2 perception/opponent tuning YAML.",
         ),
+        odom_selector,
         perception,
         GroupAction(condition=IfCondition(tracking), actions=[preprocessing, segmentation, ship_tracking]),
         planner, safety_points,

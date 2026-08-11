@@ -30,6 +30,7 @@ def _include(package_name, launch_file, arguments=None):
 
 
 def generate_launch_description():
+    task2_params_file = LaunchConfiguration("task2_params_file")
     nav2 = _include(
         "robot",
         "navigation_launch_task2.py",
@@ -59,14 +60,7 @@ def generate_launch_description():
         executable="safety_cloud_gate_node",
         name="task2_safety_cloud_gate",
         output="screen",
-        parameters=[{
-            "safety_topic": "/task2/safety_points",
-            "cmd_vel_in_topic": "/cmd_vel_collision_checked",
-            "cmd_vel_out_topic": "/cmd_vel_nav",
-            "safety_timeout_sec": 1.0,
-            "command_timeout_sec": 0.5,
-            "publish_rate_hz": 20.0,
-        }],
+        parameters=[task2_params_file],
     )
     autonomy_ready = Node(
         package="asv_trajectory_planner",
@@ -81,6 +75,12 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "task2_params_file",
+            default_value=PathJoinSubstitution(
+                [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
+            description="Shared Task 2 perception and safety tuning YAML.",
+        ),
         DeclareLaunchArgument(
             "params_file",
             default_value=PathJoinSubstitution(

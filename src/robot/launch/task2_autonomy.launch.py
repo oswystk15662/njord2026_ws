@@ -48,8 +48,14 @@ def generate_launch_description():
     enable_lidar = LaunchConfiguration("enable_lidar")
     enable_ship_tracking = LaunchConfiguration("enable_ship_tracking")
     enable_nav2 = LaunchConfiguration("enable_nav2")
-    own_odom_topic = LaunchConfiguration("own_odom_topic")
     params_file = LaunchConfiguration("params_file")
+    ego_odom_topic = "/task2/ego_odom"
+
+    odom_selector = Node(
+        package="robot", executable="bag_odometry_selector.py",
+        name="task2_odometry_selector", output="screen",
+        parameters=[params_file],
+    )
 
     task2_perception = _include(
         "task2_perception",
@@ -61,6 +67,7 @@ def generate_launch_description():
             "enable_opponent_selector": enable_ship_tracking,
             "publish_self_marker": "false",
             "params_file": params_file,
+            "ego_odom_topic": ego_odom_topic,
         },
     )
     ship_tracking = GroupAction(
@@ -78,7 +85,7 @@ def generate_launch_description():
                 name="ship_tracker_node", output="screen", parameters=[params_file],
                 remappings=[
                     ("input/cluster_observations", "/pcl/cluster_observations"),
-                    ("input/ego_odometry", own_odom_topic),
+                    ("input/ego_odometry", ego_odom_topic),
                     ("output/tracked_objects", "/tracked_objects"),
                     ("output/tracked_objects/markers", "/tracked_objects/markers"),
                 ],
@@ -89,7 +96,7 @@ def generate_launch_description():
         "asv_trajectory_planner",
         "planner_real.launch.py",
         arguments={
-            "own_odom_topic": own_odom_topic,
+            "own_odom_topic": ego_odom_topic,
             "task2_params_file": params_file,
             # In the two-machine deployment FollowPath belongs to miniPC,
             # alongside ControllerServer and the final safety monitor.
@@ -140,10 +147,7 @@ def generate_launch_description():
                 [FindPackageShare("task2_perception"), "config", "task2_params.yaml"]),
             description="Single Task 2 perception/opponent tuning YAML.",
         ),
-        DeclareLaunchArgument(
-            "own_odom_topic", default_value="/odom",
-            description="Ego odometry already published by the manual-control stack.",
-        ),
+        odom_selector,
         task2_perception,
         ship_tracking,
         mppi,
