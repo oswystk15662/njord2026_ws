@@ -1,5 +1,16 @@
 # Task 2 launch 構成
 
+> 現行の実機手順は、常駐role bringupを使う。Jetsonでは
+> `ros2 launch robot jetson_bringup.launch.py enable_task2_autonomy:=true`、
+> miniPCでは
+> `ros2 launch robot minipc_bringup.launch.py active_nav2_profile:=task2`、
+> Ground PCでは `njord-task check task2` の成功後に
+> `njord-task start task2 --auto` を実行する。
+> この順序の詳細と停止手順は `Docs/system_operation_guide.md` を正本とする。
+
+> 以下の `task2_autonomy.launch.py` / `task2_controller.launch.py` は
+> 個別デバッグ・互換構成用であり、通常のrole bringupと重ねて起動しない。
+
 Task 2で利用する入口は、用途ごとに次の4つです。
 
 | 用途 | 起動コマンド | センサー・スラスタの扱い |

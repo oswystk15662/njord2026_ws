@@ -34,6 +34,7 @@ _GENERATE_LAUNCH_DESCRIPTION_FILES = [
     "task2.launch.py",
     "task3.launch.py",
     "networking.launch.py",
+    "ground_waypoint_map_only.launch.py",
 ]
 
 
@@ -128,6 +129,21 @@ def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
 
     assert 'LaunchConfiguration("back_cam_jpeg_video_port")' in source
     assert 'DeclareLaunchArgument("back_cam_jpeg_video_port", default_value="5602")' in source
+
+
+def test_waypoint_map_only_launch_has_no_gnss_or_control_path():
+    source = _read_launch_source("ground_waypoint_map_only.launch.py")
+
+    assert '"waypoint_map.launch.py"' in source
+    assert '"foxglove_bridge"' in source
+    for forbidden in (
+        'package="robot_localization"',
+        'package="critical_link"',
+        'executable="mission_manager_node"',
+        'executable="command_arbiter_node"',
+        'package="thruster_driver"',
+    ):
+        assert forbidden not in source
 
 
 def test_ground_pc_uses_the_jpeg_sender_port_for_the_jpeg_receiver():
