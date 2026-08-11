@@ -51,7 +51,7 @@ def generate_launch_description():
         }],
     )
     return LaunchDescription([
-        DeclareLaunchArgument("own_odom_topic", default_value="/odometry/filtered/global"),
+        DeclareLaunchArgument("own_odom_topic", default_value="/odometry/filtered/local"),
         DeclareLaunchArgument("enable_ship_tracking", default_value="true"),
         perception,
         GroupAction(condition=IfCondition(tracking), actions=[preprocessing, segmentation, ship_tracking]),

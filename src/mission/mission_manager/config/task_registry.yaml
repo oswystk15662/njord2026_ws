@@ -35,7 +35,7 @@ tasks:
     route_package: waypoint_publisher
     route: config/task2_waypoints.yaml
     route_key: task2_config
-    frame_id: map
+    frame_id: odom
     nav2_profile: task2
     control_policy: task2
     features: {buoy_perception: true}

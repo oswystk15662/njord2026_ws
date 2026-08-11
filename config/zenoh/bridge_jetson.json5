@@ -31,7 +31,7 @@
 
       allow: {
         publishers: [
-          "/odom", "/odometry/filtered/global", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/odometry/filtered/local", "/livox/imu",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
           "/waypoint1_pose", "/waypoint2_pose",
@@ -41,7 +41,7 @@
           "/foxglove_log",
         ],
         subscribers: [
-          "/odom", "/odometry/filtered/global", "/tf", "/tf_static", "/livox/imu",
+          "/odom", "/odometry/filtered/global", "/odometry/filtered/local", "/tf", "/tf_static", "/livox/imu",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
           "/waypoint1_pose", "/waypoint2_pose",

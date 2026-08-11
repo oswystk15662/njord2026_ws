@@ -688,8 +688,8 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "use_ekf_global",
-                default_value="true",
-                description="Enable the global EKF. The local EKF is always enabled.",
+                default_value="false",
+                description="Enable the optional map-referenced global EKF.",
             ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(

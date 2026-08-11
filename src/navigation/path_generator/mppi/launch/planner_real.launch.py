@@ -55,7 +55,7 @@ def generate_launch_description():
                 "config_key": "task2_config",
                 "waypoint1_topic": "/waypoint1_pose",
                 "waypoint2_topic": "/waypoint2_pose",
-                "frame_id": "map",
+                "frame_id": "odom",
                 "publish_frequency": 2.0,
             }
         ],
@@ -82,7 +82,7 @@ def generate_launch_description():
                 "own_frame": "base_link",
                 "other_ship_frame": "opponent_vessel",
 
-                "frame_id": "map",
+                "frame_id": "odom",
                 "planning_frequency": 2.0,
                 "point_spacing": 0.5,
                 "avoid_radius": 2.0,

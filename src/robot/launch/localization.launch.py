@@ -34,7 +34,7 @@ def generate_launch_description():
     )
     enable_global_ekf_arg = DeclareLaunchArgument(
         "enable_global_ekf",
-        default_value="true",
+        default_value="false",
     )
     enable_navsat_transform_arg = DeclareLaunchArgument(
         "enable_navsat_transform",
@@ -115,7 +115,7 @@ def generate_launch_description():
         output="screen",
         parameters=[
             {
-                "world_frame": "map",
+                "world_frame": "odom",
                 "use_sim_time": use_sim_time,
                 "frequency": 10.0,
                 "magnetic_declination_radians": 0.0,
@@ -197,7 +197,7 @@ def generate_launch_description():
         arguments=["--ros-args", "--log-level", "ERROR"],
         parameters=[
             {
-                "world_frame": "map",
+                "world_frame": "odom",
                 "use_sim_time": use_sim_time,
                 "frequency": 10.0,
                 "magnetic_declination_radians": 0.0,
@@ -211,13 +211,10 @@ def generate_launch_description():
         ],
         remappings=[
             ("gps/fix", "/sensor/vehicle_gnss/fix/raw"),
-            # navsat output inherits the input odometry world frame.  Use the
-            # global EKF here so /odometry/gps/um982 is map-referenced before
-            # feeding it back to that EKF.  Using the local (odom-referenced)
-            # output creates a map<->odom feedback loop after global TF starts.
-            ("odometry/filtered", "odometry/filtered/global"),
-            # The guard republishes finite messages on /odometry/gps/um982.
-            ("odometry/gps", "/odometry/gps/um982/raw"),
+            # Keep the first UM982 fix as the local odom origin.  navsat is
+            # retained for /fromLL, but does not depend on the global EKF.
+            ("odometry/filtered", "odometry/filtered/local"),
+            ("odometry/gps", "/odometry/gps/um982"),
         ],
         condition=IfCondition(LaunchConfiguration("enable_navsat_transform")),
     )

@@ -166,6 +166,19 @@ def test_minipc_bringup_uses_canonical_control_manager_by_default():
     assert 'package="twist_mux"' not in source
 
 
+def test_task2_uses_fixed_odom_without_global_ekf():
+    minipc = _read_launch_source("minipc_bringup.launch.py")
+    localization = _read_launch_source("localization.launch.py")
+    jetson = _read_launch_source("jetson_bringup.launch.py")
+    task2 = _read_launch_source("task2_mission_adapter.launch.py")
+
+    assert '"use_ekf_global",\n                default_value="false"' in minipc
+    assert '"world_frame": "odom"' in localization
+    assert '("odometry/filtered", "odometry/filtered/local")' in localization
+    assert '"frame_id": "odom"' in task2
+    assert '"own_odom_topic": "/odometry/filtered/local"' in jetson
+
+
 def test_minipc_bringup_adds_sbus_without_replacing_the_ground_link_joy_path():
     source = _read_launch_source("minipc_bringup.launch.py")
 

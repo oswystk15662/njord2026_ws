@@ -3,7 +3,7 @@
 # and Task2 MPPI project the values through /fromLL at run time.
 
 task2_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
   # Trondheim integration course: GPS 5 is Task 1's GPS 1; GPS 6 is
   # approximately 46 m south-south-west of GPS 5 (bearing 202.5 degrees).

@@ -17,6 +17,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     )
     assert registry.get("task1").runnable
     assert registry.get("task2").executor == "task2_mppi"
+    assert registry.get("task2").frame_id == "odom"
     assert registry.get("task3_1").runnable
     assert registry.get("task3_1").executor == "staged_docking"
     assert registry.get("task3_2").runnable

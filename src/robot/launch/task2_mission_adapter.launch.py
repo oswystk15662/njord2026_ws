@@ -16,7 +16,7 @@ def generate_launch_description():
         parameters=[{
             "config_package": "waypoint_publisher", "config_file": "task2_waypoints.yaml",
             "config_key": "task2_config", "waypoint1_topic": "/waypoint1_pose",
-            "waypoint2_topic": "/waypoint2_pose", "frame_id": "map", "publish_frequency": 2.0,
+            "waypoint2_topic": "/waypoint2_pose", "frame_id": "odom", "publish_frequency": 2.0,
         }],
     )
     follow_path = Node(
