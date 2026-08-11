@@ -96,12 +96,13 @@ opponent_selector:
     min_absolute_speed_knots: 0.3              # [kn] reject stationary buoys, retain slow vessels
     max_absolute_speed_knots: 6.0              # [kn] tolerate estimate error; MPPI remains fixed at 2.5 kn
     # Recognition rectangle fixed in the map frame to GPS point 5 -> 6.
-    # It begins 5 m before GPS5, ends 5 m past GPS6, and is 40 m wide.
+    # It begins 5 m after GPS5, ends 5 m past GPS6, and is 40 m wide.
     # task2_waypoint_pose_publisher resolves the GPS points through /fromLL.
     corridor_enabled: true
     corridor_start_topic: "/waypoint1_pose"    # GPS 5, map frame
     corridor_end_topic: "/waypoint2_pose"      # GPS 6, map frame
-    corridor_longitudinal_margin_m: 5.0
+    corridor_start_offset_m: 5.0
+    corridor_end_margin_m: 5.0
     corridor_half_width_m: 20.0
 
 # ---------------------------------------------------------------------------

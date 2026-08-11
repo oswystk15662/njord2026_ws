@@ -147,13 +147,13 @@ class TestStaleAndGates:
         start = np.array([10.0, 20.0])
         end = np.array([30.0, 20.0])
         assert tracking_glue.in_oriented_corridor(
-            np.array([5.0, 40.0]), start, end, 5.0, 20.0)
-        assert tracking_glue.in_oriented_corridor(
-            np.array([35.0, 0.0]), start, end, 5.0, 20.0)
+            np.array([15.0, 40.0]), start, end, 5.0, 5.0, 20.0)
         assert not tracking_glue.in_oriented_corridor(
-            np.array([35.1, 20.0]), start, end, 5.0, 20.0)
+            np.array([14.9, 20.0]), start, end, 5.0, 5.0, 20.0)
         assert not tracking_glue.in_oriented_corridor(
-            np.array([20.0, 40.1]), start, end, 5.0, 20.0)
+            np.array([35.1, 20.0]), start, end, 5.0, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([20.0, 40.1]), start, end, 5.0, 5.0, 20.0)
 
     def test_straight_line_confidence_gate(self):
         short_history = make_track(

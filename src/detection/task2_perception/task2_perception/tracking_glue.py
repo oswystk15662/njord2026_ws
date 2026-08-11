@@ -184,13 +184,15 @@ def in_oriented_corridor(
     point_xy: np.ndarray,
     start_xy: np.ndarray,
     end_xy: np.ndarray,
-    longitudinal_margin_m: float,
+    start_offset_m: float,
+    end_margin_m: float,
     half_width_m: float,
 ) -> bool:
     """Return whether a map-frame point is in the GPS5->GPS6 rectangle.
 
-    The rectangle follows the start-to-goal vector, extends by the specified
-    margin past both endpoints, and is independent of vessel heading.
+    The rectangle follows the start-to-goal vector. It starts after the
+    requested offset from GPS5 and ends after the requested margin past GPS6;
+    it is independent of vessel heading.
     """
     start = np.asarray(start_xy, dtype=float)[:2]
     end = np.asarray(end_xy, dtype=float)[:2]
@@ -203,8 +205,8 @@ def in_oriented_corridor(
     relative = point - start
     longitudinal = float(relative @ forward)
     lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
-    return (-float(longitudinal_margin_m) <= longitudinal <=
-            length + float(longitudinal_margin_m) and
+    return (float(start_offset_m) <= longitudinal <=
+            length + float(end_margin_m) and
             abs(lateral) <= float(half_width_m))
 
 

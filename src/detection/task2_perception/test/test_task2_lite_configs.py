@@ -44,7 +44,8 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["max_absolute_speed_knots"] == 6.0
     assert selector["straight_coast_timeout_sec"] == 2.0
     assert selector["corridor_enabled"] is True
-    assert selector["corridor_longitudinal_margin_m"] == 5.0
+    assert selector["corridor_start_offset_m"] == 5.0
+    assert selector["corridor_end_margin_m"] == 5.0
     assert selector["corridor_half_width_m"] == 20.0
 
 

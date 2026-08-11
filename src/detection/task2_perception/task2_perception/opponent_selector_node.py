@@ -101,7 +101,8 @@ class OpponentSelectorNode(Node):
             ("corridor_enabled", True),
             ("corridor_start_topic", "/waypoint1_pose"),
             ("corridor_end_topic", "/waypoint2_pose"),
-            ("corridor_longitudinal_margin_m", 5.0),
+            ("corridor_start_offset_m", 5.0),
+            ("corridor_end_margin_m", 5.0),
             ("corridor_half_width_m", 20.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
@@ -127,10 +128,11 @@ class OpponentSelectorNode(Node):
         self.straight_continue_after_loss = bool(
             gp("straight_continue_after_loss"))
         self.corridor_enabled = bool(gp("corridor_enabled"))
-        self.corridor_longitudinal_margin_m = float(
-            gp("corridor_longitudinal_margin_m"))
+        self.corridor_start_offset_m = float(gp("corridor_start_offset_m"))
+        self.corridor_end_margin_m = float(gp("corridor_end_margin_m"))
         self.corridor_half_width_m = float(gp("corridor_half_width_m"))
-        if self.corridor_longitudinal_margin_m < 0.0 or \
+        if self.corridor_start_offset_m < 0.0 or \
+                self.corridor_end_margin_m < 0.0 or \
                 self.corridor_half_width_m <= 0.0:
             raise ValueError("Task 2 corridor dimensions must be positive")
         self.corridor_start_map = None
@@ -266,7 +268,8 @@ class OpponentSelectorNode(Node):
             return False
         return tracking_glue.in_oriented_corridor(
             position_map, self.corridor_start_map, self.corridor_end_map,
-            self.corridor_longitudinal_margin_m, self.corridor_half_width_m)
+            self.corridor_start_offset_m, self.corridor_end_margin_m,
+            self.corridor_half_width_m)
 
     def _publish_output(self, now, pos_map, vel_map, opponent_yaw, yaw_rate):
         """Publish one absolute target estimate and its map-frame TF."""
