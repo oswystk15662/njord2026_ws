@@ -250,6 +250,7 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert '"task2_autonomy_ready_node"' not in adapter_source
     assert '"/runtime/nav2/status"' in supervisor_source
     assert 'active_profile_ == "task2"' in supervisor_source
+    assert 'active_profile_ != "task2" && !action_server_ready_' in supervisor_source
     assert '"/planned_path_pruned"' in supervisor_source
     assert '"task2_readiness_adapter_node"' in adapter_source
     assert '"follow_path_client_node"' in adapter_source

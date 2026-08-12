@@ -118,7 +118,7 @@ private:
     {
       status.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
         "Task 2 FollowPath action server or fresh path is unavailable");
-    } else if (!action_server_ready_) {
+    } else if (active_profile_ != "task2" && !action_server_ready_) {
       status.summary(diagnostic_msgs::msg::DiagnosticStatus::ERROR,
         "NavigateThroughPoses action server is unavailable");
     } else if (last_waypoint_.nanoseconds() == 0 ||
