@@ -55,6 +55,9 @@ def generate_launch_description():
     enable_pcl_buoy_detection = LaunchConfiguration("enable_pcl_buoy_detection")
     enable_gpu_perception = LaunchConfiguration("enable_gpu_perception")
     engine_path = LaunchConfiguration("engine_path")
+    enable_vessel_perception = LaunchConfiguration("enable_vessel_perception")
+    vessel_engine_path = LaunchConfiguration("vessel_engine_path")
+    vessel_confidence_threshold = LaunchConfiguration("vessel_confidence_threshold")
     camera_resolution = LaunchConfiguration("camera_resolution")
     camera_framerate = LaunchConfiguration("camera_framerate")
     enable_ground_video_h264 = LaunchConfiguration("enable_ground_video_h264")
@@ -98,6 +101,9 @@ def generate_launch_description():
             "mode": "sdk",
             "enable_gpu_perception": enable_gpu_perception,
             "engine_path": engine_path,
+            "enable_vessel_perception": enable_vessel_perception,
+            "vessel_engine_path": vessel_engine_path,
+            "vessel_confidence_threshold": vessel_confidence_threshold,
             "camera_resolution": camera_resolution,
             "framerate": camera_framerate,
             # Jetson JPEG uses nvvidconv + nvjpegenc (the Tegra NVJPG
@@ -270,6 +276,9 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_gpu_perception", default_value="true"),
             DeclareLaunchArgument("engine_path", default_value=default_engine),
+            DeclareLaunchArgument("enable_vessel_perception", default_value="false"),
+            DeclareLaunchArgument("vessel_engine_path", default_value=""),
+            DeclareLaunchArgument("vessel_confidence_threshold", default_value="0.25"),
             DeclareLaunchArgument(
                 "camera_resolution",
                 default_value="HD720",

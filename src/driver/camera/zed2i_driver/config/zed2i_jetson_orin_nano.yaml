@@ -47,6 +47,15 @@
     # matching local TensorRT engine has been generated.
     enable_gpu_perception: false
     engine_path: ""
+    # Optional YOLO-World vessel detector. Export the supplied yolov8s-world.pt
+    # with the single prompt/class "boat" and NMS enabled, then set this to
+    # that Jetson-local TensorRT engine. Boat results are visualization-only:
+    # they are drawn blue on /zed2i/debug/detections_image and never enter the
+    # buoy or virtual-wall topics.
+    enable_vessel_perception: false
+    vessel_engine_path: ""
+    vessel_confidence_threshold: 0.25
+    vessel_max_detections: 16
     # Ground-video transport is opt-in: an empty host and false enable prevent
     # accidental UDP transmission during normal development.
     enable_ground_video: false

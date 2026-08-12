@@ -134,6 +134,7 @@ struct DepthAnnotatedDetection
 {
   Detection2D detection;
   float depth_m{};
+  bool is_vessel{false};
 };
 
 struct DetectionVisualStyle
@@ -146,8 +147,11 @@ struct DetectionVisualStyle
 // generation: class 0 is green and class 1 is red.  Keep the visual mapping
 // here, beside the Foxglove annotation, so an operator can immediately see
 // that the image and the downstream navigation classification agree.
-DetectionVisualStyle detection_visual_style(int class_id)
+DetectionVisualStyle detection_visual_style(int class_id, bool is_vessel)
 {
+  if (is_vessel) {
+    return {"boat", cv::Scalar(255, 0, 0, 255)};
+  }
   switch (class_id) {
     case 0:
       return {"green buoy", cv::Scalar(0, 255, 0, 255)};
@@ -163,7 +167,7 @@ void draw_depth_annotations(
 {
   for (const auto & item : detections) {
     const auto & box = item.detection;
-    const auto style = detection_visual_style(box.class_id);
+    const auto style = detection_visual_style(box.class_id, item.is_vessel);
     const cv::Point top_left{cvRound(box.x1), cvRound(box.y1)};
     const cv::Point bottom_right{cvRound(box.x2), cvRound(box.y2)};
     cv::rectangle(image, top_left, bottom_right, style.color, 2);
@@ -240,6 +244,7 @@ public:
     ground_video_config_.mtu = declare_parameter<int>("ground_video_mtu", 1200);
     ground_video_draw_detections_ = declare_parameter<bool>("ground_video_draw_detections", false);
     const bool enable_gpu_perception = declare_parameter<bool>("enable_gpu_perception", false);
+    const bool enable_vessel_perception = declare_parameter<bool>("enable_vessel_perception", false);
     if (enable_gpu_perception) {
 #ifndef ZED2I_DRIVER_HAS_GPU_PERCEPTION
       RCLCPP_FATAL(
@@ -296,13 +301,41 @@ public:
 #endif
     }
 
+    if (enable_vessel_perception) {
+#ifndef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+      RCLCPP_FATAL(
+        get_logger(),
+        "enable_vessel_perception=true requires a build with ZED, CUDA, and TensorRT support.");
+      rclcpp::shutdown();
+      return;
+#else
+      vessel_engine_path_ = declare_parameter<std::string>("vessel_engine_path", "");
+      vessel_confidence_threshold_ = declare_parameter<double>("vessel_confidence_threshold", 0.25);
+      vessel_max_detections_ = declare_parameter<int>("vessel_max_detections", 16);
+      if (!enable_gpu_perception) {
+        publish_debug_image_ = declare_parameter<bool>("publish_debug_image", true);
+        depth_center_ratio_ = declare_parameter<double>("depth_center_ratio", 0.5);
+        depth_sample_stride_ = declare_parameter<int>("depth_sample_stride", 2);
+        min_valid_depth_samples_ = declare_parameter<int>("min_valid_depth_samples", 16);
+      }
+      if (vessel_engine_path_.empty()) {
+        RCLCPP_FATAL(
+          get_logger(), "enable_vessel_perception=true requires a non-empty vessel_engine_path");
+        rclcpp::shutdown();
+        return;
+      }
+      vessel_detector_ = std::make_unique<TensorRtDetector>(
+        vessel_engine_path_, static_cast<float>(vessel_confidence_threshold_), vessel_max_detections_);
+#endif
+    }
+
     rclcpp::QoS image_qos(rclcpp::KeepLast(5));
     image_qos.best_effort();
     image_qos.durability_volatile();
 
     left_image_pub_ = create_publisher<sensor_msgs::msg::Image>("left/image_rect", image_qos);
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
-    if (detector_) {
+    if (detector_ || vessel_detector_) {
       debug_image_pub_ = create_publisher<sensor_msgs::msg::Image>(
         "debug/detections_image", image_qos);
     }
@@ -356,7 +389,7 @@ public:
         width_, height_, ellipse_cx_, ellipse_cy_, ellipse_a_, ellipse_b_);
     }
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
-    if (detector_) {
+    if (detector_ || vessel_detector_) {
       left_gpu_.alloc(width_, height_, sl::MAT_TYPE::U8_C4, sl::MEM::GPU);
       depth_gpu_.alloc(width_, height_, sl::MAT_TYPE::F32_C1, sl::MEM::GPU);
     }
@@ -413,6 +446,7 @@ public:
 #endif
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
     detector_.reset();
+    vessel_detector_.reset();
 #endif
 #if defined(ZED2I_DRIVER_HAS_GPU_PERCEPTION) || defined(ZED2I_DRIVER_HAS_GROUND_VIDEO)
     // GPU sl::Mat storage must be released while the camera's CUDA context is alive.
@@ -620,7 +654,7 @@ private:
   {
     bool run_gpu = false;
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
-    run_gpu = static_cast<bool>(detector_);
+    run_gpu = static_cast<bool>(detector_) || static_cast<bool>(vessel_detector_);
 #endif
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
     run_gpu = run_gpu || static_cast<bool>(ground_video_streamer_);
@@ -705,7 +739,7 @@ private:
                 static_cast<float>(depth_min_m_), static_cast<float>(depth_max_m_),
                 min_valid_depth_samples_, nullptr);
               if (publish_debug_image) {
-                debug_detections.push_back({detection, depth});
+                debug_detections.push_back({detection, depth, false});
               }
               if (std::isfinite(depth)) {
                 RCLCPP_INFO_THROTTLE(
@@ -802,6 +836,50 @@ private:
             RCLCPP_ERROR_THROTTLE(
               get_logger(), *get_clock(), 2000, "GPU perception stopped: %s", error.what());
             detector_.reset();
+          }
+        }
+#endif
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+        if (vessel_detector_) {
+          camera_.retrieveMeasure(depth_gpu_, sl::MEASURE::DEPTH, sl::MEM::GPU);
+          const auto * pointer = left_gpu_.getPtr<sl::uchar1>(sl::MEM::GPU);
+          const auto * depth_pointer = depth_gpu_.getPtr<sl::float1>(sl::MEM::GPU);
+          try {
+            const auto detections = vessel_detector_->infer(
+              pointer, left_gpu_.getStepBytes(sl::MEM::GPU), width_, height_, nullptr);
+            for (const auto & detection : detections) {
+              if (fov_ellipse_enable_) {
+                const auto center_u = (detection.x1 + detection.x2) * 0.5F;
+                const auto center_v = (detection.y1 + detection.y2) * 0.5F;
+                if (!ellipse_contains(center_u, center_v)) {
+                  continue;
+                }
+              }
+              const auto roi = central_depth_roi(
+                detection, static_cast<float>(depth_center_ratio_), width_, height_);
+              const auto depth = depth_median_gpu(
+                depth_pointer, depth_gpu_.getStepBytes(sl::MEM::GPU), width_, height_,
+                roi.x0, roi.y0, roi.x1, roi.y1, depth_sample_stride_,
+                static_cast<float>(depth_min_m_), static_cast<float>(depth_max_m_),
+                min_valid_depth_samples_, nullptr);
+              if (publish_debug_image) {
+                debug_detections.push_back({detection, depth, true});
+              }
+              if (std::isfinite(depth)) {
+                RCLCPP_INFO_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Boat detected: confidence=%.2f ZED depth=%.2f m",
+                  detection.confidence, depth);
+              } else {
+                RCLCPP_WARN_THROTTLE(
+                  get_logger(), *get_clock(), 1000,
+                  "Boat detected: confidence=%.2f ZED depth unavailable", detection.confidence);
+              }
+            }
+          } catch (const std::exception & error) {
+            RCLCPP_ERROR_THROTTLE(
+              get_logger(), *get_clock(), 2000, "Vessel TensorRT perception stopped: %s", error.what());
+            vessel_detector_.reset();
           }
         }
 #endif
@@ -912,6 +990,7 @@ private:
   double cy_;
   double baseline_m_;
   std::string engine_path_;
+  std::string vessel_engine_path_;
   bool fov_ellipse_enable_{false};
   double fov_ellipse_cx_ratio_{0.5};
   double fov_ellipse_cy_ratio_{0.5};
@@ -941,11 +1020,14 @@ private:
 #endif
 #ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
   std::unique_ptr<TensorRtDetector> detector_;
+  std::unique_ptr<TensorRtDetector> vessel_detector_;
   sl::Mat depth_gpu_;
   std::string detection_topic_;
   std::string output_frame_;
   double confidence_threshold_{};
+  double vessel_confidence_threshold_{};
   int max_detections_{};
+  int vessel_max_detections_{};
   bool publish_debug_detections_{};
   bool publish_debug_image_{true};
   double depth_center_ratio_{};
