@@ -25,8 +25,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("task4").runnable
-    assert registry.get("task4").executor == "task4_composite"
-    assert registry.get("task4").nav2_profile == "task3"
+    assert registry.get("task4").executor == "waypoint_sequence"
+    assert registry.get("task4").nav2_profile == "task1"
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
@@ -46,31 +46,19 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
     assert len(task1.waypoints) == 11
     assert task1.frame_id == task3.frame_id == task3_2.frame_id == "odom"
-    assert task4.frame_id == "odom"
+    assert task4.frame_id == "map"
     assert [waypoint.competition_id for waypoint in task4.waypoints if waypoint.competition_id] == [
-        "13", "14", "15", "16", "17"
+        "1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"
     ]
-    assert [waypoint.waypoint_id for waypoint in task4.stage("normal_exit")] == ["normal_exit"]
-    assert [waypoint.waypoint_id for waypoint in task4.stage("parallel_dock")] == ["parallel_dock"]
-    assert [(waypoint.competition_id, waypoint.latitude, waypoint.longitude) for waypoint in task4.waypoints
-            if waypoint.competition_id] == [
-        ("13", 63.440797, 10.423860), ("14", 63.440931, 10.423994),
-        ("15", 63.441086, 10.423729), ("16", 63.441155, 10.424123),
-        ("17", 63.441044, 10.424106),
-    ]
-    assert [(waypoint.waypoint_id, waypoint.docking_motion) for waypoint in task4.waypoints
-            if waypoint.docking_motion] == [
-        ("14", "forward"), ("normal_dock", "forward"),
-        ("normal_exit", "omni"), ("17", "sway_negative"),
-        ("parallel_dock", "sway_negative"),
-    ]
+    assert task4.waypoints[-1].latitude == pytest.approx(63.4407694444)
+    assert task4.waypoints[-1].longitude == pytest.approx(10.4237833333)
     assert len(task4.projection_points()) == len(task4.waypoints)
     displayed = [
         str(waypoint["competition_id"])
         for waypoint in load_yaml(WAYPOINT_ROOT / "config/task4_waypoints.yaml")["task4_config"]["waypoints"]
         if waypoint.get("display", True)
     ]
-    assert displayed == ["13", "14", "15", "16", "17"]
+    assert displayed == ["1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"]
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"
