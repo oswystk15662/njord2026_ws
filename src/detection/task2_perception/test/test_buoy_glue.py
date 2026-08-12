@@ -19,18 +19,18 @@ def test_route_side_rejects_wrong_offset_or_outside_route():
         np.array([21.0, -2.5]), start, end, 2.5, 0.5) is None
 
 
-def test_route_side_accepts_three_metre_width_only_between_gps5_and_gps6():
+def test_route_side_accepts_three_metre_band_centred_at_two_point_five_m():
     start, end = np.array([0.0, 0.0]), np.array([20.0, 0.0])
     assert buoy_glue.classify_route_side(
-        np.array([10.0, 2.9]), start, end, 1.5, 1.5) == buoy_glue.RED
+        np.array([10.0, 3.9]), start, end, 2.5, 1.5) == buoy_glue.RED
     assert buoy_glue.classify_route_side(
-        np.array([10.0, -2.9]), start, end, 1.5, 1.5) == buoy_glue.GREEN
+        np.array([10.0, -3.9]), start, end, 2.5, 1.5) == buoy_glue.GREEN
     assert buoy_glue.classify_route_side(
-        np.array([10.0, 0.0]), start, end, 1.5, 1.5) is None
+        np.array([10.0, 0.9]), start, end, 2.5, 1.5) is None
     assert buoy_glue.classify_route_side(
-        np.array([10.0, 3.1]), start, end, 1.5, 1.5) is None
+        np.array([10.0, 4.1]), start, end, 2.5, 1.5) is None
     assert buoy_glue.classify_route_side(
-        np.array([-0.1, 1.5]), start, end, 1.5, 1.5) is None
+        np.array([-0.1, 2.5]), start, end, 2.5, 1.5) is None
 
 
 def test_stationary_gate_uses_compensated_ground_speed():
