@@ -347,6 +347,12 @@ def generate_launch_description():
         name="ground_speed_publisher",
         parameters=[{"odometry_topic": "/odometry/feedback"}],
     )
+    cmd_vel_markers = Node(
+        package="tf_frame_arrow_publisher",
+        executable="cmd_vel_marker_publisher",
+        name="cmd_vel_marker_publisher",
+        parameters=[{"cmd_vel_topic": "/cmd_vel", "marker_topic": "/cmd_vel_markers"}],
+    )
 
     alert_lamp_launch = include_launch(
         "alert_lamp",
@@ -768,6 +774,7 @@ def generate_launch_description():
             bms_launch,
             foxglove_logger,
             ground_speed,
+            cmd_vel_markers,
             alert_lamp_launch,
             buoy_obstacle_launch,
             cardinal_wall_publisher,

@@ -62,6 +62,7 @@
           "/sensor/vehicle_gnss/fix/raw", "/sensor/vehicle_gnss/compass/raw",
           "/gui/ground_speed_mps",
           "/mission/waypoint_markers",
+          "/cmd_vel_markers",
           "/gui/battery_percent",
         ],
         subscribers: [
