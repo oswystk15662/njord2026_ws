@@ -89,3 +89,12 @@ tasks:
     frame_id: odom
     nav2_profile: task1
     control_policy: task1
+  back_to_birth_point:
+    display_name: Back to birth point
+    availability: experimental
+    executor: waypoint_sequence
+    route: move_to_exam_field_waypoints.yaml
+    route_key: back_to_birth_point_config
+    frame_id: odom
+    nav2_profile: task1
+    control_policy: task1

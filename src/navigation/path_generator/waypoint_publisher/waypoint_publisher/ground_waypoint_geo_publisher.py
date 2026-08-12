@@ -23,6 +23,9 @@ _CONFIGS = {
     "move_to_exam_field": (
         "mission_manager", "config/move_to_exam_field_waypoints.yaml", "move_to_exam_field_config"
     ),
+    "back_to_birth_point": (
+        "mission_manager", "config/move_to_exam_field_waypoints.yaml", "back_to_birth_point_config"
+    ),
 }
 
 

@@ -31,6 +31,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
     assert registry.get("move_to_exam_field").frame_id == "odom"
+    assert registry.get("back_to_birth_point").runnable
     assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
@@ -82,6 +83,10 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert [waypoint.waypoint_id for waypoint in exam_field.waypoints] == [
         "gps_0_1", "waypoint_1", "waypoint_2", "gps_0_2_1",
     ]
+    back = loader.load(PACKAGE_ROOT / "config" / "move_to_exam_field_waypoints.yaml", "back_to_birth_point_config")
+    assert [waypoint.waypoint_id for waypoint in back.waypoints] == list(reversed([
+        waypoint.waypoint_id for waypoint in exam_field.waypoints
+    ]))
 
 
 def test_task1_uses_gps1_as_start_not_navigation_goal():
