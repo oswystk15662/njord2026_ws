@@ -124,6 +124,31 @@ def test_staged_docking_does_not_wait_after_an_undocking_stage():
     assert results[0].status == ExecutorStatus.SUCCEEDED
 
 
+def test_staged_docking_honors_explicit_stage_order_for_task4_style_route():
+    nav = FakeNavigation()
+    results = []
+    route = Route(
+        "map",
+        (
+            Waypoint("start", 0.0, 0.0, 0.0, "start", "start"),
+            Waypoint("berth", 1.0, 0.0, 0.0, "berth", "dock"),
+            Waypoint("exit", 2.0, 0.0, 0.0, "exit", "dock_approach"),
+        ),
+        {"first": ("start",), "dock": ("berth",), "leave": ("exit",)},
+        {},
+        {"stage_order": ["first", "dock", "leave"], "wait_time_s": 0},
+    )
+    executor = StagedDockingExecutor(
+        nav, lambda _seconds, callback: (callback(), callback)[1], lambda _timer: None
+    )
+    executor.start("task4", route, lambda *_: None, results.append)
+    for expected_id in ("start", "berth", "exit"):
+        poses, _accepted, completed = nav.sent[-1]
+        assert [pose.waypoint_id for pose in poses] == [expected_id]
+        completed(ExecutorStatus.SUCCEEDED, "ok")
+    assert results[0].status == ExecutorStatus.SUCCEEDED
+
+
 def test_task2_mppi_withdraws_its_gate_before_reporting_canceled():
     enabled = []
     results = []

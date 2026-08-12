@@ -60,14 +60,14 @@ tasks:
     nav2_profile: task3
     control_policy: task3
   task4:
-    display_name: Task 4 (temporary waypoint baseline)
+    display_name: Task 4 (two-berth route)
     availability: experimental
-    executor: waypoint_sequence
+    executor: staged_docking
     route_package: waypoint_publisher
     route: config/task4_waypoints.yaml
     route_key: task4_config
     frame_id: map
-    nav2_profile: task1
+    nav2_profile: task3
     control_policy: task1
     features: {cardinal_walls: false, buoy_perception: false}
   return_home:

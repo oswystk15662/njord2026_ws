@@ -25,6 +25,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("task4").runnable
+    assert registry.get("task4").executor == "staged_docking"
+    assert registry.get("task4").nav2_profile == "task3"
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
@@ -44,8 +46,14 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert len(task1.waypoints) == 11
     assert task1.frame_id == task3.frame_id == task3_2.frame_id == "odom"
     assert [waypoint.waypoint_id for waypoint in task4.waypoints] == [
-        waypoint.waypoint_id for waypoint in task1.waypoints
+        "13", "14_outbound", "8_berth1_approach", "berth1",
+        "8_berth1_exit", "8_exit_turn", "14_return", "15", "16",
+        "17", "11_berth2_approach", "berth2",
     ]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("stage_3")] == ["berth1"]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("stage_4")] == ["8_berth1_exit"]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("stage_10")] == ["11_berth2_approach"]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("stage_11")] == ["berth2"]
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"
@@ -68,7 +76,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     exam_field = loader.load(PACKAGE_ROOT / "config" / "move_to_exam_field_waypoints.yaml", "move_to_exam_field_config")
     assert exam_field.frame_id == "odom"
     assert [waypoint.waypoint_id for waypoint in exam_field.waypoints] == [
-        "gps_0_1", "waypoint_1", "waypoint_2", "gps_0_2_1",
+        "gps_0_2_1", "waypoint_2", "waypoint_1", "gps_0_1",
     ]
 
 

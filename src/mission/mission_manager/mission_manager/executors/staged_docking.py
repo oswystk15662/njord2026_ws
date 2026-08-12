@@ -31,8 +31,19 @@ class StagedDockingExecutor(TaskExecutor):
         self._route = route
         self._full_sequence = full_sequence
         stage_set = route.full_sequence_stages if full_sequence else route.stages
-        self._stage_names = [name for name in ("stage_1_gate", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5")
-                             if stage_set.get(name)]
+        configured_order = route.constraints.get("stage_order")
+        if isinstance(configured_order, list) and all(
+                isinstance(name, str) for name in configured_order):
+            self._stage_names = [name for name in configured_order if stage_set.get(name)]
+        else:
+            # Preserve the established Task 3 stage order for routes that do
+            # not declare one explicitly.
+            self._stage_names = [
+                name for name in (
+                    "stage_1_gate", "stage_1", "stage_2", "stage_3",
+                    "stage_4", "stage_5",
+                ) if stage_set.get(name)
+            ]
         self._stage_index = 0
         self._retry_count = 0
         self._berth_wait_count = 0
