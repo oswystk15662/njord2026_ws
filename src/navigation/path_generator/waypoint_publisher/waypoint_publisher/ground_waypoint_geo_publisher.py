@@ -103,6 +103,9 @@ class GroundWaypointGeoPublisher(Node):
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 1.0
             marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.0, 0.9, 1.0, 1.0
+            # GNSS Map Telemetry reads this field for the label beside the
+            # numbered pin on the geographic map.
+            marker.text = str(waypoint.get("name", "")).strip()
             markers.markers.append(marker)
             label = Marker()
             label.header.frame_id, label.header.stamp = "wgs84", stamp
