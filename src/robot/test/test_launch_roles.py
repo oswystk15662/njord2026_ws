@@ -900,6 +900,8 @@ def test_zed_v4l2_q40_preview_is_the_default_jetson_backend():
     assert '"jpeg_qualities": [40]' in preview_launch
     assert '"width": 640' in preview_launch
     assert '"height": 360' in preview_launch
+    assert "/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_" in preview_launch
+    assert "OV0001-video-index0" in preview_launch
 
 
 def test_zenoh_routes_only_the_q40_zed_preview_to_ground():

@@ -45,7 +45,16 @@ def generate_launch_description():
     )
 
     return LaunchDescription([
-        DeclareLaunchArgument("video_device", default_value="/dev/video0"),
+        # /dev/videoN numbering is not stable across reconnects.  Match the
+        # left-eye device already recorded in zed2i_jetson_orin_nano.yaml so
+        # the V4L2 fallback cannot silently select the rear camera instead.
+        DeclareLaunchArgument(
+            "video_device",
+            default_value=(
+                "/dev/v4l/by-id/usb-Technologies__Inc._ZED_2i_"
+                "OV0001-video-index0"
+            ),
+        ),
         DeclareLaunchArgument("raw_topic", default_value="/zed2i/stereo/image_raw"),
         DeclareLaunchArgument("output_prefix", default_value="/zed2i/left/preview"),
         DeclareLaunchArgument("max_fps", default_value="10.0"),
