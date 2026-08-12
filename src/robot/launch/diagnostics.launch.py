@@ -90,8 +90,8 @@ PROFILES = {
             "reliable",
         ),
         _monitor(
-            "global_filtered_odom",
-            "/odometry/filtered/global",
+            "local_filtered_odom",
+            "/odometry/filtered/local",
             "nav_msgs/msg/Odometry",
             "required_frequency",
             30.0,
