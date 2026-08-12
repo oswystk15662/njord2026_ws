@@ -1,6 +1,5 @@
 # Task 4: surveyed transit waypoints plus the Task 3 berth 1 and berth 2
-# manoeuvres.  The Task 4 copies of GPS8 and GPS11 are projected onto the
-# adjacent transit-to-berth lines; their docking headings remain Task 3's.
+# manoeuvres.  GPS8 and GPS11 use their original Task 3 coordinates.
 task4_config:
   frame_id: "map"
   publish_rate_hz: 2.0
@@ -8,16 +7,16 @@ task4_config:
   waypoints:
     - {id: 13, competition_id: "01", latitude: 63.4407340000, longitude: 10.4233660000, yaw: 0.2773, type: "start", name: "GPS 13 - Task 4 Start", tolerance_m: 2.0}
     - {id: 14_outbound, competition_id: "02", latitude: 63.4407970000, longitude: 10.4238600000, yaw: -2.4342, type: "waypoint", name: "GPS 14 - Berth 1 Transit", tolerance_m: 2.0}
-    - {id: 8_berth1_approach, competition_id: "03", latitude: 63.4409288798, longitude: 10.4240747889, yaw: -0.3216, type: "dock_approach", name: "GPS 8 - Berth 1 Approach", tolerance_m: 0.8}
+    - {id: 8_berth1_approach, competition_id: "03", latitude: 63.4409333333, longitude: 10.4240611111, yaw: -0.3216, type: "dock_approach", name: "GPS 8 - Berth 1 Approach", tolerance_m: 0.8}
     - {id: berth1, competition_id: "04", latitude: 63.4409400000, longitude: 10.4240929000, yaw: -0.3216, type: "dock", name: "Berth 1 - Inside Dock", tolerance_m: 0.8, dock_type: "normal"}
-    - {id: 8_berth1_exit, competition_id: "05", latitude: 63.4409288798, longitude: 10.4240747889, yaw: -0.3216, type: "dock_approach", name: "GPS 8 - Berth 1 Exit", tolerance_m: 0.8}
+    - {id: 8_berth1_exit, competition_id: "05", latitude: 63.4409333333, longitude: 10.4240611111, yaw: -0.3216, type: "dock_approach", name: "GPS 8 - Berth 1 Exit", tolerance_m: 0.8}
     # Hold the GPS8 position while turning toward the following Task 4 leg.
-    - {id: 8_exit_turn, competition_id: "06", latitude: 63.4409288798, longitude: 10.4240747889, yaw: -2.1539, type: "dock_approach", name: "GPS 8 - Turn toward GPS 14", tolerance_m: 0.8}
+    - {id: 8_exit_turn, competition_id: "06", latitude: 63.4409333333, longitude: 10.4240611111, yaw: -2.1539, type: "dock_approach", name: "GPS 8 - Turn toward GPS 14", tolerance_m: 0.8}
     - {id: 14_return, competition_id: "07", latitude: 63.4407970000, longitude: 10.4238600000, yaw: -2.4342, type: "waypoint", name: "GPS 14 - Return Transit", tolerance_m: 2.0}
     - {id: 15, competition_id: "08", latitude: 63.4404600000, longitude: 10.4229800000, yaw: 0.8034, type: "waypoint", name: "GPS 15", tolerance_m: 2.0}
     - {id: 16, competition_id: "09", latitude: 63.4409310000, longitude: 10.4239940000, yaw: 2.2277, type: "waypoint", name: "GPS 16", tolerance_m: 2.0}
     - {id: 17, competition_id: "10", latitude: 63.4410860000, longitude: 10.4237290000, yaw: -0.3681, type: "waypoint", name: "GPS 17 - Berth 2 Transit", tolerance_m: 2.0}
-    - {id: 11_berth2_approach, competition_id: "11", latitude: 63.4409898775, longitude: 10.4241175055, yaw: 2.9119, type: "dock_approach", name: "GPS 11 - Berth 2 Approach", tolerance_m: 0.8}
+    - {id: 11_berth2_approach, competition_id: "11", latitude: 63.4410138889, longitude: 10.4241472222, yaw: 2.9119, type: "dock_approach", name: "GPS 11 - Berth 2 Approach", tolerance_m: 0.8}
     - {id: berth2, competition_id: "12", latitude: 63.4409890500, longitude: 10.4241208500, yaw: 2.9119, type: "dock", name: "Berth 2 - Inside Dock", tolerance_m: 0.8, dock_type: "parallel"}
   constraints:
     # Match Task 3 berth-1 operation: dwell for 10 seconds after entering.
