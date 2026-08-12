@@ -618,8 +618,8 @@ private:
   template<typename MessageT>
   static bool has_subscribers(const std::shared_ptr<rclcpp::Publisher<MessageT>> & publisher)
   {
-    return publisher->get_subscription_count() > 0 ||
-           publisher->get_intra_process_subscription_count() > 0;
+    return publisher && (publisher->get_subscription_count() > 0 ||
+           publisher->get_intra_process_subscription_count() > 0);
   }
 
   static cv::Mat sl_mat_to_cv_bgra_view(const sl::Mat & mat)
