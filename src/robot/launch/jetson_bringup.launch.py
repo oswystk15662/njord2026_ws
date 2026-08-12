@@ -221,7 +221,7 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
                 "enable_glim",
-                default_value="true",
+                default_value="false",
                 description="Load GLIM into the Livox component container",
             ),
             DeclareLaunchArgument(
