@@ -1,15 +1,28 @@
-# Task 4 surprise course surveyed in "gps points 12.08.xlsx".
-# GPS IDs are already in navigation order; no GPS waypoint is placed in a dock.
+# Task 4 is one mission spanning Task 3 normal docking, Task 1 avoidance,
+# and Task 3 parallel docking.  Internal docks are intentionally not GPS map
+# markers; replace only their coordinates when the surveyed positions arrive.
 task4_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
-  scenario: "surprise_task_parallel_docking"
+  scenario: "task3_task1_task3_composite"
   waypoints:
     - {id: 13, competition_id: "13", latitude: 63.4407340000, longitude: 10.4233660000, yaw: 0.2773, type: "start", name: "GPS 13 - Task 4 Start", tolerance_m: 2.0}
-    - {id: 14, competition_id: "14", latitude: 63.4407970000, longitude: 10.4238600000, yaw: -2.4342, type: "waypoint", name: "GPS 14", tolerance_m: 2.0}
+    - {id: 14, competition_id: "14", latitude: 63.4407970000, longitude: 10.4238600000, yaw: -2.4342, type: "dock_approach", name: "GPS 14 - Normal Dock Approach", tolerance_m: 0.8}
+    - {id: "normal_dock", competition_id: "", latitude: 63.4409400000, longitude: 10.4240929000, yaw: -0.3216, type: "dock", name: "Normal Dock", display: false, tolerance_m: 0.8, dock_type: "normal"}
     - {id: 15, competition_id: "15", latitude: 63.4404600000, longitude: 10.4229800000, yaw: 0.8034, type: "waypoint", name: "GPS 15", tolerance_m: 2.0}
     - {id: 16, competition_id: "16", latitude: 63.4409310000, longitude: 10.4239940000, yaw: 2.2277, type: "waypoint", name: "GPS 16", tolerance_m: 2.0}
-    - {id: 17, competition_id: "17", latitude: 63.4410860000, longitude: 10.4237290000, yaw: 2.2277, type: "dock_approach", name: "GPS 17 - Parallel Docking Approach", tolerance_m: 2.0}
+    - {id: 17, competition_id: "17", latitude: 63.4410860000, longitude: 10.4237290000, yaw: 2.2277, type: "dock_approach", name: "GPS 17 - Parallel Docking Approach", tolerance_m: 0.8}
+    - {id: "parallel_dock", competition_id: "", latitude: 63.4409890500, longitude: 10.4241208500, yaw: 2.9119, type: "dock", name: "Parallel Dock", display: false, tolerance_m: 0.8, dock_type: "parallel"}
+  stages:
+    normal_gate: [13]
+    normal_approach: [14]
+    normal_dock: ["normal_dock"]
+    normal_exit: [14]
+    task1_obstacle_avoidance: [15, 16, 17]
+    parallel_approach: [17]
+    parallel_dock: ["parallel_dock"]
   constraints:
-    final_maneuver: "parallel_docking"
+    initial_nav2_profile: task3
+    final_nav2_profile: task3
+    final_maneuver: parallel_docking
     finish_in_final_dock: true

@@ -92,6 +92,8 @@ class GroundWaypointGeoPublisher(Node):
         reset.action = Marker.DELETEALL
         markers.markers.append(reset)
         for index, waypoint in enumerate(self.waypoints):
+            if waypoint.get("display", True) is False:
+                continue
             if "latitude" not in waypoint or "longitude" not in waypoint:
                 continue
             marker = Marker()

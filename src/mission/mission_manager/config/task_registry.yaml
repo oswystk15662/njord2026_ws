@@ -60,15 +60,15 @@ tasks:
     nav2_profile: task3
     control_policy: task3
   task4:
-    display_name: Task 4 (temporary waypoint baseline)
+    display_name: Task 4 composite mission
     availability: experimental
-    executor: waypoint_sequence
+    executor: task4_composite
     route_package: waypoint_publisher
     route: config/task4_waypoints.yaml
     route_key: task4_config
-    frame_id: map
-    nav2_profile: task1
-    control_policy: task1
+    frame_id: odom
+    nav2_profile: task3
+    control_policy: task3
     features: {cardinal_walls: false, buoy_perception: false}
   return_home:
     display_name: Ground-link failsafe return home

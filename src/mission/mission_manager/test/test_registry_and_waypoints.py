@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 
-from mission_manager.task_registry import RegistryError, TaskRegistry, required_runtime_readiness
+from mission_manager.task_registry import RegistryError, TaskRegistry, load_yaml, required_runtime_readiness
 from mission_manager.waypoint_config import WaypointConfigLoader
 
 
@@ -25,6 +25,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("task4").runnable
+    assert registry.get("task4").executor == "task4_composite"
+    assert registry.get("task4").nav2_profile == "task3"
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
@@ -43,9 +45,19 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
     assert len(task1.waypoints) == 11
     assert task1.frame_id == task3.frame_id == task3_2.frame_id == "odom"
-    assert [waypoint.waypoint_id for waypoint in task4.waypoints] == [
-        waypoint.waypoint_id for waypoint in task1.waypoints
+    assert task4.frame_id == "odom"
+    assert [waypoint.competition_id for waypoint in task4.waypoints if waypoint.competition_id] == [
+        "13", "14", "15", "16", "17"
     ]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("normal_exit")] == ["14"]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("parallel_dock")] == ["parallel_dock"]
+    assert len(task4.projection_points()) == len(task4.waypoints)
+    displayed = [
+        str(waypoint["competition_id"])
+        for waypoint in load_yaml(WAYPOINT_ROOT / "config/task4_waypoints.yaml")["task4_config"]["waypoints"]
+        if waypoint.get("display", True)
+    ]
+    assert displayed == ["13", "14", "15", "16", "17"]
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"

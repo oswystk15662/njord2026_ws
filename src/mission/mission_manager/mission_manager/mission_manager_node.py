@@ -34,6 +34,7 @@ from .executors import (
     ExecutorStatus,
     StagedDockingExecutor,
     Task2MppiExecutor,
+    Task4CompositeExecutor,
     WaypointSequenceExecutor,
 )
 from .state_machine import MissionState, MissionStateMachine, ResultCode, StartRequest
@@ -479,7 +480,7 @@ class MissionManager(Node):
 
     def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Set Task 3's projected strict goals before activating its route."""
-        if task.nav2_profile != "task3" or request.dry_run:
+        if task.nav2_profile != "task3" or request.dry_run or task.executor == "task4_composite":
             return self._finish_configure_route(decision, task, route, request)
         if not self._task3_goal_checker_client.service_is_ready():
             return self._reject_started(
@@ -735,11 +736,91 @@ class MissionManager(Node):
             executor = Task2MppiExecutor(self._set_task2_enabled)
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
+        elif task.executor == "task4_composite":
+            executor = Task4CompositeExecutor(
+                self._navigation,
+                lambda profile, complete: self._switch_task4_profile(execution_id, profile, complete),
+                lambda goals, complete: self._configure_task4_strict_goals(execution_id, goals, complete),
+            )
+            executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
+                           self._executor_complete(execution_id))
         elif task.executor == "dummy":
             executor = DummyExecutor()
             executor.start(execution_id, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
         self._active_executor = executor
+
+    def _switch_task4_profile(self, execution_id: str, profile: str, complete) -> None:
+        """Switch Task 4 profiles while its executor owns the next Nav2 goal."""
+        if not self._machine.is_current(execution_id):
+            return
+        if not self._configure_runtime_client.server_is_ready():
+            complete(False, "runtime manager /system/configure is unavailable")
+            return
+        goal = ConfigureSystem.Goal(parameter="nav2_profile", value=profile)
+
+        def sent(future) -> None:
+            with self._lock:
+                if not self._machine.is_current(execution_id):
+                    return
+                try:
+                    handle = future.result()
+                    if not handle.accepted:
+                        raise RuntimeError("runtime manager rejected profile switch")
+                    handle.get_result_async().add_done_callback(done)
+                except Exception as exc:
+                    complete(False, str(exc))
+
+        def done(future) -> None:
+            with self._lock:
+                if not self._machine.is_current(execution_id):
+                    return
+                try:
+                    result = future.result().result
+                    if not result.success:
+                        raise RuntimeError(result.message)
+                    self._active_nav2_profile = profile
+                    complete(True, result.message)
+                except Exception as exc:
+                    complete(False, str(exc))
+
+        self._configure_runtime_client.send_goal_async(goal).add_done_callback(sent)
+
+    def _configure_task4_strict_goals(self, execution_id: str, goals: tuple[Waypoint, ...], complete) -> None:
+        """Apply Task 3 heading checks only to the Task 4 docking target in flight."""
+        if not self._machine.is_current(execution_id):
+            return
+        if not self._task3_goal_checker_client.service_is_ready():
+            complete(False, "Task 3 goal checker parameter service is unavailable")
+            return
+        request = SetParameters.Request()
+        request.parameters = [
+            Parameter(
+                name="general_goal_checker.heading_required_goal_xs",
+                value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                                     double_array_value=[waypoint.x for waypoint in goals]),
+            ),
+            Parameter(
+                name="general_goal_checker.heading_required_goal_ys",
+                value=ParameterValue(type=ParameterType.PARAMETER_DOUBLE_ARRAY,
+                                     double_array_value=[waypoint.y for waypoint in goals]),
+            ),
+        ]
+
+        def done(future) -> None:
+            with self._lock:
+                if not self._machine.is_current(execution_id):
+                    return
+                try:
+                    response = future.result()
+                    if not all(result.successful for result in response.results):
+                        reason = next(result.reason for result in response.results if not result.successful)
+                        raise RuntimeError(reason or "controller rejected Task 3 strict-goal parameters")
+                    complete(True, "")
+                except Exception as exc:
+                    complete(False, f"unable to configure Task 3 strict goals: {exc}")
+
+        self._task3_goal_checker_client.call_async(request).add_done_callback(done)
 
     def _set_task2_enabled(self, enabled: bool) -> None:
         self._task2_enabled_pub.publish(Bool(data=enabled))

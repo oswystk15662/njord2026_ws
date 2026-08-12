@@ -1,5 +1,6 @@
 from mission_manager.executors import (
-    ExecutorStatus, StagedDockingExecutor, Task2MppiExecutor, WaypointSequenceExecutor,
+    ExecutorStatus, StagedDockingExecutor, Task2MppiExecutor, Task4CompositeExecutor,
+    WaypointSequenceExecutor,
 )
 from mission_manager.mission_manager_node import _RosNavigationClient
 from mission_manager.waypoint_config import Route, Waypoint
@@ -143,3 +144,88 @@ def test_task2_mppi_reports_follow_path_goal_success_once():
     executor.goal_reached()  # Delayed duplicate status must be harmless.
     assert enabled == [True, False]
     assert [result.status for result in results] == [ExecutorStatus.SUCCEEDED]
+
+
+def test_task4_composite_sends_the_required_route_and_profile_switches():
+    nav = FakeNavigation()
+    switches, strict, results = [], [], []
+    callbacks = {"switch": [], "strict": []}
+    route = Route("odom", tuple(
+        Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
+        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+    ), {}, {}, {})
+    executor = Task4CompositeExecutor(
+        nav,
+        lambda profile, complete: (switches.append(profile), callbacks["switch"].append(complete)),
+        lambda goals, complete: (strict.append(goals[0].waypoint_id), callbacks["strict"].append(complete)),
+    )
+    executor.start("execution", route, lambda *_: None, results.append)
+
+    expected = ["13", "14", "normal_dock", "14", "15", "16", "17", "17", "parallel_dock"]
+    for waypoint_id in expected:
+        if callbacks["strict"]:
+            callbacks["strict"].pop(0)(True, "")
+        poses, accepted, completed = nav.sent[-1]
+        assert [pose.waypoint_id for pose in poses] == [waypoint_id]
+        accepted(True)
+        completed(ExecutorStatus.SUCCEEDED, "ok")
+        if waypoint_id == "14" and len(nav.sent) == 4:
+            callbacks["switch"].pop(0)(True, "")
+        if waypoint_id == "17" and len(nav.sent) == 7:
+            callbacks["switch"].pop(0)(True, "")
+    assert switches == ["task1", "task3"]
+    assert strict == ["14", "normal_dock", "17", "parallel_dock"]
+    assert results[0].status == ExecutorStatus.SUCCEEDED
+
+
+def test_task4_composite_stops_after_a_rejected_profile_switch():
+    nav = FakeNavigation()
+    callbacks, results = [], []
+    route = Route("odom", tuple(
+        Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
+        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+    ), {}, {}, {})
+    executor = Task4CompositeExecutor(
+        nav, lambda _profile, complete: callbacks.append(complete), lambda _goals, complete: complete(True, "")
+    )
+    executor.start("execution", route, lambda *_: None, results.append)
+    for _ in range(4):
+        nav.sent[-1][2](ExecutorStatus.SUCCEEDED, "ok")
+    callbacks[0](False, "switch rejected")
+    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "14"]
+    assert results[0].status == ExecutorStatus.INTERNAL_ERROR
+
+
+def test_task4_composite_cancels_during_profile_switch_and_ignores_late_result():
+    nav = FakeNavigation()
+    callbacks, results = [], []
+    route = Route("odom", tuple(
+        Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
+        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+    ), {}, {}, {})
+    executor = Task4CompositeExecutor(
+        nav, lambda _profile, complete: callbacks.append(complete), lambda _goals, complete: complete(True, "")
+    )
+    executor.start("execution", route, lambda *_: None, results.append)
+    for _ in range(4):
+        nav.sent[-1][2](ExecutorStatus.SUCCEEDED, "ok")
+    executor.cancel("execution")
+    callbacks[0](True, "late")
+    assert results[0].status == ExecutorStatus.CANCELED
+    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "14"]
+
+
+def test_task4_composite_stops_after_navigation_failure():
+    nav = FakeNavigation()
+    results = []
+    route = Route("odom", tuple(
+        Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
+        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+    ), {}, {}, {})
+    executor = Task4CompositeExecutor(
+        nav, lambda _profile, complete: complete(True, ""), lambda _goals, complete: complete(True, "")
+    )
+    executor.start("execution", route, lambda *_: None, results.append)
+    nav.sent[0][2](ExecutorStatus.NAVIGATION_FAILED, "blocked")
+    assert len(nav.sent) == 1
+    assert results[0].status == ExecutorStatus.NAVIGATION_FAILED
