@@ -55,6 +55,20 @@ TEST(PerceptionLogic, ComputesDepthMedianAndMinimumSamplePolicy)
   EXPECT_FLOAT_EQ(*median, 3.0F);
 }
 
+TEST(PerceptionLogic, LabelsTheFinalRangeSourceForGroundVideo)
+{
+  PositionedDetection detection;
+  detection.position_base = {3.0F, 4.0F, 0.0F};
+  detection.source = PositionSource::kZedDepth;
+  EXPECT_EQ(detection_range_label(detection), "Z 5.0m");
+
+  detection.source = PositionSource::kLidarFused;
+  EXPECT_EQ(detection_range_label(detection), "L 5.0m");
+
+  detection.source = PositionSource::kNone;
+  EXPECT_EQ(detection_range_label(detection), "?");
+}
+
 TEST(PerceptionLogic, CentralDepthRoiClipsImageBounds)
 {
   const Detection2D detection{0, .9F, -10.0F, 0.0F, 30.0F, 20.0F};

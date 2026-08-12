@@ -691,10 +691,6 @@ private:
                 }
               }
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
-              if (ground_video_draw_detections_) {
-                ground_video_boxes.push_back(
-                  {detection.x1, detection.y1, detection.x2, detection.y2});
-              }
 #endif
               PositionedDetection item{detection, nan_position(), PositionSource::kNone};
               const auto roi = central_depth_roi(
@@ -751,6 +747,14 @@ private:
                   item.source = PositionSource::kLidarFused;
                 }
               }
+#ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
+              if (ground_video_draw_detections_) {
+                GroundVideoBox box{detection.x1, detection.y1, detection.x2, detection.y2};
+                std::snprintf(
+                  box.label, sizeof(box.label), "%s", detection_range_label(item).c_str());
+                ground_video_boxes.push_back(box);
+              }
+#endif
               positioned.push_back(item);
             }
             std_msgs::msg::Header header;

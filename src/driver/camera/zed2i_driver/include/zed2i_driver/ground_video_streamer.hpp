@@ -39,6 +39,7 @@ struct GroundVideoBox
   float y1;
   float x2;
   float y2;
+  char label[16]{};
 };
 
 // Owns the stream-only CUDA buffers, nvJPEG state, and RTP/JPEG sender.  submit()
