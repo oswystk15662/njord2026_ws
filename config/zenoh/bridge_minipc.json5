@@ -43,7 +43,7 @@
           "/mission/status", "/task/plan",
           "/docking/berth1_nominal", "/docking/berth2_nominal",
           "/task1/safety_points",
-          "/task2/safety_points", "/planned_path_pruned",
+          "/planned_path_pruned",
           "/autonomy/ready", "/heartbeat/autonomy",
           "/task2/buoy_pose_correction",
           "/docking/berth1_corrected", "/docking/berth2_corrected",
@@ -64,7 +64,7 @@
         subscribers: [
           "/odom", "/odometry/filtered/global", "/livox/imu",
           "/task1/safety_points",
-          "/task2/safety_points", "/planned_path_pruned",
+          "/planned_path_pruned",
           "/task2/buoy_pose_correction",
           "/other_ship/twist",
           "/task2/opponent_detected",

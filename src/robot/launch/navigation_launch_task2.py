@@ -1,8 +1,8 @@
 """Task 2 final command graph on miniPC.
 
 MPPI supplies paths from Jetson.  The command path is strictly Controller ->
-Smoother -> Collision Monitor -> /cmd_vel_nav, so Collision Monitor is the
-only publisher of the final autonomous command.
+Smoother -> /cmd_vel_nav.  Task 2 deliberately has no LiDAR collision-stop
+stage: obstacle avoidance is performed by the Jetson MPPI path planner.
 """
 
 import os
@@ -63,15 +63,8 @@ def generate_launch_description():
             name="velocity_smoother",
             remappings=remappings + [
                 ("cmd_vel", "/cmd_vel_controller"),
-                ("cmd_vel_smoothed", "/cmd_vel_smoothed"),
+                ("cmd_vel_smoothed", "/cmd_vel_nav"),
             ],
-            **common,
-        ),
-        Node(
-            package="nav2_collision_monitor",
-            executable="collision_monitor",
-            name="collision_monitor",
-            remappings=remappings,
             **common,
         ),
         Node(
@@ -82,7 +75,7 @@ def generate_launch_description():
             arguments=["--ros-args", "--log-level", log_level],
             parameters=[
                 {"use_sim_time": use_sim_time, "autostart": autostart},
-                {"node_names": ["controller_server", "velocity_smoother", "collision_monitor"]},
+                {"node_names": ["controller_server", "velocity_smoother"]},
             ],
         ),
     ])
