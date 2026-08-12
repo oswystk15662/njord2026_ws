@@ -44,9 +44,18 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["corridor_half_width_m"] == 20.0
     assert selector["corridor_ignore_left_side"] is True
     assert selector["corridor_left_side_margin_m"] == 5.0
+    relay = params["task2_waypoint_map_frame_relay"]["ros__parameters"]
+    assert relay["waypoint1_input_topic"] == "/waypoint1_pose"
+    assert relay["waypoint1_output_topic"] == "/task2/waypoint1_pose_map"
+    assert relay["target_frame"] == "map"
     buoy = params["task2_buoy_selector"]["ros__parameters"]
-    assert buoy["expected_lateral_offset_m"] == 2.5
-    assert buoy["lateral_tolerance_m"] == 1.0
+    assert selector["corridor_start_topic"] == relay["waypoint1_output_topic"]
+    assert buoy["waypoint_start_topic"] == relay["waypoint1_output_topic"]
+    assert buoy["waypoint_end_topic"] == relay["waypoint2_output_topic"]
+    assert buoy["expected_lateral_offset_m"] == 3.5
+    assert buoy["lateral_tolerance_m"] == 3.5
+    assert buoy["start_margin_m"] == 0.0
+    assert buoy["end_margin_m"] == 0.0
     assert buoy["stationary_speed_max_mps"] == 0.35
     assert buoy["stationary_confirmation_window_sec"] == 3.0
     assert buoy["stationary_confirmation_min_observations"] == 5

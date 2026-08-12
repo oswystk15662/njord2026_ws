@@ -62,6 +62,20 @@ def generate_launch_description():
 
         Node(
             package="task2_perception",
+            executable="task2_waypoint_map_frame_relay_node",
+            name="task2_waypoint_map_frame_relay",
+            output="screen",
+            parameters=[
+                LaunchConfiguration("params_file"),
+                {
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "target_frame": LaunchConfiguration("map_frame"),
+                },
+            ],
+        ),
+
+        Node(
+            package="task2_perception",
             executable="task2_cloud_filter_node",
             name="task2_cloud_filter",
             output="screen",

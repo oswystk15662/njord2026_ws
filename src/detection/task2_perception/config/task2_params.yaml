@@ -55,6 +55,17 @@ task2_cloud_filter:
 # ---------------------------------------------------------------------------
 # Candidate selection and absolute target velocity output
 # ---------------------------------------------------------------------------
+task2_waypoint_map_frame_relay:
+  ros__parameters:
+    # Keep the odom-frame source topics for navigation.  These map-frame
+    # copies are exclusively for Task 2 perception and global EKF geometry.
+    waypoint1_input_topic: "/waypoint1_pose"
+    waypoint2_input_topic: "/waypoint2_pose"
+    waypoint1_output_topic: "/task2/waypoint1_pose_map"
+    waypoint2_output_topic: "/task2/waypoint2_pose_map"
+    target_frame: "map"
+    transform_timeout_sec: 0.2
+
 opponent_selector:
   ros__parameters:
     tracked_objects_topic: "/tracked_objects"
@@ -90,8 +101,8 @@ opponent_selector:
     # It begins 5 m after GPS5, ends 5 m past GPS6, and is 40 m wide.
     # task2_waypoint_pose_publisher resolves the GPS points through /fromLL.
     corridor_enabled: true
-    corridor_start_topic: "/waypoint1_pose"    # GPS 5, map frame
-    corridor_end_topic: "/waypoint2_pose"      # GPS 6, map frame
+    corridor_start_topic: "/task2/waypoint1_pose_map" # GPS 5, map frame
+    corridor_end_topic: "/task2/waypoint2_pose_map"   # GPS 6, map frame
     corridor_start_offset_m: 5.0
     corridor_end_margin_m: 5.0
     corridor_half_width_m: 20.0
@@ -113,13 +124,13 @@ task2_buoy_selector:
     legacy_point_topic: "/buoy_detections"  # PointStamped compatibility feed
     map_frame: "map"
     base_frame: "base_link"
-    waypoint_start_topic: "/waypoint1_pose" # GPS 5
-    waypoint_end_topic: "/waypoint2_pose"   # GPS 6
-    # Left (+ lateral) is red; right (- lateral) is green.
-    expected_lateral_offset_m: 2.5
-    lateral_tolerance_m: 1.0
-    start_margin_m: 2.0
-    end_margin_m: 2.0
+    waypoint_start_topic: "/task2/waypoint1_pose_map" # GPS 5
+    waypoint_end_topic: "/task2/waypoint2_pose_map"   # GPS 6
+    # GPS5->6 only: red is 0..7 m to the left, green is 0..7 m to the right.
+    expected_lateral_offset_m: 3.5
+    lateral_tolerance_m: 3.5
+    start_margin_m: 0.0
+    end_margin_m: 0.0
     confirmed_only: true
     min_hit_count: 5
     max_distance_m: 40.0
@@ -148,8 +159,8 @@ task2_buoy_pose_correction:
     buoy_topic: "/task2/buoy_detections"
     odom_topic: "/odometry/filtered/global"
     output_topic: "/task2/buoy_pose_correction"
-    waypoint_start_topic: "/waypoint1_pose"
-    waypoint_end_topic: "/waypoint2_pose"
+    waypoint_start_topic: "/task2/waypoint1_pose_map"
+    waypoint_end_topic: "/task2/waypoint2_pose_map"
     frame_id: "map"
     pair_separation_m: 5.0
     pair_separation_tolerance_m: 2.0

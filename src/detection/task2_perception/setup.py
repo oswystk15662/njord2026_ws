@@ -24,11 +24,12 @@ setup(
     license="Apache-2.0",
     tests_require=["pytest"],
     entry_points={
-            "console_scripts": [
-                "task2_cloud_filter_node = task2_perception.cloud_filter_node:main",
-                "opponent_selector_node = task2_perception.opponent_selector_node:main",
-                "buoy_pose_correction_node = task2_perception.buoy_pose_correction_node:main",
-                "task2_buoy_selector_node = task2_perception.buoy_selector_node:main",
+        "console_scripts": [
+            "task2_cloud_filter_node = task2_perception.cloud_filter_node:main",
+            "opponent_selector_node = task2_perception.opponent_selector_node:main",
+            "buoy_pose_correction_node = task2_perception.buoy_pose_correction_node:main",
+            "task2_buoy_selector_node = task2_perception.buoy_selector_node:main",
+            "task2_waypoint_map_frame_relay_node = task2_perception.waypoint_map_frame_relay_node:main",
         ],
     },
 )
