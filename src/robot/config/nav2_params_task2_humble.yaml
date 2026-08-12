@@ -21,7 +21,9 @@ controller_server:
 
     FollowPath:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.7
+      # Task 2 cruise target: 2.0 kn = 1.028888... m/s.  Curvature and final
+      # approach regulation below may intentionally reduce this command.
+      desired_linear_vel: 1.0288888888888889
       min_approach_linear_velocity: 0.08
       approach_velocity_scaling_dist: 6.0
       lookahead_dist: 3.0
@@ -38,6 +40,7 @@ controller_server:
       use_cost_regulated_linear_velocity_scaling: false
       use_collision_detection: false
       transform_tolerance: 0.3
+      # Match the final smoother so neither layer introduces an extra ramp.
       max_linear_accel: 0.5
 
     general_goal_checker:
@@ -69,7 +72,8 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: false
     feedback: "OPEN_LOOP"
-    max_velocity: [0.7, 0.5, 1.0]
+    # Allow 2.2 kn headroom, while FollowPath's cruise request remains 2.0 kn.
+    max_velocity: [1.1317777777777778, 0.5, 1.0]
     min_velocity: [-0.4, -0.5, -1.0]
     max_accel: [0.5, 0.5, 1.0]
     max_decel: [-0.5, -0.5, -1.0]
