@@ -1,7 +1,7 @@
 # Route from the launch inlet to the exam field.
 # All points are converted through /fromLL.
 move_to_exam_field_config:
-  frame_id: map
+  frame_id: odom
   waypoints:
     - id: gps_0_1
       latitude: 63.442096626145

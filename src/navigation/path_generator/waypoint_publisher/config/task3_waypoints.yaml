@@ -3,7 +3,7 @@
 # Task 3.2: GPS10 -> GPS11 -> berth 2 -> GPS11 -> GPS12 (final goal)
 
 task3_1_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
   scenario: "normal_docking_surveyed"
   waypoints:
@@ -26,7 +26,7 @@ task3_1_config:
     stage_4: [9]
 
 task3_2_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
   scenario: "parallel_docking_surveyed"
   waypoints:

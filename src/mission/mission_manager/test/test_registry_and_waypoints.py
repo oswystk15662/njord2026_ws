@@ -16,9 +16,11 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
         package_shares={"waypoint_publisher": WAYPOINT_ROOT},
     )
     assert registry.get("task1").runnable
+    assert registry.get("task1").frame_id == "odom"
     assert registry.get("task2").executor == "task2_mppi"
     assert registry.get("task2").frame_id == "odom"
     assert registry.get("task3_1").runnable
+    assert registry.get("task3_1").frame_id == "odom"
     assert registry.get("task3_1").executor == "staged_docking"
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
@@ -26,6 +28,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
+    assert registry.get("move_to_exam_field").frame_id == "odom"
     assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
@@ -39,6 +42,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
     task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
     assert len(task1.waypoints) == 11
+    assert task1.frame_id == task3.frame_id == task3_2.frame_id == "odom"
     assert [waypoint.waypoint_id for waypoint in task4.waypoints] == [
         waypoint.waypoint_id for waypoint in task1.waypoints
     ]
@@ -62,6 +66,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     ]
     assert [waypoint.waypoint_id for waypoint in task3_2.waypoints] == ["10", "11", "berth2", "12"]
     exam_field = loader.load(PACKAGE_ROOT / "config" / "move_to_exam_field_waypoints.yaml", "move_to_exam_field_config")
+    assert exam_field.frame_id == "odom"
     assert [waypoint.waypoint_id for waypoint in exam_field.waypoints] == [
         "gps_0_1", "waypoint_1", "waypoint_2", "gps_0_2_1",
     ]

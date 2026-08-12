@@ -6,7 +6,7 @@ amcl:
 bt_navigator:
   ros__parameters:
     use_sim_time: false
-    global_frame: map
+    global_frame: odom
     robot_base_frame: base_link
     odom_topic: /odometry/filtered/local
     bt_loop_duration: 10
@@ -94,8 +94,8 @@ local_costmap:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         # LiDAR と Task 1 cardinal mark から生成する仮想壁。仮想壁は
-        # map frame で publish されるため、local costmap (odom frame) へ
-        # 取り込むには安定した map -> odom -> base_link TF が必要。
+        # odom frame で publish されるため、local costmap と同じ TF tree
+        # (odom -> base_link) だけで取り込める。
         observation_sources: safety_points virtual_wall
         safety_points:
           topic: /task1/safety_points
@@ -124,17 +124,17 @@ global_costmap:
     ros__parameters:
       update_frequency: 1.0
       publish_frequency: 1.0
-      global_frame: map
+      global_frame: odom
       robot_base_frame: base_link
       use_sim_time: false
       robot_radius: 0.8
       resolution: 0.1
       track_unknown_space: true
       
-      # Exam-field navigation area, fixed in the map frame.  The four
+      # Exam-field navigation area, fixed in the odom frame.  The four
       # specified WGS84 corners resolve through /fromLL to approximately
       # x=-113.01..39.45 m and y=-219.10..41.81 m.  Keep a 20 m margin.
-      # A fixed map-frame costmap prevents a legitimate distant GPS goal
+      # A fixed odom-frame costmap prevents a legitimate distant GPS goal
       # from falling outside a rolling odom-frame window.
       rolling_window: false
       width: 200 # x=-135..65 m

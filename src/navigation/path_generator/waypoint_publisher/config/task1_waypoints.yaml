@@ -4,7 +4,7 @@
 # The surveyed point formerly labelled 3.4 is the Task 1 GPS 4 route goal.
 
 task1_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
   waypoints: &task1_waypoints
     - {id: 1, competition_id: "1", latitude: 63.4408000000, longitude: 10.4233194444, yaw: -2.7271, type: "start", name: "GPS 1", tolerance_m: 2.0}
@@ -27,7 +27,7 @@ task1_config:
 # Deprecated compatibility route; it intentionally follows the same surveyed
 # points so legacy displays keep loading valid coordinates.
 task1_follow_config:
-  frame_id: "map"
+  frame_id: "odom"
   publish_rate_hz: 2.0
   waypoints: *task1_waypoints
   constraints:

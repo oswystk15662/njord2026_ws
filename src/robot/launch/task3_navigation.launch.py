@@ -33,7 +33,7 @@ def generate_launch_description():
         executable="field_boundary_publisher",
         name="field_boundary_publisher",
         parameters=[{
-            "map_frame": "map",
+            "map_frame": "odom",
             "resolution": 0.2,
             "map_size_m": 80.0,
             # Operating bounds: x=[-24, 24], y=[-14, 14].
@@ -63,7 +63,7 @@ def generate_launch_description():
         ),
         launch_arguments={
             "task_type": LaunchConfiguration("task_type"),
-            "frame_id": "map",
+            "frame_id": "odom",
             "publish_rate_hz": "2.0",
             "use_dynamic_gate_midpoints": LaunchConfiguration("use_dynamic_gate_midpoints"),
             "run_full_sequence": LaunchConfiguration("run_full_sequence"),

@@ -519,11 +519,9 @@ def test_glim_feedback_profile_fuses_odom_without_changing_ekf_tf_ownership():
     assert params["world_frame"] == "map"
 
 
-def test_task1_tf_authorities_and_local_virtual_wall_contract():
-    """Keep Task 1's map-frame walls transformable into the local costmap."""
+def test_task1_uses_only_the_odom_to_base_link_navigation_tree():
+    """Task 1 obstacles and costmaps must not require map -> odom."""
     robot_config_dir = os.path.normpath(os.path.join(_THIS_DIR, "..", "config"))
-    with open(os.path.join(robot_config_dir, "ekf_global.yaml"), encoding="utf-8") as stream:
-        global_ekf = yaml.safe_load(stream)["ekf_filter_node_global"]["ros__parameters"]
     with open(
         os.path.join(
             _THIS_DIR,
@@ -540,10 +538,6 @@ def test_task1_tf_authorities_and_local_virtual_wall_contract():
     with open(os.path.join(robot_config_dir, "nav2_params_humble.yaml"), encoding="utf-8") as stream:
         nav2 = yaml.safe_load(stream)
 
-    assert global_ekf["publish_tf"] is True
-    assert global_ekf["world_frame"] == "map"
-    assert global_ekf["map_frame"] == "map"
-    assert global_ekf["odom_frame"] == "odom"
     assert local_ekf["publish_tf"] is True
     assert local_ekf["world_frame"] == "odom"
     assert local_ekf["odom_frame"] == "odom"
@@ -551,11 +545,26 @@ def test_task1_tf_authorities_and_local_virtual_wall_contract():
 
     local_obstacle_layer = nav2["local_costmap"]["local_costmap"]["ros__parameters"]["obstacle_layer"]
     local_costmap = nav2["local_costmap"]["local_costmap"]["ros__parameters"]
+    global_costmap = nav2["global_costmap"]["global_costmap"]["ros__parameters"]
+    assert nav2["bt_navigator"]["ros__parameters"]["global_frame"] == "odom"
+    assert global_costmap["global_frame"] == "odom"
+    assert local_costmap["global_frame"] == "odom"
     assert local_costmap["rolling_window"] is True
     assert local_costmap["width"] == 30
     assert local_costmap["height"] == 30
     assert "virtual_wall" in local_obstacle_layer["observation_sources"].split()
     assert local_obstacle_layer["virtual_wall"]["topic"] == "/virtual_obstacles"
+
+
+@pytest.mark.parametrize("filename", ["nav2_params_task3_humble.yaml", "nav2_params_task3_jazzy.yaml"])
+def test_task3_uses_the_single_local_odom_source(filename):
+    with open(os.path.join(_THIS_DIR, "..", "config", filename), encoding="utf-8") as stream:
+        nav2 = yaml.safe_load(stream)
+    params = nav2["bt_navigator"]["ros__parameters"]
+    smoother = nav2["velocity_smoother"]["ros__parameters"]
+    assert params["global_frame"] == "odom"
+    assert params["odom_topic"] == "/odometry/filtered/local"
+    assert smoother["odom_topic"] == "/odometry/filtered/local"
 
 
 def test_glim_um982_localization_has_one_owner_per_dynamic_tf_edge():
