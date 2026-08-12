@@ -13,5 +13,6 @@ target_link_libraries(preview_node ${OpenCV_LIBRARIES})
 target_include_directories(preview_node PRIVATE ${OpenCV_INCLUDE_DIRS})
 
 install(TARGETS preview_node DESTINATION lib/${PROJECT_NAME})
+install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 
 ament_package()
