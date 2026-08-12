@@ -47,7 +47,7 @@ from .task_registry import (
     TaskRegistry,
     required_runtime_readiness,
 )
-from .waypoint_config import Route, Waypoint, WaypointConfigLoader
+from .waypoint_config import GeodeticPoint, Route, Waypoint, WaypointConfigLoader
 
 
 _STATUS_QOS = QoSProfile(
@@ -193,8 +193,8 @@ class MissionManager(Node):
         self.declare_parameter("coordinate_projection_retry_sec", 0.5)
         self.declare_parameter("coordinate_projection_request_timeout_sec", 5.0)
         self.declare_parameter("waypoint_transform_enabled", False)
-        self.declare_parameter("waypoint_transform_anchor_x", 0.0)
-        self.declare_parameter("waypoint_transform_anchor_y", 0.0)
+        self.declare_parameter("waypoint_transform_anchor_latitude", 0.0)
+        self.declare_parameter("waypoint_transform_anchor_longitude", 0.0)
         self.declare_parameter("waypoint_transform_rotation_rad", 0.0)
         self.declare_parameter("waypoint_transform_scale", 1.0)
         self._lock = threading.RLock()
@@ -428,7 +428,10 @@ class MissionManager(Node):
                 MissionState.CONFIGURING, execution_id=decision.execution_id,
                 stage="project_waypoints", message="projecting latitude/longitude waypoint coordinates",
             )
-            self._start_coordinate_projection(decision.execution_id, task, route, request)
+            try:
+                self._start_coordinate_projection(decision.execution_id, task, route, request)
+            except ValueError as exc:
+                return self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
             self._publish_status()
             return decision
         return self._configure_route(decision, task, route, request)
@@ -471,7 +474,11 @@ class MissionManager(Node):
                             "map projection service /fromLL is unavailable",
                         )
                         return
-                    self._start_coordinate_projection(decision.execution_id, task, route, request)
+                    try:
+                        self._start_coordinate_projection(decision.execution_id, task, route, request)
+                    except ValueError as exc:
+                        self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
+                        return
                     self._publish_status()
                     return
                 self._configure_route(decision, task, route, request)
@@ -485,10 +492,11 @@ class MissionManager(Node):
             if message.state == Nav2RuntimeStatus.FAILED and self._machine.active:
                 self._complete(self._machine.snapshot.execution_id, ResultCode.CONFIGURATION_FAILED, message.message)
 
-    def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
+    def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest,
+                         anchor: tuple[float, float] | None = None):
         """Set Task 3's projected strict goals before activating its route."""
         try:
-            route = self._transform_route_for_cart_test(route)
+            route = self._transform_route_for_cart_test(route, anchor)
         except ValueError as exc:
             return self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
         if task.nav2_profile != "task3" or request.dry_run or task.executor == "task4_composite":
@@ -525,15 +533,16 @@ class MissionManager(Node):
         )
         return decision
 
-    def _transform_route_for_cart_test(self, route: Route) -> Route:
+    def _transform_route_for_cart_test(self, route: Route, anchor: tuple[float, float] | None) -> Route:
         if not self.get_parameter("waypoint_transform_enabled").value:
             return route
+        if anchor is None:
+            raise ValueError("waypoint transform requires a projected latitude/longitude anchor")
         return Route(
             route.frame_id,
             transform_waypoints(
                 route.waypoints,
-                float(self.get_parameter("waypoint_transform_anchor_x").value),
-                float(self.get_parameter("waypoint_transform_anchor_y").value),
+                anchor[0], anchor[1],
                 float(self.get_parameter("waypoint_transform_rotation_rad").value),
                 float(self.get_parameter("waypoint_transform_scale").value),
                 replace,
@@ -612,12 +621,16 @@ class MissionManager(Node):
         self, execution_id: str, task: TaskDefinition, route: Route, request: StartRequest
     ) -> None:
         points = route.projection_points()
+        anchor = self._cart_anchor()
+        if anchor is not None:
+            points += (anchor,)
         self._pending_coordinate_projection = {
             "execution_id": execution_id,
             "task": task,
             "route": route,
             "request": request,
             "points": points,
+            "route_point_count": len(route.waypoints),
             "projected": [],
             "next_index": 0,
             "attempts": 1,
@@ -631,6 +644,15 @@ class MissionManager(Node):
         ) if timeout_sec else None
         self._request_next_coordinate_projection()
 
+    def _cart_anchor(self) -> GeodeticPoint | None:
+        if not self.get_parameter("waypoint_transform_enabled").value:
+            return None
+        latitude = float(self.get_parameter("waypoint_transform_anchor_latitude").value)
+        longitude = float(self.get_parameter("waypoint_transform_anchor_longitude").value)
+        if not -90.0 <= latitude <= 90.0 or not -180.0 <= longitude <= 180.0:
+            raise ValueError("waypoint transform anchor latitude/longitude is out of range")
+        return GeodeticPoint(latitude, longitude)
+
     def _request_next_coordinate_projection(self) -> None:
         """Serialize /fromLL requests; navsat_transform drops bursts of service calls."""
         pending = self._pending_coordinate_projection
@@ -642,7 +664,8 @@ class MissionManager(Node):
         index = pending["next_index"]
         if index >= len(points):
             projected = tuple(pending["projected"])
-            if pending["route"].projection_is_degenerate(projected):
+            route_points = projected[:pending["route_point_count"]]
+            if pending["route"].projection_is_degenerate(route_points):
                 retry_sec = float(self.get_parameter("coordinate_projection_retry_sec").value)
                 if retry_sec <= 0.0:
                     retry_sec = 0.1
@@ -657,9 +680,10 @@ class MissionManager(Node):
                 return
             self._pending_coordinate_projection = None
             self._coordinate_projection_deadline_ns = None
-            resolved = pending["route"].with_projected_points(projected)
+            resolved = pending["route"].with_projected_points(route_points)
+            anchor = projected[-1] if len(projected) > len(route_points) else None
             decision = type("Decision", (), {"execution_id": pending["execution_id"]})()
-            self._configure_route(decision, pending["task"], resolved, pending["request"])
+            self._configure_route(decision, pending["task"], resolved, pending["request"], anchor)
             return
         point = points[index]
         projection_request = FromLL.Request()

@@ -18,15 +18,15 @@ def generate_launch_description():
     transform_args = {
         "active_nav2_profile": "task3",
         "waypoint_transform_enabled": "true",
-        "waypoint_transform_anchor_x": LaunchConfiguration("anchor_x"),
-        "waypoint_transform_anchor_y": LaunchConfiguration("anchor_y"),
+        "waypoint_transform_anchor_latitude": LaunchConfiguration("anchor_latitude"),
+        "waypoint_transform_anchor_longitude": LaunchConfiguration("anchor_longitude"),
         "waypoint_transform_rotation_rad": LaunchConfiguration("rotation_rad"),
         "waypoint_transform_scale": LaunchConfiguration("scale"),
     }
     return LaunchDescription([
         LogInfo(msg="Cart-test stack ready; start Task 4 explicitly with njord-critical task start task4."),
-        DeclareLaunchArgument("anchor_x", default_value="0.0"),
-        DeclareLaunchArgument("anchor_y", default_value="0.0"),
+        DeclareLaunchArgument("anchor_latitude", default_value="63.4407340000"),
+        DeclareLaunchArgument("anchor_longitude", default_value="10.4233660000"),
         DeclareLaunchArgument("rotation_rad", default_value="0.0"),
         DeclareLaunchArgument("scale", default_value="0.1"),
         _include("robot", "minipc_bringup.launch.py", {

@@ -10,8 +10,8 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("active_nav2_profile", default_value=""),
         DeclareLaunchArgument("waypoint_transform_enabled", default_value="false"),
-        DeclareLaunchArgument("waypoint_transform_anchor_x", default_value="0.0"),
-        DeclareLaunchArgument("waypoint_transform_anchor_y", default_value="0.0"),
+        DeclareLaunchArgument("waypoint_transform_anchor_latitude", default_value="0.0"),
+        DeclareLaunchArgument("waypoint_transform_anchor_longitude", default_value="0.0"),
         DeclareLaunchArgument("waypoint_transform_rotation_rad", default_value="0.0"),
         DeclareLaunchArgument("waypoint_transform_scale", default_value="1.0"),
         DeclareLaunchArgument(
@@ -38,8 +38,8 @@ def generate_launch_description():
             parameters=[{
                 "active_nav2_profile": LaunchConfiguration("active_nav2_profile"),
                 "waypoint_transform_enabled": LaunchConfiguration("waypoint_transform_enabled"),
-                "waypoint_transform_anchor_x": LaunchConfiguration("waypoint_transform_anchor_x"),
-                "waypoint_transform_anchor_y": LaunchConfiguration("waypoint_transform_anchor_y"),
+                "waypoint_transform_anchor_latitude": LaunchConfiguration("waypoint_transform_anchor_latitude"),
+                "waypoint_transform_anchor_longitude": LaunchConfiguration("waypoint_transform_anchor_longitude"),
                 "waypoint_transform_rotation_rad": LaunchConfiguration("waypoint_transform_rotation_rad"),
                 "waypoint_transform_scale": LaunchConfiguration("waypoint_transform_scale"),
             }],
