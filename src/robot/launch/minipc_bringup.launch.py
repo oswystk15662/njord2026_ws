@@ -116,11 +116,6 @@ def generate_launch_description():
     use_sim_time = LaunchConfiguration("use_sim_time")
     use_ekf_local = LaunchConfiguration("use_ekf_local")
     use_ekf_global = LaunchConfiguration("use_ekf_global")
-    use_glim_fb = LaunchConfiguration("use_glim_fb")
-    enable_um982_glim_imu_fusion = LaunchConfiguration("enable_um982_glim_imu_fusion")
-    um982_glim_imu_ekf_start_delay_sec = LaunchConfiguration(
-        "um982_glim_imu_ekf_start_delay_sec"
-    )
     thruster_config_file = LaunchConfiguration("thruster_config_file")
     thruster_robot_description_file = LaunchConfiguration("thruster_robot_description_file")
     thruster_use_velocity_feedback = LaunchConfiguration("thruster_use_velocity_feedback")
@@ -137,7 +132,6 @@ def generate_launch_description():
             "enable_global_ekf": use_ekf_global,
             "enable_navsat_transform": "true",
             "enable_diagnostics": enable_diagnostics,
-            "use_glim_fb": use_glim_fb,
             "use_sim_time": use_sim_time,
         },
     )
@@ -197,11 +191,7 @@ def generate_launch_description():
         "feedback_mode": um982_feedback_mode,
         "raw_topic": "/odometry/feedback",
         "output_topic": "/odometry/filtered/local",
-        "enable_glim_imu_fusion": enable_um982_glim_imu_fusion,
     }
-    # The non-fusion filter can start immediately.  In fusion mode, defer the
-    # include itself: a TimerAction inside an included scoped launch loses its
-    # launch arguments before it fires.
     um982_feedback_launch = include_launch(
         "um982_feedback_filter",
         ["launch", "um982_feedback.launch.py"],
@@ -209,34 +199,11 @@ def generate_launch_description():
             PythonExpression(
                 [
                     "'", enable_um982, "'.lower() in ('true', '1', 'yes', 'on') and '",
-                    use_ekf_local, "'.lower() not in ('true', '1', 'yes', 'on') and '",
-                    enable_um982_glim_imu_fusion,
-                    "'.lower() not in ('true', '1', 'yes', 'on')",
+                    use_ekf_local, "'.lower() not in ('true', '1', 'yes', 'on')",
                 ]
             )
         ),
         um982_feedback_launch_arguments,
-    )
-    delayed_um982_glim_imu_ekf_launch = TimerAction(
-        period=um982_glim_imu_ekf_start_delay_sec,
-        condition=IfCondition(
-            PythonExpression(
-                [
-                    "'", enable_um982, "'.lower() in ('true', '1', 'yes', 'on') and '",
-                    use_ekf_local, "'.lower() not in ('true', '1', 'yes', 'on') and '",
-                    enable_um982_glim_imu_fusion,
-                    "'.lower() in ('true', '1', 'yes', 'on')",
-                ]
-            )
-        ),
-        actions=[
-            include_launch(
-                "um982_feedback_filter",
-                ["launch", "um982_feedback.launch.py"],
-                None,
-                um982_feedback_launch_arguments,
-            )
-        ],
     )
 
     joy_converter = Node(
@@ -667,12 +634,6 @@ def generate_launch_description():
                 "back_cam_jpeg_ground_video_fps", default_value="2.0"
             ),
             DeclareLaunchArgument(
-                "use_glim_fb",
-                default_value="false",
-                description="Fuse Jetson GLIM /odom into the global EKF. "
-                "Keep false when GLIM is disabled or cannot sustain real time.",
-            ),
-            DeclareLaunchArgument(
                 "enable_nav2",
                 default_value="false",
                 description="Compatibility preload request; normal bringup starts with no Nav2 runtime.",
@@ -730,17 +691,6 @@ def generate_launch_description():
                 default_value="false",
                 description="Enable the optional map-referenced global EKF.",
             ),
-            DeclareLaunchArgument(
-                "enable_um982_glim_imu_fusion",
-                default_value="true",
-                description="Fuse UM982 feedback, Jetson GLIM /odom, and /livox/imu in the "
-                "sole odom->base_link EKF; navsat_transform remains available for /fromLL.",
-            ),
-            DeclareLaunchArgument(
-                "um982_glim_imu_ekf_start_delay_sec",
-                default_value="30.0",
-                description="Seconds to wait for Jetson GLIM before starting the fusion EKF.",
-            ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
                 "thruster_robot_description_file", default_value=default_thruster_urdf
@@ -755,7 +705,6 @@ def generate_launch_description():
             spatial_driver,
             spatial_ntrip,
             um982_feedback_launch,
-            delayed_um982_glim_imu_ekf_launch,
             # drogger_launch,
             # imu_node,
             joy_converter,

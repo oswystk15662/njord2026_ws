@@ -370,54 +370,21 @@ def test_minipc_starts_um982_and_spatial_ntrip_clients_from_the_ground_caster():
     assert "mountpoint: 'RTCM3'" in source
 
 
-def test_minipc_video_and_glim_feedback_defaults_are_safe():
+def test_minipc_video_defaults_are_safe():
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'default_value="osw-Stealth-14-AI-Studio-A1VGG.local"' in source
     assert '"back_cam_ground_video_fps", default_value="2.0"' in source
     assert '"back_cam_ground_video_width", default_value="360"' in source
     assert '"back_cam_ground_video_height", default_value="240"' in source
-    assert '"use_glim_fb"' in source
-    assert 'default_value="false"' in source
 
 
-def test_minipc_defaults_to_delayed_um982_glim_imu_fusion_with_navsat_projection():
+def test_minipc_uses_um982_filter_without_glim_wait():
     source = _read_launch_source("minipc_bringup.launch.py")
-    assert '"enable_um982_glim_imu_fusion",\n                default_value="true"' in source
-    assert '"um982_glim_imu_ekf_start_delay_sec",\n                default_value="30.0"' in source
+    assert "use_glim_fb" not in source
+    assert "enable_um982_glim_imu_fusion" not in source
+    assert "um982_glim_imu_ekf_start_delay_sec" not in source
     assert '"enable_navsat_transform": "true"' in source
-
-    config_path = os.path.normpath(
-        os.path.join(
-            _THIS_DIR,
-            "..",
-            "..",
-            "localization",
-            "um982_feedback_filter",
-            "config",
-            "um982_glim_imu_ekf.yaml",
-        )
-    )
-    with open(config_path, encoding="utf-8") as stream:
-        params = yaml.safe_load(stream)["um982_feedback_ekf"]["ros__parameters"]
-
-    assert params["odom0"] == "odometry/feedback"
-    assert params["odom1"] == "/odom"
-    assert params["odom1_relative"] is True
-    assert params["odom1_config"][5] is False
-    assert params["imu0"] == "/livox/imu"
-    assert params["publish_tf"] is True
-
-    feedback_launch = (
-        Path(_THIS_DIR)
-        .parent.parent
-        / "localization"
-        / "um982_feedback_filter"
-        / "launch"
-        / "um982_feedback.launch.py"
-    ).read_text(encoding="utf-8")
-    assert "um982_glim_imu_ekf.yaml" in feedback_launch
-    assert "condition=ekf_fusion_is(True)" in feedback_launch
-    assert "period=um982_glim_imu_ekf_start_delay_sec" in source
+    assert "um982_feedback_launch = include_launch" in source
 
 
 def test_local_ekf_is_opt_in_and_replaces_um982_feedback_ekf():
