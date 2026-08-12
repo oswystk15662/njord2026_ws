@@ -136,25 +136,62 @@ struct DepthAnnotatedDetection
   float depth_m{};
 };
 
+struct DetectionVisualStyle
+{
+  const char * label;
+  cv::Scalar color;
+};
+
+// The TensorRT buoy model uses the same class contract as virtual-wall
+// generation: class 0 is green and class 1 is red.  Keep the visual mapping
+// here, beside the Foxglove annotation, so an operator can immediately see
+// that the image and the downstream navigation classification agree.
+DetectionVisualStyle detection_visual_style(int class_id)
+{
+  switch (class_id) {
+    case 0:
+      return {"green buoy", cv::Scalar(0, 255, 0, 255)};
+    case 1:
+      return {"red buoy", cv::Scalar(0, 0, 255, 255)};
+    default:
+      return {"unknown buoy", cv::Scalar(0, 255, 255, 255)};
+  }
+}
+
 void draw_depth_annotations(
   cv::Mat & image, const std::vector<DepthAnnotatedDetection> & detections)
 {
   for (const auto & item : detections) {
     const auto & box = item.detection;
+    const auto style = detection_visual_style(box.class_id);
     const cv::Point top_left{cvRound(box.x1), cvRound(box.y1)};
     const cv::Point bottom_right{cvRound(box.x2), cvRound(box.y2)};
-    cv::rectangle(image, top_left, bottom_right, cv::Scalar(0, 255, 0, 255), 2);
-    char label[64];
+    cv::rectangle(image, top_left, bottom_right, style.color, 2);
+    char label[96];
     if (std::isfinite(item.depth_m)) {
-      std::snprintf(label, sizeof(label), "id=%d %.0f%% depth=%.2fm", box.class_id,
+      std::snprintf(
+        label, sizeof(label), "%s %.0f%%  ZED %.2f m", style.label,
         box.confidence * 100.0F, item.depth_m);
     } else {
-      std::snprintf(label, sizeof(label), "id=%d %.0f%% depth=N/A", box.class_id,
+      std::snprintf(
+        label, sizeof(label), "%s %.0f%%  ZED N/A", style.label,
         box.confidence * 100.0F);
     }
+    constexpr double kFontScale = 0.5;
+    constexpr int kThickness = 1;
+    int baseline = 0;
+    const auto text_size = cv::getTextSize(
+      label, cv::FONT_HERSHEY_SIMPLEX, kFontScale, kThickness, &baseline);
+    const int text_y = std::max(text_size.height + baseline + 4, top_left.y - 6);
+    const cv::Point text_origin{top_left.x, text_y};
+    cv::rectangle(
+      image,
+      {text_origin.x, text_origin.y - text_size.height - baseline - 3},
+      {text_origin.x + text_size.width + 4, text_origin.y + 3},
+      cv::Scalar(0, 0, 0, 255), cv::FILLED);
     cv::putText(
-      image, label, {top_left.x, std::max(16, top_left.y - 6)}, cv::FONT_HERSHEY_SIMPLEX,
-      0.5, cv::Scalar(0, 255, 0, 255), 1, cv::LINE_AA);
+      image, label, text_origin, cv::FONT_HERSHEY_SIMPLEX,
+      kFontScale, style.color, kThickness, cv::LINE_AA);
   }
 }
 

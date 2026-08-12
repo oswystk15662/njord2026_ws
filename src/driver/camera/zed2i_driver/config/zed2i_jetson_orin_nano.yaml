@@ -60,7 +60,8 @@
     ground_video_max_pending_frames: 1
     ground_video_mtu: 1200
     detection_topic: /buoy_detections_3d
-    # Foxglove用。購読者がいるときだけBBとZED depthを重畳した画像を
+    # Foxglove用。購読者がいるときだけ、green/red buoyに対応した色のBB、
+    # ラベル、信頼度、ZED depth距離を重畳した画像を
     # /zed2i/debug/detections_image にpublishする。
     publish_debug_image: true
     output_frame: base_link

@@ -880,3 +880,44 @@ def test_foxglove_v3_telemetry_reaches_the_ground_pc():
 
     source = _read_launch_source("minipc_bringup.launch.py")
     assert 'executable="ground_speed_publisher"' in source
+
+
+def test_zed_v4l2_q40_preview_is_the_default_jetson_backend():
+    source = _read_launch_source("jetson_bringup.launch.py")
+    assert '"zed_camera_backend"' in source
+    assert 'default_value="v4l2"' in source
+    assert '["v4l2", "sdk"]' in source
+    assert '"zed_v4l2_preview.launch.py"' in source
+
+    root = Path(_THIS_DIR).parents[2]
+    preview_launch = (
+        root
+        / "src"
+        / "foxglove_image_preview"
+        / "launch"
+        / "zed_v4l2_preview.launch.py"
+    ).read_text(encoding="utf-8")
+    assert '"jpeg_qualities": [40]' in preview_launch
+    assert '"width": 640' in preview_launch
+    assert '"height": 360' in preview_launch
+
+
+def test_zenoh_routes_only_the_q40_zed_preview_to_ground():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    configs = {
+        role: (zenoh_dir / f"bridge_{role}.json5").read_text(encoding="utf-8")
+        for role in ("jetson", "minipc", "groundpc")
+    }
+    q40 = '"/zed2i/left/preview/q40/compressed"'
+
+    assert q40 in configs["jetson"].split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    assert q40 in configs["minipc"].split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    assert q40 in configs["minipc"].split("subscribers:", 1)[1]
+    assert q40 in configs["groundpc"].split("subscribers:", 1)[1]
+
+    for forbidden in (
+        "/zed2i/stereo/image_raw",
+        "/zed2i/left/preview/q70/compressed",
+        "/zed2i/left/preview/q90/compressed",
+    ):
+        assert all(forbidden not in config for config in configs.values())

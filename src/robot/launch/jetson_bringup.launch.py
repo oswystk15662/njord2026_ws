@@ -48,6 +48,7 @@ def generate_launch_description():
     lidar_model = LaunchConfiguration("lidar_model")
     enable_mid360 = LaunchConfiguration("enable_mid360")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
+    zed_camera_backend = LaunchConfiguration("zed_camera_backend")
     enable_glim = LaunchConfiguration("enable_glim")
     glim_headless = LaunchConfiguration("glim_headless")
     glim_backend = LaunchConfiguration("glim_backend")
@@ -89,7 +90,10 @@ def generate_launch_description():
     zed2i_launch = include_launch(
         "zed2i_driver",
         ["launch", "zed2i.launch.py"],
-        IfCondition(enable_zed2i),
+        IfCondition(PythonExpression([
+            "'", enable_zed2i, "' == 'true' and '",
+            zed_camera_backend, "' == 'sdk'",
+        ])),
         {
             "mode": "sdk",
             "enable_gpu_perception": enable_gpu_perception,
@@ -112,6 +116,19 @@ def generate_launch_description():
             "ground_video_jpeg_quality": LaunchConfiguration("ground_video_jpeg_quality"),
             "ground_video_draw_detections": ground_video_draw_detections,
         },
+    )
+
+    # The ZED SDK currently detects the camera but fails in sl::Camera::open()
+    # with CAMERA STREAM FAILED TO START on this Jetson.  The UVC/V4L2 path is
+    # independently verified and keeps only a bounded, low-bandwidth q40 JPEG
+    # preview for ground/Foxglove use.
+    zed_v4l2_preview_launch = include_launch(
+        "foxglove_image_preview",
+        ["launch", "zed_v4l2_preview.launch.py"],
+        IfCondition(PythonExpression([
+            "'", enable_zed2i, "' == 'true' and '",
+            zed_camera_backend, "' == 'v4l2'",
+        ])),
     )
 
     heartbeat_launch = include_launch(
@@ -220,6 +237,15 @@ def generate_launch_description():
             DeclareLaunchArgument("enable_mid360", default_value="true"),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
             DeclareLaunchArgument(
+                "zed_camera_backend",
+                default_value="v4l2",
+                choices=["v4l2", "sdk"],
+                description=(
+                    "Use the stable UVC q40 preview by default; select sdk to "
+                    "restore depth, point cloud and GPU perception."
+                ),
+            ),
+            DeclareLaunchArgument(
                 "enable_glim",
                 default_value="false",
                 description="Load GLIM into the Livox component container",
@@ -321,7 +347,7 @@ def generate_launch_description():
             ),
             TimerAction(
                 period=LaunchConfiguration("camera_start_delay"),
-                actions=[zed2i_launch],
+                actions=[zed2i_launch, zed_v4l2_preview_launch],
             ),
             livox_static_tf,
             zed_static_tf,
