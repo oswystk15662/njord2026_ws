@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
@@ -24,6 +25,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.task import Future
 from std_msgs.msg import Bool, Empty, Float64, String
 from visualization_msgs.msg import Marker, MarkerArray
+from waypoint_transformer import transform_waypoints
 
 from njord_interfaces.action import ConfigureSystem, RunTask
 from njord_interfaces.msg import ControlState, MissionStatus, Nav2RuntimeStatus, TaskInfo
@@ -190,6 +192,11 @@ class MissionManager(Node):
         self.declare_parameter("coordinate_projection_timeout_sec", 30.0)
         self.declare_parameter("coordinate_projection_retry_sec", 0.5)
         self.declare_parameter("coordinate_projection_request_timeout_sec", 5.0)
+        self.declare_parameter("waypoint_transform_enabled", False)
+        self.declare_parameter("waypoint_transform_anchor_x", 0.0)
+        self.declare_parameter("waypoint_transform_anchor_y", 0.0)
+        self.declare_parameter("waypoint_transform_rotation_rad", 0.0)
+        self.declare_parameter("waypoint_transform_scale", 1.0)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -480,6 +487,10 @@ class MissionManager(Node):
 
     def _configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Set Task 3's projected strict goals before activating its route."""
+        try:
+            route = self._transform_route_for_cart_test(route)
+        except ValueError as exc:
+            return self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
         if task.nav2_profile != "task3" or request.dry_run or task.executor == "task4_composite":
             return self._finish_configure_route(decision, task, route, request)
         if not self._task3_goal_checker_client.service_is_ready():
@@ -513,6 +524,22 @@ class MissionManager(Node):
             self._finish_task3_goal_checker_configuration
         )
         return decision
+
+    def _transform_route_for_cart_test(self, route: Route) -> Route:
+        if not self.get_parameter("waypoint_transform_enabled").value:
+            return route
+        return Route(
+            route.frame_id,
+            transform_waypoints(
+                route.waypoints,
+                float(self.get_parameter("waypoint_transform_anchor_x").value),
+                float(self.get_parameter("waypoint_transform_anchor_y").value),
+                float(self.get_parameter("waypoint_transform_rotation_rad").value),
+                float(self.get_parameter("waypoint_transform_scale").value),
+                replace,
+            ),
+            route.stages, route.full_sequence_stages, route.constraints,
+        )
 
     def _finish_task3_goal_checker_configuration(self, future) -> None:
         with self._lock:

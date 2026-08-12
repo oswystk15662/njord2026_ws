@@ -9,6 +9,11 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument("active_nav2_profile", default_value=""),
+        DeclareLaunchArgument("waypoint_transform_enabled", default_value="false"),
+        DeclareLaunchArgument("waypoint_transform_anchor_x", default_value="0.0"),
+        DeclareLaunchArgument("waypoint_transform_anchor_y", default_value="0.0"),
+        DeclareLaunchArgument("waypoint_transform_rotation_rad", default_value="0.0"),
+        DeclareLaunchArgument("waypoint_transform_scale", default_value="1.0"),
         DeclareLaunchArgument(
             "ground_link_return_monitor_log_level", default_value="info"
         ),
@@ -30,6 +35,13 @@ def generate_launch_description():
             executable="mission_manager_node",
             name="mission_manager",
             output="screen",
-            parameters=[{"active_nav2_profile": LaunchConfiguration("active_nav2_profile")}],
+            parameters=[{
+                "active_nav2_profile": LaunchConfiguration("active_nav2_profile"),
+                "waypoint_transform_enabled": LaunchConfiguration("waypoint_transform_enabled"),
+                "waypoint_transform_anchor_x": LaunchConfiguration("waypoint_transform_anchor_x"),
+                "waypoint_transform_anchor_y": LaunchConfiguration("waypoint_transform_anchor_y"),
+                "waypoint_transform_rotation_rad": LaunchConfiguration("waypoint_transform_rotation_rad"),
+                "waypoint_transform_scale": LaunchConfiguration("waypoint_transform_scale"),
+            }],
         ),
     ])

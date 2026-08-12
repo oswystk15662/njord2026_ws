@@ -52,6 +52,7 @@
   <exec_depend>tf_frame_arrow_publisher</exec_depend>
   <exec_depend>usb_cam</exec_depend>
   <exec_depend>waypoint_publisher</exec_depend>
+  <exec_depend>waypoint_transformer</exec_depend>
   <exec_depend>witmotion_imu_driver</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
   <exec_depend>xacro</exec_depend>
