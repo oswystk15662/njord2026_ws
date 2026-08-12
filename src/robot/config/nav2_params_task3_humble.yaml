@@ -102,7 +102,9 @@ controller_server:
       # GPS11/berth2 map coordinates before it sends a Task 3 route.
       heading_required_goal_xs: []
       heading_required_goal_ys: []
-      heading_required_goal_tolerance: 0.2
+      # LiDAR berth-centre correction can move the final dock target by up to
+      # 0.8m; retain strict heading at that corrected target too.
+      heading_required_goal_tolerance: 1.0
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths

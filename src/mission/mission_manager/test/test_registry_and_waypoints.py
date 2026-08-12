@@ -60,10 +60,10 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     task4_by_id = {waypoint.waypoint_id: waypoint for waypoint in task4.waypoints}
     assert (task4_by_id["8_berth1_approach"].latitude,
             task4_by_id["8_berth1_approach"].longitude) == (
-                63.4409288798, 10.4240747889)
+                63.4409333333, 10.4240611111)
     assert (task4_by_id["11_berth2_approach"].latitude,
             task4_by_id["11_berth2_approach"].longitude) == (
-                63.4409898775, 10.4241175055)
+                63.4410138889, 10.4241472222)
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"

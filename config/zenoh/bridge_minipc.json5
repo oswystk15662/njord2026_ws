@@ -41,10 +41,12 @@
         publishers: [
           "/odom", "/odometry/filtered/global", "/odometry/filtered/local", "/tf", "/tf_static", "/livox/imu",
           "/mission/status", "/task/plan",
+          "/docking/berth1_nominal", "/docking/berth2_nominal",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
           "/autonomy/ready", "/heartbeat/autonomy",
           "/task2/buoy_pose_correction",
+          "/docking/berth1_corrected", "/docking/berth2_corrected",
           "/other_ship/twist",
           "/task2/opponent_detected",
           "/waypoint1_pose", "/waypoint2_pose",

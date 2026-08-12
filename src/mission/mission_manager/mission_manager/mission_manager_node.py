@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import threading
+from dataclasses import replace
 from pathlib import Path
 from typing import Callable, Optional, Sequence
 
@@ -256,6 +257,15 @@ class MissionManager(Node):
         self._task3_goal_checker_client = self.create_client(
             SetParameters, "/controller_server/set_parameters"
         )
+        self._dock_nominal_pub = {
+            "berth1": self.create_publisher(PoseStamped, "/docking/berth1_nominal", _STATUS_QOS),
+            "berth2": self.create_publisher(PoseStamped, "/docking/berth2_nominal", _STATUS_QOS),
+        }
+        self._dock_corrections: dict[str, PoseStamped] = {}
+        self.create_subscription(PoseStamped, "/docking/berth1_corrected",
+                                 lambda message: self._on_dock_correction("berth1", message), 10)
+        self.create_subscription(PoseStamped, "/docking/berth2_corrected",
+                                 lambda message: self._on_dock_correction("berth2", message), 10)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
@@ -537,6 +547,11 @@ class MissionManager(Node):
 
     def _finish_configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Finish setup after any YAML GPS coordinates are expressed in map."""
+        if task.executor == "staged_docking":
+            self._dock_corrections.clear()
+            for waypoint in route.waypoints:
+                if waypoint.waypoint_id in self._dock_nominal_pub:
+                    self._publish_dock_nominal(waypoint)
         self._active_route = route
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
@@ -727,7 +742,8 @@ class MissionManager(Node):
                            self._executor_complete(execution_id))
         elif task.executor == "staged_docking":
             executor = StagedDockingExecutor(
-                self._navigation, self._create_wait_timer, self.destroy_timer
+                self._navigation, self._create_wait_timer, self.destroy_timer,
+                self._dock_target_for_navigation,
             )
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
@@ -740,6 +756,45 @@ class MissionManager(Node):
             executor.start(execution_id, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
         self._active_executor = executor
+
+    def _on_dock_correction(self, berth: str, message: PoseStamped) -> None:
+        """Keep only fresh map-frame LiDAR corrections from the dedicated node."""
+        if message.header.frame_id == "map":
+            self._dock_corrections[berth] = message
+
+    def _dock_target_for_navigation(self, waypoint: Waypoint) -> Waypoint:
+        """Publish a nominal target and accept a fresh bounded LiDAR correction.
+
+        The correction node is advisory: it cannot block a docking run or
+        replace a goal outside its own bounded quality gates.
+        """
+        berth = waypoint.waypoint_id
+        publisher = self._dock_nominal_pub.get(berth)
+        if publisher is None:
+            return waypoint
+        self._publish_dock_nominal(waypoint)
+        correction = self._dock_corrections.get(berth)
+        if correction is None:
+            return waypoint
+        now = self.get_clock().now().nanoseconds
+        stamp = correction.header.stamp
+        age_ns = now - (stamp.sec * 1_000_000_000 + stamp.nanosec)
+        dx, dy = correction.pose.position.x - waypoint.x, correction.pose.position.y - waypoint.y
+        if age_ns < 0 or age_ns > 2_000_000_000 or dx * dx + dy * dy > 0.8 ** 2:
+            return waypoint
+        self.get_logger().info(
+            f"using LiDAR berth correction for {berth}: dx={dx:.2f}m dy={dy:.2f}m")
+        return replace(waypoint, x=correction.pose.position.x, y=correction.pose.position.y)
+
+    def _publish_dock_nominal(self, waypoint: Waypoint) -> None:
+        publisher = self._dock_nominal_pub[waypoint.waypoint_id]
+        nominal = PoseStamped()
+        nominal.header.frame_id = "map"
+        nominal.header.stamp = self.get_clock().now().to_msg()
+        nominal.pose.position.x, nominal.pose.position.y = waypoint.x, waypoint.y
+        nominal.pose.orientation.z = math.sin(waypoint.yaw / 2.0)
+        nominal.pose.orientation.w = math.cos(waypoint.yaw / 2.0)
+        publisher.publish(nominal)
 
     def _set_task2_enabled(self, enabled: bool) -> None:
         self._task2_enabled_pub.publish(Bool(data=enabled))

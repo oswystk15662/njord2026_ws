@@ -216,7 +216,9 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert checker["position_only_xy_goal_tolerance"] == pytest.approx(1.5)
     assert checker["heading_required_goal_xs"] == []
     assert checker["heading_required_goal_ys"] == []
-    assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
+    # A verified LiDAR berth-centre correction may move the final dock goal
+    # by up to 0.8m, while preserving its strict yaw requirement.
+    assert checker["heading_required_goal_tolerance"] == pytest.approx(1.0)
 
 
 def test_task1_pass_through_state_is_scoped_to_each_goal():
