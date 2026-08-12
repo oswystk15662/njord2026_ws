@@ -34,6 +34,7 @@ class Waypoint:
     latitude: float | None = None
     longitude: float | None = None
     altitude: float = 0.0
+    docking_motion: str = ""
 
 
 @dataclass(frozen=True)
@@ -218,6 +219,11 @@ class WaypointConfigLoader:
                 raise RegistryError(
                     f"route {route_key!r} waypoint {waypoint_id!r} has invalid competition_id"
                 )
+            docking_motion = item.get("docking_motion", "")
+            if docking_motion not in {"", "forward", "sway_negative", "omni"}:
+                raise RegistryError(
+                    f"route {route_key!r} waypoint {waypoint_id!r} has invalid docking_motion"
+                )
             geodetic = self._geodetic_point(
                 item, route_key, f"waypoint {waypoint_id!r}", required=True
             )
@@ -230,6 +236,7 @@ class WaypointConfigLoader:
                 latitude=None if geodetic is None else geodetic.latitude,
                 longitude=None if geodetic is None else geodetic.longitude,
                 altitude=0.0 if geodetic is None else geodetic.altitude,
+                docking_motion=docking_motion,
             ))
         return result
 

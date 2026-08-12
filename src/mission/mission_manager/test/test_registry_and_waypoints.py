@@ -50,8 +50,14 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert [waypoint.competition_id for waypoint in task4.waypoints if waypoint.competition_id] == [
         "13", "14", "15", "16", "17"
     ]
-    assert [waypoint.waypoint_id for waypoint in task4.stage("normal_exit")] == ["14"]
+    assert [waypoint.waypoint_id for waypoint in task4.stage("normal_exit")] == ["normal_exit"]
     assert [waypoint.waypoint_id for waypoint in task4.stage("parallel_dock")] == ["parallel_dock"]
+    assert [(waypoint.waypoint_id, waypoint.docking_motion) for waypoint in task4.waypoints
+            if waypoint.docking_motion] == [
+        ("14", "forward"), ("normal_dock", "forward"),
+        ("normal_exit", "omni"), ("17", "sway_negative"),
+        ("parallel_dock", "sway_negative"),
+    ]
     assert len(task4.projection_points()) == len(task4.waypoints)
     displayed = [
         str(waypoint["competition_id"])

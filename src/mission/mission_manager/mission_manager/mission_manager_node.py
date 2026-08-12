@@ -792,6 +792,7 @@ class MissionManager(Node):
                 self._navigation,
                 lambda profile, complete: self._switch_task4_profile(execution_id, profile, complete),
                 lambda goals, complete: self._configure_task4_strict_goals(execution_id, goals, complete),
+                lambda policy, complete: self._configure_task4_docking_motion(execution_id, policy, complete),
             )
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
@@ -870,6 +871,46 @@ class MissionManager(Node):
                     complete(True, "")
                 except Exception as exc:
                     complete(False, f"unable to configure Task 3 strict goals: {exc}")
+
+        self._task3_goal_checker_client.call_async(request).add_done_callback(done)
+
+    def _configure_task4_docking_motion(self, execution_id: str, policy: str, complete) -> None:
+        if not self._machine.is_current(execution_id):
+            return
+        if not self._task3_goal_checker_client.service_is_ready():
+            complete(False, "controller parameter service is unavailable")
+            return
+        limits = {
+            "forward": (0.0, 0.5, 0.0, 0.0, 21, 1),
+            "sway_negative": (0.0, 0.0, -0.5, 0.0, 1, 21),
+            "omni": (-0.5, 0.5, -0.5, 0.5, 21, 21),
+        }
+        if policy not in limits:
+            complete(False, f"unknown Task 4 docking motion policy: {policy}")
+            return
+        min_x, max_x, min_y, max_y, samples_x, samples_y = limits[policy]
+        request = SetParameters.Request()
+        request.parameters = [
+            Parameter(name=f"FollowPath.{name}", value=ParameterValue(type=kind, **{field: value}))
+            for name, kind, field, value in (
+                ("min_vel_x", ParameterType.PARAMETER_DOUBLE, "double_value", min_x),
+                ("max_vel_x", ParameterType.PARAMETER_DOUBLE, "double_value", max_x),
+                ("min_vel_y", ParameterType.PARAMETER_DOUBLE, "double_value", min_y),
+                ("max_vel_y", ParameterType.PARAMETER_DOUBLE, "double_value", max_y),
+                ("vx_samples", ParameterType.PARAMETER_INTEGER, "integer_value", samples_x),
+                ("vy_samples", ParameterType.PARAMETER_INTEGER, "integer_value", samples_y),
+            )
+        ]
+
+        def done(future) -> None:
+            try:
+                response = future.result()
+                if not all(result.successful for result in response.results):
+                    reason = next(result.reason for result in response.results if not result.successful)
+                    raise RuntimeError(reason or "controller rejected docking motion parameters")
+                complete(True, "")
+            except Exception as exc:
+                complete(False, f"unable to configure Task 4 docking motion: {exc}")
 
         self._task3_goal_checker_client.call_async(request).add_done_callback(done)
 

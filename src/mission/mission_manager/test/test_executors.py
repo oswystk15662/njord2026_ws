@@ -152,7 +152,7 @@ def test_task4_composite_sends_the_required_route_and_profile_switches():
     callbacks = {"switch": [], "strict": []}
     route = Route("odom", tuple(
         Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
-        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+        for waypoint_id in ("13", "14", "normal_dock", "normal_exit", "15", "16", "17", "parallel_dock")
     ), {}, {}, {})
     executor = Task4CompositeExecutor(
         nav,
@@ -161,7 +161,7 @@ def test_task4_composite_sends_the_required_route_and_profile_switches():
     )
     executor.start("execution", route, lambda *_: None, results.append)
 
-    expected = ["13", "14", "normal_dock", "14", "15", "16", "17", "17", "parallel_dock"]
+    expected = ["13", "14", "normal_dock", "normal_exit", "15", "16", "17", "17", "parallel_dock"]
     for waypoint_id in expected:
         if callbacks["strict"]:
             callbacks["strict"].pop(0)(True, "")
@@ -183,7 +183,7 @@ def test_task4_composite_stops_after_a_rejected_profile_switch():
     callbacks, results = [], []
     route = Route("odom", tuple(
         Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
-        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+        for waypoint_id in ("13", "14", "normal_dock", "normal_exit", "15", "16", "17", "parallel_dock")
     ), {}, {}, {})
     executor = Task4CompositeExecutor(
         nav, lambda _profile, complete: callbacks.append(complete), lambda _goals, complete: complete(True, "")
@@ -192,7 +192,7 @@ def test_task4_composite_stops_after_a_rejected_profile_switch():
     for _ in range(4):
         nav.sent[-1][2](ExecutorStatus.SUCCEEDED, "ok")
     callbacks[0](False, "switch rejected")
-    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "14"]
+    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "normal_exit"]
     assert results[0].status == ExecutorStatus.INTERNAL_ERROR
 
 
@@ -201,7 +201,7 @@ def test_task4_composite_cancels_during_profile_switch_and_ignores_late_result()
     callbacks, results = [], []
     route = Route("odom", tuple(
         Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
-        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+        for waypoint_id in ("13", "14", "normal_dock", "normal_exit", "15", "16", "17", "parallel_dock")
     ), {}, {}, {})
     executor = Task4CompositeExecutor(
         nav, lambda _profile, complete: callbacks.append(complete), lambda _goals, complete: complete(True, "")
@@ -212,7 +212,7 @@ def test_task4_composite_cancels_during_profile_switch_and_ignores_late_result()
     executor.cancel("execution")
     callbacks[0](True, "late")
     assert results[0].status == ExecutorStatus.CANCELED
-    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "14"]
+    assert [poses[0].waypoint_id for poses, *_ in nav.sent] == ["13", "14", "normal_dock", "normal_exit"]
 
 
 def test_task4_composite_stops_after_navigation_failure():
@@ -220,7 +220,7 @@ def test_task4_composite_stops_after_navigation_failure():
     results = []
     route = Route("odom", tuple(
         Waypoint(waypoint_id, 0.0, 0.0, 0.0, waypoint_id, "dock")
-        for waypoint_id in ("13", "14", "normal_dock", "15", "16", "17", "parallel_dock")
+        for waypoint_id in ("13", "14", "normal_dock", "normal_exit", "15", "16", "17", "parallel_dock")
     ), {}, {}, {})
     executor = Task4CompositeExecutor(
         nav, lambda _profile, complete: complete(True, ""), lambda _goals, complete: complete(True, "")

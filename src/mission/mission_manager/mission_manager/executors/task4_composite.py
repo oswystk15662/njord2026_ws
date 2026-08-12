@@ -10,6 +10,7 @@ from ..waypoint_config import Route, Waypoint
 
 ProfileSwitch = Callable[[str, Callable[[bool, str], None]], None]
 StrictGoals = Callable[[tuple[Waypoint, ...], Callable[[bool, str], None]], None]
+MotionPolicy = Callable[[str, Callable[[bool, str], None]], None]
 
 
 class Task4CompositeExecutor(TaskExecutor):
@@ -19,7 +20,7 @@ class Task4CompositeExecutor(TaskExecutor):
         ("normal_gate", "13", False),
         ("normal_approach", "14", True),
         ("normal_dock", "normal_dock", True),
-        ("normal_exit", "14", False),
+        ("normal_exit", "normal_exit", False),
         ("switch_to_task1", "", False),
         ("task1_gps15", "15", False),
         ("task1_gps16", "16", False),
@@ -29,10 +30,12 @@ class Task4CompositeExecutor(TaskExecutor):
         ("parallel_dock", "parallel_dock", True),
     )
 
-    def __init__(self, navigation, switch_profile: ProfileSwitch, strict_goals: StrictGoals) -> None:
+    def __init__(self, navigation, switch_profile: ProfileSwitch, strict_goals: StrictGoals,
+                 motion_policy: MotionPolicy = lambda _policy, complete: complete(True, "")) -> None:
         super().__init__(navigation)
         self._switch_profile = switch_profile
         self._strict_goals = strict_goals
+        self._motion_policy = motion_policy
         self._route: Optional[Route] = None
         self._stage_index = 0
         self._switching = False
@@ -67,9 +70,28 @@ class Task4CompositeExecutor(TaskExecutor):
             self._switch_profile(profile, lambda ok, message: self._switched(expected_id, ok, message))
             return
         waypoint = next(item for item in self._route.waypoints if item.waypoint_id == waypoint_id)
+        if waypoint.docking_motion and (stage.startswith("normal_") or stage.startswith("parallel_")):
+            self._motion_policy(
+                waypoint.docking_motion,
+                lambda ok, message: self._motion_ready(expected_id, waypoint, strict, ok, message),
+            )
+            return
         if strict:
             self._strict_goals((waypoint,), lambda ok, message: self._strict_ready(
                 expected_id, waypoint, ok, message
+            ))
+        else:
+            self._send_waypoint(expected_id, waypoint)
+
+    def _motion_ready(self, expected_id: str, waypoint: Waypoint, strict: bool,
+                      ok: bool, message: str) -> None:
+        if expected_id != self.execution_id or self._finished:
+            return
+        if not ok:
+            self._finish(ExecutorStatus.INTERNAL_ERROR, message or "Task 4 docking motion setup failed")
+        elif strict:
+            self._strict_goals((waypoint,), lambda ready, detail: self._strict_ready(
+                expected_id, waypoint, ready, detail
             ))
         else:
             self._send_waypoint(expected_id, waypoint)
