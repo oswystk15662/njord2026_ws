@@ -17,7 +17,7 @@ from launch.actions import (
     TimerAction,
 )
 from launch.conditions import IfCondition
-from launch.launch_description_sources import PythonLaunchDescriptionSource
+from launch.launch_description_sources import AnyLaunchDescriptionSource, PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.substitutions import FindPackageShare
 from launch_ros.actions import Node
@@ -48,6 +48,7 @@ def generate_launch_description():
     lidar_model = LaunchConfiguration("lidar_model")
     enable_mid360 = LaunchConfiguration("enable_mid360")
     enable_zed2i = LaunchConfiguration("enable_zed2i")
+    enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
     zed_camera_backend = LaunchConfiguration("zed_camera_backend")
     enable_glim = LaunchConfiguration("enable_glim")
     glim_headless = LaunchConfiguration("glim_headless")
@@ -129,6 +130,20 @@ def generate_launch_description():
             "'", enable_zed2i, "' == 'true' and '",
             zed_camera_backend, "' == 'v4l2'",
         ])),
+    )
+
+    # Keep camera frames local to the Jetson: Foxglove reads the existing q40
+    # preview directly instead of routing it through Zenoh.
+    foxglove_bridge_launch = IncludeLaunchDescription(
+        AnyLaunchDescriptionSource(
+            PathJoinSubstitution(
+                [FindPackageShare("foxglove_bridge"), "launch", "foxglove_bridge_launch.xml"]
+            )
+        ),
+        launch_arguments={
+            "topic_whitelist": "['/zed2i/left/preview/q40/compressed']",
+        }.items(),
+        condition=IfCondition(enable_foxglove_bridge),
     )
 
     heartbeat_launch = include_launch(
@@ -236,6 +251,11 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument("enable_mid360", default_value="true"),
             DeclareLaunchArgument("enable_zed2i", default_value="true"),
+            DeclareLaunchArgument(
+                "enable_foxglove_bridge",
+                default_value="true",
+                description="Expose the local q40 ZED preview on ws://<jetson>:8765.",
+            ),
             DeclareLaunchArgument(
                 "zed_camera_backend",
                 default_value="v4l2",
@@ -351,6 +371,7 @@ def generate_launch_description():
             ),
             livox_static_tf,
             zed_static_tf,
+            foxglove_bridge_launch,
             TimerAction(period=0.5, actions=[task1_safety_points]),
             task1_default_buoy_roi,
             task2_autonomy,

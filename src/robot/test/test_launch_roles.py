@@ -906,6 +906,14 @@ def test_zed_v4l2_q40_preview_is_the_default_jetson_backend():
     assert "OV0001-video-index0" in preview_launch
 
 
+def test_jetson_exposes_only_the_q40_preview_to_its_local_foxglove_bridge():
+    source = _read_launch_source("jetson_bringup.launch.py")
+
+    assert '"enable_foxglove_bridge"' in source
+    assert '"foxglove_bridge_launch.xml"' in source
+    assert '"topic_whitelist": "[\'/zed2i/left/preview/q40/compressed\']"' in source
+
+
 def test_zenoh_routes_only_the_q40_zed_preview_to_ground():
     zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
     configs = {
