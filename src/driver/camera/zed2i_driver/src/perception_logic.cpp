@@ -10,10 +10,25 @@ namespace
 {
 constexpr float kPi = 3.14159265358979323846F;
 
-float value_at(const std::vector<float> & output, int index, int field, int count, bool channels_first)
+float value_at(
+  const std::vector<float> & output, int index, int field, int count, bool channels_first,
+  int fields_per_detection = 6)
 {
   return channels_first ? output[static_cast<size_t>(field * count + index)] :
-         output[static_cast<size_t>(index * 6 + field)];
+         output[static_cast<size_t>(index * fields_per_detection + field)];
+}
+
+float intersection_over_union(const Detection2D & first, const Detection2D & second)
+{
+  const float x1 = std::max(first.x1, second.x1);
+  const float y1 = std::max(first.y1, second.y1);
+  const float x2 = std::min(first.x2, second.x2);
+  const float y2 = std::min(first.y2, second.y2);
+  const float intersection = std::max(0.0F, x2 - x1) * std::max(0.0F, y2 - y1);
+  const float first_area = std::max(0.0F, first.x2 - first.x1) * std::max(0.0F, first.y2 - first.y1);
+  const float second_area = std::max(0.0F, second.x2 - second.x1) * std::max(0.0F, second.y2 - second.y1);
+  const float union_area = first_area + second_area - intersection;
+  return union_area > 0.0F ? intersection / union_area : 0.0F;
 }
 
 float normalize_angle(float angle)
@@ -57,6 +72,57 @@ std::vector<Detection2D> decode_detections(
   std::sort(decoded.begin(), decoded.end(), [](const auto & a, const auto & b) { return a.confidence > b.confidence; });
   if (decoded.size() > static_cast<size_t>(max_detections)) { decoded.resize(static_cast<size_t>(max_detections)); }
   return decoded;
+}
+
+std::vector<Detection2D> decode_yolo_world_raw_detections(
+  const std::vector<float> & output, int count, bool channels_first, float threshold,
+  const LetterboxTransform & letterbox, int max_detections)
+{
+  if (count <= 0 || max_detections <= 0 || letterbox.scale <= 0.0F ||
+    output.size() < static_cast<size_t>(count * 5))
+  {
+    return {};
+  }
+  std::vector<Detection2D> candidates;
+  candidates.reserve(static_cast<size_t>(count));
+  for (int i = 0; i < count; ++i) {
+    const float confidence = value_at(output, i, 4, count, channels_first, 5);
+    if (!std::isfinite(confidence) || confidence < threshold || confidence > 1.0F) { continue; }
+    const float cx = value_at(output, i, 0, count, channels_first, 5);
+    const float cy = value_at(output, i, 1, count, channels_first, 5);
+    const float width = value_at(output, i, 2, count, channels_first, 5);
+    const float height = value_at(output, i, 3, count, channels_first, 5);
+    if (!std::isfinite(cx) || !std::isfinite(cy) || !std::isfinite(width) || !std::isfinite(height) ||
+      width <= 0.0F || height <= 0.0F)
+    {
+      continue;
+    }
+    Detection2D detection{0, confidence,
+      (cx - width * 0.5F - letterbox.pad_x) / letterbox.scale,
+      (cy - height * 0.5F - letterbox.pad_y) / letterbox.scale,
+      (cx + width * 0.5F - letterbox.pad_x) / letterbox.scale,
+      (cy + height * 0.5F - letterbox.pad_y) / letterbox.scale};
+    detection.x1 = std::clamp(detection.x1, 0.0F, static_cast<float>(letterbox.source_width));
+    detection.x2 = std::clamp(detection.x2, 0.0F, static_cast<float>(letterbox.source_width));
+    detection.y1 = std::clamp(detection.y1, 0.0F, static_cast<float>(letterbox.source_height));
+    detection.y2 = std::clamp(detection.y2, 0.0F, static_cast<float>(letterbox.source_height));
+    if (detection.x2 - detection.x1 >= 1.0F && detection.y2 - detection.y1 >= 1.0F) {
+      candidates.push_back(detection);
+    }
+  }
+  std::sort(candidates.begin(), candidates.end(), [](const auto & a, const auto & b) {
+    return a.confidence > b.confidence;
+  });
+  std::vector<Detection2D> result;
+  result.reserve(static_cast<size_t>(max_detections));
+  for (const auto & candidate : candidates) {
+    const bool overlaps = std::any_of(result.begin(), result.end(), [&candidate](const auto & kept) {
+      return intersection_over_union(candidate, kept) >= 0.45F;
+    });
+    if (!overlaps) { result.push_back(candidate); }
+    if (result.size() >= static_cast<size_t>(max_detections)) { break; }
+  }
+  return result;
 }
 
 DepthRoi central_depth_roi(const Detection2D & d, float ratio, int width, int height)

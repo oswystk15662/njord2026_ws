@@ -14,6 +14,13 @@ std::vector<Detection2D> decode_detections(
   const std::vector<float> & output, int detection_count, bool channels_first,
   float confidence_threshold, const LetterboxTransform & letterbox, int max_detections = 32);
 
+// Decodes the pre-NMS YOLO output used by a one-class YOLO-World export:
+// [1,5,N] or [1,N,5], where each candidate is cx, cy, width, height, score.
+// NMS stays on the CPU because only the compact output tensor leaves TensorRT.
+std::vector<Detection2D> decode_yolo_world_raw_detections(
+  const std::vector<float> & output, int detection_count, bool channels_first,
+  float confidence_threshold, const LetterboxTransform & letterbox, int max_detections = 32);
+
 DepthRoi central_depth_roi(
   const Detection2D & detection, float ratio, int image_width, int image_height);
 
