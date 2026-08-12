@@ -68,6 +68,7 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('course_bounds', [-100.0, 100.0, -100.0, 100.0])
         self.declare_parameter('wall_width_m', 0.2)
         self.declare_parameter('point_spacing_m', 0.1)
+        self.declare_parameter('max_wall_length_m', 13.0)
         self.declare_parameter('marker_merge_radius_m', 2.0)
         self.declare_parameter('confirmations_required', 2)
         self.declare_parameter('max_active_wall_tracks', 0)
@@ -102,6 +103,7 @@ class CardinalWallPublisher(Node):
             raise ValueError('course_bounds must be [min_x, max_x, min_y, max_y]')
         self.wall_width = max(0.01, float(self.get_parameter('wall_width_m').value))
         self.spacing = max(0.02, float(self.get_parameter('point_spacing_m').value))
+        self.max_wall_length_m = max(0.1, float(self.get_parameter('max_wall_length_m').value))
         self.merge_radius = max(0.05, float(self.get_parameter('marker_merge_radius_m').value))
         self.required_confirmations = max(1, int(self.get_parameter('confirmations_required').value))
         self.max_active_wall_tracks = max(
@@ -367,7 +369,7 @@ class CardinalWallPublisher(Node):
                 points.extend(wall_points(
                     self.bounds, self.wall_width, self.spacing,
                     track['x'], track['y'], track['class_id'],
-                    wall_heading))
+                    wall_heading, self.max_wall_length_m))
         msg = PointCloud2()
         msg.header.stamp = self.get_clock().now().to_msg()
         msg.header.frame_id = self.map_frame
@@ -542,7 +544,7 @@ class CardinalWallPublisher(Node):
                 for x, y, z in wall_points(
                         self.bounds, self.wall_width, self.spacing,
                         track['x'], track['y'], class_id,
-                        self._wall_heading(class_id, track)):
+                        self._wall_heading(class_id, track), self.max_wall_length_m):
                     wall.points.append(Point(x=x, y=y, z=z + 0.08))
                 markers.markers.append(wall)
 

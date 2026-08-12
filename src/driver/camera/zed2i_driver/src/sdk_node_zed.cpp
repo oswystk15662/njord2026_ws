@@ -142,10 +142,10 @@ struct DetectionVisualStyle
   cv::Scalar color;
 };
 
-// The TensorRT buoy model uses the same class contract as virtual-wall
-// generation: class 0 is green and class 1 is red.  Keep the visual mapping
-// here, beside the Foxglove annotation, so an operator can immediately see
-// that the image and the downstream navigation classification agree.
+// TensorRT model / BuoyDetection / virtual-wall contract:
+//   0 green, 1 red, 2 north, 3 east, 4 south, 5 west.
+// Keep it beside the Foxglove annotation so the image and downstream wall
+// classification use exactly the same IDs.
 DetectionVisualStyle detection_visual_style(int class_id)
 {
   switch (class_id) {
@@ -153,6 +153,14 @@ DetectionVisualStyle detection_visual_style(int class_id)
       return {"green buoy", cv::Scalar(0, 255, 0, 255)};
     case 1:
       return {"red buoy", cv::Scalar(0, 0, 255, 255)};
+    case 2:
+      return {"north cardinal", cv::Scalar(0, 215, 255, 255)};
+    case 3:
+      return {"east cardinal", cv::Scalar(0, 215, 255, 255)};
+    case 4:
+      return {"south cardinal", cv::Scalar(0, 215, 255, 255)};
+    case 5:
+      return {"west cardinal", cv::Scalar(0, 215, 255, 255)};
     default:
       return {"unknown buoy", cv::Scalar(0, 255, 255, 255)};
   }

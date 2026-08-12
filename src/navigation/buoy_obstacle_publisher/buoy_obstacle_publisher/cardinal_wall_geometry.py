@@ -77,8 +77,9 @@ def is_behind_retirement_frontier(marker_x, marker_y, frontier_x, frontier_y,
     ) < -max(0.0, margin_m)
 
 
-def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0):
-    """Return a filled wall from a marker to its forbidden course edge."""
+def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=0.0,
+                max_length_m=13.0):
+    """Return a filled wall from a marker, capped at a safe finite length."""
     direction = direction_for_class(class_id, course_heading_rad)
     if direction is None:
         return []
@@ -86,6 +87,11 @@ def wall_points(bounds, wall_width, spacing, x, y, class_id, course_heading_rad=
     length = math.hypot(dx, dy)
     dx, dy = dx / length, dy / length
     end_x, end_y = _ray_end(bounds, x, y, dx, dy)
+    if math.isfinite(max_length_m) and max_length_m > 0.0:
+        edge_length = math.hypot(end_x - x, end_y - y)
+        capped_length = min(edge_length, max_length_m)
+        end_x = x + capped_length * dx
+        end_y = y + capped_length * dy
 
     spacing = max(0.02, spacing)
     longitudinal_steps = max(1, math.ceil(math.hypot(end_x - x, end_y - y) / spacing))

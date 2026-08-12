@@ -362,7 +362,12 @@ def generate_launch_description():
             "detection_topic": "/buoy_detections_3d",
             "output_topic": "/virtual_obstacles",
             "map_frame": "odom",
+            "max_wall_length_m": 13.0,
             "max_active_wall_tracks": 4,
+            # One latest map position per recognised colour/cardinal class.
+            # A wall remains if it later leaves the camera field of view;
+            # retirement is controlled only by crossing its course plane.
+            "latest_per_class_only": True,
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
             "true_north_confirmations_required": 10,
             "wall_enable_topic": "/task1/cardinal_wall_enable",
@@ -390,6 +395,7 @@ def generate_launch_description():
             # Task4 waypoints are projected into map before execution; keep
             # buoy transforms, heading, and wall cloud in that same frame.
             "map_frame": "map",
+            "max_wall_length_m": 13.0,
             "max_active_wall_tracks": 4,
             "wall_enable_topic": "/task4/buoy_wall_enable",
             "retirement_heading_topic": "/task4/gps14_to_gps16_heading",
@@ -400,9 +406,9 @@ def generate_launch_description():
             # Task4 has only red/green channel buoys, not cardinal marks.
             "allow_cardinal_classes": False,
             "latest_per_class_only": True,
-            # The camera stream is expected continuously while Task4 walls
-            # are active.  A missing observation promptly removes its wall.
-            "track_ttl_s": 1.0,
+            # Losing sight of a buoy does not erase its wall.  It retires
+            # only when the vessel has passed its GPS14->GPS16 wall plane.
+            "track_ttl_s": 0.0,
         }],
         condition=IfCondition(enable_buoy_costmap),
     )
