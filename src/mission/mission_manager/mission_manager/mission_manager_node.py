@@ -780,7 +780,7 @@ class MissionManager(Node):
         stamp = correction.header.stamp
         age_ns = now - (stamp.sec * 1_000_000_000 + stamp.nanosec)
         dx, dy = correction.pose.position.x - waypoint.x, correction.pose.position.y - waypoint.y
-        if age_ns < 0 or age_ns > 2_000_000_000 or dx * dx + dy * dy > 0.8 ** 2:
+        if age_ns < 0 or age_ns > 2_000_000_000 or dx * dx + dy * dy > 1.0 ** 2:
             return waypoint
         self.get_logger().info(
             f"using LiDAR berth correction for {berth}: dx={dx:.2f}m dy={dy:.2f}m")

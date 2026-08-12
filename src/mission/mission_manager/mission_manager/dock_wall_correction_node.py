@@ -44,7 +44,7 @@ class DockWallCorrection(Node):
             ("min_wall_span_ratio", 0.55),
             ("wall_band_m", 0.25),
             ("search_margin_m", 1.2),
-            ("max_correction_m", 0.8),
+            ("max_correction_m", 1.0),
             # The lower berth is often open.  Ignore water/edge returns and
             # fit only the solid upper part of a wall.
             ("min_z_m", 0.35),
