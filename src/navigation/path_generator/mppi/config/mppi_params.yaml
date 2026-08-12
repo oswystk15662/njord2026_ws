@@ -26,11 +26,9 @@ planner_node:
     # Planning loop rate [Hz] (pre-existing parameter, kept as-is).
     planning_frequency: 2.0  # current default - human tuning expected; record any change
 
-    # Measured buoy positions from the YOLO + LiDAR fusion pipeline.  These
-    # are the normal source for buoy_outside_cost; GPS-derived virtual buoys
-    # remain available only for fallback experiments.
-    buoy_detections_topic: "/buoy_detections"
-    use_detected_buoys: true
+    # Task 2 does not use buoy recognition for planning.  Its perception
+    # stack is limited to other-vessel tracking and the safety-point cloud.
+    use_detected_buoys: false
     use_virtual_buoys: false
     buoy_detection_timeout_sec: 1.0
     buoy_merge_distance_m: 1.0

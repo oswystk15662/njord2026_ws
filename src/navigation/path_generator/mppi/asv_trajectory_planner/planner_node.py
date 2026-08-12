@@ -242,12 +242,14 @@ class PlannerNode(Node):
             10,
         )
 
-        self.buoy_detection_sub = self.create_subscription(
-            PointStamped,
-            self.buoy_detections_topic,
-            self.buoy_detection_callback,
-            10,
-        )
+        self.buoy_detection_sub = None
+        if self.use_detected_buoys:
+            self.buoy_detection_sub = self.create_subscription(
+                PointStamped,
+                self.buoy_detections_topic,
+                self.buoy_detection_callback,
+                10,
+            )
 
         self.path_pub = self.create_publisher(
             Path,
@@ -268,7 +270,8 @@ class PlannerNode(Node):
         self.get_logger().info(f"Subscribe other_ship_twist: {self.other_ship_twist_topic}")
         self.get_logger().info(f"Subscribe waypoint1      : {self.waypoint1_topic}")
         self.get_logger().info(f"Subscribe waypoint2      : {self.waypoint2_topic}")
-        self.get_logger().info(f"Subscribe buoy detections: {self.buoy_detections_topic}")
+        if self.use_detected_buoys:
+            self.get_logger().info(f"Subscribe buoy detections: {self.buoy_detections_topic}")
         self.get_logger().info(
             f"Buoys detected/virtual  : {self.use_detected_buoys}/"
             f"{self.use_virtual_buoys}")

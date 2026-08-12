@@ -258,7 +258,7 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert 'active_profile_ == "task2"' in supervisor_source
     assert 'active_profile_ != "task2" && !action_server_ready_' in supervisor_source
     assert '"/planned_path_pruned"' in supervisor_source
-    assert '"task2_readiness_adapter_node"' in adapter_source
+    assert '"task2_readiness_adapter_node"' not in adapter_source
     assert '"follow_path_client_node"' in adapter_source
     assert '"mission_gate_required": True' in adapter_source
     assert '"preprocessing.launch.py"' not in adapter_source

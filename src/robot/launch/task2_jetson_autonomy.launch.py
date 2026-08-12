@@ -22,6 +22,10 @@ def generate_launch_description():
     params = PathJoinSubstitution([FindPackageShare("task2_perception"), "config", "task2_params.yaml"])
     perception = _include("task2_perception", "task2_perception.launch.py", {
         "enable_cloud_filter": "true", "enable_opponent_selector": tracking,
+        # Task 2 uses LiDAR only for other-vessel tracking and Collision
+        # Monitor safety points.  Do not start the optional buoy selector or
+        # buoy-based EKF correction pipeline.
+        "enable_buoy_selector": "false",
         "publish_self_marker": "false", "ego_odom_topic": odom,
         "motion_filter_mode": "straight_line",
     })
