@@ -220,6 +220,7 @@ def generate_launch_description():
         # Keep the joystick's button-status outputs available for debugging
         # without allowing them to contend with the alert-lamp state machine.
         remappings=[
+            ("/soft_emg", "/soft_emg_ground"),
             ("/green", "/manual_lamp/green"),
             ("/yellow", "/manual_lamp/yellow"),
             ("/red", "/manual_lamp/red"),
@@ -235,13 +236,20 @@ def generate_launch_description():
         remappings=[("joy", "/sbus/joy")],
     )
 
+    soft_emg_selector = Node(
+        package="simple_manual",
+        executable="soft_emg_selector_node",
+        name="soft_emg_selector",
+        output="screen",
+    )
+
     sbus_joy_converter = Node(
         package="simple_manual",
         executable="sbus_joy_converter_node",
         name="sbus_joy_converter",
         output="screen",
         parameters=[{"zero_axes_on_startup": sbus_zero_axes_on_startup}],
-        remappings=[("joy", "/sbus/joy")],
+        remappings=[("joy", "/sbus/joy"), ("/soft_emg", "/soft_emg_sbus")],
     )
 
     command_arbiter = Node(
@@ -710,6 +718,7 @@ def generate_launch_description():
             joy_converter,
             sbus_joy,
             sbus_joy_converter,
+            soft_emg_selector,
             command_arbiter,
             control_manager_launch,
             mission_manager_launch,

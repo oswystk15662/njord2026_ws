@@ -185,7 +185,10 @@ def test_minipc_bringup_adds_sbus_without_replacing_the_ground_link_joy_path():
     assert '"sbus_serial_port"' in source
     assert 'executable="sbus_joy_node"' in source
     assert 'executable="sbus_joy_converter_node"' in source
+    assert 'executable="soft_emg_selector_node"' in source
     assert '("joy", "/sbus/joy")' in source
+    assert '("/soft_emg", "/soft_emg_ground")' in source
+    assert 'remappings=[("joy", "/sbus/joy"), ("/soft_emg", "/soft_emg_sbus")]' in source
     assert 'executable="joy_converter_node"' in source
 
 

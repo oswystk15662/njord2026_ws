@@ -40,6 +40,14 @@ target_include_directories(sbus_joy_converter_node PUBLIC
 )
 ament_target_dependencies(sbus_joy_converter_node rclcpp sensor_msgs geometry_msgs std_msgs)
 
+add_executable(soft_emg_selector_node src/soft_emg_selector.cpp)
+target_compile_features(soft_emg_selector_node PUBLIC cxx_std_17)
+target_include_directories(soft_emg_selector_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>
+)
+ament_target_dependencies(soft_emg_selector_node rclcpp sensor_msgs std_msgs)
+
 add_executable(command_arbiter_node src/command_arbiter.cpp)
 target_compile_features(command_arbiter_node PUBLIC cxx_std_17)
 ament_target_dependencies(command_arbiter_node rclcpp geometry_msgs std_msgs)
@@ -76,6 +84,10 @@ if(BUILD_TESTING)
   target_compile_definitions(test_sbus_joy_converter PRIVATE main=sbus_joy_converter_main)
   target_include_directories(test_sbus_joy_converter PRIVATE include)
   ament_target_dependencies(test_sbus_joy_converter rclcpp sensor_msgs geometry_msgs std_msgs)
+  ament_add_gtest(test_soft_emg_selector test/test_soft_emg_selector.cpp src/soft_emg_selector.cpp)
+  target_compile_definitions(test_soft_emg_selector PRIVATE main=soft_emg_selector_main)
+  target_include_directories(test_soft_emg_selector PRIVATE include)
+  ament_target_dependencies(test_soft_emg_selector rclcpp sensor_msgs std_msgs)
 endif()
 
 install(TARGETS
@@ -83,6 +95,7 @@ install(TARGETS
   joy_converter_node
   sbus_joy_node
   sbus_joy_converter_node
+  soft_emg_selector_node
   command_arbiter_node
   ground_station_heartbeat_node
   thruster_id_test
