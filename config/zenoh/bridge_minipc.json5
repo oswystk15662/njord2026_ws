@@ -43,6 +43,7 @@
           "/mission/status", "/task/plan",
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
+          "/autonomy/ready", "/heartbeat/autonomy",
           "/waypoint1_pose", "/waypoint2_pose",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",

@@ -834,6 +834,18 @@ def test_zenoh_local_odometry_has_one_minipc_publisher():
     assert topic in jetson_allow.split("subscribers:", 1)[1]
 
 
+def test_zenoh_routes_minipc_autonomy_status_to_jetson():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+    jetson = (zenoh_dir / "bridge_jetson.json5").read_text(encoding="utf-8")
+    minipc_publishers = minipc.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    jetson_subscribers = jetson.split("subscribers:", 1)[1]
+
+    for topic in ('"/autonomy/ready"', '"/heartbeat/autonomy"'):
+        assert topic in minipc_publishers
+        assert topic in jetson_subscribers
+
+
 def test_networking_launch_starts_bridge_and_the_correct_critical_link_roles():
     source = _read_launch_source("networking.launch.py")
 
