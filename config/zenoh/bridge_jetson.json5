@@ -41,6 +41,7 @@
           "/zed2i/left/preview/q40/compressed",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/zed2i/yolo/debug_image",
+          "/zed2i/debug/detections_image",
           "/foxglove_log",
         ],
         subscribers: [
@@ -52,6 +53,7 @@
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/zed2i/yolo/debug_image",
+          "/zed2i/debug/detections_image",
           "/foxglove_log",
         ],
         service_servers: [], service_clients: [],

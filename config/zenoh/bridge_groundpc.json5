@@ -30,6 +30,7 @@
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/zed2i/left/preview/q40/compressed",
           "/zed2i/yolo/debug_image",
+          "/zed2i/debug/detections_image",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/joy/set_feedback", "/foxglove_log", "/mission/waypoint_markers",
           "/sensor/vehicle_gnss/fix/raw", "/sensor/vehicle_gnss/compass/raw",
