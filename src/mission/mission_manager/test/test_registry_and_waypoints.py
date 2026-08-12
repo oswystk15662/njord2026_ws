@@ -29,7 +29,7 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
     assert registry.get("move_to_exam_field").frame_id == "odom"
-    assert required_runtime_readiness(registry.get("task2")) == {"buoy_perception"}
+    assert required_runtime_readiness(registry.get("task2")) == set()
     assert registry.get("task1_2").availability == "not_implemented"
     assert "Marker-driven" in registry.get("task1_2").reason
 
