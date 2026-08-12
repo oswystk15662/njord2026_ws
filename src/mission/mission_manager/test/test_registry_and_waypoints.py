@@ -52,6 +52,12 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     ]
     assert [waypoint.waypoint_id for waypoint in task4.stage("normal_exit")] == ["normal_exit"]
     assert [waypoint.waypoint_id for waypoint in task4.stage("parallel_dock")] == ["parallel_dock"]
+    assert [(waypoint.competition_id, waypoint.latitude, waypoint.longitude) for waypoint in task4.waypoints
+            if waypoint.competition_id] == [
+        ("13", 63.440797, 10.423860), ("14", 63.440931, 10.423994),
+        ("15", 63.441086, 10.423729), ("16", 63.441155, 10.424123),
+        ("17", 63.441044, 10.424106),
+    ]
     assert [(waypoint.waypoint_id, waypoint.docking_motion) for waypoint in task4.waypoints
             if waypoint.docking_motion] == [
         ("14", "forward"), ("normal_dock", "forward"),
