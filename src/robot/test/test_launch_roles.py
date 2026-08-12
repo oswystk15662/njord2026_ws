@@ -267,7 +267,10 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "nav2_velocity_smoother" in task2_nav_source
     assert "nav2_lifecycle_manager" in task2_nav_source
     assert '"controller_server", "velocity_smoother", "collision_monitor"' in task2_nav_source
-    assert "/cmd_vel_nav" in task2_nav_source
+    assert '("cmd_vel", "/cmd_vel_controller")' in task2_nav_source
+    assert '("cmd_vel_smoothed", "/cmd_vel_smoothed")' in task2_nav_source
+    assert 'cmd_vel_in_topic: "/cmd_vel_smoothed"' in task2_params
+    assert 'cmd_vel_out_topic: "/cmd_vel_nav"' in task2_params
     assert "root_key=None" in task2_nav_source
     for forbidden in (
         "nav2_planner",

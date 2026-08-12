@@ -1,7 +1,8 @@
 """Task 2 final command graph on miniPC.
 
-MPPI supplies paths from Jetson; miniPC owns FollowPath, the final collision
-monitor and therefore the only /cmd_vel_nav publisher.
+MPPI supplies paths from Jetson.  The command path is strictly Controller ->
+Smoother -> Collision Monitor -> /cmd_vel_nav, so Collision Monitor is the
+only publisher of the final autonomous command.
 """
 
 import os
@@ -62,7 +63,7 @@ def generate_launch_description():
             name="velocity_smoother",
             remappings=remappings + [
                 ("cmd_vel", "/cmd_vel_controller"),
-                ("cmd_vel_smoothed", "/cmd_vel_nav"),
+                ("cmd_vel_smoothed", "/cmd_vel_smoothed"),
             ],
             **common,
         ),
