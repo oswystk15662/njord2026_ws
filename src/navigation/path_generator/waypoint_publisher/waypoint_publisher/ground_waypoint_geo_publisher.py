@@ -116,7 +116,9 @@ class GroundWaypointGeoPublisher(Node):
             label.pose.position.z = 1.0 + 0.35 * index
             label.pose.orientation.w, label.scale.z = 1.0, 0.8
             label.color.r = label.color.g = label.color.b = label.color.a = 1.0
-            label.text = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
+            order = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
+            name = str(waypoint.get("name", "")).strip()
+            label.text = f"{order} {name}" if name else order
             markers.markers.append(label)
         self.publisher.publish(markers)
 
