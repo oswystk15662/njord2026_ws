@@ -35,6 +35,7 @@
           "/task1/safety_points",
           "/task2/safety_points", "/planned_path_pruned",
           "/autonomy/ready", "/heartbeat/autonomy",
+          "/task2/buoy_pose_correction",
           "/other_ship/twist",
           "/task2/opponent_detected",
           "/waypoint1_pose", "/waypoint2_pose",

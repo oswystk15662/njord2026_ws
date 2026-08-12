@@ -87,6 +87,24 @@ opponent_selector:
     min_absolute_speed_knots: 2.0              # [kn]
     max_absolute_speed_knots: 3.0              # [kn]
 
+task2_buoy_pose_correction:
+  ros__parameters:
+    buoy_topic: "/task2/buoy_detections"
+    odom_topic: "/odometry/filtered/global"
+    output_topic: "/task2/buoy_pose_correction"
+    waypoint_start_topic: "/waypoint1_pose"
+    waypoint_end_topic: "/waypoint2_pose"
+    frame_id: "map"
+    pair_separation_m: 5.0
+    pair_separation_tolerance_m: 2.0
+    max_pair_along_error_m: 2.0
+    max_cross_track_correction_m: 2.0
+    max_yaw_correction_rad: 0.35
+    stable_samples_required: 5
+    position_stddev_m: 0.5
+    along_track_stddev_m: 20.0
+    yaw_stddev_rad: 0.12
+
 # ---------------------------------------------------------------------------
 # PCL preprocessing: compact, current-frame cloud for Task 2 only
 # ---------------------------------------------------------------------------
