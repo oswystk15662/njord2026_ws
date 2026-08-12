@@ -31,3 +31,7 @@ def test_nav2_profile_monitors_its_configured_local_odometry():
 
     assert "/odometry/filtered/local" in topics
     assert "/odometry/filtered/global" not in topics
+
+
+def test_legacy_task3_profile_has_no_unvalidated_monitors():
+    assert _load_diagnostics_module().PROFILES["task3"] == []
