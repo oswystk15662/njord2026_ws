@@ -43,7 +43,7 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["corridor_end_margin_m"] == 5.0
     assert selector["corridor_half_width_m"] == 20.0
     assert selector["corridor_ignore_left_side"] is True
-    assert selector["corridor_left_side_margin_m"] == 0.0
+    assert selector["corridor_left_side_margin_m"] == 5.0
     buoy = params["task2_buoy_selector"]["ros__parameters"]
     assert buoy["expected_lateral_offset_m"] == 2.5
     assert buoy["lateral_tolerance_m"] == 1.0

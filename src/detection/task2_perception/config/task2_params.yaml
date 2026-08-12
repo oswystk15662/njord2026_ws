@@ -95,10 +95,11 @@ opponent_selector:
     corridor_start_offset_m: 5.0
     corridor_end_margin_m: 5.0
     corridor_half_width_m: 20.0
-    # In the GPS5->6 direction, ignore the route's left half of the Task 2
-    # corridor. This remains fixed even if the vessel changes heading.
+    # In the GPS5->6 direction, retain a 5 m centre/left safety band for a
+    # vessel arriving from ahead; ignore only the outer left-side area. This
+    # remains fixed even if the vessel changes heading.
     corridor_ignore_left_side: true
-    corridor_left_side_margin_m: 0.0
+    corridor_left_side_margin_m: 5.0
 
 # ---------------------------------------------------------------------------
 # Route-side buoy selector: shared tracker -> coloured stationary buoys
