@@ -37,6 +37,7 @@ def generate_launch_description():
         parameters=[{
             "input_topic": raw_topic,
             "output_prefix": output_prefix,
+            "output_raw_topic": "/zed2i/left/image_raw",
             "width": 640,
             "height": 360,
             "max_fps": LaunchConfiguration("max_fps"),

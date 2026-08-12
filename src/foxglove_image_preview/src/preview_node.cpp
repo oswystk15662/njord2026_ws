@@ -22,6 +22,8 @@ public:
     input_topic_ = declare_parameter<std::string>("input_topic", "/zed2i/stereo/image_raw");
     output_prefix_ = declare_parameter<std::string>(
       "output_prefix", "/zed2i/left/preview");
+    output_raw_topic_ = declare_parameter<std::string>("output_raw_topic", "");
+    split_stereo_ = declare_parameter<bool>("split_stereo", true);
     width_ = declare_parameter<int>("width", 640);
     height_ = declare_parameter<int>("height", 360);
     max_fps_ = declare_parameter<double>("max_fps", 10.0);
@@ -42,6 +44,10 @@ public:
         static_cast<int>(quality),
         create_publisher<sensor_msgs::msg::CompressedImage>(topic, output_qos)});
       RCLCPP_INFO(get_logger(), "JPEG quality %ld -> %s", quality, topic.c_str());
+    }
+    if (!output_raw_topic_.empty()) {
+      raw_output_ = create_publisher<sensor_msgs::msg::Image>(
+        output_raw_topic_, rclcpp::SensorDataQoS().keep_last(1));
     }
 
     minimum_period_ = std::chrono::duration<double>(1.0 / max_fps_);
@@ -74,24 +80,40 @@ private:
         get_logger(), *get_clock(), 5000, "Unsupported encoding: %s", msg->encoding.c_str());
       return;
     }
-    if (msg->width < 2 || msg->height == 0 || msg->step < msg->width * 3U) {
+    if (msg->width < (split_stereo_ ? 2U : 1U) || msg->height == 0 ||
+      msg->step < msg->width * 3U)
+    {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 5000, "Invalid input image geometry");
       return;
     }
 
-    const int source_width = static_cast<int>(msg->width / 2U);
-    cv::Mat stereo(
+    cv::Mat input(
       static_cast<int>(msg->height), static_cast<int>(msg->width), CV_8UC3,
       const_cast<unsigned char *>(msg->data.data()), static_cast<size_t>(msg->step));
-    cv::Mat left = stereo(cv::Rect(0, 0, source_width, static_cast<int>(msg->height)));
+    cv::Mat source = input;
+    if (split_stereo_) {
+      source = input(cv::Rect(
+        0, 0, static_cast<int>(msg->width / 2U), static_cast<int>(msg->height)));
+    }
     cv::Mat resized;
-    cv::resize(left, resized, cv::Size(width_, height_), 0.0, 0.0, cv::INTER_AREA);
+    cv::resize(source, resized, cv::Size(width_, height_), 0.0, 0.0, cv::INTER_AREA);
 
     cv::Mat bgr;
     if (msg->encoding == "rgb8") {
       cv::cvtColor(resized, bgr, cv::COLOR_RGB2BGR);
     } else {
       bgr = resized;
+    }
+    if (raw_output_) {
+      sensor_msgs::msg::Image raw;
+      raw.header = msg->header;
+      raw.header.frame_id = "zed2i_left_camera_frame";
+      raw.height = static_cast<uint32_t>(bgr.rows);
+      raw.width = static_cast<uint32_t>(bgr.cols);
+      raw.encoding = "bgr8";
+      raw.step = static_cast<sensor_msgs::msg::Image::_step_type>(bgr.step);
+      raw.data.assign(bgr.datastart, bgr.dataend);
+      raw_output_->publish(std::move(raw));
     }
 
     for (const auto & output : outputs_) {
@@ -108,11 +130,14 @@ private:
 
   std::string input_topic_;
   std::string output_prefix_;
+  std::string output_raw_topic_;
+  bool split_stereo_;
   int width_;
   int height_;
   double max_fps_;
   std::vector<int64_t> qualities_;
   std::vector<Output> outputs_;
+  rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr raw_output_;
   std::chrono::duration<double> minimum_period_{0.1};
   std::chrono::steady_clock::time_point last_publish_{};
   rclcpp::Subscription<sensor_msgs::msg::Image>::SharedPtr subscription_;

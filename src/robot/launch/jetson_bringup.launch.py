@@ -131,6 +131,25 @@ def generate_launch_description():
         ])),
     )
 
+    # Keep the annotated YOLO preview low-bandwidth before Zenoh forwards it.
+    # This remains idle until a YOLO node publishes /yolo/debug_image.
+    yolo_debug_preview = Node(
+        package="foxglove_image_preview",
+        executable="preview_node",
+        name="yolo_foxglove_preview",
+        output="screen",
+        parameters=[{
+            "input_topic": "/yolo/debug_image",
+            "output_prefix": "/yolo/debug_preview",
+            "split_stereo": False,
+            "width": 640,
+            "height": 360,
+            "max_fps": 2.0,
+            "jpeg_qualities": [40],
+        }],
+        condition=IfCondition(enable_zed2i),
+    )
+
     heartbeat_launch = include_launch(
         "robot",
         ["launch", "heartbeat.launch.py"],
@@ -347,7 +366,7 @@ def generate_launch_description():
             ),
             TimerAction(
                 period=LaunchConfiguration("camera_start_delay"),
-                actions=[zed2i_launch, zed_v4l2_preview_launch],
+                actions=[zed2i_launch, zed_v4l2_preview_launch, yolo_debug_preview],
             ),
             livox_static_tf,
             zed_static_tf,

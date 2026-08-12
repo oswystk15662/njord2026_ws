@@ -925,3 +925,13 @@ def test_zenoh_routes_only_the_q40_zed_preview_to_ground():
         "/zed2i/left/preview/q90/compressed",
     ):
         assert all(forbidden not in config for config in configs.values())
+
+
+def test_zenoh_routes_the_low_rate_annotated_yolo_preview_to_minipc():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    jetson = (zenoh_dir / "bridge_jetson.json5").read_text(encoding="utf-8")
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+    topic = '"/yolo/debug_preview/q40/compressed"'
+
+    assert topic in jetson.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    assert topic in minipc.split("subscribers:", 1)[1]
