@@ -765,13 +765,15 @@ def test_verified_wired_link_is_used_for_zenoh_and_critical_link():
     jetson_bridge = (root / "config" / "zenoh" / "bridge_jetson.json5").read_text(
         encoding="utf-8"
     )
-    assert '"tcp/10.42.0.98:7447"' in ground_bridge
-    assert '"tcp/192.168.1.2:7447"' in jetson_bridge
+    assert '"tcp/10.42.0.2:7447"' in ground_bridge
+    assert '"tcp/10.42.0.2:7447"' in jetson_bridge
 
     ground = (root / "src" / "critical_link" / "config" / "ground_sender.yaml").read_text()
     vessel = (root / "src" / "critical_link" / "config" / "vessel_receiver.yaml").read_text()
-    assert '"wired_lan|192.168.1.72|192.168.1.2|45100"' in ground
-    assert '"wired_lan|192.168.1.2|45100"' in vessel
+    assert '"ops_lan|10.42.0.1|10.42.0.2|45100"' in ground
+    assert '"tailscale|100.123.47.2|100.82.157.125|45101"' in ground
+    assert '"ops_lan|10.42.0.2|45100"' in vessel
+    assert '"tailscale|100.82.157.125|45101"' in vessel
 
 
 def test_ground_zenoh_bridge_can_request_mission_manager_tasks():

@@ -5,13 +5,11 @@ critical_link_sender:
     operator_command_input_topic: /critical_link/input/operator_command
     operator_response_output_topic: /critical_link/output/operator_response
     # Format: name|Ground-PC bind IPv4|miniPC destination IPv4|UDP port
-    # Example paths after assigning static/VPN addresses:
-    # udp_paths:
-    #   - "usb_wifi|192.168.10.1|192.168.10.2|45100"
-    #   - "builtin_wifi|192.168.20.1|192.168.20.2|45101"
-    #   - "internet_vpn|10.20.0.1|10.20.0.2|45103"
+    # The Ground PC is the 10.42.0.1 gateway for the BE25/X50 ops LAN.
+    # Tailscale is an independent fallback through the phone uplink.
     udp_paths:
-      - "wired_lan|192.168.1.72|192.168.1.2|45100"
+      - "ops_lan|10.42.0.1|10.42.0.2|45100"
+      - "tailscale|100.123.47.2|100.82.157.125|45101"
     # Use a stable /dev/serial/by-id path for the Ground ESP32.
     serial_device: ""
     serial_baud: 921600
