@@ -51,7 +51,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert task1.waypoints[-1].competition_id == "4"
     assert [waypoint.waypoint_id for waypoint in task2.waypoints] == ["5", "6"]
     assert [(waypoint.latitude, waypoint.longitude) for waypoint in task2.waypoints] == [
-        (63.4408000000, 10.4233194444), (63.4404230000, 10.4229704000),
+        (63.4421024, 10.4247185), (63.4421472, 10.4243527),
     ]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["8"]

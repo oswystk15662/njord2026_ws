@@ -5,20 +5,19 @@
 task2_config:
   frame_id: "odom"
   publish_rate_hz: 2.0
-  # Trondheim integration course: GPS 5 is Task 1's GPS 1; GPS 6 is
-  # approximately 46 m south-south-west of GPS 5 (bearing 202.5 degrees).
+  # GPS 6 is approximately 19 m west-north-west of GPS 5.
   waypoints:
     - id: 5
-      latitude: 63.4408000000
-      longitude: 10.4233194444
+      latitude: 63.4421024
+      longitude: 10.4247185
       yaw: -1.9634954085
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
 
     - id: 6
-      latitude: 63.4404230000
-      longitude: 10.4229704000
+      latitude: 63.4421472
+      longitude: 10.4243527
       yaw: -1.9634954085
       type: "goal"
       name: "GPS 6 - Goal"
