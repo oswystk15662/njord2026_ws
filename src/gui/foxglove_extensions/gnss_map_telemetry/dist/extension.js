@@ -222,15 +222,16 @@ function initGnssMapTelemetry(context) {
       // receiving the vessel's map-frame MarkerArray over Zenoh.
       const position = [waypoint.pose.position.y, waypoint.pose.position.x];
       const id = String(waypoint.id);
+      const order = String(Number(waypoint.id) + 1).padStart(2, "0");
+      const name = waypoint.text || "WP";
       let waypointMarker = waypointMarkers.get(id);
       if (!waypointMarker) {
-        const order = String(Number(waypoint.id) + 1).padStart(2, "0");
         waypointMarker = L.marker(position, {
           icon: L.divIcon({
             className: "",
             iconSize: [220, 24],
             iconAnchor: [12, 12],
-            html: `<div class="waypoint-pin">${order}<span class="waypoint-pin-leader"></span><span class="waypoint-pin-label">${order} · ${waypoint.text || "WP"}</span></div>`,
+            html: `<div class="waypoint-pin">${order}<span class="waypoint-pin-leader"></span><span class="waypoint-pin-label">${order} · ${name}</span></div>`,
           }),
           interactive: false,
         });
@@ -238,6 +239,12 @@ function initGnssMapTelemetry(context) {
         waypointMarkers.set(id, waypointMarker);
       } else {
         waypointMarker.setLatLng(position);
+        waypointMarker.setIcon(L.divIcon({
+          className: "",
+          iconSize: [220, 24],
+          iconAnchor: [12, 12],
+          html: `<div class="waypoint-pin">${order}<span class="waypoint-pin-leader"></span><span class="waypoint-pin-label">${order} · ${name}</span></div>`,
+        }));
       }
     }
     const orderedWaypoints = [...waypointMarkers.entries()]

@@ -12,11 +12,13 @@ class StagedDockingExecutor(TaskExecutor):
     """Runs gate, dock, berth wait, and exit stages without process restarts."""
 
     def __init__(self, navigation, create_wait_timer: Callable[[float, Callable[[], None]], object],
-                 cancel_wait_timer: Callable[[object], None], dock_target_correction=None) -> None:
+                 cancel_wait_timer: Callable[[object], None], dock_target_correction=None,
+                 stage_succeeded=None) -> None:
         super().__init__(navigation)
         self._create_wait_timer = create_wait_timer
         self._cancel_wait_timer = cancel_wait_timer
         self._dock_target_correction = dock_target_correction
+        self._stage_succeeded = stage_succeeded
         self._route: Optional[Route] = None
         self._full_sequence = False
         self._stage_names: list[str] = []
@@ -85,10 +87,13 @@ class StagedDockingExecutor(TaskExecutor):
                 self._finish(ExecutorStatus.CANCELED, "docking task canceled")
             elif status != ExecutorStatus.SUCCEEDED:
                 self._retry_or_finish(message or "docking navigation failed")
-            elif self._needs_berth_wait():
-                self._start_wait()
             else:
-                self._advance_stage()
+                if self._stage_succeeded is not None:
+                    self._stage_succeeded(stage_name, poses)
+                if self._needs_berth_wait():
+                    self._start_wait()
+                else:
+                    self._advance_stage()
 
         self._navigation.send(poses, accepted, completed)
 

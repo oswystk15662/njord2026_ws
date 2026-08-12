@@ -36,5 +36,31 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert cluster["min_cluster_size"] == 30
     assert tracker["straight_hits_to_confirm"] == 10
     selector = params["opponent_selector"]["ros__parameters"]
+    assert selector["tracked_objects_in_map_frame"] is False
     assert selector["straight_min_hit_count"] == 10
     assert selector["straight_coast_timeout_sec"] == 2.0
+    assert selector["corridor_enabled"] is True
+    assert selector["corridor_start_offset_m"] == 5.0
+    assert selector["corridor_end_margin_m"] == 5.0
+    assert selector["corridor_half_width_m"] == 20.0
+    assert selector["corridor_ignore_left_side"] is True
+    assert selector["corridor_left_side_margin_m"] == 5.0
+    relay = params["task2_waypoint_map_frame_relay"]["ros__parameters"]
+    assert relay["waypoint1_input_topic"] == "/waypoint1_pose"
+    assert relay["waypoint1_output_topic"] == "/task2/waypoint1_pose_map"
+    assert relay["target_frame"] == "map"
+    buoy = params["task2_buoy_selector"]["ros__parameters"]
+    assert buoy["tracked_objects_in_map_frame"] is False
+    assert selector["corridor_start_topic"] == relay["waypoint1_output_topic"]
+    assert buoy["waypoint_start_topic"] == relay["waypoint1_output_topic"]
+    assert buoy["waypoint_end_topic"] == relay["waypoint2_output_topic"]
+    assert buoy["expected_lateral_offset_m"] == 2.5
+    assert buoy["lateral_tolerance_m"] == 1.5
+    assert buoy["start_margin_m"] == 0.0
+    assert buoy["end_margin_m"] == 0.0
+    assert buoy["stationary_speed_max_mps"] == 0.35
+    assert buoy["stationary_confirmation_window_sec"] == 3.0
+    assert buoy["stationary_confirmation_min_observations"] == 5
+    assert buoy["min_point_count"] == 5
+    assert buoy["max_length_m"] == 1.2
+    assert buoy["max_width_m"] == 1.2

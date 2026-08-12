@@ -173,6 +173,56 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
     return None
 
 
+def in_oriented_corridor(
+    point_xy: np.ndarray,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    start_offset_m: float,
+    end_margin_m: float,
+    half_width_m: float,
+) -> bool:
+    """Return whether a map-frame point is in the GPS5->GPS6 rectangle.
+
+    The rectangle follows the start-to-goal vector. It starts after the
+    requested offset from GPS5 and ends after the requested margin past GPS6;
+    it is independent of vessel heading.
+    """
+    start = np.asarray(start_xy, dtype=float)[:2]
+    end = np.asarray(end_xy, dtype=float)[:2]
+    point = np.asarray(point_xy, dtype=float)[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return False
+    forward = direction / length
+    relative = point - start
+    longitudinal = float(relative @ forward)
+    lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
+    return (float(start_offset_m) <= longitudinal <=
+            length + float(end_margin_m) and
+            abs(lateral) <= float(half_width_m))
+
+
+def is_left_of_oriented_line(
+    point_xy: np.ndarray,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    margin_m: float = 0.0,
+) -> bool:
+    """Return whether point is left of the directed start-to-end route line."""
+    start = np.asarray(start_xy, dtype=float)[:2]
+    end = np.asarray(end_xy, dtype=float)[:2]
+    point = np.asarray(point_xy, dtype=float)[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return False
+    forward = direction / length
+    relative = point - start
+    lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
+    return lateral > float(margin_m)
+
+
 def select_opponent(
     tracks: list[Track],
     now_sec: float,

@@ -28,7 +28,6 @@ _CONFIGS = {
     ),
 }
 
-
 def _coordinate(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return float(value)
@@ -103,14 +102,31 @@ class GroundWaypointGeoPublisher(Node):
             marker.header.frame_id, marker.header.stamp = "wgs84", stamp
             marker.ns, marker.id = "ground_waypoint_wgs84", index
             marker.type, marker.action = Marker.SPHERE, Marker.ADD
-            # This display-only contract uses x=longitude and y=latitude.
+            # The Foxglove geographic-map display uses x=longitude and y=latitude.
             marker.pose.position.x = _coordinate(waypoint["longitude"])
             marker.pose.position.y = _coordinate(waypoint["latitude"])
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 1.0
             marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.0, 0.9, 1.0, 1.0
-            marker.text = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
+            # GNSS Map Telemetry reads this field for the label beside the
+            # numbered pin on the geographic map.
+            marker.text = str(waypoint.get("name", "")).strip()
             markers.markers.append(marker)
+            label = Marker()
+            label.header.frame_id, label.header.stamp = "wgs84", stamp
+            label.ns, label.id, label.type, label.action = (
+                "ground_waypoint_order", index, Marker.TEXT_VIEW_FACING, Marker.ADD)
+            label.pose.position.x = marker.pose.position.x
+            label.pose.position.y = marker.pose.position.y
+            # Repeated GPS8 points would otherwise place 03/05/06 exactly on
+            # top of each other.  Offset only their label, not the waypoint.
+            label.pose.position.z = 1.0 + 0.35 * index
+            label.pose.orientation.w, label.scale.z = 1.0, 0.8
+            label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+            order = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
+            name = str(waypoint.get("name", "")).strip()
+            label.text = f"{order} {name}" if name else order
+            markers.markers.append(label)
         self.publisher.publish(markers)
 
 
@@ -119,6 +135,12 @@ def main():
     node = GroundWaypointGeoPublisher()
     try:
         rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
     finally:
-        node.destroy_node()
-        rclpy.shutdown()
+        try:
+            node.destroy_node()
+            if rclpy.ok():
+                rclpy.shutdown()
+        except KeyboardInterrupt:
+            pass

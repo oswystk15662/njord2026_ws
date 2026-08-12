@@ -35,8 +35,8 @@ control_policy:
   task2:
     require_ground_station: true
     require_waypoint_plan: true
-    require_collision_monitor: true
-    require_buoy_perception: true
+    require_collision_monitor: false
+    require_buoy_perception: false
     require_dynamic_gate_tf: false
 
   task3:

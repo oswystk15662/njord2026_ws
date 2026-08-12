@@ -370,7 +370,12 @@ def generate_launch_description():
             "detection_topic": "/buoy_detections_3d",
             "output_topic": "/virtual_obstacles",
             "map_frame": "odom",
+            "max_wall_length_m": 13.0,
             "max_active_wall_tracks": 4,
+            # One latest map position per recognised colour/cardinal class.
+            # A wall remains if it later leaves the camera field of view;
+            # retirement is controlled only by crossing its course plane.
+            "latest_per_class_only": True,
             "true_north_heading_topic": "/sensor/vehicle_gnss/compass/raw",
             "true_north_confirmations_required": 10,
             "wall_enable_topic": "/task1/cardinal_wall_enable",
@@ -383,6 +388,37 @@ def generate_launch_description():
         condition=IfCondition(PythonExpression([
             "'", enable_buoy_costmap, "' == 'true' and '", active_nav2_profile, "' == 'task1'"
         ])),
+    )
+
+    task4_buoy_wall_publisher = Node(
+        package="buoy_obstacle_publisher",
+        executable="cardinal_wall_publisher",
+        name="task4_buoy_wall_publisher",
+        output="screen",
+        parameters=[{
+            # This is the canonical colour + 3-D position message produced by
+            # ZED perception (with Livox fallback when ZED depth is absent).
+            "detection_topic": "/buoy_detections_3d",
+            "output_topic": "/task4/virtual_obstacles",
+            # Task4 waypoints are projected into map before execution; keep
+            # buoy transforms, heading, and wall cloud in that same frame.
+            "map_frame": "map",
+            "max_wall_length_m": 13.0,
+            "max_active_wall_tracks": 4,
+            "wall_enable_topic": "/task4/buoy_wall_enable",
+            "retirement_heading_topic": "/task4/gps14_to_gps16_heading",
+            "retire_passed_cardinal_walls_from_base_pose": True,
+            "retirement_margin_m": 1.0,
+            "retirement_confirmations_required": 5,
+            "return_confirmations_required": 5,
+            # Task4 has only red/green channel buoys, not cardinal marks.
+            "allow_cardinal_classes": False,
+            "latest_per_class_only": True,
+            # Losing sight of a buoy does not erase its wall.  It retires
+            # only when the vessel has passed its GPS14->GPS16 wall plane.
+            "track_ttl_s": 0.0,
+        }],
+        condition=IfCondition(enable_buoy_costmap),
     )
 
     back_cam_launch = include_launch(
@@ -696,8 +732,12 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "use_ekf_global",
-                default_value="false",
-                description="Enable the optional map-referenced global EKF.",
+                default_value="true",
+                description=(
+                    "Publish map->odom from the GNSS-backed global EKF. "
+                    "Task 2 perception requires this transform for its "
+                    "GPS5->GPS6 geometry."
+                ),
             ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(
@@ -731,6 +771,7 @@ def generate_launch_description():
             alert_lamp_launch,
             buoy_obstacle_launch,
             cardinal_wall_publisher,
+            task4_buoy_wall_publisher,
             back_cam_launch,
             zed2i_cpu_launch,
             zed2i_h264_ground_video_launch,

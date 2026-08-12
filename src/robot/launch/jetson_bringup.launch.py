@@ -80,6 +80,15 @@ def generate_launch_description():
         output="screen",
     )
 
+    # Keep raw LiDAR local to Jetson; only the small corrected berth poses are
+    # bridged to the miniPC Mission Manager.
+    dock_wall_correction = Node(
+        package="mission_manager",
+        executable="dock_wall_correction_node",
+        name="dock_wall_correction",
+        output="screen",
+    )
+
     mid360_launch = include_launch(
         "robot",
         ["launch", "lidar.launch.py"],

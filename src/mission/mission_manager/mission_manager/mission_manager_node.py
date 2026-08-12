@@ -253,10 +253,18 @@ class MissionManager(Node):
         self._task1_cardinal_heading_pub = self.create_publisher(
             Float64, "/task1/gps3_to_gps4_heading", _STATUS_QOS
         )
+        self._task4_buoy_wall_enable_pub = self.create_publisher(
+            Bool, "/task4/buoy_wall_enable", _STATUS_QOS
+        )
+        self._task4_buoy_wall_heading_pub = self.create_publisher(
+            Float64, "/task4/gps14_to_gps16_heading", _STATUS_QOS
+        )
         self._task1_wall_enable_after_remaining: int | None = None
         self._task1_walls_enabled = False
+        self._task4_walls_enabled = False
         self._set_task2_enabled(False)
         self._set_task1_cardinal_walls(False)
+        self._set_task4_buoy_walls(False)
         self._navigation = _RosNavigationClient(
             self, self._plan_pub, self._waypoint_markers_pub
         )
@@ -591,6 +599,7 @@ class MissionManager(Node):
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
         self._configure_task1_cardinal_walls(task, route)
+        self._configure_task4_buoy_walls(task, route)
         # Task 1's only required runtime input is the route just validated
         # above.  Publish it before requesting AUTO so AUTO admission does not
         # depend on a Nav2 goal that has not been sent yet.
@@ -792,7 +801,8 @@ class MissionManager(Node):
                            self._executor_complete(execution_id))
         elif task.executor == "staged_docking":
             executor = StagedDockingExecutor(
-                self._navigation, self._create_wait_timer, self.destroy_timer, self._dock_target_for_navigation
+                self._navigation, self._create_wait_timer, self.destroy_timer,
+                self._dock_target_for_navigation, self._on_docking_stage_succeeded,
             )
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
@@ -1003,6 +1013,34 @@ class MissionManager(Node):
         self._task1_walls_enabled = enabled
         self._task1_cardinal_wall_enable_pub.publish(Bool(data=enabled))
 
+    def _configure_task4_buoy_walls(self, task: TaskDefinition, route: Route) -> None:
+        self._set_task4_buoy_walls(False)
+        if task.task_id != "task4":
+            return
+        by_id = {waypoint.waypoint_id: waypoint for waypoint in route.waypoints}
+        gps14, gps16 = by_id.get("14_outbound"), by_id.get("16")
+        if gps14 is None or gps16 is None:
+            self.get_logger().error("Task4 route has no GPS14/GPS16; buoy walls remain disabled")
+            return
+        dx, dy = gps16.x - gps14.x, gps16.y - gps14.y
+        if dx * dx + dy * dy < 1.0e-8:
+            self.get_logger().error("Task4 GPS14 and GPS16 coincide; buoy walls remain disabled")
+            return
+        self._task4_buoy_wall_heading_pub.publish(Float64(data=math.atan2(dy, dx)))
+
+    def _on_docking_stage_succeeded(self, _stage: str, poses: Sequence[Waypoint]) -> None:
+        if self._active_task is None or self._active_task.task_id != "task4" or not poses:
+            return
+        reached_id = poses[-1].waypoint_id
+        if reached_id == "14_outbound":
+            self._set_task4_buoy_walls(True)
+        elif reached_id == "16":
+            self._set_task4_buoy_walls(False)
+
+    def _set_task4_buoy_walls(self, enabled: bool) -> None:
+        self._task4_walls_enabled = enabled
+        self._task4_buoy_wall_enable_pub.publish(Bool(data=enabled))
+
     def _activate_task_readiness(self, execution_id: str, task: TaskDefinition) -> None:
         if self._machine.is_current(execution_id):
             self._publish_task_readiness(
@@ -1062,6 +1100,7 @@ class MissionManager(Node):
         self._machine.begin_cancel(execution_id)
         self._set_task2_enabled(False)
         self._set_task1_cardinal_walls(False)
+        self._set_task4_buoy_walls(False)
         self._publish_task_readiness(False, False, "")
         self._pending_start = None
         self._pending_coordinate_projection = None
@@ -1104,6 +1143,7 @@ class MissionManager(Node):
         self._active_task = None
         self._set_task2_enabled(False)
         self._set_task1_cardinal_walls(False)
+        self._set_task4_buoy_walls(False)
         self._navigation.set_feedback_callback(None)
         self._publish_status()
         self._publish_task_readiness(False, False, "")

@@ -55,9 +55,23 @@ task2_cloud_filter:
 # ---------------------------------------------------------------------------
 # Candidate selection and absolute target velocity output
 # ---------------------------------------------------------------------------
+task2_waypoint_map_frame_relay:
+  ros__parameters:
+    # Keep the odom-frame source topics for navigation.  These map-frame
+    # copies are exclusively for Task 2 perception and global EKF geometry.
+    waypoint1_input_topic: "/waypoint1_pose"
+    waypoint2_input_topic: "/waypoint2_pose"
+    waypoint1_output_topic: "/task2/waypoint1_pose_map"
+    waypoint2_output_topic: "/task2/waypoint2_pose_map"
+    target_frame: "map"
+    transform_timeout_sec: 0.2
+
 opponent_selector:
   ros__parameters:
     tracked_objects_topic: "/tracked_objects"
+    # ship_tracker publishes object poses relative to base_link. Convert them
+    # through map<-base_link before corridor and speed gating.
+    tracked_objects_in_map_frame: false
     ego_odom_topic: "/odometry/filtered/local"
     twist_topic: "/other_ship/twist"         # map-frame, absolute [m/s]
     map_frame: "map"
@@ -86,6 +100,82 @@ opponent_selector:
     # Operator-facing speed gate. Twist output remains SI m/s.
     min_absolute_speed_knots: 2.0              # [kn]
     max_absolute_speed_knots: 3.0              # [kn]
+    # Recognition rectangle fixed in the map frame to GPS point 5 -> 6.
+    # It begins 5 m after GPS5, ends 5 m past GPS6, and is 40 m wide.
+    # task2_waypoint_pose_publisher resolves the GPS points through /fromLL.
+    corridor_enabled: true
+    corridor_start_topic: "/task2/waypoint1_pose_map" # GPS 5, map frame
+    corridor_end_topic: "/task2/waypoint2_pose_map"   # GPS 6, map frame
+    corridor_start_offset_m: 5.0
+    corridor_end_margin_m: 5.0
+    corridor_half_width_m: 20.0
+    # In the GPS5->6 direction, retain a 5 m centre/left safety band for a
+    # vessel arriving from ahead; ignore only the outer left-side area. This
+    # remains fixed even if the vessel changes heading.
+    corridor_ignore_left_side: true
+    corridor_left_side_margin_m: 5.0
+
+# ---------------------------------------------------------------------------
+# Route-side buoy selector: shared tracker -> coloured stationary buoys
+# ---------------------------------------------------------------------------
+task2_buoy_selector:
+  ros__parameters:
+    tracked_objects_topic: "/tracked_objects"
+    # Same base_link-relative tracker contract as opponent_selector.
+    tracked_objects_in_map_frame: false
+    ego_odom_topic: "/task2/ego_odom"
+    output_topic: "/task2/buoy_detections"  # njord_interfaces/BuoyDetectionArray
+    legacy_point_topic: "/buoy_detections"  # PointStamped compatibility feed
+    map_frame: "map"
+    base_frame: "base_link"
+    waypoint_start_topic: "/task2/waypoint1_pose_map" # GPS 5
+    waypoint_end_topic: "/task2/waypoint2_pose_map"   # GPS 6
+    # GPS5->6 only: 3 m-wide bands centred 2.5 m from the route: red is
+    # left 1.0..4.0 m and green is right 1.0..4.0 m.
+    expected_lateral_offset_m: 2.5
+    lateral_tolerance_m: 1.5
+    start_margin_m: 0.0
+    end_margin_m: 0.0
+    confirmed_only: true
+    min_hit_count: 5
+    max_distance_m: 40.0
+    # Matches the former camera + LiDAR fusion PCL detector's minimum
+    # cluster population. That detector used no 3-D bounding-box gate.
+    min_point_count: 5
+    # The former buoy costmap used physical radius 0.45 m (diameter 0.9 m).
+    # Permit 0.3 m of LiDAR clustering error, while rejecting vessel-sized
+    # stationary tracks. Use the same vertical extent gate as other ships.
+    min_length_m: 0.0
+    max_length_m: 1.2
+    min_width_m: 0.0
+    max_width_m: 1.2
+    min_height_m: 0.15
+    max_height_m: 1.5
+    stale_timeout_sec: 2.0
+    stationary_speed_max_mps: 0.35
+    # After tracker confirmation, require enough stationary observations in
+    # this rolling window; they do not need to be consecutive.
+    stationary_confirmation_window_sec: 3.0
+    stationary_confirmation_min_observations: 5
+    publish_rate_hz: 5.0
+
+task2_buoy_pose_correction:
+  ros__parameters:
+    buoy_topic: "/task2/buoy_detections"
+    odom_topic: "/odometry/filtered/global"
+    output_topic: "/task2/buoy_pose_correction"
+    waypoint_start_topic: "/task2/waypoint1_pose_map"
+    waypoint_end_topic: "/task2/waypoint2_pose_map"
+    frame_id: "map"
+    pair_separation_m: 5.0
+    pair_separation_tolerance_m: 2.0
+    max_pair_along_error_m: 2.0
+    max_cross_track_correction_m: 2.0
+    max_yaw_correction_rad: 0.35
+    stable_samples_required: 5
+    position_stddev_m: 0.5
+    along_track_stddev_m: 20.0
+    yaw_stddev_rad: 0.12
 
 # ---------------------------------------------------------------------------
 # PCL preprocessing: compact, current-frame cloud for Task 2 only

@@ -25,11 +25,14 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    params_file = PathJoinSubstitution(
+    default_params_file = PathJoinSubstitution(
         [FindPackageShare("task2_perception"), "config",
          "task2_params.yaml"])
 
     return LaunchDescription([
+        DeclareLaunchArgument(
+            "params_file", default_value=default_params_file,
+            description="Single Task 2 perception-tuning YAML."),
         DeclareLaunchArgument(
             "enable_cloud_filter", default_value="true",
             description="Start task2_cloud_filter (/livox/lidar -> "
@@ -38,6 +41,12 @@ def generate_launch_description():
             "enable_opponent_selector", default_value="true",
             description="Start opponent_selector (/tracked_objects -> "
                         "/other_ship/twist + opponent TF)"),
+        DeclareLaunchArgument(
+            "enable_buoy_selector", default_value="false",
+            description="Start optional Task 2 route-side buoy selector"),
+        DeclareLaunchArgument(
+            "publish_buoy_detection_markers", default_value="false",
+            description="Publish MarkerArray boxes for buoy-selected clusters"),
         DeclareLaunchArgument(
             "publish_self_marker", default_value="true",
             description="Publish the visualization-only self-vessel Marker"),
@@ -53,11 +62,25 @@ def generate_launch_description():
 
         Node(
             package="task2_perception",
+            executable="task2_waypoint_map_frame_relay_node",
+            name="task2_waypoint_map_frame_relay",
+            output="screen",
+            parameters=[
+                LaunchConfiguration("params_file"),
+                {
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "target_frame": LaunchConfiguration("map_frame"),
+                },
+            ],
+        ),
+
+        Node(
+            package="task2_perception",
             executable="task2_cloud_filter_node",
             name="task2_cloud_filter",
             output="screen",
             parameters=[
-                params_file,
+                LaunchConfiguration("params_file"),
                 {
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "publish_self_marker": LaunchConfiguration(
@@ -72,7 +95,7 @@ def generate_launch_description():
             name="opponent_selector",
             output="screen",
             parameters=[
-                params_file,
+                LaunchConfiguration("params_file"),
                 {
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
@@ -83,5 +106,31 @@ def generate_launch_description():
             ],
             condition=IfCondition(
                 LaunchConfiguration("enable_opponent_selector")),
+        ),
+        Node(
+            package="task2_perception",
+            executable="task2_buoy_selector_node",
+            name="task2_buoy_selector",
+            output="screen",
+            parameters=[
+                LaunchConfiguration("params_file"),
+                {
+                    "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
+                    "map_frame": LaunchConfiguration("map_frame"),
+                    "base_frame": LaunchConfiguration("base_frame"),
+                    "publish_detection_markers": LaunchConfiguration(
+                        "publish_buoy_detection_markers"),
+                },
+            ],
+            condition=IfCondition(LaunchConfiguration("enable_buoy_selector")),
+        ),
+        Node(
+            package="task2_perception",
+            executable="buoy_pose_correction_node",
+            name="task2_buoy_pose_correction",
+            output="screen",
+            parameters=[LaunchConfiguration("params_file")],
+            condition=IfCondition(LaunchConfiguration("enable_buoy_selector")),
         ),
     ])
