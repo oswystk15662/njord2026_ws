@@ -104,8 +104,20 @@ class GroundWaypointGeoPublisher(Node):
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 1.0
             marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.0, 0.9, 1.0, 1.0
-            marker.text = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
             markers.markers.append(marker)
+            label = Marker()
+            label.header.frame_id, label.header.stamp = "wgs84", stamp
+            label.ns, label.id, label.type, label.action = (
+                "ground_waypoint_order", index, Marker.TEXT_VIEW_FACING, Marker.ADD)
+            label.pose.position.x = marker.pose.position.x
+            label.pose.position.y = marker.pose.position.y
+            # Repeated GPS8 points would otherwise place 03/05/06 exactly on
+            # top of each other.  Offset only their label, not the waypoint.
+            label.pose.position.z = 1.0 + 0.35 * index
+            label.pose.orientation.w, label.scale.z = 1.0, 0.8
+            label.color.r = label.color.g = label.color.b = label.color.a = 1.0
+            label.text = str(waypoint.get("competition_id", waypoint.get("id", index + 1)))
+            markers.markers.append(label)
         self.publisher.publish(markers)
 
 
