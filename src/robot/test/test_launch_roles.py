@@ -294,13 +294,13 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert "/task2/safety_points" not in task2_params
 
 
-def test_task2_cruise_target_is_two_knots_with_two_point_two_knot_headroom():
+def test_task2_cruise_target_is_two_point_two_knots_with_two_point_four_knot_headroom():
     params = yaml.safe_load((Path(_LAUNCH_DIR).parents[0] / "config" /
                              "nav2_params_task2_humble.yaml").read_text())
     follow_path = params["controller_server"]["ros__parameters"]["FollowPath"]
     smoother = params["velocity_smoother"]["ros__parameters"]
-    assert follow_path["desired_linear_vel"] == pytest.approx(2.0 * 1852.0 / 3600.0)
-    assert smoother["max_velocity"][0] == pytest.approx(2.2 * 1852.0 / 3600.0)
+    assert follow_path["desired_linear_vel"] == pytest.approx(2.2 * 1852.0 / 3600.0)
+    assert smoother["max_velocity"][0] == pytest.approx(2.4 * 1852.0 / 3600.0)
     assert smoother["max_accel"][0] == follow_path["max_linear_accel"]
 
 
