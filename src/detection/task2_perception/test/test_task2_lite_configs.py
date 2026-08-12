@@ -52,8 +52,8 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["corridor_start_topic"] == relay["waypoint1_output_topic"]
     assert buoy["waypoint_start_topic"] == relay["waypoint1_output_topic"]
     assert buoy["waypoint_end_topic"] == relay["waypoint2_output_topic"]
-    assert buoy["expected_lateral_offset_m"] == 3.5
-    assert buoy["lateral_tolerance_m"] == 3.5
+    assert buoy["expected_lateral_offset_m"] == 1.5
+    assert buoy["lateral_tolerance_m"] == 1.5
     assert buoy["start_margin_m"] == 0.0
     assert buoy["end_margin_m"] == 0.0
     assert buoy["stationary_speed_max_mps"] == 0.35

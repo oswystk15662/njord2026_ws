@@ -126,9 +126,9 @@ task2_buoy_selector:
     base_frame: "base_link"
     waypoint_start_topic: "/task2/waypoint1_pose_map" # GPS 5
     waypoint_end_topic: "/task2/waypoint2_pose_map"   # GPS 6
-    # GPS5->6 only: red is 0..7 m to the left, green is 0..7 m to the right.
-    expected_lateral_offset_m: 3.5
-    lateral_tolerance_m: 3.5
+    # GPS5->6 only: red is 0..3 m to the left, green is 0..3 m to the right.
+    expected_lateral_offset_m: 1.5
+    lateral_tolerance_m: 1.5
     start_margin_m: 0.0
     end_margin_m: 0.0
     confirmed_only: true
