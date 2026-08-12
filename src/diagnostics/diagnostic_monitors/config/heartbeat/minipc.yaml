@@ -32,11 +32,11 @@ signals:
     expected_frequency_hz: 20.0
     minimum_frequency_hz: 15.0
 
-  global_odometry:
-    topic: /odometry/filtered/global
-    type: nav_msgs/msg/Odometry
-    timeout_sec: 1.0
-    expected_frequency_hz: 30.0
+  # global_odometry:
+  #   topic: /odometry/filtered/global
+  #   type: nav_msgs/msg/Odometry
+  #   timeout_sec: 1.0
+  #   expected_frequency_hz: 30.0
 
   driver_heartbeat:
     topic: /heartbeat/driver

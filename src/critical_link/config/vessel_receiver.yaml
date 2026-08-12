@@ -7,6 +7,8 @@ critical_link_receiver:
     # Format: name|miniPC bind IPv4 or hostname|UDP port
     udp_paths:
       - "wired_lan|192.168.1.2|45100"
+      - "usb|192.168.1.2|45100"
+      
     # Use a stable /dev/serial/by-id path for the vessel ESP32.
     serial_device: ""
     serial_baud: 921600

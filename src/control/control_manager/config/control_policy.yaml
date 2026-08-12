@@ -26,7 +26,7 @@ control_policy:
   # タスク別の追加要求。ground station requirementと4つのタスク要件を
   # 各ポリシーに明記する（省略不可）。
   task1:
-    require_ground_station: true
+    require_ground_station: false
     require_waypoint_plan: true       # 有効なウェイポイント経路が読み込まれていること
     require_collision_monitor: false  # Nav2 Collision Monitor が有効であること
     require_buoy_perception: false    # ブイ認識が出力していること

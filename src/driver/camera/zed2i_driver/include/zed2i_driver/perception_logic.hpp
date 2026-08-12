@@ -5,6 +5,7 @@
 #include <array>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace zed2i_driver
@@ -33,6 +34,10 @@ bool point_in_central_bbox_roi(
   float u, float v, const Detection2D & detection, float ratio);
 
 bool valid_position(const std::array<float, 3> & position);
+
+// Compact label for the ground-video overlay. Z and L identify the final
+// position source; ? means that this detection has no usable range.
+std::string detection_range_label(const PositionedDetection & detection);
 
 struct WallPoint { float x; float y; float z; };
 

@@ -56,6 +56,49 @@ __device__ std::uint8_t clamp_byte(int value)
   return static_cast<std::uint8_t>(max(0, min(255, value)));
 }
 
+// 3x5 glyphs keep the range readable after the 360px ground-video resize.
+__device__ unsigned short glyph(char value)
+{
+  switch (value) {
+    case '0': return 0b111101101101111;
+    case '1': return 0b010110010010111;
+    case '2': return 0b111001111100111;
+    case '3': return 0b111001111001111;
+    case '4': return 0b101101111001001;
+    case '5': return 0b111100111001111;
+    case '6': return 0b111100111101111;
+    case '7': return 0b111001010010010;
+    case '8': return 0b111101111101111;
+    case '9': return 0b111101111001111;
+    case 'Z': return 0b111001010100111;
+    case 'L': return 0b100100100100111;
+    case 'm': return 0b000110101101101;
+    case '.': return 0b000000000000010;
+    case '?': return 0b111001010000010;
+    default: return 0;
+  }
+}
+
+__device__ bool label_pixel(
+  const GroundVideoBox & box, int x, int y,
+  int destination_width, int destination_height, int source_width, int source_height)
+{
+  const int x1 = static_cast<int>(box.x1 * destination_width / source_width);
+  const int y1 = static_cast<int>(box.y1 * destination_height / source_height);
+  const int label_y = max(0, y1 - 12);
+  if (y < label_y || y >= label_y + 10 || x < x1) {
+    return false;
+  }
+  const int character = (x - x1) / 8;
+  if (character >= 15 || box.label[character] == '\0') {
+    return false;
+  }
+  const int glyph_x = ((x - x1) % 8) / 2;
+  const int glyph_y = (y - label_y) / 2;
+  return glyph_x < 3 && glyph_y < 5 &&
+         (glyph(box.label[character]) & (1 << (14 - glyph_y * 3 - glyph_x))) != 0;
+}
+
 __device__ void load_resized_bgr(
   const std::uint8_t * source, std::size_t source_pitch, int source_width, int source_height,
   int destination_width, int destination_height, int x, int y, int & b, int & g, int & r)
@@ -90,8 +133,10 @@ __global__ void resize_bgra_to_i420(
     const int x2 = static_cast<int>(box.x2 * destination_width / source_width);
     const int y1 = static_cast<int>(box.y1 * destination_height / source_height);
     const int y2 = static_cast<int>(box.y2 * destination_height / source_height);
-    if (x >= x1 && x <= x2 && y >= y1 && y <= y2 &&
-      (x - x1 < 2 || x2 - x < 2 || y - y1 < 2 || y2 - y < 2))
+    if ((x >= x1 && x <= x2 && y >= y1 && y <= y2 &&
+      (x - x1 < 2 || x2 - x < 2 || y - y1 < 2 || y2 - y < 2)) ||
+      label_pixel(
+        box, x, y, destination_width, destination_height, source_width, source_height))
     {
       b = 0;
       g = 255;

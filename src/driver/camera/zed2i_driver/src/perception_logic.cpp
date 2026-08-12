@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <limits>
 
 namespace zed2i_driver
@@ -97,6 +98,23 @@ bool valid_position(const std::array<float, 3> & position)
   return std::all_of(position.begin(), position.end(), [](float value) {
     return std::isfinite(value);
   });
+}
+
+std::string detection_range_label(const PositionedDetection & detection)
+{
+  const char source = detection.source == PositionSource::kZedDepth ? 'Z' :
+    detection.source == PositionSource::kLidarFused ? 'L' : '?';
+  if (source == '?' || !valid_position(detection.position_base)) {
+    return "?";
+  }
+  const float range = std::hypot(
+    detection.position_base[0], detection.position_base[1], detection.position_base[2]);
+  if (!std::isfinite(range)) {
+    return "?";
+  }
+  char label[16];
+  std::snprintf(label, sizeof(label), "%c %.1fm", source, static_cast<double>(range));
+  return label;
 }
 
 bool point_in_central_bbox_roi(float u, float v, const Detection2D & detection, float ratio)
