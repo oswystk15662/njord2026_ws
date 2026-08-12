@@ -166,17 +166,20 @@ def test_minipc_bringup_uses_canonical_control_manager_by_default():
     assert 'package="twist_mux"' not in source
 
 
-def test_task2_uses_fixed_odom_without_global_ekf():
+def test_task2_uses_fixed_odom_with_global_map_transform_available():
     minipc = _read_launch_source("minipc_bringup.launch.py")
     localization = _read_launch_source("localization.launch.py")
     jetson = _read_launch_source("jetson_bringup.launch.py")
+    jetson_task2 = _read_launch_source("task2_jetson_autonomy.launch.py")
     task2 = _read_launch_source("task2_mission_adapter.launch.py")
 
-    assert '"use_ekf_global",\n                default_value="false"' in minipc
+    assert '"use_ekf_global",\n                default_value="true"' in minipc
     assert '"world_frame": "odom"' in localization
     assert '("odometry/filtered", "odometry/filtered/local")' in localization
     assert '"frame_id": "odom"' in task2
-    assert '"own_odom_topic": "/odometry/filtered/local"' in jetson
+    assert '"task2_jetson_autonomy.launch.py"' in jetson
+    assert 'odom = "/task2/ego_odom"' in jetson_task2
+    assert '"own_odom_topic": odom' in jetson_task2
 
 
 def test_minipc_bringup_adds_sbus_without_replacing_the_ground_link_joy_path():
@@ -287,6 +290,12 @@ def test_task2_cruise_target_is_two_knots_with_two_point_two_knot_headroom():
     assert follow_path["desired_linear_vel"] == pytest.approx(2.0 * 1852.0 / 3600.0)
     assert smoother["max_velocity"][0] == pytest.approx(2.2 * 1852.0 / 3600.0)
     assert smoother["max_accel"][0] == follow_path["max_linear_accel"]
+
+
+def test_minipc_global_ekf_defaults_on_for_task2_map_geometry():
+    source = _read_launch_source("minipc_bringup.launch.py")
+    assert '"use_ekf_global",\n                default_value="true"' in source
+    assert '"enable_global_ekf": use_ekf_global' in source
 
 
 def test_legacy_task2_launch_uses_the_follow_path_only_graph():

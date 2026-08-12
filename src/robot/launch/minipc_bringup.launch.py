@@ -688,8 +688,12 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "use_ekf_global",
-                default_value="false",
-                description="Enable the optional map-referenced global EKF.",
+                default_value="true",
+                description=(
+                    "Publish map->odom from the GNSS-backed global EKF. "
+                    "Task 2 perception requires this transform for its "
+                    "GPS5->GPS6 geometry."
+                ),
             ),
             DeclareLaunchArgument("thruster_config_file", default_value=default_thruster_config),
             DeclareLaunchArgument(

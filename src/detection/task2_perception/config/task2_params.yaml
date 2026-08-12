@@ -69,6 +69,9 @@ task2_waypoint_map_frame_relay:
 opponent_selector:
   ros__parameters:
     tracked_objects_topic: "/tracked_objects"
+    # ship_tracker publishes object poses relative to base_link. Convert them
+    # through map<-base_link before corridor and speed gating.
+    tracked_objects_in_map_frame: false
     ego_odom_topic: "/odometry/filtered/local"
     twist_topic: "/other_ship/twist"         # map-frame, absolute [m/s]
     map_frame: "map"
@@ -118,7 +121,8 @@ opponent_selector:
 task2_buoy_selector:
   ros__parameters:
     tracked_objects_topic: "/tracked_objects"
-    tracked_objects_in_map_frame: true
+    # Same base_link-relative tracker contract as opponent_selector.
+    tracked_objects_in_map_frame: false
     ego_odom_topic: "/task2/ego_odom"
     output_topic: "/task2/buoy_detections"  # njord_interfaces/BuoyDetectionArray
     legacy_point_topic: "/buoy_detections"  # PointStamped compatibility feed
