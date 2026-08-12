@@ -1,6 +1,7 @@
 """Publish the selected local waypoint YAML as geographic display markers."""
 
 from pathlib import Path
+from math import cos, radians, sin, sqrt
 import re
 
 from ament_index_python.packages import get_package_share_directory
@@ -25,6 +26,14 @@ _CONFIGS = {
     ),
 }
 
+# Keep this independent ground-display node usable without the vehicle's
+# navsat_transform /fromLL service.  These are the canonical map datum values
+# used by localization; map is ENU (+x East, +y North).
+_MAP_DATUM_LATITUDE = 63.442096626145
+_MAP_DATUM_LONGITUDE = 10.424757352535376
+_WGS84_SEMI_MAJOR = 6378137.0
+_WGS84_ECCENTRICITY_SQ = 6.69437999014e-3
+
 
 def _coordinate(value):
     if isinstance(value, (int, float)) and not isinstance(value, bool):
@@ -37,6 +46,27 @@ def _coordinate(value):
         raise ValueError(f"invalid coordinate {value!r}")
     coordinate = degrees + minutes / 60.0 + seconds / 3600.0
     return -coordinate if match.group(4) in "SW" else coordinate
+
+
+def _wgs84_to_map(latitude, longitude):
+    """Convert WGS84 latitude/longitude to ENU metres in the map frame."""
+    def ecef(lat_deg, lon_deg):
+        lat, lon = radians(lat_deg), radians(lon_deg)
+        radius = _WGS84_SEMI_MAJOR / sqrt(
+            1.0 - _WGS84_ECCENTRICITY_SQ * sin(lat) ** 2)
+        return (
+            radius * cos(lat) * cos(lon),
+            radius * cos(lat) * sin(lon),
+            radius * (1.0 - _WGS84_ECCENTRICITY_SQ) * sin(lat),
+        )
+
+    x, y, z = ecef(latitude, longitude)
+    x0, y0, z0 = ecef(_MAP_DATUM_LATITUDE, _MAP_DATUM_LONGITUDE)
+    dx, dy, dz = x - x0, y - y0, z - z0
+    lat0, lon0 = radians(_MAP_DATUM_LATITUDE), radians(_MAP_DATUM_LONGITUDE)
+    east = -sin(lon0) * dx + cos(lon0) * dy
+    north = -sin(lat0) * cos(lon0) * dx - sin(lat0) * sin(lon0) * dy + cos(lat0) * dz
+    return east, north
 
 
 class GroundWaypointGeoPublisher(Node):
@@ -95,18 +125,17 @@ class GroundWaypointGeoPublisher(Node):
             if "latitude" not in waypoint or "longitude" not in waypoint:
                 continue
             marker = Marker()
-            marker.header.frame_id, marker.header.stamp = "wgs84", stamp
+            marker.header.frame_id, marker.header.stamp = "map", stamp
             marker.ns, marker.id = "ground_waypoint_wgs84", index
             marker.type, marker.action = Marker.SPHERE, Marker.ADD
-            # This display-only contract uses x=longitude and y=latitude.
-            marker.pose.position.x = _coordinate(waypoint["longitude"])
-            marker.pose.position.y = _coordinate(waypoint["latitude"])
+            marker.pose.position.x, marker.pose.position.y = _wgs84_to_map(
+                _coordinate(waypoint["latitude"]), _coordinate(waypoint["longitude"]))
             marker.pose.orientation.w = 1.0
             marker.scale.x = marker.scale.y = marker.scale.z = 1.0
             marker.color.r, marker.color.g, marker.color.b, marker.color.a = 0.0, 0.9, 1.0, 1.0
             markers.markers.append(marker)
             label = Marker()
-            label.header.frame_id, label.header.stamp = "wgs84", stamp
+            label.header.frame_id, label.header.stamp = "map", stamp
             label.ns, label.id, label.type, label.action = (
                 "ground_waypoint_order", index, Marker.TEXT_VIEW_FACING, Marker.ADD)
             label.pose.position.x = marker.pose.position.x
