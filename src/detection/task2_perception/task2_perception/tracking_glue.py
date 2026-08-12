@@ -173,6 +173,52 @@ def _passes_gates(track: Track, now_sec: float, params: SelectionParams) -> str 
     return None
 
 
+def in_oriented_corridor(
+    point_xy: np.ndarray,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    start_offset_m: float,
+    end_margin_m: float,
+    half_width_m: float,
+) -> bool:
+    """Return whether a map-frame point is in the GPS5->GPS6 rectangle.
+
+    The rectangle follows the start-to-goal vector. It starts after the
+    requested offset from GPS5 and ends after the requested margin past GPS6;
+    it is independent of vessel heading.
+    """
+    start = np.asarray(start_xy, dtype=float)[:2]
+    end = np.asarray(end_xy, dtype=float)[:2]
+    point = np.asarray(point_xy, dtype=float)[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return False
+    forward = direction / length
+    relative = point - start
+    longitudinal = float(relative @ forward)
+    lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
+    return (float(start_offset_m) <= longitudinal <=
+            length + float(end_margin_m) and
+            abs(lateral) <= float(half_width_m))
+
+
+def in_bearing_sector(
+    position_base: np.ndarray,
+    min_bearing_deg: float,
+    max_bearing_deg: float,
+) -> bool:
+    """Return whether a base_link-relative point lies in an angular sector.
+
+    REP-103 base_link uses +x forward and +y left, so a target on starboard
+    has a negative bearing.  The configured bounds are inclusive and use the
+    ordinary, non-wrapping interval [-180, 180] degrees.
+    """
+    point = np.asarray(position_base, dtype=float)
+    bearing_deg = float(np.degrees(np.arctan2(point[1], point[0])))
+    return float(min_bearing_deg) <= bearing_deg <= float(max_bearing_deg)
+
+
 def select_opponent(
     tracks: list[Track],
     now_sec: float,

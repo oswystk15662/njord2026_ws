@@ -132,6 +132,28 @@ class TestStaleAndGates:
         assert [track.object_id for track in ranked] == [3]
         assert [reason for _, reason in params.rejected] == ["too narrow", "too wide"]
 
+    def test_oriented_corridor_is_fixed_to_gps5_to_gps6_line(self):
+        # GPS5->6 is east here; the vessel's own heading is irrelevant.
+        start = np.array([10.0, 20.0])
+        end = np.array([30.0, 20.0])
+        assert tracking_glue.in_oriented_corridor(
+            np.array([15.0, 40.0]), start, end, 5.0, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([14.9, 20.0]), start, end, 5.0, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([35.1, 20.0]), start, end, 5.0, 5.0, 20.0)
+        assert not tracking_glue.in_oriented_corridor(
+            np.array([20.0, 40.1]), start, end, 5.0, 5.0, 20.0)
+
+    def test_bearing_sector_keeps_forward_and_starboard_not_port(self):
+        # REP-103 base_link has +x forward and +y to port.
+        assert tracking_glue.in_bearing_sector(
+            np.array([10.0, -10.0, 0.0]), -90.0, 20.0)
+        assert tracking_glue.in_bearing_sector(
+            np.array([10.0, 3.0, 0.0]), -90.0, 20.0)
+        assert not tracking_glue.in_bearing_sector(
+            np.array([10.0, 5.0, 0.0]), -90.0, 20.0)
+
     def test_straight_line_confidence_gate(self):
         short_history = make_track(
             object_id=1, hit_count=8, velocity_stddev_mps=0.10)

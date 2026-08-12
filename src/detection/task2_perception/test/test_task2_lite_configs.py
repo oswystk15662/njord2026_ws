@@ -38,3 +38,19 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["straight_min_hit_count"] == 10
     assert selector["straight_coast_timeout_sec"] == 2.0
+    assert selector["corridor_enabled"] is True
+    assert selector["corridor_start_offset_m"] == 5.0
+    assert selector["corridor_end_margin_m"] == 5.0
+    assert selector["corridor_half_width_m"] == 20.0
+    assert selector["bearing_sector_enabled"] is True
+    assert selector["bearing_sector_min_deg"] == -90.0
+    assert selector["bearing_sector_max_deg"] == 20.0
+    buoy = params["task2_buoy_selector"]["ros__parameters"]
+    assert buoy["expected_lateral_offset_m"] == 2.5
+    assert buoy["lateral_tolerance_m"] == 1.0
+    assert buoy["stationary_speed_max_mps"] == 0.35
+    assert buoy["stationary_confirmation_window_sec"] == 3.0
+    assert buoy["stationary_confirmation_min_observations"] == 5
+    assert buoy["min_point_count"] == 5
+    assert buoy["max_length_m"] == 1.2
+    assert buoy["max_width_m"] == 1.2
