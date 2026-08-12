@@ -68,6 +68,12 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   kp_surge_ = this->declare_parameter<double>("control.p.surge", 1.0);
   kp_sway_ = this->declare_parameter<double>("control.p.sway", 1.0);
   kp_yaw_ = this->declare_parameter<double>("control.p.yaw", 1.0);
+  ki_surge_ = this->declare_parameter<double>("control.i.surge", 0.0);
+  ki_sway_ = this->declare_parameter<double>("control.i.sway", 0.0);
+  ki_yaw_ = this->declare_parameter<double>("control.i.yaw", 0.0);
+  kd_surge_ = this->declare_parameter<double>("control.d.surge", 0.0);
+  kd_sway_ = this->declare_parameter<double>("control.d.sway", 0.0);
+  kd_yaw_ = this->declare_parameter<double>("control.d.yaw", 0.0);
   max_surge_wrench_ = std::max(
     1.0, this->declare_parameter<double>("control.max_surge_wrench", 1.0));
   max_sway_wrench_ = std::max(
@@ -220,12 +226,13 @@ void ThrusterDriverNode::controlTimerCallback()
 
   if (cmd_timeout || (feedback_timeout && stop_on_feedback_timeout_)) {
     publishCommands(std::vector<double>(thrusters_.size(), 0.0));
+    resetPid();
     have_prev_meas_ = false;
     prev_wrench_ = {0.0, 0.0, 0.0};
     return;
   }
 
-  const std::vector<double> wrench = computeWrench(dt);
+  const std::vector<double> wrench = computeWrench(dt, use_velocity_feedback_ && !feedback_timeout);
   std::vector<double> allocation_wrench = wrench;
   for (std::size_t i = 0; i < allocation_wrench.size(); ++i) {
     allocation_wrench[i] *= allocation_wrench_sign_[i];
@@ -238,6 +245,13 @@ void ThrusterDriverNode::controlTimerCallback()
 
   publishCommands(commands);
   prev_wrench_ = wrench;
+}
+
+void ThrusterDriverNode::resetPid()
+{
+  pid_surge_.reset();
+  pid_sway_.reset();
+  pid_yaw_.reset();
 }
 
 void ThrusterDriverNode::loadThrusterConfigs()
@@ -348,16 +362,25 @@ void ThrusterDriverNode::validateThrusterConfigs() const
   }
 }
 
-std::vector<double> ThrusterDriverNode::computeWrench(double dt)
+std::vector<double> ThrusterDriverNode::computeWrench(double dt, bool velocity_feedback_available)
 {
   const double ref_surge = clamp(latest_cmd_.linear.x, -max_linear_x_, max_linear_x_);
   const double ref_sway = clamp(latest_cmd_.linear.y, -max_linear_y_, max_linear_y_);
   const double ref_yaw = clamp(latest_cmd_.angular.z, -max_angular_z_, max_angular_z_);
 
-  std::vector<double> wrench = {
-    kp_surge_ * (ref_surge - meas_surge_),
-    kp_sway_ * (ref_sway - meas_sway_),
-    kp_yaw_ * (ref_yaw - meas_yaw_)};
+  const std::vector<double> error = {
+    ref_surge - meas_surge_, ref_sway - meas_sway_, ref_yaw - meas_yaw_};
+  std::vector<double> wrench;
+  if (velocity_feedback_available) {
+    wrench = {
+      pidStep(kp_surge_, ki_surge_, kd_surge_, error[0], dt, max_surge_wrench_, pid_surge_),
+      pidStep(kp_sway_, ki_sway_, kd_sway_, error[1], dt, max_sway_wrench_, pid_sway_),
+      pidStep(kp_yaw_, ki_yaw_, kd_yaw_, error[2], dt, max_yaw_wrench_, pid_yaw_)};
+  } else {
+    resetPid();
+    wrench = {
+      kp_surge_ * error[0], kp_sway_ * error[1], kp_yaw_ * error[2]};
+  }
 
   if (dob_enable_ && have_prev_meas_) {
     const std::vector<double> meas = {meas_surge_, meas_sway_, meas_yaw_};

@@ -8,6 +8,8 @@
 #include <std_msgs/msg/int16_multi_array.hpp>
 #include <std_msgs/msg/float32_multi_array.hpp>
 
+#include "thruster_driver/pid.hpp"
+
 #include <string>
 #include <vector>
 
@@ -41,12 +43,13 @@ private:
   void dutyArrayCallback(const std_msgs::msg::Int16MultiArray::SharedPtr msg);
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg);
   void controlTimerCallback();
+  void resetPid();
 
   void loadThrusterConfigs();
   void loadThrusterPosesFromUrdf(const std::string & robot_description);
   void validateThrusterConfigs() const;
 
-  std::vector<double> computeWrench(double dt);
+  std::vector<double> computeWrench(double dt, bool velocity_feedback_available);
   std::vector<double> allocateWrench(const std::vector<double> & wrench) const;
   double applyStaticMap(double value, const ThrusterConfig & thruster) const;
   double applyDeadzone(double value, double deadzone) const;
@@ -87,6 +90,12 @@ private:
   double kp_surge_{1.0};
   double kp_sway_{1.0};
   double kp_yaw_{1.0};
+  double ki_surge_{0.0};
+  double ki_sway_{0.0};
+  double ki_yaw_{0.0};
+  double kd_surge_{0.0};
+  double kd_sway_{0.0};
+  double kd_yaw_{0.0};
   double max_surge_wrench_{1.0};
   double max_sway_wrench_{1.0};
   double max_yaw_wrench_{1.0};
@@ -120,6 +129,10 @@ private:
   double prev_meas_yaw_{0.0};
   bool have_prev_meas_{false};
   bool have_feedback_{false};
+
+  PidAxisState pid_surge_;
+  PidAxisState pid_sway_;
+  PidAxisState pid_yaw_;
 
   std::vector<double> prev_wrench_{0.0, 0.0, 0.0};
   std::vector<double> dob_hat_{0.0, 0.0, 0.0};

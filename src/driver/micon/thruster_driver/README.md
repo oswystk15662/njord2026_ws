@@ -18,7 +18,7 @@
 - CAN や per-thruster ROS topic への出力は持ちません。
 - URDFはスラスタの固定poseだけを持ち、推力方向・反転・ゲインはconfigで切替えます。
 - スラスタ別の出力補正は `static_map.thrusters` で設定します。
-- `control.dob.enable` でP+DOBとP-onlyを切替できます。
+- `control.dob.enable` でPID+DOBとPID-onlyを切替できます。
 - 起動時、cmd timeout、feedback timeout時は 0N を publish します。
 
 ## 信号の流れ (cmd_vel モード)
@@ -26,7 +26,7 @@
 ```
 cmd_vel (Twist)
   └─ input_scaling で目標速度に clamp
-      └─ P 制御 (+ 任意で DOB) → wrench [surge, sway, yaw] (N, N, N·m)
+      └─ PID 制御 (+ 任意で DOB) → wrench [surge, sway, yaw] (N, N, N·m)
           └─ control.max_*_wrench で wrench を clamp
               └─ allocation (最小二乗) → 各スラスタの正規化指令 [-1, 1]
                   └─ static_map (deadzone / gain / offset)
@@ -76,8 +76,10 @@ BlueRobotics T200 @16V の最大推力 **≈51.5N** です。
 | `input_scaling.max_angular_z` | rad/s | `cmd_vel.angular.z` を clamp する上限 (yaw 目標角速度) |
 | `control.rate_hz` | Hz | 制御ループ (control timer) の周期 |
 | `control.feedback_timeout_sec` | s | odometry フィードバックが途切れたと判定するまでの時間 |
-| `control.stop_on_feedback_timeout` | bool | feedback timeout 時に 0N を出すか (false なら P 制御を継続) |
-| `control.p.surge` / `sway` / `yaw` | N/(m/s), N·m/(rad/s) | 速度誤差に対する P ゲイン。wrench = P × (目標 − 実測) |
+| `control.stop_on_feedback_timeout` | bool | feedback timeout 時に 0N を出すか。false なら I/D を止め、P 制御を継続 |
+| `control.p.surge` / `sway` / `yaw` | N/(m/s), N·m/(rad/s) | 速度誤差に対する P ゲイン |
+| `control.i.surge` / `sway` / `yaw` | N/m, N·m/rad | 速度フィードバック時の誤差積分に対する I ゲイン。wrench 飽和中は積分しない |
+| `control.d.surge` / `sway` / `yaw` | N/(m/s²), N·m/(rad/s²) | 速度フィードバック時の誤差微分に対する D ゲイン |
 | `control.max_surge_wrench` | N | surge 方向 wrench の clamp 上限 |
 | `control.max_sway_wrench` | N | sway 方向 wrench の clamp 上限 |
 | `control.max_yaw_wrench` | N·m | yaw 方向 wrench (トルク) の clamp 上限 |

@@ -53,6 +53,8 @@ if(BUILD_TESTING)
   find_package(ament_cmake_gtest REQUIRED)
   ament_add_gtest(test_allocation test/test_allocation.cpp)
   target_link_libraries(test_allocation thruster_allocation)
+  ament_add_gtest(test_pid test/test_pid.cpp)
+  target_include_directories(test_pid PRIVATE include)
 endif()
 
 ament_export_include_directories(include)

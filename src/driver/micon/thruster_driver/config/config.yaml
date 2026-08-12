@@ -18,6 +18,14 @@ thruster_driver_node:
         surge: 28.29
         sway: 28.29
         yaw: 12.17
+      i:
+        surge: 0.0
+        sway: 0.0
+        yaw: 0.0
+      d:
+        surge: 0.0
+        sway: 0.0
+        yaw: 0.0
       # Wrench is clamped to +/-max_{surge,sway,yaw}_wrench instead of +/-1 so
       # stick/button-driven manual commands can reach a usable thrust; tuned so
       # manual_control.launch.py's default full-scale stick/button input
