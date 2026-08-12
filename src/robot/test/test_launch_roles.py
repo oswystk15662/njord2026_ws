@@ -214,8 +214,12 @@ def test_task3_requires_goal_heading_alignment(filename):
     assert checker["plugin"] == "robot::SelectiveHeadingGoalChecker"
     assert checker["yaw_goal_tolerance"] == pytest.approx(0.35)
     assert checker["position_only_xy_goal_tolerance"] == pytest.approx(1.5)
-    assert checker["heading_required_goal_xs"] == []
-    assert checker["heading_required_goal_ys"] == []
+    if filename.endswith("jazzy.yaml"):
+        assert checker["heading_required_goal_xs"] == []
+        assert checker["heading_required_goal_ys"] == []
+    else:
+        assert "heading_required_goal_xs" not in checker
+        assert "heading_required_goal_ys" not in checker
     assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
 
 
@@ -231,7 +235,8 @@ def test_task3_uses_its_relaxed_waypoint_behavior_tree():
                 "navigate_through_poses_task3_w_replanning_and_recovery.xml").read_text()
 
     assert "navigate_through_poses_task3_w_replanning_and_recovery.xml" in source
-    assert 'RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="1.5"' in task3_bt
+    assert ('RemovePassedGoals input_goals="{goals}" output_goals="{goals}" '
+            'radius="1.5" global_frame="odom"') in task3_bt
 
 
 def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():

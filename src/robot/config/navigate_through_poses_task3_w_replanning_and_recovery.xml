@@ -6,7 +6,7 @@
           <RecoveryNode number_of_retries="1" name="ComputePathThroughPoses">
             <Sequence name="ComputeAndSmoothPath">
               <!-- Outside-dock Task 3 waypoints are intentionally passable. -->
-              <RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="1.5"/>
+              <RemovePassedGoals input_goals="{goals}" output_goals="{goals}" radius="1.5" global_frame="odom"/>
               <ComputePathThroughPoses goals="{goals}" path="{path}" planner_id="GridBased"/>
               <SmoothPath unsmoothed_path="{path}" smoothed_path="{path}" smoother_id="natural_cubic_spline"/>
             </Sequence>
