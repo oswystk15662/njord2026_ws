@@ -100,7 +100,7 @@ controller_server:
       yaw_goal_tolerance: 0.35
       # Mission Manager fills these with projected GPS8/berth1 or
       # GPS11/berth2 map coordinates before it sends a Task 3 route.
-      heading_required_goal_tolerance: 0.2
+      heading_required_goal_tolerance: 1.0
 
 # ─── PLANNER ─────────────────────────────────────────────────────────────────
 # ThetaStarPlanner: holonomic planner that generates straight-line paths

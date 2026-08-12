@@ -18,6 +18,7 @@
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>std_srvs</depend>
+  <depend>tf2_ros</depend>
   <depend>visualization_msgs</depend>
   <depend>waypoint_transformer</depend>
   <depend>launch</depend>

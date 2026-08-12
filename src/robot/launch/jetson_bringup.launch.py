@@ -73,6 +73,12 @@ def generate_launch_description():
     enable_task1_safety_points = LaunchConfiguration("enable_task1_safety_points")
     enable_task1_default_buoy_roi = LaunchConfiguration("enable_task1_default_buoy_roi")
     enable_task2_autonomy = LaunchConfiguration("enable_task2_autonomy")
+    dock_wall_correction = Node(
+        package="mission_manager",
+        executable="dock_wall_correction_node",
+        name="dock_wall_correction",
+        output="screen",
+    )
 
     mid360_launch = include_launch(
         "robot",
@@ -371,7 +377,7 @@ def generate_launch_description():
             ),
             TimerAction(
                 period=LaunchConfiguration("lidar_start_delay"),
-                actions=[mid360_launch],
+                actions=[mid360_launch, dock_wall_correction],
             ),
             TimerAction(
                 period=LaunchConfiguration("camera_start_delay"),

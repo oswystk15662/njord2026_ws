@@ -12,10 +12,11 @@ class StagedDockingExecutor(TaskExecutor):
     """Runs gate, dock, berth wait, and exit stages without process restarts."""
 
     def __init__(self, navigation, create_wait_timer: Callable[[float, Callable[[], None]], object],
-                 cancel_wait_timer: Callable[[object], None]) -> None:
+                 cancel_wait_timer: Callable[[object], None], dock_target_correction=None) -> None:
         super().__init__(navigation)
         self._create_wait_timer = create_wait_timer
         self._cancel_wait_timer = cancel_wait_timer
+        self._dock_target_correction = dock_target_correction
         self._route: Optional[Route] = None
         self._full_sequence = False
         self._stage_names: list[str] = []
@@ -31,8 +32,10 @@ class StagedDockingExecutor(TaskExecutor):
         self._route = route
         self._full_sequence = full_sequence
         stage_set = route.full_sequence_stages if full_sequence else route.stages
-        self._stage_names = [name for name in ("stage_1_gate", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5")
-                             if stage_set.get(name)]
+        configured_order = route.constraints.get("stage_order")
+        self._stage_names = [name for name in configured_order if stage_set.get(name)] if isinstance(configured_order, list) else [
+            name for name in ("stage_1_gate", "stage_1", "stage_2", "stage_3", "stage_4", "stage_5") if stage_set.get(name)
+        ]
         self._stage_index = 0
         self._retry_count = 0
         self._berth_wait_count = 0
@@ -63,6 +66,8 @@ class StagedDockingExecutor(TaskExecutor):
             return
         stage_name = self._stage_names[self._stage_index]
         poses = self._route.stage(stage_name, full_sequence=self._full_sequence)
+        if self._dock_target_correction is not None and poses and poses[-1].waypoint_type == "dock":
+            poses = (*poses[:-1], self._dock_target_correction(poses[-1]))
         progress = self._stage_index / len(self._stage_names)
         self._report(stage_name, progress, f"sending docking {stage_name}")
         expected_id = self.execution_id

@@ -220,7 +220,7 @@ def test_task3_requires_goal_heading_alignment(filename):
     else:
         assert "heading_required_goal_xs" not in checker
         assert "heading_required_goal_ys" not in checker
-    assert checker["heading_required_goal_tolerance"] == pytest.approx(0.2)
+    assert checker["heading_required_goal_tolerance"] == pytest.approx(1.0)
 
 
 def test_task1_pass_through_state_is_scoped_to_each_goal():

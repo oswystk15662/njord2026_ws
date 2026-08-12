@@ -25,8 +25,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task3_2").runnable
     assert registry.get("task3_2").nav2_profile == "task3"
     assert registry.get("task4").runnable
-    assert registry.get("task4").executor == "waypoint_sequence"
-    assert registry.get("task4").nav2_profile == "task1"
+    assert registry.get("task4").executor == "staged_docking"
+    assert registry.get("task4").nav2_profile == "task3"
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"
@@ -48,17 +48,17 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert task1.frame_id == task3.frame_id == task3_2.frame_id == "odom"
     assert task4.frame_id == "map"
     assert [waypoint.competition_id for waypoint in task4.waypoints if waypoint.competition_id] == [
-        "1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"
+        "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"
     ]
-    assert task4.waypoints[-1].latitude == pytest.approx(63.4407694444)
-    assert task4.waypoints[-1].longitude == pytest.approx(10.4237833333)
+    assert task4.waypoints[-1].latitude == pytest.approx(63.4409890500)
+    assert task4.waypoints[-1].longitude == pytest.approx(10.4241208500)
     assert len(task4.projection_points()) == len(task4.waypoints)
     displayed = [
         str(waypoint["competition_id"])
         for waypoint in load_yaml(WAYPOINT_ROOT / "config/task4_waypoints.yaml")["task4_config"]["waypoints"]
         if waypoint.get("display", True)
     ]
-    assert displayed == ["1", "1.1", "1.2", "1.3", "1.4", "2", "3", "3.1", "3.2", "3.3", "4"]
+    assert displayed == ["01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12"]
     assert len(task1.projection_points()) == len(task1.waypoints)
     assert task1.waypoints[6].competition_id == "3"
     assert task1.waypoints[-1].competition_id == "4"

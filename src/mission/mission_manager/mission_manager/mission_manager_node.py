@@ -264,6 +264,14 @@ class MissionManager(Node):
         self._task3_goal_checker_client = self.create_client(
             SetParameters, "/controller_server/set_parameters"
         )
+        self._dock_nominal_pub = {
+            berth: self.create_publisher(PoseStamped, f"/docking/{berth}_nominal", _STATUS_QOS)
+            for berth in ("berth1", "berth2")
+        }
+        self._dock_corrections: dict[str, PoseStamped] = {}
+        for berth in self._dock_nominal_pub:
+            self.create_subscription(PoseStamped, f"/docking/{berth}_corrected",
+                                     lambda message, berth=berth: self._on_dock_correction(berth, message), 10)
         self._control_sub = self.create_subscription(
             ControlState, "/control/state", self._on_control_state, _STATUS_QOS,
             callback_group=self._cb_group,
@@ -574,6 +582,11 @@ class MissionManager(Node):
 
     def _finish_configure_route(self, decision, task: TaskDefinition, route: Route, request: StartRequest):
         """Finish setup after any YAML GPS coordinates are expressed in map."""
+        if task.executor == "staged_docking":
+            self._dock_corrections.clear()
+            for waypoint in route.waypoints:
+                if waypoint.waypoint_id in self._dock_nominal_pub:
+                    self._publish_dock_nominal(waypoint)
         self._active_route = route
         self._active_task = task
         self._navigation.set_frame_id(route.frame_id)
@@ -779,7 +792,7 @@ class MissionManager(Node):
                            self._executor_complete(execution_id))
         elif task.executor == "staged_docking":
             executor = StagedDockingExecutor(
-                self._navigation, self._create_wait_timer, self.destroy_timer
+                self._navigation, self._create_wait_timer, self.destroy_timer, self._dock_target_for_navigation
             )
             executor.start(execution_id, self._active_route, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
@@ -801,6 +814,39 @@ class MissionManager(Node):
             executor.start(execution_id, self._feedback_update(execution_id),
                            self._executor_complete(execution_id))
         self._active_executor = executor
+
+    def _on_dock_correction(self, berth: str, message: PoseStamped) -> None:
+        if message.header.frame_id == "map":
+            self._dock_corrections[berth] = message
+
+    def _dock_target_for_navigation(self, waypoint: Waypoint) -> Waypoint:
+        publisher = self._dock_nominal_pub.get(waypoint.waypoint_id)
+        if publisher is None:
+            return waypoint
+        self._publish_dock_nominal(waypoint)
+        correction = self._dock_corrections.get(waypoint.waypoint_id)
+        if correction is None:
+            return waypoint
+        now = self.get_clock().now().nanoseconds
+        stamp = correction.header.stamp
+        age_ns = now - (stamp.sec * 1_000_000_000 + stamp.nanosec)
+        dx, dy = correction.pose.position.x - waypoint.x, correction.pose.position.y - waypoint.y
+        if age_ns < 0 or age_ns > 2_000_000_000 or dx * dx + dy * dy > 1.0 ** 2:
+            return waypoint
+        yaw = math.atan2(2.0 * correction.pose.orientation.w * correction.pose.orientation.z,
+                         1.0 - 2.0 * correction.pose.orientation.z ** 2)
+        if abs(math.atan2(math.sin(yaw - waypoint.yaw), math.cos(yaw - waypoint.yaw))) > 0.35:
+            return waypoint
+        self.get_logger().info(f"using LiDAR berth correction for {waypoint.waypoint_id}: dx={dx:.2f}m dy={dy:.2f}m")
+        return replace(waypoint, x=correction.pose.position.x, y=correction.pose.position.y, yaw=yaw)
+
+    def _publish_dock_nominal(self, waypoint: Waypoint) -> None:
+        nominal = PoseStamped()
+        nominal.header.frame_id = "map"
+        nominal.header.stamp = self.get_clock().now().to_msg()
+        nominal.pose.position.x, nominal.pose.position.y = waypoint.x, waypoint.y
+        nominal.pose.orientation.z, nominal.pose.orientation.w = math.sin(waypoint.yaw / 2.0), math.cos(waypoint.yaw / 2.0)
+        self._dock_nominal_pub[waypoint.waypoint_id].publish(nominal)
 
     def _switch_task4_profile(self, execution_id: str, profile: str, complete) -> None:
         """Switch Task 4 profiles while its executor owns the next Nav2 goal."""
