@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import math
+import time
 from copy import deepcopy
 
 import rclpy
@@ -7,6 +8,7 @@ from rclpy.node import Node
 from rclpy.action import ActionClient
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
+from geometry_msgs.msg import PoseStamped
 from nav_msgs.msg import Path
 from nav2_msgs.action import FollowPath
 from action_msgs.msg import GoalStatus
@@ -29,7 +31,10 @@ class FollowPathClientNode(Node):
         self.declare_parameter("enable_replanning", True)
         self.declare_parameter("enabled_topic", "/mission/task2/enabled")
         self.declare_parameter("mission_gate_required", False)
+        self.declare_parameter("startup_hold_sec", 0.0)
         self.declare_parameter("goal_reached_topic", "/mission/task2/goal_reached")
+        self.declare_parameter("final_goal_pose_topic", "/waypoint2_pose")
+        self.declare_parameter("final_goal_endpoint_tolerance_m", 1.0)
 
         # goal active中にFollowPath goalを投げ直す最短間隔。
         # 短すぎるとcontroller_serverがabortしやすい。
@@ -45,10 +50,19 @@ class FollowPathClientNode(Node):
         self.mission_gate_required = bool(
             self.get_parameter("mission_gate_required").value
         )
+        self.startup_hold_sec = float(
+            self.get_parameter("startup_hold_sec").value
+        )
+        if self.startup_hold_sec < 0.0:
+            raise ValueError("startup_hold_sec must be non-negative")
         self.active_replan_interval_s = float(
             self.get_parameter("active_replan_interval_s").value
         )
         self.goal_reached_topic = str(self.get_parameter("goal_reached_topic").value)
+        self.final_goal_pose_topic = str(self.get_parameter("final_goal_pose_topic").value)
+        self.final_goal_endpoint_tolerance_m = float(
+            self.get_parameter("final_goal_endpoint_tolerance_m").value
+        )
 
         self.latest_path = None
         self.last_sent_path = None
@@ -58,6 +72,8 @@ class FollowPathClientNode(Node):
         self.last_goal_send_time = None
         self.goal_completed = False
         self.goal_generation = 0
+        self.final_goal_pose = None
+        self.startup_hold_until = None
 
         status_qos = QoSProfile(
             depth=1, reliability=ReliabilityPolicy.RELIABLE,
@@ -74,6 +90,9 @@ class FollowPathClientNode(Node):
         )
         self.enabled_sub = self.create_subscription(
             Bool, self.enabled_topic, self.enabled_callback, 10
+        )
+        self.final_goal_sub = self.create_subscription(
+            PoseStamped, self.final_goal_pose_topic, self.final_goal_callback, 10
         )
 
         self.action_client = ActionClient(
@@ -95,7 +114,16 @@ class FollowPathClientNode(Node):
             f"Mission gate: {'required' if self.mission_gate_required else 'disabled'} "
             f"({self.enabled_topic})"
         )
+        if self.mission_gate_required and self.startup_hold_sec > 0.0:
+            self.get_logger().info(
+                f"Task 2 startup hold: {self.startup_hold_sec:.1f}s "
+                "with no autonomous propulsion"
+            )
         self.get_logger().info(f"active interval: {self.active_replan_interval_s}")
+        self.get_logger().info(
+            f"Task 2 final goal: {self.final_goal_pose_topic} "
+            f"(endpoint tolerance {self.final_goal_endpoint_tolerance_m:.2f} m)"
+        )
 
     def path_callback(self, msg: Path):
         if len(msg.poses) < 2:
@@ -103,6 +131,9 @@ class FollowPathClientNode(Node):
             return
 
         self.latest_path = deepcopy(msg)
+
+    def final_goal_callback(self, msg: PoseStamped):
+        self.final_goal_pose = deepcopy(msg)
 
     def enabled_callback(self, msg: Bool):
         if not self.mission_gate_required:
@@ -113,6 +144,7 @@ class FollowPathClientNode(Node):
         self.goal_completed = False
         self.goal_reached_pub.publish(Bool(data=False))
         if not self.enabled:
+            self.startup_hold_until = None
             self.goal_generation += 1
             self.latest_path = None
             if self.goal_handle is not None:
@@ -121,7 +153,15 @@ class FollowPathClientNode(Node):
             self.goal_handle = None
             self.get_logger().info("Task 2 Mission gate disabled; canceled FollowPath goal")
         else:
-            self.get_logger().info("Task 2 Mission gate enabled")
+            self.startup_hold_until = (
+                time.monotonic() + self.startup_hold_sec
+                if self.startup_hold_sec > 0.0 else None
+            )
+            self.get_logger().info(
+                "Task 2 Mission gate enabled; "
+                + (f"holding autonomous propulsion for {self.startup_hold_sec:.1f}s"
+                   if self.startup_hold_until is not None else "ready to send FollowPath goals")
+            )
 
     def path_changed_enough(self, path_a: Path, path_b: Path) -> bool:
         if path_a is None or path_b is None:
@@ -150,6 +190,19 @@ class FollowPathClientNode(Node):
     def timer_callback(self):
         if not self.enabled or self.goal_completed or self.latest_path is None:
             return
+
+        if self.startup_hold_until is not None:
+            remaining = self.startup_hold_until - time.monotonic()
+            if remaining > 0.0:
+                self.get_logger().info(
+                    f"Task 2 buoy-observation hold: {remaining:.1f}s remaining",
+                    throttle_duration_sec=1.0,
+                )
+                return
+            self.startup_hold_until = None
+            self.get_logger().info(
+                "Task 2 buoy-observation hold complete; enabling FollowPath goals"
+            )
 
         if not self.action_client.wait_for_server(timeout_sec=0.0):
             self.get_logger().warn(
@@ -247,12 +300,27 @@ class FollowPathClientNode(Node):
         self.goal_active = False
         self.goal_handle = None
         if self.enabled and status == GoalStatus.STATUS_SUCCEEDED:
-            # This is the exact Nav2 FollowPath goal-checker success used for
-            # normal waypoint completion.  Mission Manager consumes it as the
-            # Task 2 completion event.
+            if not self._path_ends_at_final_goal():
+                # MPPI publishes a rolling horizon while avoiding an obstacle.
+                # Completing such an intermediate FollowPath must not end Task2
+                # or remove its Mission gate before GPS6 is reached.
+                self.get_logger().info(
+                    "FollowPath reached an intermediate MPPI horizon; "
+                    "waiting for a path terminating at Task2 GPS6"
+                )
+                return
             self.goal_completed = True
             self.goal_reached_pub.publish(Bool(data=True))
             self.get_logger().info("Task 2 goal reached; reported to Mission Manager")
+
+    def _path_ends_at_final_goal(self) -> bool:
+        if self.last_sent_path is None or not self.last_sent_path.poses or self.final_goal_pose is None:
+            return False
+        endpoint = self.last_sent_path.poses[-1].pose.position
+        goal = self.final_goal_pose.pose.position
+        return math.hypot(endpoint.x - goal.x, endpoint.y - goal.y) <= (
+            self.final_goal_endpoint_tolerance_m
+        )
 
 
 def main(args=None):
