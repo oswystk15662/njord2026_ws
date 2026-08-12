@@ -28,6 +28,7 @@
           "/odom", "/tf", "/tf_static", "/mission/status", "/task/plan",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
+          "/zed2i/left/preview/q40/compressed",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",
           "/joy/set_feedback", "/foxglove_log", "/mission/waypoint_markers",
           "/sensor/vehicle_gnss/fix/raw", "/sensor/vehicle_gnss/compass/raw",
