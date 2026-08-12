@@ -37,6 +37,9 @@ def launch_setup(context, *args, **kwargs):
                         {
                             "enable_gpu_perception": LaunchConfiguration("enable_gpu_perception"),
                             "engine_path": LaunchConfiguration("engine_path"),
+                            "enable_vessel_perception": LaunchConfiguration("enable_vessel_perception"),
+                            "vessel_engine_path": LaunchConfiguration("vessel_engine_path"),
+                            "vessel_confidence_threshold": LaunchConfiguration("vessel_confidence_threshold"),
                             "publish_debug_detections": LaunchConfiguration("publish_debug_detections"),
                             "camera_resolution": LaunchConfiguration("camera_resolution"),
                             "framerate": LaunchConfiguration("framerate"),
@@ -81,6 +84,15 @@ def generate_launch_description():
             DeclareLaunchArgument("params_file", default_value=default_params_file),
             DeclareLaunchArgument("enable_gpu_perception", default_value="false"),
             DeclareLaunchArgument("engine_path", default_value=""),
+            DeclareLaunchArgument(
+                "enable_vessel_perception", default_value="false",
+                description="Run the optional YOLO-World boat TensorRT engine on the same ZED GPU image.",
+            ),
+            DeclareLaunchArgument(
+                "vessel_engine_path", default_value="",
+                description="TensorRT engine exported from YOLO-World with classes=[boat] and NMS enabled.",
+            ),
+            DeclareLaunchArgument("vessel_confidence_threshold", default_value="0.25"),
             DeclareLaunchArgument(
                 "publish_debug_detections",
                 default_value="false",

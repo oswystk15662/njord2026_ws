@@ -56,6 +56,7 @@ struct TensorRtDetector::Impl
   size_t output_bytes{};
   int output_count{};
   bool channels_first{};
+  bool raw_yolo_world_output{};
   float threshold{};
   int max_detections{};
   std::vector<float> host_output;
@@ -89,23 +90,26 @@ struct TensorRtDetector::Impl
       throw std::runtime_error("only FP32 input is currently supported by the CUDA preprocessor");
     }
     const auto output_shape = engine->getTensorShape(output_name);
-    if (output_shape.nbDims != 3 || output_shape.d[0] != 1 || (output_shape.d[1] != 6 && output_shape.d[2] != 6)) {
-      throw std::runtime_error("output must be [1,N,6] or [1,6,N]");
+    if (output_shape.nbDims != 3 || output_shape.d[0] != 1 ||
+      ((output_shape.d[1] != 6 && output_shape.d[2] != 6) &&
+      (output_shape.d[1] != 5 && output_shape.d[2] != 5))) {
+      throw std::runtime_error("output must be [1,N,6], [1,6,N], [1,N,5], or [1,5,N]");
     }
-    channels_first = output_shape.d[1] == 6;
+    raw_yolo_world_output = output_shape.d[1] == 5 || output_shape.d[2] == 5;
+    channels_first = output_shape.d[1] == (raw_yolo_world_output ? 5 : 6);
     output_count = channels_first ? output_shape.d[2] : output_shape.d[1];
     if (output_count <= 0 || engine->getTensorDataType(output_name) != nvinfer1::DataType::kFLOAT) {
       throw std::runtime_error("output must be fixed-size FP32");
     }
     input_bytes = 3U * 640U * 640U * sizeof(float);
-    output_bytes = static_cast<size_t>(output_count) * 6U * sizeof(float);
+    output_bytes = static_cast<size_t>(output_count) * (raw_yolo_world_output ? 5U : 6U) * sizeof(float);
     if (cudaMalloc(&input, input_bytes) != cudaSuccess || cudaMalloc(&output, output_bytes) != cudaSuccess) {
       throw std::runtime_error("CUDA buffer allocation failed");
     }
     context.reset(engine->createExecutionContext());
     if (!context) throw std::runtime_error("TensorRT execution context creation failed");
     context->setTensorAddress(input_name, input); context->setTensorAddress(output_name, output);
-    host_output.resize(static_cast<size_t>(output_count) * 6U);
+    host_output.resize(static_cast<size_t>(output_count) * (raw_yolo_world_output ? 5U : 6U));
   }
 
   ~Impl() { cudaFree(input); cudaFree(output); }
@@ -131,6 +135,10 @@ std::vector<Detection2D> TensorRtDetector::infer(
   if (cudaMemcpyAsync(impl_->host_output.data(), impl_->output, impl_->output_bytes,
     cudaMemcpyDeviceToHost, stream) != cudaSuccess) throw std::runtime_error("TensorRT output copy failed");
   if (cudaStreamSynchronize(stream) != cudaSuccess) throw std::runtime_error("CUDA stream synchronization failed");
+  if (impl_->raw_yolo_world_output) {
+    return decode_yolo_world_raw_detections(impl_->host_output, impl_->output_count, impl_->channels_first,
+      impl_->threshold, impl_->letterbox, impl_->max_detections);
+  }
   return decode_detections(impl_->host_output, impl_->output_count, impl_->channels_first,
     impl_->threshold, impl_->letterbox, impl_->max_detections);
 }
