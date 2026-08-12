@@ -27,6 +27,10 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task4").runnable
     assert registry.get("task4").executor == "staged_docking"
     assert registry.get("task4").nav2_profile == "task3"
+    # Task4's walls are advisory after GPS14; the camera must not block task
+    # startup before it can reach the buoy lane.
+    assert registry.get("task4").features["buoy_perception"] is False
+    assert registry.get("task4").features["task4_buoy_walls"] is True
     assert registry.get("return_home").runnable
     assert registry.get("move_to_exam_field").runnable
     assert registry.get("move_to_exam_field").executor == "waypoint_sequence"

@@ -69,7 +69,9 @@ tasks:
     frame_id: map
     nav2_profile: task3
     control_policy: task1
-    features: {cardinal_walls: false, buoy_perception: false}
+    # Buoy walls are advisory after GPS14.  Do not block Task4 startup when
+    # the camera has not yet produced a detection.
+    features: {cardinal_walls: false, buoy_perception: false, task4_buoy_walls: true}
   return_home:
     display_name: Ground-link failsafe return home
     availability: experimental

@@ -11,6 +11,7 @@ import rclpy
 from rclpy.duration import Duration
 from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
+from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from std_msgs.msg import Bool
@@ -26,6 +27,11 @@ from buoy_obstacle_publisher.cardinal_wall_geometry import (
 
 
 WALL_CLASSES = set(CARDINAL_DIRECTIONS) | {BuoyDetection.CLASS_GREEN, BuoyDetection.CLASS_RED}
+_GATE_QOS = QoSProfile(
+    depth=1,
+    reliability=ReliabilityPolicy.RELIABLE,
+    durability=DurabilityPolicy.TRANSIENT_LOCAL,
+)
 CLASS_LABELS = {
     BuoyDetection.CLASS_GREEN: 'GREEN / STARBOARD',
     BuoyDetection.CLASS_RED: 'RED / PORT',
@@ -79,6 +85,12 @@ class CardinalWallPublisher(Node):
         self.declare_parameter('retire_passed_cardinal_walls_from_base_pose', False)
         self.declare_parameter('retirement_heading_topic', '')
         self.declare_parameter('wall_enable_topic', '')
+        self.declare_parameter('allow_cardinal_classes', True)
+        # Task4 treats red and green as the currently observed channel pair:
+        # replace a same-colour position with the newest observation and
+        # remove it entirely when the camera no longer sees it.
+        self.declare_parameter('latest_per_class_only', False)
+        self.declare_parameter('track_ttl_s', 0.0)
         # Simulation-only ground-truth preview. It is visualization-only and
         # is deliberately never included in /virtual_obstacles.
         self.declare_parameter('preview_buoy_positions', '[]')
@@ -109,6 +121,9 @@ class CardinalWallPublisher(Node):
             1, int(self.get_parameter('return_confirmations_required').value))
         self.retire_passed_cardinal_walls_from_base_pose = self.get_parameter(
             'retire_passed_cardinal_walls_from_base_pose').value
+        self.allow_cardinal_classes = bool(self.get_parameter('allow_cardinal_classes').value)
+        self.latest_per_class_only = bool(self.get_parameter('latest_per_class_only').value)
+        self.track_ttl_s = max(0.0, float(self.get_parameter('track_ttl_s').value))
         self.tracks = []
         # DELETEALL is safe only once on node startup, to remove stale
         # markers from an older publisher.  Per-cycle deletion makes
@@ -141,10 +156,10 @@ class CardinalWallPublisher(Node):
         if retirement_topic:
             self.create_subscription(PointStamped, retirement_topic, self._on_retirement_frontier, 10)
         if wall_enable_topic:
-            self.create_subscription(Bool, wall_enable_topic, self._on_wall_enable, 10)
+            self.create_subscription(Bool, wall_enable_topic, self._on_wall_enable, _GATE_QOS)
         heading_topic = self.get_parameter('retirement_heading_topic').value
         if heading_topic:
-            self.create_subscription(Float64, heading_topic, self._on_retirement_heading, 10)
+            self.create_subscription(Float64, heading_topic, self._on_retirement_heading, _GATE_QOS)
         if true_north_topic:
             self.create_subscription(PoseWithCovarianceStamped, true_north_topic, self._on_true_north_heading, 10)
         rate = max(0.2, float(self.get_parameter('publish_rate_hz').value))
@@ -177,6 +192,9 @@ class CardinalWallPublisher(Node):
         for detection in msg.detections:
             if detection.class_id not in WALL_CLASSES:
                 continue
+            if (not self.allow_cardinal_classes and
+                    detection.class_id in CARDINAL_DIRECTIONS):
+                continue
             if detection.position_source == BuoyDetection.POSITION_NONE:
                 continue
             if not math.isfinite(detection.position.x) or not math.isfinite(detection.position.y):
@@ -202,17 +220,17 @@ class CardinalWallPublisher(Node):
             self._record_detection(mapped.point.x, mapped.point.y, detection.class_id)
 
     def _on_wall_enable(self, msg):
-        """Gate planning walls by the Task1 GPS3 completion signal."""
+        """Gate planning walls from the Mission Manager's reached-stage signal."""
         if msg.data and not self.walls_enabled:
             self.walls_enabled = True
-            self.get_logger().info('GPS3 reached: enabling confirmed buoy virtual walls')
+            self.get_logger().info('Reached wall gate: enabling confirmed buoy virtual walls')
         elif not msg.data and self.walls_enabled:
             # A new Mission Manager execution starts with false.  Do not let
             # confirmed positions from a previous run become obstacles in the
-            # next run before its GPS3 gate is crossed.
+            # next run before its gate is crossed.
             self.walls_enabled = False
             self.tracks.clear()
-            self.get_logger().info('Task1 wall gate reset: cleared prior virtual-wall tracks')
+            self.get_logger().info('Wall gate reset: cleared prior virtual-wall tracks')
 
     def _on_retirement_heading(self, msg):
         """Accept the map-frame GPS3->4 heading calculated from route points."""
@@ -282,6 +300,28 @@ class CardinalWallPublisher(Node):
             # Cardinal N/E/S/W sides depend on true north.  Red/green walls
             # use the GPS3->GPS4 route heading and remain independent.
             return
+        observed_ns = self.get_clock().now().nanoseconds
+        if self.latest_per_class_only:
+            # A channel buoy has no persistent ID in BuoyDetectionArray.  For
+            # Task4, the safe interpretation is therefore one current track
+            # per colour, always placed at its most recent camera observation.
+            same_class = [track for track in self.tracks if track.get('candidate') == class_id
+                          or track.get('class_id') == class_id]
+            if same_class:
+                nearest = same_class[-1]
+                self.tracks = [
+                    track for track in self.tracks
+                    if track is nearest or (
+                        track.get('candidate') != class_id and track.get('class_id') != class_id)
+                ]
+                nearest['x'] = x
+                nearest['y'] = y
+                nearest['last_seen_ns'] = observed_ns
+                if nearest['class_id'] is None:
+                    nearest['count'] = nearest['count'] + 1 if nearest['candidate'] == class_id else 1
+                    nearest['candidate'] = class_id
+                return self._confirm_track(nearest)
+
         nearest = None
         nearest_distance = self.merge_radius
         for track in self.tracks:
@@ -293,7 +333,7 @@ class CardinalWallPublisher(Node):
             nearest = {
                 'x': x, 'y': y, 'candidate': class_id, 'count': 1,
                 'class_id': None, 'wall_active': True, 'true_north_yaw_rad': None,
-                'passed_samples': 0, 'return_samples': 0,
+                'passed_samples': 0, 'return_samples': 0, 'last_seen_ns': observed_ns,
             }
             self.tracks.append(nearest)
         elif nearest['class_id'] is None:
@@ -302,13 +342,18 @@ class CardinalWallPublisher(Node):
             else:
                 nearest['candidate'] = class_id
                 nearest['count'] = 1
-        if nearest['class_id'] is None and nearest['count'] >= self.required_confirmations:
-            nearest['class_id'] = nearest['candidate']
-            nearest['true_north_yaw_rad'] = self.true_north_yaw_rad
+        nearest['last_seen_ns'] = observed_ns
+        self._confirm_track(nearest)
+
+    def _confirm_track(self, track):
+        if track['class_id'] is None and track['count'] >= self.required_confirmations:
+            track['class_id'] = track['candidate']
+            track['true_north_yaw_rad'] = self.true_north_yaw_rad
             self.get_logger().info(
-                f"Confirmed cardinal marker {nearest['class_id']} at ({nearest['x']:.2f}, {nearest['y']:.2f})")
+                f"Confirmed cardinal marker {track['class_id']} at ({track['x']:.2f}, {track['y']:.2f})")
 
     def publish_walls(self):
+        self._discard_stale_tracks()
         # GPS3 is the start of the cardinal course.  Before that gate, the
         # boat position must not retire future course walls.
         if self.walls_enabled:
@@ -340,6 +385,20 @@ class CardinalWallPublisher(Node):
         msg.data = b''.join(struct.pack('fff', *point) for point in points)
         self.pub.publish(msg)
         self._publish_detection_markers(msg.header.stamp, selected_indexes)
+
+    def _discard_stale_tracks(self):
+        """Forget Task4's old camera observations, including their walls."""
+        if self.track_ttl_s <= 0.0:
+            return
+        cutoff_ns = self.get_clock().now().nanoseconds - int(self.track_ttl_s * 1_000_000_000)
+        before = len(self.tracks)
+        self.tracks = [
+            track for track in self.tracks
+            if track.get('last_seen_ns', cutoff_ns) >= cutoff_ns
+        ]
+        discarded = before - len(self.tracks)
+        if discarded:
+            self.get_logger().info(f'Discarded {discarded} stale buoy track(s) and virtual wall(s)')
 
     def _select_active_wall_track_indexes(self):
         """Return the nearest not-yet-passed tracks along the GPS3->GPS4 axis."""

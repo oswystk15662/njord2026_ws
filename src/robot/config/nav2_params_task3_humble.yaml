@@ -142,12 +142,20 @@ local_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: pointcloud
+        observation_sources: pointcloud virtual_wall
         pointcloud:
           topic: /pointcloud
           max_obstacle_height: 2.0
           clearing: True
           marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 20.0
+          obstacle_max_range: 18.0
+        virtual_wall:
+          topic: /task4/virtual_obstacles
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
           data_type: "PointCloud2"
           raytrace_max_range: 20.0
           obstacle_max_range: 18.0
@@ -186,12 +194,20 @@ global_costmap:
       obstacle_layer:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
-        observation_sources: pointcloud
+        observation_sources: pointcloud virtual_wall
         pointcloud:
           topic: /pointcloud
           max_obstacle_height: 2.0
           clearing: True
           marking: True
+          data_type: "PointCloud2"
+          raytrace_max_range: 30.0
+          obstacle_max_range: 30.0
+        virtual_wall:
+          topic: /task4/virtual_obstacles
+          max_obstacle_height: 2.0
+          clearing: true
+          marking: true
           data_type: "PointCloud2"
           raytrace_max_range: 30.0
           obstacle_max_range: 30.0

@@ -377,6 +377,36 @@ def generate_launch_description():
         ])),
     )
 
+    task4_buoy_wall_publisher = Node(
+        package="buoy_obstacle_publisher",
+        executable="cardinal_wall_publisher",
+        name="task4_buoy_wall_publisher",
+        output="screen",
+        parameters=[{
+            # This is the canonical colour + 3-D position message produced by
+            # ZED perception (with Livox fallback when ZED depth is absent).
+            "detection_topic": "/buoy_detections_3d",
+            "output_topic": "/task4/virtual_obstacles",
+            # Task4 waypoints are projected into map before execution; keep
+            # buoy transforms, heading, and wall cloud in that same frame.
+            "map_frame": "map",
+            "max_active_wall_tracks": 4,
+            "wall_enable_topic": "/task4/buoy_wall_enable",
+            "retirement_heading_topic": "/task4/gps14_to_gps16_heading",
+            "retire_passed_cardinal_walls_from_base_pose": True,
+            "retirement_margin_m": 1.0,
+            "retirement_confirmations_required": 5,
+            "return_confirmations_required": 5,
+            # Task4 has only red/green channel buoys, not cardinal marks.
+            "allow_cardinal_classes": False,
+            "latest_per_class_only": True,
+            # The camera stream is expected continuously while Task4 walls
+            # are active.  A missing observation promptly removes its wall.
+            "track_ttl_s": 1.0,
+        }],
+        condition=IfCondition(enable_buoy_costmap),
+    )
+
     back_cam_launch = include_launch(
         "robot",
         ["launch", "back_cam.launch.py"],
@@ -726,6 +756,7 @@ def generate_launch_description():
             alert_lamp_launch,
             buoy_obstacle_launch,
             cardinal_wall_publisher,
+            task4_buoy_wall_publisher,
             back_cam_launch,
             zed2i_cpu_launch,
             zed2i_h264_ground_video_launch,

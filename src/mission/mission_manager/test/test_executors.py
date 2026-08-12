@@ -149,6 +149,29 @@ def test_staged_docking_honors_explicit_stage_order_for_task4_style_route():
     assert results[0].status == ExecutorStatus.SUCCEEDED
 
 
+def test_staged_docking_reports_only_nav2_confirmed_stage_successes():
+    nav = FakeNavigation()
+    reached = []
+    route = Route(
+        "map",
+        (
+            Waypoint("14_outbound", 0.0, 0.0, 0.0, "GPS 14", "waypoint"),
+            Waypoint("16", 1.0, 0.0, 0.0, "GPS 16", "waypoint"),
+        ),
+        {"first": ("14_outbound",), "second": ("16",)},
+        {},
+        {"stage_order": ["first", "second"]},
+    )
+    executor = StagedDockingExecutor(
+        nav, lambda _seconds, callback: callback, lambda _timer: None,
+        stage_succeeded=lambda stage, poses: reached.append((stage, poses[-1].waypoint_id)),
+    )
+    executor.start("task4", route, lambda *_: None, lambda _result: None)
+    nav.sent[0][2](ExecutorStatus.SUCCEEDED, "GPS14 reached")
+    nav.sent[1][2](ExecutorStatus.SUCCEEDED, "GPS16 reached")
+    assert reached == [("first", "14_outbound"), ("second", "16")]
+
+
 def test_task2_mppi_withdraws_its_gate_before_reporting_canceled():
     enabled = []
     results = []

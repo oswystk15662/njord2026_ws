@@ -152,7 +152,7 @@ local_costmap:
           raytrace_max_range: 20.0
           obstacle_max_range: 18.0
         virtual_wall:
-          topic: /virtual_obstacles
+          topic: /task4/virtual_obstacles
           max_obstacle_height: 2.0
           clearing: true
           marking: true
@@ -204,7 +204,7 @@ global_costmap:
           raytrace_max_range: 30.0
           obstacle_max_range: 30.0
         virtual_wall:
-          topic: /virtual_obstacles
+          topic: /task4/virtual_obstacles
           max_obstacle_height: 2.0
           clearing: true
           marking: true
