@@ -50,6 +50,16 @@ def test_inventory_parameters_omit_disabled_signals():
     assert [item["monitor_name"] for item in inventory.inventory_parameters(parsed)] == ["enabled"]
 
 
+def test_inventory_parameters_use_configured_minimum_frequency():
+    parsed = inventory.parse_inventory(
+        {"role": "test", "signals": {"signal": {
+            "topic": "/signal", "type": "std_msgs/msg/Empty", "timeout_sec": 1,
+            "expected_frequency_hz": 20, "minimum_frequency_hz": 15,
+        }}}
+    )
+    assert inventory.inventory_parameters(parsed)[0]["minimum_frequency"] == 15
+
+
 @pytest.mark.parametrize(
     "bad",
     [

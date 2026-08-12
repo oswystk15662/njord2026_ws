@@ -55,19 +55,20 @@ def _load_inventory(role):
         try:
             timeout = float(signal["timeout_sec"])
             expected = float(signal["expected_frequency_hz"])
+            minimum = float(signal.get("minimum_frequency_hz", expected))
         except (TypeError, ValueError) as error:
             raise RuntimeError(f"Signal {name!r} has invalid numeric values") from error
-        if timeout <= 0.0 or expected < 0.0:
+        if timeout <= 0.0 or minimum < 0.0 or minimum > expected:
             raise RuntimeError(f"Signal {name!r} has invalid timeout/frequency")
         enabled = signal.get("enabled", True)
         if not isinstance(enabled, bool):
             raise RuntimeError(f"Signal {name!r} enabled must be boolean")
         if enabled:
-            validated.append((name, topic, topic_type, timeout, expected))
+            validated.append((name, topic, topic_type, timeout, expected, minimum))
     aggregates = config.get("aggregates", {})
     if not isinstance(aggregates, Mapping):
         raise RuntimeError(f"{config_path} aggregates must be a mapping")
-    signal_by_name = {name: (topic, topic_type) for name, topic, topic_type, _, _ in validated}
+    signal_by_name = {name: (topic, topic_type) for name, topic, topic_type, _, _, _ in validated}
     validated_aggregates = []
     output_topics = set()
     for name, aggregate in aggregates.items():
@@ -105,7 +106,7 @@ def _load_inventory(role):
     return validated, validated_aggregates
 
 
-def _monitor(role, name, topic, topic_type, timeout, expected):
+def _monitor(role, name, topic, topic_type, timeout, expected, minimum):
     # Keep signal names role-qualified on the transport so a Jetson/ground-PC
     # graph cannot accidentally overwrite a miniPC signal with the same name.
     return Node(
@@ -120,7 +121,7 @@ def _monitor(role, name, topic, topic_type, timeout, expected):
                 "topic_type": topic_type,
                 "mode": "required_frequency",
                 "expected_frequency": expected,
-                "minimum_frequency": expected,
+                "minimum_frequency": minimum,
                 "timeout": timeout,
                 "stale_timeout": max(timeout * 3.0, timeout + 1.0),
                 "health_signal_topic": f"/health/signals/{role}",
@@ -166,8 +167,8 @@ def _launch_setup(context, *args, **kwargs):
         disabled.update({"lidar_points", "lidar_imu"})
 
     nodes = [
-        _monitor(role, name, topic, topic_type, timeout, expected)
-        for name, topic, topic_type, timeout, expected in signals
+        _monitor(role, name, topic, topic_type, timeout, expected, minimum)
+        for name, topic, topic_type, timeout, expected, minimum in signals
         if name not in disabled
     ]
     nodes.extend(

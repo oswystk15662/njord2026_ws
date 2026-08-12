@@ -10,6 +10,7 @@ signals:
     type: sensor_msgs/msg/NavSatFix
     timeout_sec: 1.0
     expected_frequency_hz: 20.0
+    minimum_frequency_hz: 15.0
 
   # back_camera:
   #   topic: /back_cam/image_raw
@@ -22,12 +23,14 @@ signals:
     type: std_msgs/msg/Float32MultiArray
     timeout_sec: 3.0
     expected_frequency_hz: 1.0
+    minimum_frequency_hz: 0.8
 
   local_odometry:
     topic: /odometry/filtered/local
     type: nav_msgs/msg/Odometry
     timeout_sec: 1.0
-    expected_frequency_hz: 30.0
+    expected_frequency_hz: 20.0
+    minimum_frequency_hz: 15.0
 
   global_odometry:
     topic: /odometry/filtered/global
@@ -40,6 +43,7 @@ signals:
     type: std_msgs/msg/Empty
     timeout_sec: 1.5
     expected_frequency_hz: 2.0
+    minimum_frequency_hz: 1.5
 
   ground_station_heartbeat:
     topic: /heartbeat/ground_station
@@ -49,18 +53,21 @@ signals:
     # wait through short transmission gaps before declaring the link unhealthy.
     timeout_sec: 5.0
     expected_frequency_hz: 0.5
+    minimum_frequency_hz: 0.25
 
   manual_control_heartbeat:
     topic: /heartbeat/manual_control
     type: std_msgs/msg/Empty
     timeout_sec: 2.0
     expected_frequency_hz: 1.0
+    minimum_frequency_hz: 0.5
 
   autonomy_heartbeat:
     topic: /heartbeat/autonomy
     type: std_msgs/msg/Empty
     timeout_sec: 2.0
     expected_frequency_hz: 1.0
+    minimum_frequency_hz: 0.5
 
 # Derived heartbeats are role-owned just like the monitored signals above.
 # They are emitted only while every listed driver data source is fresh, so the

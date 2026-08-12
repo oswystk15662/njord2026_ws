@@ -13,6 +13,7 @@ signals:
     type: sensor_msgs/msg/PointCloud2
     timeout_sec: 1.0
     expected_frequency_hz: 10.0
+    minimum_frequency_hz: 8.0
     enabled: true
 
   lidar_imu:
@@ -20,4 +21,5 @@ signals:
     type: sensor_msgs/msg/Imu
     timeout_sec: 1.0
     expected_frequency_hz: 200.0
+    minimum_frequency_hz: 150.0
     enabled: true

@@ -27,6 +27,7 @@ class SignalConfig:
     message_type: str
     timeout_sec: float
     expected_frequency_hz: float
+    minimum_frequency_hz: float
     enabled: bool = True
 
 
@@ -80,17 +81,18 @@ def parse_inventory(data: Any, *, source: str | pathlib.Path = "<inventory>") ->
         try:
             timeout = float(raw["timeout_sec"])
             expected = float(raw["expected_frequency_hz"])
+            minimum = float(raw.get("minimum_frequency_hz", expected))
         except (TypeError, ValueError) as error:
             raise _fail(path, f"signal '{name}' numeric values are invalid") from error
         if timeout <= 0:
             raise _fail(path, f"signal '{name}' timeout_sec must be positive")
-        if expected < 0:
-            raise _fail(path, f"signal '{name}' expected_frequency_hz cannot be negative")
+        if minimum < 0 or minimum > expected:
+            raise _fail(path, f"signal '{name}' minimum_frequency_hz must be between 0 and expected_frequency_hz")
         enabled = raw.get("enabled", True)
         if not isinstance(enabled, bool):
             raise _fail(path, f"signal '{name}' enabled must be boolean")
         parsed.append(
-            SignalConfig(name, topic, message_type, timeout, expected, enabled)
+            SignalConfig(name, topic, message_type, timeout, expected, minimum, enabled)
         )
     return RoleInventory(role.strip(), tuple(parsed))
 
@@ -119,7 +121,7 @@ def inventory_parameters(inventory: RoleInventory) -> list[dict[str, Any]]:
             "topic_type": signal.message_type,
             "mode": "required_frequency",
             "expected_frequency": signal.expected_frequency_hz,
-            "minimum_frequency": signal.expected_frequency_hz,
+            "minimum_frequency": signal.minimum_frequency_hz,
             "timeout": signal.timeout_sec,
             "stale_timeout": signal.timeout_sec * 3.0,
         }
