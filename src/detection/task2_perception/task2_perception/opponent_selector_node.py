@@ -100,10 +100,8 @@ class OpponentSelectorNode(Node):
             ("corridor_start_offset_m", 5.0),
             ("corridor_end_margin_m", 5.0),
             ("corridor_half_width_m", 20.0),
-            # base_link bearing sector: +x is forward and +y is port.
-            ("bearing_sector_enabled", True),
-            ("bearing_sector_min_deg", -90.0),
-            ("bearing_sector_max_deg", 20.0),
+            ("corridor_ignore_left_side", True),
+            ("corridor_left_side_margin_m", 0.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -129,16 +127,14 @@ class OpponentSelectorNode(Node):
         self.corridor_start_offset_m = float(gp("corridor_start_offset_m"))
         self.corridor_end_margin_m = float(gp("corridor_end_margin_m"))
         self.corridor_half_width_m = float(gp("corridor_half_width_m"))
-        self.bearing_sector_enabled = bool(gp("bearing_sector_enabled"))
-        self.bearing_sector_min_deg = float(gp("bearing_sector_min_deg"))
-        self.bearing_sector_max_deg = float(gp("bearing_sector_max_deg"))
+        self.corridor_ignore_left_side = bool(gp("corridor_ignore_left_side"))
+        self.corridor_left_side_margin_m = float(gp("corridor_left_side_margin_m"))
         if self.corridor_start_offset_m < 0.0 or \
                 self.corridor_end_margin_m < 0.0 or \
                 self.corridor_half_width_m <= 0.0:
             raise ValueError("Task 2 corridor dimensions must be positive")
-        if not -180.0 <= self.bearing_sector_min_deg <= \
-                self.bearing_sector_max_deg <= 180.0:
-            raise ValueError("bearing sector must satisfy -180 <= min <= max <= 180")
+        if self.corridor_left_side_margin_m < 0.0:
+            raise ValueError("corridor_left_side_margin_m must be >= 0")
         self.corridor_start_map = None
         self.corridor_end_map = None
         self.selection_params = SelectionParams(
@@ -208,8 +204,7 @@ class OpponentSelectorNode(Node):
             f"-{self.max_absolute_speed_knots:.2f} kn, "
             f"straight_coast={self.straight_coast_timeout_sec:.1f}s, "
             f"GPS5->6 corridor={'enabled' if self.corridor_enabled else 'disabled'}, "
-            f"bearing_sector={'enabled' if self.bearing_sector_enabled else 'disabled'} "
-            f"[{self.bearing_sector_min_deg:.0f}, {self.bearing_sector_max_deg:.0f}] deg")
+            f"left_side_ignored={self.corridor_ignore_left_side}")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -271,47 +266,16 @@ class OpponentSelectorNode(Node):
                 "opponents without the GPS5->6 corridor restriction.",
                 throttle_duration_sec=2.0)
             return True
-        return tracking_glue.in_oriented_corridor(
+        if not tracking_glue.in_oriented_corridor(
             position_map, self.corridor_start_map, self.corridor_end_map,
             self.corridor_start_offset_m, self.corridor_end_margin_m,
-            self.corridor_half_width_m)
-
-    def _lookup_map_base_transform(self, stamp_sec: float):
-        """Get map <- base_link, preferring the target observation time."""
-        try:
-            try:
-                return self.tf_buffer.lookup_transform(
-                    self.map_frame, self.base_frame, Time(seconds=stamp_sec))
-            except TransformException:
-                return self.tf_buffer.lookup_transform(
-                    self.map_frame, self.base_frame, Time())
-        except TransformException as e:
-            self.get_logger().warning(
-                f"TF {self.base_frame} -> {self.map_frame} unavailable: {e}",
-                throttle_duration_sec=2.0)
-            return None
-
-    def _in_bearing_sector(self, position_base: np.ndarray) -> bool:
-        if not self.bearing_sector_enabled:
-            return True
-        return tracking_glue.in_bearing_sector(
-            position_base, self.bearing_sector_min_deg,
-            self.bearing_sector_max_deg)
-
-    @staticmethod
-    def _map_position_to_base(position_map: np.ndarray, transform) -> np.ndarray:
-        q = transform.transform.rotation
-        t = transform.transform.translation
-        rot = cloud_ops.quaternion_to_rotation_matrix(q.x, q.y, q.z, q.w)
-        return rot.T @ (np.asarray(position_map) - np.array([t.x, t.y, t.z]))
-
-    def _map_position_in_bearing_sector(self, position_map: np.ndarray,
-                                        stamp_sec: float) -> bool:
-        if not self.bearing_sector_enabled:
-            return True
-        transform = self._lookup_map_base_transform(stamp_sec)
-        return transform is not None and self._in_bearing_sector(
-            self._map_position_to_base(position_map, transform))
+            self.corridor_half_width_m):
+            return False
+        return not (self.corridor_ignore_left_side and
+                    tracking_glue.is_left_of_oriented_line(
+                        position_map, self.corridor_start_map,
+                        self.corridor_end_map,
+                        self.corridor_left_side_margin_m))
 
     def _publish_output(self, now, pos_map, vel_map, opponent_yaw, yaw_rate):
         """Publish one absolute target estimate and its map-frame TF."""
@@ -356,12 +320,6 @@ class OpponentSelectorNode(Node):
                 pos_map = tracking_glue.predict_straight_motion(
                     coast["position_map"], coast["velocity_map"], elapsed)
                 if not self._in_task2_corridor(pos_map):
-                    self.last_observation = None
-                    self.selected_id = None
-                    self.smoother.reset()
-                    self._publish_detection_status(False)
-                    return
-                if not self._map_position_in_bearing_sector(pos_map, now_sec):
                     self.last_observation = None
                     self.selected_id = None
                     self.smoother.reset()
@@ -434,8 +392,6 @@ class OpponentSelectorNode(Node):
             candidate_pos_map, candidate_vel_map = tracking_glue.to_map_frame(
                 candidate.position, vel_abs_base, t_map_base)
             if not self._in_task2_corridor(candidate_pos_map):
-                continue
-            if not self._in_bearing_sector(candidate.position):
                 continue
             speed_knots = mps_to_knots(
                 np.hypot(candidate_vel_map[0], candidate_vel_map[1]))

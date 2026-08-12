@@ -145,14 +145,15 @@ class TestStaleAndGates:
         assert not tracking_glue.in_oriented_corridor(
             np.array([20.0, 40.1]), start, end, 5.0, 5.0, 20.0)
 
-    def test_bearing_sector_keeps_forward_and_starboard_not_port(self):
-        # REP-103 base_link has +x forward and +y to port.
-        assert tracking_glue.in_bearing_sector(
-            np.array([10.0, -10.0, 0.0]), -90.0, 20.0)
-        assert tracking_glue.in_bearing_sector(
-            np.array([10.0, 3.0, 0.0]), -90.0, 20.0)
-        assert not tracking_glue.in_bearing_sector(
-            np.array([10.0, 5.0, 0.0]), -90.0, 20.0)
+    def test_route_left_side_is_fixed_to_gps5_to_gps6_line(self):
+        start = np.array([10.0, 20.0])
+        end = np.array([30.0, 20.0])
+        assert tracking_glue.is_left_of_oriented_line(
+            np.array([20.0, 20.1]), start, end)
+        assert not tracking_glue.is_left_of_oriented_line(
+            np.array([20.0, 20.0]), start, end)
+        assert not tracking_glue.is_left_of_oriented_line(
+            np.array([20.0, 19.9]), start, end)
 
     def test_straight_line_confidence_gate(self):
         short_history = make_track(

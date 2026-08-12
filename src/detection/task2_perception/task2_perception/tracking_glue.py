@@ -203,20 +203,24 @@ def in_oriented_corridor(
             abs(lateral) <= float(half_width_m))
 
 
-def in_bearing_sector(
-    position_base: np.ndarray,
-    min_bearing_deg: float,
-    max_bearing_deg: float,
+def is_left_of_oriented_line(
+    point_xy: np.ndarray,
+    start_xy: np.ndarray,
+    end_xy: np.ndarray,
+    margin_m: float = 0.0,
 ) -> bool:
-    """Return whether a base_link-relative point lies in an angular sector.
-
-    REP-103 base_link uses +x forward and +y left, so a target on starboard
-    has a negative bearing.  The configured bounds are inclusive and use the
-    ordinary, non-wrapping interval [-180, 180] degrees.
-    """
-    point = np.asarray(position_base, dtype=float)
-    bearing_deg = float(np.degrees(np.arctan2(point[1], point[0])))
-    return float(min_bearing_deg) <= bearing_deg <= float(max_bearing_deg)
+    """Return whether point is left of the directed start-to-end route line."""
+    start = np.asarray(start_xy, dtype=float)[:2]
+    end = np.asarray(end_xy, dtype=float)[:2]
+    point = np.asarray(point_xy, dtype=float)[:2]
+    direction = end - start
+    length = float(np.linalg.norm(direction))
+    if length <= 1e-6:
+        return False
+    forward = direction / length
+    relative = point - start
+    lateral = float(relative[0] * -forward[1] + relative[1] * forward[0])
+    return lateral > float(margin_m)
 
 
 def select_opponent(
