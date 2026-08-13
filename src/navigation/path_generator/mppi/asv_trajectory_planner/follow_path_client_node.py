@@ -73,7 +73,7 @@ class FollowPathClientNode(Node):
             10,
         )
         self.enabled_sub = self.create_subscription(
-            Bool, self.enabled_topic, self.enabled_callback, 10
+            Bool, self.enabled_topic, self.enabled_callback, status_qos
         )
 
         self.action_client = ActionClient(
