@@ -117,7 +117,8 @@ opponent_selector:
     corridor_ignore_left_side: true
     corridor_left_side_margin_m: 5.0
     # Relative to GPS5->6, 0 deg is forward. A target may arrive only from
-    # the right (negative bearing); preserve range and clamp to this sector.
+    # the right (negative bearing); keep its observed position and speed, and
+    # clamp only its velocity direction to this sector.
     clip_opponent_bearing_to_corridor: true
     opponent_bearing_min_deg: -90.0
     opponent_bearing_max_deg: 0.0
