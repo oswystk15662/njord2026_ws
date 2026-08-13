@@ -3,7 +3,7 @@
 
 """
 Launch file for waypoint_publisher node
-Supports task1, task2, task3_1, and task3_2 modes
+Supports task1, task2, task2_bak, task3_1, and task3_2 modes
 """
 
 from launch import LaunchDescription
@@ -20,7 +20,7 @@ def generate_launch_description():
         default_value='task1',
         description=(
             'Task type: task1, task1_skip_1_1, task1_follow, task2, '
-            'task3_1, or task3_2'
+            'task2_bak, task3_1, or task3_2'
         )
     )
     

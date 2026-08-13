@@ -17,6 +17,7 @@ setup(
             "config/task1_skip_1_1_waypoints.yaml",
             "config/task1_follow_waypoints.yaml",
             "config/task2_waypoints.yaml",
+            "config/task2_bak_waypoints.yaml",
             "config/task3_waypoints.yaml",
             "config/task4_waypoints.yaml",
         ]),

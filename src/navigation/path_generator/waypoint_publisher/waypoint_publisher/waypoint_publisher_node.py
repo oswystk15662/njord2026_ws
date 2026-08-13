@@ -36,6 +36,7 @@ class TaskType(Enum):
     TASK1_SKIP_1_1 = "task1_skip_1_1"
     TASK1_FOLLOW = "task1_follow"
     TASK2 = "task2"
+    TASK2_BAK = "task2_bak"
     TASK3_1 = "task3_1"
     TASK3_2 = "task3_2"
 
@@ -166,6 +167,7 @@ class WaypointPublisher(Node):
             TaskType.TASK1_SKIP_1_1: 'task1_skip_1_1_waypoints.yaml',
             TaskType.TASK1_FOLLOW: 'task1_follow_waypoints.yaml',
             TaskType.TASK2: 'task2_waypoints.yaml',
+            TaskType.TASK2_BAK: 'task2_bak_waypoints.yaml',
             TaskType.TASK3_1: 'task3_waypoints.yaml',
             TaskType.TASK3_2: 'task3_waypoints.yaml',
         }
@@ -188,6 +190,8 @@ class WaypointPublisher(Node):
             return full_config['task1_follow_config']
         elif self.task_type == TaskType.TASK2:
             return full_config['task2_config']
+        elif self.task_type == TaskType.TASK2_BAK:
+            return full_config['task2_bak_config']
         elif self.task_type == TaskType.TASK3_1:
             return full_config['task3_1_config']
         elif self.task_type == TaskType.TASK3_2:

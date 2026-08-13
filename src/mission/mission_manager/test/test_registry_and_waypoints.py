@@ -1,4 +1,5 @@
 from pathlib import Path
+from math import cos, hypot, pi
 
 import pytest
 
@@ -19,6 +20,8 @@ def test_registry_exposes_supported_and_unimplemented_tasks():
     assert registry.get("task1").frame_id == "odom"
     assert registry.get("task2").executor == "task2_mppi"
     assert registry.get("task2").frame_id == "odom"
+    assert registry.get("task2_bak").executor == "waypoint_sequence"
+    assert registry.get("task2_bak").frame_id == "odom"
     assert registry.get("task3_1").runnable
     assert registry.get("task3_1").frame_id == "odom"
     assert registry.get("task3_1").executor == "staged_docking"
@@ -41,6 +44,7 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     loader = WaypointConfigLoader()
     task1 = loader.load(WAYPOINT_ROOT / "config/task1_waypoints.yaml", "task1_config")
     task2 = loader.load(WAYPOINT_ROOT / "config/task2_waypoints.yaml", "task2_config")
+    task2_bak = loader.load(WAYPOINT_ROOT / "config/task2_bak_waypoints.yaml", "task2_bak_config")
     task3 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_1_config")
     task3_2 = loader.load(WAYPOINT_ROOT / "config/task3_waypoints.yaml", "task3_2_config")
     task4 = loader.load(WAYPOINT_ROOT / "config/task4_waypoints.yaml", "task4_config")
@@ -66,6 +70,24 @@ def test_existing_task_routes_load_without_changing_waypoint_files():
     assert [(waypoint.latitude, waypoint.longitude) for waypoint in task2.waypoints] == [
         (63.440734, 10.423366), (63.440460, 10.422980),
     ]
+    assert [waypoint.waypoint_id for waypoint in task2_bak.waypoints] == [
+        "5", "waypoint1", "waypoint2", "waypoint3", "waypoint4", "6",
+    ]
+    # GPS 5 -> GPS 6 is divided into fifths; the middle pair is 10 m right.
+    points = task2_bak.waypoints
+    metres_per_latitude = 111_320.0
+    metres_per_longitude = metres_per_latitude * cos(points[0].latitude * pi / 180.0)
+    east = (points[-1].longitude - points[0].longitude) * metres_per_longitude
+    north = (points[-1].latitude - points[0].latitude) * metres_per_latitude
+    length = hypot(east, north)
+    for index in (1, 4):
+        offset_east = (points[index].longitude - points[0].longitude) * metres_per_longitude
+        offset_north = (points[index].latitude - points[0].latitude) * metres_per_latitude
+        assert abs(east * offset_north - north * offset_east) < 0.01
+    for index in (2, 3):
+        offset_east = (points[index].longitude - points[0].longitude) * metres_per_longitude
+        offset_north = (points[index].latitude - points[0].latitude) * metres_per_latitude
+        assert (east * offset_north - north * offset_east) / length == pytest.approx(-10.0, abs=0.02)
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1_gate")] == ["7"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_1")] == ["8"]
     assert [waypoint.waypoint_id for waypoint in task3.stage("stage_2")] == ["berth1"]

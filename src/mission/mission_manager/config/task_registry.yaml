@@ -39,6 +39,16 @@ tasks:
     nav2_profile: task2
     control_policy: task2
     features: {buoy_perception: false}
+  task2_bak:
+    display_name: Task 2 fallback route
+    availability: experimental
+    executor: waypoint_sequence
+    route_package: waypoint_publisher
+    route: config/task2_bak_waypoints.yaml
+    route_key: task2_bak_config
+    frame_id: odom
+    nav2_profile: task2
+    control_policy: task2
   task3_1:
     display_name: Task 3-1
     availability: experimental

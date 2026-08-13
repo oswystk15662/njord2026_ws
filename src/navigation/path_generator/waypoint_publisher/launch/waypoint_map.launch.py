@@ -12,7 +12,7 @@ def generate_launch_description():
     return LaunchDescription([
         DeclareLaunchArgument(
             "task_type", default_value="task1",
-            choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task3_1", "task3_2", "task4"],
+            choices=["task1", "task1_skip_1_1", "task1_follow", "task2", "task2_bak", "task3_1", "task3_2", "task4"],
         ),
         DeclareLaunchArgument("marker_topic", default_value="/ground_waypoint_markers"),
         DeclareLaunchArgument("publish_rate_hz", default_value="1.0"),

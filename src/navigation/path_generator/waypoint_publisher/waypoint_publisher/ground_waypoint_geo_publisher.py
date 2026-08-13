@@ -17,6 +17,7 @@ _CONFIGS = {
     "task1_skip_1_1": ("waypoint_publisher", "config/task1_skip_1_1_waypoints.yaml", "task1_skip_1_1_config"),
     "task1_follow": ("waypoint_publisher", "config/task1_follow_waypoints.yaml", "task1_follow_config"),
     "task2": ("waypoint_publisher", "config/task2_waypoints.yaml", "task2_config"),
+    "task2_bak": ("waypoint_publisher", "config/task2_bak_waypoints.yaml", "task2_bak_config"),
     "task3_1": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_1_config"),
     "task3_2": ("waypoint_publisher", "config/task3_waypoints.yaml", "task3_2_config"),
     "task4": ("waypoint_publisher", "config/task4_waypoints.yaml", "task4_config"),
