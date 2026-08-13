@@ -76,7 +76,8 @@ ros2 launch ship_perception_bringup classical_pipeline.launch.py \
 実機の自動運転では両方とも `robot/task2_autonomy.launch.py` に含まれるため、別途起動しません。
 
 rosbagでこの一連の認識を確認する場合は、`robot/task2_bag_perception.launch.py` を使います。
-これはbag再生と必要なTFを補い、認識・追跡だけを起動するオフライン検証用です。
+これはbag再生と必要なLiDAR固定TFを補い、認識・追跡だけを起動するオフライン検証用です。
+実機用ではなく、`/tf_static` をbagから再生しないため固定TFが二重になりません。
 
 ## Design notes
 
