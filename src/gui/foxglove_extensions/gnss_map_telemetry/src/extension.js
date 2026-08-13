@@ -387,9 +387,51 @@ function initBatteryStatus(context) {
   return () => root.replaceChildren();
 }
 
+function initLidarMissionSplat(context) {
+  const defaults = {map: "/gui/livox/splat_map", waypoints: "/mission/waypoint_markers", actual: "/actual_path_marker", tf: "/tf", tfStatic: "/tf_static", status: "/mission/status", fix: FIX_TOPIC, speed: SPEED_TOPIC, battery: BATTERY_PERCENT_TOPIC};
+  const topics = {...defaults, ...(context.initialState?.topics || {})};
+  const root = context.panelElement;
+  root.replaceChildren();
+  root.style.cssText = "height:100%;position:relative;overflow:hidden;background:#071018;color:#dcecff;font:12px system-ui";
+  const canvas = document.createElement("canvas"); canvas.style.cssText = "width:100%;height:100%;touch-action:none"; root.appendChild(canvas);
+  const card = document.createElement("div"); card.style.cssText = "position:absolute;right:12px;top:12px;background:#0c1620df;border:1px solid #526375;border-radius:6px;padding:9px;min-width:190px;line-height:1.55"; root.appendChild(card);
+  const settings = document.createElement("details"); settings.style.cssText = "position:absolute;left:12px;top:12px;background:#0c1620df;padding:7px;border-radius:5px";
+  settings.innerHTML = "<summary style='cursor:pointer'>⚙ Topics</summary><form></form>"; root.appendChild(settings);
+  const form = settings.querySelector("form");
+  for (const [name, value] of Object.entries(topics)) form.insertAdjacentHTML("beforeend", `<label style="display:block;margin-top:5px">${name}<input name="${name}" value="${value}" style="display:block;width:180px"></label>`);
+  form.insertAdjacentHTML("beforeend", "<button style='margin-top:7px'>Apply</button>");
+  form.onsubmit = event => { event.preventDefault(); for (const input of form.querySelectorAll("input")) topics[input.name] = input.value.trim(); context.saveState({topics}); subscribe(); settings.open = false; };
+  const gl = canvas.getContext("webgl2", {antialias: true});
+  if (!gl) { card.textContent = "WebGL2 is unavailable. LiDAR Mission Splat requires WebGL2."; return () => root.replaceChildren(); }
+  const vertex = `#version 300 es
+  in vec3 p; in float i; uniform mat4 m; uniform float size; out float v; void main(){gl_Position=m*vec4(p,1.);gl_PointSize=size;v=i;}`;
+  const fragment = `#version 300 es
+  precision mediump float; in float v; out vec4 c; void main(){vec2 q=gl_PointCoord*2.-1.;float a=exp(-dot(q,q)*3.);c=vec4(clamp(v/255.,0.,1.),.85,1.-clamp(v/255.,0.,1.),a);}`;
+  function shader(type, source) { const s = gl.createShader(type); gl.shaderSource(s, source); gl.compileShader(s); return s; }
+  const program = gl.createProgram(); gl.attachShader(program, shader(gl.VERTEX_SHADER, vertex)); gl.attachShader(program, shader(gl.FRAGMENT_SHADER, fragment)); gl.linkProgram(program);
+  const buffer = gl.createBuffer(); const position = gl.getAttribLocation(program, "p"), intensity = gl.getAttribLocation(program, "i");
+  let points = new Float32Array(), lastCloud = 0, resolution = .75, yaw = .6, pitch = .9, zoom = 1, panX = 0, panY = 0, dragging, telemetry = {}, path = [], waypoints = [], vessel;
+  function decode(message) {
+    const fields = Object.fromEntries((message.fields || []).map(f => [f.name, f.offset])); const data = message.data;
+    if (!(data && fields.x !== undefined && fields.y !== undefined && fields.z !== undefined && message.point_step >= 12)) return undefined;
+    const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.buffer || data); const out = new Float32Array(Math.floor(bytes.byteLength / message.point_step) * 4); const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength); let n = 0;
+    for (let o = 0; o + message.point_step <= bytes.byteLength; o += message.point_step) { const x=view.getFloat32(o+fields.x,true), y=view.getFloat32(o+fields.y,true), z=view.getFloat32(o+fields.z,true), i=fields.intensity===undefined?0:view.getFloat32(o+fields.intensity,true); if ([x,y,z,i].every(Number.isFinite)) out.set([x,y,z,i],n+=4); }
+    return out.slice(0,n);
+  }
+  function markerPoints(message) { return (message?.markers || []).flatMap(m => (m.points || []).map(p => [p.x,p.y,p.z || 0])); }
+  function matrix() { const c=Math.cos(yaw),s=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch), z=zoom/80; return new Float32Array([c*z,s*sp*z,s*cp*z,0,-s*z,c*sp*z,c*cp*z,0,0,-cp*z,sp*z,0,panX,panY,0,1]); }
+  function draw() { const rect=canvas.getBoundingClientRect(), w=Math.max(1,rect.width*devicePixelRatio),h=Math.max(1,rect.height*devicePixelRatio); if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;} gl.viewport(0,0,w,h);gl.clearColor(.027,.063,.094,1);gl.clear(gl.COLOR_BUFFER_BIT); if(points.length && Date.now()-lastCloud <= 3000){const overlay=[...path,...waypoints];if(vessel)overlay.push([vessel.translation.x,vessel.translation.y,vessel.translation.z||0]);const drawPoints=new Float32Array(points.length+overlay.length*4);drawPoints.set(points);overlay.forEach((p,n)=>drawPoints.set([p[0],p[1],p[2],255],points.length+n*4));gl.useProgram(program);gl.bindBuffer(gl.ARRAY_BUFFER,buffer);gl.bufferData(gl.ARRAY_BUFFER,drawPoints,gl.DYNAMIC_DRAW);gl.enableVertexAttribArray(position);gl.vertexAttribPointer(position,3,gl.FLOAT,false,16,0);gl.enableVertexAttribArray(intensity);gl.vertexAttribPointer(intensity,1,gl.FLOAT,false,16,12);gl.uniformMatrix4fv(gl.getUniformLocation(program,"m"),false,matrix());gl.uniform1f(gl.getUniformLocation(program,"size"),Math.max(2,7*zoom));gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE);gl.drawArrays(gl.POINTS,0,drawPoints.length/4);} requestAnimationFrame(draw); }
+  function subscribe() { context.subscribe(Object.values(topics).filter(Boolean).map(topic => ({topic}))); }
+  context.watch("currentFrame"); subscribe(); draw();
+  context.onRender = (state, done) => { try { for(const event of state.currentFrame || []) { const m=event.message || {}; if(event.topic===topics.map){const decoded=decode(m);if(decoded){points=decoded;lastCloud=Date.now();}} else if(event.topic===topics.actual) path=markerPoints(m); else if(event.topic===topics.waypoints) waypoints=markerPoints(m); else if(event.topic===topics.fix) {telemetry.lat=m.latitude; telemetry.lon=m.longitude;} else if(event.topic===topics.speed) telemetry.speed=m.data; else if(event.topic===topics.battery) telemetry.battery=m.data; else if(event.topic===topics.status) telemetry.task=m.task_id; else if(event.topic===topics.tf || event.topic===topics.tfStatic) for(const t of m.transforms||[]) if(normalizeFrame(t.child_frame_id)==="base_link"&&normalizeFrame(t.header?.frame_id)==="odom") vessel=t.transform; } const age=(Date.now()-lastCloud)/1000, lidar=lastCloud ? (age > 3 ? `STALE (${age.toFixed(1)}s)` : `${age.toFixed(1)}s ago`) : "waiting"; card.innerHTML=`<b>LiDAR MISSION SPLAT</b><br>PTS ${points.length/4} · VOX ${resolution.toFixed(2)} m<br>LiDAR ${lidar}<br>TF ${vessel?"odom ✓":"waiting"}<br>LAT ${format(telemetry.lat,6,"")}<br>LON ${format(telemetry.lon,6,"")}<br>HDG ${vessel?quaternionToBearingDegrees(vessel.rotation)?.toFixed(1)+"°":"--"}<br>SOG ${format(telemetry.speed,2," m/s")}<br>BAT ${format(telemetry.battery,0,"%")}<br>TASK ${telemetry.task||"--"}`; } finally {done();} };
+  canvas.onpointerdown=e=>{dragging=[e.clientX,e.clientY];canvas.setPointerCapture(e.pointerId)}; canvas.onpointermove=e=>{if(!dragging)return; yaw+=(e.clientX-dragging[0])*.01; pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-dragging[1])*.01));dragging=[e.clientX,e.clientY]}; canvas.onpointerup=()=>dragging=undefined; canvas.onwheel=e=>{zoom=Math.max(.2,Math.min(8,zoom*(e.deltaY>0?.9:1.1)));e.preventDefault()};
+  return () => root.replaceChildren();
+}
+
 function activate(extensionContext) {
   extensionContext.registerPanel({name: "gnss-map-telemetry", initPanel: initGnssMapTelemetry});
   extensionContext.registerPanel({name: "battery-status", initPanel: initBatteryStatus});
+  extensionContext.registerPanel({name: "lidar-mission-splat", initPanel: initLidarMissionSplat});
 }
 
 module.exports = {

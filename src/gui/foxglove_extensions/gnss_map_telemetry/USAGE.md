@@ -28,7 +28,7 @@ ros2 run tf2_ros tf2_echo odom base_link
 Foxglove Desktopを開き、次のファイルを画面へドラッグ＆ドロップします。
 
 ```text
-src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.3.0.foxe
+src/gui/foxglove_extensions/gnss_map_telemetry/gnss-map-telemetry-0.4.0.foxe
 ```
 
 Foxgloveの Settings > Extensions に **GNSS Map Telemetry** が表示され、有効になっていることを確認してください。
@@ -50,6 +50,15 @@ Foxgloveで Layout メニューから Import を選び、ワークスペース�
 最初の有効なGNSS位置を受信したときに地図を中央合わせします。WP確認用launchでGNSSを
 起動していない場合は、`/ground_waypoint_markers` のWP群に中央合わせします。その後は船が
 移動しても地図中心とzoomを変更しません。マウスホイールで拡大縮小、ドラッグで自由に移動できます。
+
+## LiDAR Mission Splat
+
+Jetsonはraw `/livox/lidar` をローカルで0.75 m/最大2,000点/2 Hzに間引き、
+Zenohには `/gui/livox/points` だけを流します。Ground PCはこれを `odom` に
+積算して `/gui/livox/splat_map` を1 Hz、最大50,000点でpublishします。
+パネルを追加して **LiDAR Mission Splat** を選び、ドラッグでorbit、ホイールで
+zoomします。左上の ⚙ Topics から全入力topic名を変更でき、設定はパネルに保存
+されます。WebGL2、TF、または新しい点群が未着の場合は右上の状態表示を確認します。
 
 ## トラブルシューティング
 

@@ -43,6 +43,7 @@
           "/zed2i/yolo/debug_image",
           "/zed2i/debug/detections_image",
           "/foxglove_log",
+          "/gui/livox/points",
         ],
         subscribers: [
           "/odom", "/odometry/filtered/global", "/odometry/filtered/local", "/tf", "/tf_static", "/livox/imu",
@@ -56,6 +57,7 @@
           "/zed2i/yolo/debug_image",
           "/zed2i/debug/detections_image",
           "/foxglove_log",
+          "/gui/livox/points",
         ],
         service_servers: [], service_clients: [],
         action_servers: [], action_clients: [],

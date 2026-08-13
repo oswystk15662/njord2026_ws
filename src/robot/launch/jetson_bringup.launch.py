@@ -195,6 +195,12 @@ def generate_launch_description():
         {"own_odom_topic": "/odometry/filtered/local", "enable_ship_tracking": "true"},
     )
 
+    livox_gui_downsampler = Node(
+        package="livox_gui_telemetry", executable="livox_gui_downsampler",
+        name="livox_gui_downsampler", output="screen",
+        condition=IfCondition(LaunchConfiguration("enable_livox_gui_telemetry")),
+    )
+
     networking_launch = include_launch(
         "robot",
         ["launch", "networking.launch.py"],
@@ -327,6 +333,8 @@ def generate_launch_description():
                 "enable_task2_autonomy", default_value="false",
                 description="Run Task 2 LiDAR perception, tracking and MPPI on Jetson.",
             ),
+            DeclareLaunchArgument("enable_livox_gui_telemetry", default_value="true", description="Publish bounded Livox GUI telemetry only."),
+            livox_gui_downsampler,
             DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",

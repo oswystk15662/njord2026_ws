@@ -188,6 +188,9 @@
     "KeioRoboticsAssociation.gnss-map-telemetry.gnss-map-telemetry!3qrb5wg": {
       "foxglovePanelTitle": "GNSS Course (Map)"
     },
+    "KeioRoboticsAssociation.gnss-map-telemetry.lidar-mission-splat!livox-splat": {
+      "foxglovePanelTitle": "LiDAR Mission Splat"
+    },
     "Image!3umscrg": {
       "cameraState": {
         "distance": 20,
@@ -289,7 +292,11 @@
           "layout": {
             "first": {
               "first": "3D!2kxxs4d",
-              "second": "KeioRoboticsAssociation.gnss-map-telemetry.gnss-map-telemetry!3qrb5wg",
+              "second": {
+                "first": "KeioRoboticsAssociation.gnss-map-telemetry.gnss-map-telemetry!3qrb5wg",
+                "second": "KeioRoboticsAssociation.gnss-map-telemetry.lidar-mission-splat!livox-splat",
+                "direction": "row"
+              },
               "direction": "column"
             },
             "second": {
