@@ -286,6 +286,42 @@ class PlannerNode(Node):
     def other_ship_twist_callback(self, msg: TwistStamped):
         self.latest_other_ship_twist = msg
 
+    def _other_twist_in_planner_frame(self, msg: TwistStamped):
+        """Rotate an absolute opponent velocity into the planner frame."""
+        if self.get_parameter("other_twist_is_relative").value:
+            return msg
+
+        source_frame = msg.header.frame_id or self.frame_id
+        if source_frame == self.frame_id:
+            return msg
+        try:
+            try:
+                transform = self.tf_buffer.lookup_transform(
+                    self.frame_id, source_frame, Time.from_msg(msg.header.stamp)
+                ).transform
+            except TransformException:
+                transform = self.tf_buffer.lookup_transform(
+                    self.frame_id, source_frame, Time()
+                ).transform
+        except TransformException as exc:
+            self.get_logger().warning(
+                f"Cannot transform opponent velocity {source_frame} -> "
+                f"{self.frame_id}: {exc}; ignoring opponent this cycle.",
+                throttle_duration_sec=2.0,
+            )
+            return None
+
+        yaw = self._yaw_from_quaternion(transform.rotation)
+        c, s = math.cos(yaw), math.sin(yaw)
+        out = TwistStamped()
+        out.header.stamp = msg.header.stamp
+        out.header.frame_id = self.frame_id
+        out.twist.linear.x = c * msg.twist.linear.x - s * msg.twist.linear.y
+        out.twist.linear.y = s * msg.twist.linear.x + c * msg.twist.linear.y
+        out.twist.linear.z = msg.twist.linear.z
+        out.twist.angular = msg.twist.angular
+        return out
+
     def waypoint1_callback(self, msg: PoseStamped):
         self.latest_waypoint1_pose = msg
 
@@ -370,10 +406,17 @@ class PlannerNode(Node):
         ]
         buoy_positions = [(x, y) for x, y, _ in self.detected_buoys]
 
+        other_twist = self.latest_other_ship_twist
+        if other_twist is not None:
+            other_twist = self._other_twist_in_planner_frame(other_twist)
+        if other_twist is None and self.require_other_ship:
+            self.get_logger().debug("Waiting for other_ship_twist...")
+            return
+
         path = self.trajectory_generator.generate(
             own_odom=self.latest_own_odom,
             other_transform=other_transform,
-            other_twist=self.latest_other_ship_twist,
+            other_twist=other_twist,
             waypoint1_pose=self.latest_waypoint1_pose,
             waypoint2_pose=self.latest_waypoint2_pose,
             detected_buoys_map=buoy_positions if self.use_detected_buoys else [],

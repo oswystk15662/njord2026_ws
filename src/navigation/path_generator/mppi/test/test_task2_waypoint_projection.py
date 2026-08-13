@@ -18,6 +18,11 @@ def test_task2_projection_order_is_start_then_goal():
     assert "Resolved Task2 latitude/longitude waypoints in map frame." in SOURCE
 
 
+def test_task2_waypoints_are_transformed_from_map_to_the_output_frame():
+    assert 'self.tf_buffer.lookup_transform(\n                self.frame_id, "map", rclpy.time.Time())' in SOURCE
+    assert "self._transform_xy(transform, *self.waypoint1_xy)" in SOURCE
+
+
 def test_task2_final_completion_requires_a_path_ending_at_gps6():
     source = (Path(__file__).parents[1] / "asv_trajectory_planner" /
               "follow_path_client_node.py").read_text(encoding="utf-8")
