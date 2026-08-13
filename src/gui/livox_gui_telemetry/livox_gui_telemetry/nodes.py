@@ -6,6 +6,7 @@ from geometry_msgs.msg import TransformStamped
 from njord_interfaces.msg import MissionStatus
 from rclpy.duration import Duration
 from rclpy.node import Node
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from sensor_msgs.msg import PointCloud2, PointField
 from tf2_ros import Buffer, TransformListener, TransformException
@@ -43,7 +44,7 @@ class Downsampler(Node):
         self.period = 1.0 / self.get_parameter("publish_rate_hz").value; self.last = 0
         self.tf = Buffer(); self.listener = TransformListener(self.tf, self)
         self.pub = self.create_publisher(PointCloud2, self.get_parameter("output_topic").value, 1)
-        self.create_subscription(PointCloud2, self.get_parameter("input_topic").value, self.callback, 1)
+        self.create_subscription(PointCloud2, self.get_parameter("input_topic").value, self.callback, qos_profile_sensor_data)
 
     def callback(self, message):
         now = self.get_clock().now().nanoseconds / 1e9
