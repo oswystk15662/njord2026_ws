@@ -95,11 +95,11 @@ opponent_selector:
     twist_lowpass_alpha: 0.3
     # Task 2 launch selects straight_line; standard remains available.
     motion_filter_mode: "standard"            # standard|straight_line
-    straight_min_hit_count: 10                 # 5 Hz -> roughly 2 s history
-    straight_max_velocity_stddev_mps: 0.30     # [m/s] largest horizontal std-dev
+    straight_min_hit_count: 5                  # 5 Hz -> roughly 1 s history
+    straight_max_velocity_stddev_mps: 0.60     # [m/s] largest horizontal std-dev
     # When LiDAR briefly loses a confirmed vessel, keep publishing this
     # constant-velocity prediction.  0 disables coasting; expiry is silent.
-    straight_coast_timeout_sec: 2.0            # [s]
+    straight_coast_timeout_sec: 3.0            # [s]
     # Operator-facing speed gate. Twist output remains SI m/s.
     min_absolute_speed_knots: 1.5              # [kn]
     max_absolute_speed_knots: 3.5              # [kn]
