@@ -82,6 +82,7 @@ def generate_launch_description():
             "ego_odom_topic": LaunchConfiguration("ego_odom_topic"),
             "map_frame": "odom",
             "base_frame": "base_link",
+            "visual_voxel_leaf_size_m": "0.5",
         },
     )
     tracking = _include(

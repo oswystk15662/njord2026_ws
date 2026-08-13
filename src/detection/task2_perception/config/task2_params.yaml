@@ -17,6 +17,7 @@ task2_cloud_filter:
     output_topic: "/task2/points_filtered"  # Input for Task 2 PCL pipeline
     visual_output_topic: "/task2/points_filtered_visual"  # Display only
     publish_visual_z_mirror: true            # Does not affect recognition
+    visual_voxel_leaf_size_m: 0.0            # GUI only; set >0 to reduce Foxglove load
     output_frame: "base_link"
     min_range_m: 1.5                         # [m] remove own-hull near field
     max_range_m: 40.0                        # [m] required encounter range

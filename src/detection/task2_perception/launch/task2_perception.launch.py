@@ -45,6 +45,9 @@ def generate_launch_description():
         DeclareLaunchArgument(
             "publish_self_marker", default_value="true",
             description="Publish the visualization-only self-vessel Marker"),
+        DeclareLaunchArgument(
+            "visual_voxel_leaf_size_m", default_value="0.0",
+            description="Voxel size for the Foxglove-only point cloud; 0 disables it."),
         DeclareLaunchArgument("use_sim_time", default_value="false"),
         DeclareLaunchArgument(
             "ego_odom_topic", default_value="/odometry/filtered/local"),
@@ -66,6 +69,8 @@ def generate_launch_description():
                     "use_sim_time": LaunchConfiguration("use_sim_time"),
                     "publish_self_marker": LaunchConfiguration(
                         "publish_self_marker"),
+                    "visual_voxel_leaf_size_m": LaunchConfiguration(
+                        "visual_voxel_leaf_size_m"),
                 },
             ],
             condition=IfCondition(LaunchConfiguration("enable_cloud_filter")),

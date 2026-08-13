@@ -106,6 +106,10 @@ class CloudFilterNode(Node):
             ("output_topic", "/task2/points_filtered"),
             ("visual_output_topic", "/task2/points_filtered_visual"),
             ("publish_visual_z_mirror", True),
+            # Display-only voxel filtering.  This deliberately does not
+            # affect /task2/points_filtered, which remains the perception
+            # pipeline input.
+            ("visual_voxel_leaf_size_m", 0.0),
             ("output_frame", "base_link"),
             ("min_range_m", 0.5),
             ("max_range_m", 60.0),
@@ -151,6 +155,7 @@ class CloudFilterNode(Node):
         self.output_frame = str(gp("output_frame"))
         self.visual_output_frame = self.output_frame
         self.publish_visual_z_mirror = bool(gp("publish_visual_z_mirror"))
+        self.visual_voxel_leaf = float(gp("visual_voxel_leaf_size_m"))
         self.publish_self_marker_enabled = bool(gp("publish_self_marker"))
         self.self_marker_yaw_rad = np.deg2rad(float(gp("self_marker_yaw_deg")))
         self.min_range = float(gp("min_range_m"))
@@ -396,6 +401,8 @@ class CloudFilterNode(Node):
             # only height is mirrored for an intuitive upside-down-LiDAR view.
             visual_points = points.copy()
             visual_points[:, 2] *= -1.0
+            visual_points = cloud_ops.voxel_downsample(
+                visual_points, self.visual_voxel_leaf)
             visual_header = Header()
             visual_header.stamp = header.stamp
             visual_header.frame_id = self.visual_output_frame
