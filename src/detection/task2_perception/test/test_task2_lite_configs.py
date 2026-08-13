@@ -63,8 +63,8 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["corridor_ignore_left_side"] is True
     assert selector["corridor_left_side_margin_m"] == 5.0
     assert selector["clip_opponent_bearing_to_corridor"] is True
-    assert selector["opponent_bearing_min_deg"] == -90.0
-    assert selector["opponent_bearing_max_deg"] == 0.0
+    assert selector["opponent_bearing_min_deg"] == 90.0
+    assert selector["opponent_bearing_max_deg"] == 180.0
     relay = params["task2_waypoint_map_frame_relay"]["ros__parameters"]
     assert relay["waypoint1_input_topic"] == "/waypoint1_pose"
     assert relay["waypoint1_output_topic"] == "/task2/waypoint1_pose_map"

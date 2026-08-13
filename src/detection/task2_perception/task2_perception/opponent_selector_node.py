@@ -104,8 +104,8 @@ class OpponentSelectorNode(Node):
             ("corridor_half_width_m", 20.0),
             ("corridor_ignore_left_side", True),
             ("corridor_left_side_margin_m", 0.0),
-            # Restrict the published opponent velocity to the forward-to-right
-            # sector of the GPS5->GPS6 route while preserving its speed.
+            # Restrict the published opponent velocity to the right-to-left
+            # crossing through head-on sector of the GPS5->GPS6 route.
             ("clip_opponent_bearing_to_corridor", True),
             ("opponent_bearing_min_deg", -90.0),
             ("opponent_bearing_max_deg", 0.0),
