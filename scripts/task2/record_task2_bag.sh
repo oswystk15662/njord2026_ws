@@ -16,12 +16,18 @@ TASK2_TOPICS=(
     /odometry/filtered/local
     /odometry/filtered/global
     /task2/points_filtered
+    /task2/points_filtered_visual
+    /task2/self_vessel_marker
     /pcl/cluster_centroids
     /tracked_objects
+    /tracked_objects/markers
     /other_ship/twist
     /pcl/nonground
     /planned_path
     /planned_path_pruned
+    /mppi/crm_costmap
+    /mission/waypoint_markers
+    /actual_path_marker
     /cmd_vel_thruster
     /thruster_command
     /yolo/detections

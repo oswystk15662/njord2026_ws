@@ -14,6 +14,25 @@
           "colorMode": "colormap",
           "colorMap": "turbo"
         },
+        "/task2/points_filtered_visual": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 3
+        },
+        "/tracked_objects/markers": {
+          "visible": true
+        },
+        "/task2/self_vessel_marker": {
+          "visible": true
+        },
+        "/mppi/crm_costmap": {
+          "visible": true
+        },
+        "/planned_path_pruned": {
+          "visible": true
+        },
         "/glim_rosnode/points": {
           "visible": false
         },

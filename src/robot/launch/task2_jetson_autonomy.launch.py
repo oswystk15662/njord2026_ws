@@ -22,7 +22,7 @@ def generate_launch_description():
     params = PathJoinSubstitution([FindPackageShare("task2_perception"), "config", "task2_params.yaml"])
     perception = _include("task2_perception", "task2_perception.launch.py", {
         "enable_cloud_filter": "true", "enable_opponent_selector": tracking,
-        "publish_self_marker": "false", "ego_odom_topic": odom,
+        "publish_self_marker": "true", "ego_odom_topic": odom,
         "motion_filter_mode": "straight_line",
     })
     preprocessing = _include("pcl_preprocessing", "preprocessing.launch.py", {
