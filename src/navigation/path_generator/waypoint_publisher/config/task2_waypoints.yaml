@@ -5,19 +5,19 @@
 task2_config:
   frame_id: "odom"
   publish_rate_hz: 2.0
-  # GPS 6 is approximately 24 m west-north-west of GPS 5.
+  # GPS 6 is approximately 24 m south-west of GPS 5.
   waypoints:
     - id: 5
-      latitude: 63.44244406812208
-      longitude: 10.425838228322759
+      latitude: 63.440734
+      longitude: 10.423366
       yaw: -1.9634954085
       type: "start"
       name: "GPS 5 - Start"
       tolerance_m: 2.0
 
     - id: 6
-      latitude: 63.44248983175509
-      longitude: 10.425370944290792
+      latitude: 63.440460
+      longitude: 10.422980
       yaw: -1.9634954085
       type: "goal"
       name: "GPS 6 - Goal"

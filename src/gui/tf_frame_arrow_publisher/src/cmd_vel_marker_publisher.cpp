@@ -49,22 +49,32 @@ private:
 
   void callback(const geometry_msgs::msg::Twist::SharedPtr command)
   {
-    constexpr double kRadius = 1.0;
+    constexpr double kRadius = 10.0;
     constexpr int kSegments = 48;
+    constexpr double kMotionEpsilon = 1e-3;
     visualization_msgs::msg::MarkerArray markers;
+    const auto erase = [this, &markers](int id) {
+      auto value = marker(id, visualization_msgs::msg::Marker::ARROW);
+      value.action = visualization_msgs::msg::Marker::DELETE;
+      markers.markers.push_back(value);
+    };
 
-    auto translation = marker(0, visualization_msgs::msg::Marker::ARROW);
-    translation.scale.x = 0.08;
-    translation.scale.y = 0.16;
-    translation.scale.z = 0.16;
-    translation.color.g = 1.0;
-    translation.color.b = 0.2;
-    translation.points = {point(0.0, 0.0), point(
-      command->linear.x * display_seconds_, command->linear.y * display_seconds_)};
-    markers.markers.push_back(translation);
+    if (std::hypot(command->linear.x, command->linear.y) > kMotionEpsilon) {
+      auto translation = marker(0, visualization_msgs::msg::Marker::ARROW);
+      translation.scale.x = 0.20;
+      translation.scale.y = 0.40;
+      translation.scale.z = 0.40;
+      translation.color.g = 1.0;
+      translation.color.b = 0.2;
+      translation.points = {point(0.0, 0.0), point(
+        command->linear.x * display_seconds_, command->linear.y * display_seconds_)};
+      markers.markers.push_back(translation);
+    } else {
+      erase(0);
+    }
 
     auto circle = marker(1, visualization_msgs::msg::Marker::LINE_STRIP);
-    circle.scale.x = 0.025;
+    circle.scale.x = 0.05;
     circle.color.r = circle.color.g = circle.color.b = 0.65;
     for (int index = 0; index <= kSegments; ++index) {
       const double angle = 2.0 * M_PI * index / kSegments;
@@ -73,30 +83,35 @@ private:
     markers.markers.push_back(circle);
 
     const double sweep = std::clamp(command->angular.z * display_seconds_, -2.0 * M_PI, 2.0 * M_PI);
-    auto arc = marker(2, visualization_msgs::msg::Marker::LINE_STRIP);
-    arc.scale.x = 0.07;
-    arc.color.r = 1.0;
-    arc.color.g = 0.45;
-    const int arc_segments = std::max(1, static_cast<int>(kSegments * std::abs(sweep) / (2.0 * M_PI)));
-    for (int index = 0; index <= arc_segments; ++index) {
-      const double angle = sweep * index / arc_segments;
-      arc.points.push_back(point(kRadius * std::cos(angle), kRadius * std::sin(angle), 0.04));
-    }
-    markers.markers.push_back(arc);
+    if (std::abs(sweep) > kMotionEpsilon) {
+      auto arc = marker(2, visualization_msgs::msg::Marker::LINE_STRIP);
+      arc.scale.x = 0.15;
+      arc.color.r = 1.0;
+      arc.color.g = 0.45;
+      const int arc_segments = std::max(1, static_cast<int>(kSegments * std::abs(sweep) / (2.0 * M_PI)));
+      for (int index = 0; index <= arc_segments; ++index) {
+        const double angle = sweep * index / arc_segments;
+        arc.points.push_back(point(kRadius * std::cos(angle), kRadius * std::sin(angle), 0.04));
+      }
+      markers.markers.push_back(arc);
 
-    auto turn_head = marker(3, visualization_msgs::msg::Marker::ARROW);
-    turn_head.scale.x = 0.08;
-    turn_head.scale.y = 0.16;
-    turn_head.scale.z = 0.16;
-    turn_head.color.r = 1.0;
-    turn_head.color.g = 0.45;
-    const double direction = sweep >= 0.0 ? 1.0 : -1.0;
-    const double end_x = kRadius * std::cos(sweep);
-    const double end_y = kRadius * std::sin(sweep);
-    turn_head.points = {point(
-      end_x - 0.25 * direction * std::sin(sweep), end_y + 0.25 * direction * std::cos(sweep), 0.04),
-      point(end_x, end_y, 0.04)};
-    markers.markers.push_back(turn_head);
+      auto turn_head = marker(3, visualization_msgs::msg::Marker::ARROW);
+      turn_head.scale.x = 0.20;
+      turn_head.scale.y = 0.40;
+      turn_head.scale.z = 0.40;
+      turn_head.color.r = 1.0;
+      turn_head.color.g = 0.45;
+      const double direction = sweep >= 0.0 ? 1.0 : -1.0;
+      const double end_x = kRadius * std::cos(sweep);
+      const double end_y = kRadius * std::sin(sweep);
+      turn_head.points = {point(
+        end_x - 0.50 * direction * std::sin(sweep), end_y + 0.50 * direction * std::cos(sweep), 0.04),
+        point(end_x, end_y, 0.04)};
+      markers.markers.push_back(turn_head);
+    } else {
+      erase(2);
+      erase(3);
+    }
     pub_->publish(markers);
   }
 
