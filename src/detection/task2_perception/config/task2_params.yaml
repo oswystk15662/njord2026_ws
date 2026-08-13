@@ -74,6 +74,7 @@ opponent_selector:
     tracked_objects_in_map_frame: false
     ego_odom_topic: "/odometry/filtered/local"
     twist_topic: "/other_ship/twist"         # map-frame, absolute [m/s]
+    selected_marker_topic: "/task2/selected_opponent_marker" # Foxglove: green selected ship
     map_frame: "map"
     base_frame: "base_link"
     opponent_frame: "opponent_vessel"

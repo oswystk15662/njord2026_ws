@@ -33,6 +33,7 @@ from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformBroadcaster, TransformListener
+from visualization_msgs.msg import Marker
 
 try:
     from tf2_ros import TransformException
@@ -68,6 +69,7 @@ class OpponentSelectorNode(Node):
             ("ego_odom_topic", "/odometry/filtered/local"),
             ("twist_topic", "/other_ship/twist"),
             ("detection_status_topic", "/task2/opponent_detected"),
+            ("selected_marker_topic", "/task2/selected_opponent_marker"),
             ("map_frame", "map"),
             ("base_frame", "base_link"),
             ("opponent_frame", "opponent_vessel"),
@@ -171,6 +173,8 @@ class OpponentSelectorNode(Node):
         self.pub = self.create_publisher(TwistStamped, str(gp("twist_topic")), 10)
         self.detection_status_pub = self.create_publisher(
             Bool, str(gp("detection_status_topic")), 10)
+        self.selected_marker_pub = self.create_publisher(
+            Marker, str(gp("selected_marker_topic")), 10)
         self.create_subscription(
             TrackedObjectArray, str(gp("tracked_objects_topic")),
             self.tracks_callback, 10)
@@ -311,6 +315,31 @@ class OpponentSelectorNode(Node):
     def _publish_detection_status(self, detected: bool):
         self.detection_status_pub.publish(Bool(data=detected))
 
+    def _publish_selected_marker(self, now, position, yaw, dimensions):
+        marker = Marker()
+        marker.header.stamp = now.to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = "selected_opponent"
+        marker.id = 0
+        marker.type = Marker.CUBE
+        marker.action = Marker.ADD
+        marker.pose.position.x, marker.pose.position.y, marker.pose.position.z = position
+        marker.pose.orientation.z = math.sin(yaw / 2.0)
+        marker.pose.orientation.w = math.cos(yaw / 2.0)
+        marker.scale.x, marker.scale.y, marker.scale.z = dimensions
+        marker.color.g = 1.0
+        marker.color.a = 0.85
+        self.selected_marker_pub.publish(marker)
+
+    def _clear_selected_marker(self, now):
+        marker = Marker()
+        marker.header.stamp = now.to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = "selected_opponent"
+        marker.id = 0
+        marker.action = Marker.DELETE
+        self.selected_marker_pub.publish(marker)
+
     def _coast_or_silence(self, now, now_sec: float):
         """Bridge brief occlusions with constant-velocity prediction only."""
         coast = self.last_observation
@@ -342,6 +371,7 @@ class OpponentSelectorNode(Node):
         self.selected_id = None
         self.last_observation = None
         self.smoother.reset()
+        self._clear_selected_marker(now)
         self._publish_detection_status(False)
 
     # ------------------------------------------------------------------
@@ -429,6 +459,8 @@ class OpponentSelectorNode(Node):
         }
         self._publish_output(
             now, pos_map, vel_map, opponent_yaw, selected.yaw_rate)
+        self._publish_selected_marker(
+            now, pos_map, opponent_yaw, selected.dimensions)
 
 
 def main(args=None):
