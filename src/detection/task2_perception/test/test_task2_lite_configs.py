@@ -33,12 +33,17 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert ground["input_queue_depth"] == 1
     assert ground["ransac_max_iterations"] == 80
     assert cluster["input_queue_depth"] == 1
-    assert cluster["min_cluster_size"] == 30
+    assert cluster["min_cluster_size"] == 20
+    assert cluster["min_cluster_size_far"] == 3
+    assert cluster["far_cluster_distance_m"] == 40.0
     assert tracker["straight_hits_to_confirm"] == 10
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["tracked_objects_in_map_frame"] is False
     assert selector["straight_min_hit_count"] == 10
     assert selector["straight_coast_timeout_sec"] == 2.0
+    assert selector["min_length_m"] == 0.7
+    assert selector["max_length_m"] == 3.0
+    assert selector["max_width_m"] == 2.0
     assert selector["corridor_enabled"] is True
     assert selector["corridor_start_offset_m"] == 5.0
     assert selector["corridor_end_margin_m"] == 5.0

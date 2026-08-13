@@ -82,10 +82,13 @@ opponent_selector:
     selection_policy: "nearest"               # nearest|min_tcpa|track_id
     target_track_id: -1
     # Catamaran horizontal dimensions. Height is intentionally not gated.
-    min_length_m: 1.2                          # [m], expected about 1.8 m
-    max_length_m: 2.5                          # [m], includes measurement error
+    # At the end of the recorded run, the same vessel spans about 1.17--2.57 m
+    # between scans.  Keep the gate vessel-sized while allowing that LiDAR
+    # measurement variation.
+    min_length_m: 0.7                          # [m]
+    max_length_m: 3.0                          # [m]
     min_width_m: 0.5                           # [m], expected about 0.9 m
-    max_width_m: 1.5                           # [m], includes measurement error
+    max_width_m: 2.0                           # [m], includes measurement error
     min_point_count: 0                         # 0 disables this optional gate
     stale_timeout_sec: 2.0                     # [s]
     publish_rate_hz: 10.0                      # [Hz] output update rate
