@@ -29,7 +29,7 @@ import rclpy.logging
 from rclpy.node import Node
 from rclpy.time import Time
 
-from geometry_msgs.msg import PoseStamped, TransformStamped, TwistStamped
+from geometry_msgs.msg import Point, PoseStamped, TransformStamped, TwistStamped
 from nav_msgs.msg import Odometry
 from std_msgs.msg import Bool
 from tf2_ros import Buffer, TransformBroadcaster, TransformListener
@@ -70,6 +70,7 @@ class OpponentSelectorNode(Node):
             ("twist_topic", "/other_ship/twist"),
             ("detection_status_topic", "/task2/opponent_detected"),
             ("selected_marker_topic", "/task2/selected_opponent_marker"),
+            ("velocity_marker_topic", "/task2/selected_opponent_velocity_marker"),
             ("map_frame", "map"),
             ("base_frame", "base_link"),
             ("opponent_frame", "opponent_vessel"),
@@ -189,6 +190,8 @@ class OpponentSelectorNode(Node):
             Bool, str(gp("detection_status_topic")), 10)
         self.selected_marker_pub = self.create_publisher(
             Marker, str(gp("selected_marker_topic")), 10)
+        self.velocity_marker_pub = self.create_publisher(
+            Marker, str(gp("velocity_marker_topic")), 10)
         self.create_subscription(
             TrackedObjectArray, str(gp("tracked_objects_topic")),
             self.tracks_callback, 10)
@@ -315,7 +318,8 @@ class OpponentSelectorNode(Node):
                 "Opponent velocity spike rejected; skipping this cycle.",
                 throttle_duration_sec=2.0)
             self._publish_detection_status(False)
-            return
+            self._clear_velocity_marker(now)
+            return False
         vx, vy, wz = smoothed
 
         msg = TwistStamped()
@@ -337,6 +341,7 @@ class OpponentSelectorNode(Node):
         tf_out.transform.rotation.w = math.cos(opponent_yaw / 2.0)
         self.tf_broadcaster.sendTransform(tf_out)
         self._publish_detection_status(True)
+        return True
 
     def _publish_detection_status(self, detected: bool):
         self.detection_status_pub.publish(Bool(data=detected))
@@ -357,6 +362,35 @@ class OpponentSelectorNode(Node):
         marker.color.a = 0.85
         self.selected_marker_pub.publish(marker)
 
+    def _publish_velocity_marker(self, now, position, velocity):
+        """Publish the map-frame velocity vector of the selected opponent."""
+        speed = float(np.hypot(velocity[0], velocity[1]))
+        if speed <= 1e-6:
+            self._clear_velocity_marker(now)
+            return
+        marker = Marker()
+        marker.header.stamp = now.to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = "selected_opponent_velocity"
+        marker.id = 0
+        marker.type = Marker.ARROW
+        marker.action = Marker.ADD
+        marker.scale.x = 0.12
+        marker.scale.y = 0.24
+        marker.scale.z = 0.30
+        marker.color.r = 0.1
+        marker.color.g = 0.8
+        marker.color.b = 1.0
+        marker.color.a = 0.95
+        start = Point(x=float(position[0]), y=float(position[1]),
+                      z=float(position[2]) + 1.0)
+        # Two metres of display arrow per metre/second preserves the vector
+        # direction while keeping the expected Task 2 speed legible in 3D.
+        end = Point(x=start.x + 2.0 * float(velocity[0]),
+                    y=start.y + 2.0 * float(velocity[1]), z=start.z)
+        marker.points = [start, end]
+        self.velocity_marker_pub.publish(marker)
+
     def _clear_selected_marker(self, now):
         marker = Marker()
         marker.header.stamp = now.to_msg()
@@ -365,6 +399,15 @@ class OpponentSelectorNode(Node):
         marker.id = 0
         marker.action = Marker.DELETE
         self.selected_marker_pub.publish(marker)
+
+    def _clear_velocity_marker(self, now):
+        marker = Marker()
+        marker.header.stamp = now.to_msg()
+        marker.header.frame_id = self.map_frame
+        marker.ns = "selected_opponent_velocity"
+        marker.id = 0
+        marker.action = Marker.DELETE
+        self.velocity_marker_pub.publish(marker)
 
     def _coast_or_silence(self, now, now_sec: float):
         """Bridge brief occlusions with constant-velocity prediction only."""
@@ -378,11 +421,15 @@ class OpponentSelectorNode(Node):
                     self.last_observation = None
                     self.selected_id = None
                     self.smoother.reset()
+                    self._clear_selected_marker(now)
+                    self._clear_velocity_marker(now)
                     self._publish_detection_status(False)
                     return
-                self._publish_output(
-                    now, pos_map, coast["velocity_map"], coast["yaw_map"],
-                    coast["yaw_rate"])
+                if self._publish_output(
+                        now, pos_map, coast["velocity_map"], coast["yaw_map"],
+                        coast["yaw_rate"]):
+                    self._publish_velocity_marker(
+                        now, pos_map, coast["velocity_map"])
                 self.get_logger().info(
                     f"Coasting confirmed opponent id={coast['object_id']} "
                     f"for {elapsed:.1f}s without a LiDAR observation.",
@@ -398,6 +445,7 @@ class OpponentSelectorNode(Node):
         self.last_observation = None
         self.smoother.reset()
         self._clear_selected_marker(now)
+        self._clear_velocity_marker(now)
         self._publish_detection_status(False)
 
     # ------------------------------------------------------------------
@@ -485,10 +533,11 @@ class OpponentSelectorNode(Node):
             "yaw_map": opponent_yaw,
             "yaw_rate": selected.yaw_rate,
         }
-        self._publish_output(
-            now, pos_map, vel_map, opponent_yaw, selected.yaw_rate)
-        self._publish_selected_marker(
-            now, pos_map, opponent_yaw, selected.dimensions)
+        if self._publish_output(
+                now, pos_map, vel_map, opponent_yaw, selected.yaw_rate):
+            self._publish_selected_marker(
+                now, pos_map, opponent_yaw, selected.dimensions)
+            self._publish_velocity_marker(now, pos_map, vel_map)
 
 
 def main(args=None):

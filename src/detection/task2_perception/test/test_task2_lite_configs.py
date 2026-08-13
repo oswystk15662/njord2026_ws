@@ -47,6 +47,7 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     selector = params["opponent_selector"]["ros__parameters"]
     assert selector["tracked_objects_in_map_frame"] is False
     assert selector["selected_marker_topic"] == "/task2/selected_opponent_marker"
+    assert selector["velocity_marker_topic"] == "/task2/selected_opponent_velocity_marker"
     assert selector["straight_min_hit_count"] == 10
     assert selector["straight_coast_timeout_sec"] == 2.0
     assert selector["stale_timeout_sec"] == 4.0
