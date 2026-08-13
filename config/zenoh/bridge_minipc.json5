@@ -67,6 +67,7 @@
           "/actual_path_marker", "/local_costmap/costmap",
           "/cmd_vel_markers",
           "/gui/battery_percent",
+          "/gui/livox/points",
         ],
         subscribers: [
           "/odom", "/odometry/filtered/global", "/livox/imu",
@@ -87,6 +88,7 @@
           "/joy/set_feedback",
           "/foxglove_log",
           "/gui/battery_percent",
+          "/gui/livox/points",
         ],
         service_servers: [
           "/mission/list_tasks",

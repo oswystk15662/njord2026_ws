@@ -41,6 +41,7 @@
           "/sensor/vehicle_gnss/fix/raw", "/sensor/vehicle_gnss/compass/raw",
           "/gui/ground_speed_mps",
           "/gui/battery_percent",
+          "/gui/livox/points",
         ],
         // The ground operator is a client of the miniPC-owned Mission Manager.
         // Task selection is carried in StartTask/RunTask requests, so no

@@ -161,6 +161,9 @@
       ],
       "foxglovePanelTitle": "Task 2 Opponent"
     },
+    "KeioRoboticsAssociation.gnss-map-telemetry.lidar-mission-splat!livox-splat": {
+      "foxglovePanelTitle": "LiDAR Mission Splat"
+    },
     "Tab!w8e7ra": {
       "activeTabIdx": 0,
       "tabs": [
