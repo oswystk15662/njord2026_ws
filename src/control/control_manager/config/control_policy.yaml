@@ -29,7 +29,7 @@ control_policy:
     require_ground_station: false
     require_waypoint_plan: true       # 有効なウェイポイント経路が読み込まれていること
     require_collision_monitor: false  # Nav2 Collision Monitor が有効であること
-    require_buoy_perception: false    # ブイ認識が出力していること
+    require_buoy_perception: true    # ブイ認識が出力していること
     require_dynamic_gate_tf: false    # 動的ゲート中点の TF が出ていること
 
   task2:
@@ -43,7 +43,7 @@ control_policy:
     require_ground_station: true
     require_waypoint_plan: true
     require_collision_monitor: true
-    require_buoy_perception: false
+    require_buoy_perception: true
     require_dynamic_gate_tf: false
 
   # Ground link loss cannot permit normal AUTO continuation.  This dedicated

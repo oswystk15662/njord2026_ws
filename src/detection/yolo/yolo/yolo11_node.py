@@ -298,6 +298,7 @@ class Yolo11DetectorNode(Node):
 
     def _load_model(self, model_path):
         self.is_tensorrt_engine = model_path.endswith('.engine')
+        self.is_pytorch_model = model_path.endswith('.pt')
         self.get_logger().info(
             f'Loading YOLO11 model from: {model_path} '
             f'({"TensorRT engine" if self.is_tensorrt_engine else "PyTorch weights"})'
@@ -305,7 +306,7 @@ class Yolo11DetectorNode(Node):
         try:
             # For .engine files YOLO() transparently uses the TensorRT backend.
             self.model = YOLO(model_path)
-            if not self.is_tensorrt_engine:
+            if self.is_pytorch_model:
                 self.model.to(self.device)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f'Failed to load model from {model_path}: {exc}')
@@ -353,7 +354,7 @@ class Yolo11DetectorNode(Node):
         }
         if self.classes:
             predict_kwargs['classes'] = self.classes
-        if not self.is_tensorrt_engine:
+        if self.is_pytorch_model:
             # Engines have their precision (FP16/INT8) baked in at build time,
             # so half is only meaningful for the PyTorch backend on CUDA.
             predict_kwargs['half'] = self.use_half and 'cuda' in self.device

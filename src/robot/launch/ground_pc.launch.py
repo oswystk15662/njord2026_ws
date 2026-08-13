@@ -26,6 +26,12 @@ def generate_launch_description():
     back_cam_jpeg_video_port = LaunchConfiguration("back_cam_jpeg_video_port")
     enable_ntrip_caster = LaunchConfiguration("enable_ntrip_caster")
     enable_foxglove_bridge = LaunchConfiguration("enable_foxglove_bridge")
+    enable_livox_gui_telemetry = LaunchConfiguration("enable_livox_gui_telemetry")
+
+    livox_splat_mapper = Node(
+        package="livox_gui_telemetry", executable="livox_splat_mapper", name="livox_splat_mapper", output="screen",
+        condition=IfCondition(enable_livox_gui_telemetry),
+    )
     ntrip_caster_config = LaunchConfiguration("ntrip_caster_config")
 
     ground_video_receiver_launch = IncludeLaunchDescription(
@@ -106,6 +112,17 @@ def generate_launch_description():
         ],
     )
 
+    planned_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="planned_path_marker_publisher",
+        name="planned_route_publisher",
+        output="screen",
+        parameters=[{
+            "path_topic": "/planned_path_pruned",
+            "marker_topic": "/planned_path_marker",
+        }],
+    )
+
     ground_waypoints = Node(
         package="waypoint_publisher",
         executable="ground_waypoint_geo_publisher",
@@ -165,6 +182,8 @@ def generate_launch_description():
                 default_value="false",
                 description="Expose vessel telemetry and waypoint markers to the Ground PC Foxglove GUI.",
             ),
+            DeclareLaunchArgument("enable_livox_gui_telemetry", default_value="true", description="Integrate bounded Livox GUI clouds into an odom map."),
+            livox_splat_mapper,
             DeclareLaunchArgument(
                 "enable_zenoh_bridge",
                 default_value="true",
@@ -185,6 +204,7 @@ def generate_launch_description():
             joy_node,
             ground_station_heartbeat,
             actual_route,
+            planned_route,
             ground_waypoints,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,

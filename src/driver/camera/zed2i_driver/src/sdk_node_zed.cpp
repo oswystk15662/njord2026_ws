@@ -199,6 +199,47 @@ void draw_depth_annotations(
   }
 }
 
+sensor_msgs::msg::PointCloud2::UniquePtr depth_to_detection_point_cloud_msg(
+  const cv::Mat & depth_m, const std::vector<Detection2D> & detections,
+  double fx, double fy, double cx, double cy, int stride,
+  double depth_min_m, double depth_max_m, const std::string & frame_id,
+  const rclcpp::Time & stamp)
+{
+  auto cloud = std::make_unique<sensor_msgs::msg::PointCloud2>();
+  cloud->header.stamp = stamp;
+  cloud->header.frame_id = frame_id;
+  cloud->height = 1;
+  cloud->is_bigendian = false;
+  cloud->is_dense = true;
+  sensor_msgs::PointCloud2Modifier modifier(*cloud);
+  modifier.setPointCloud2FieldsByString(1, "xyz");
+  modifier.resize(static_cast<size_t>(depth_m.rows / stride + 1) *
+    static_cast<size_t>(depth_m.cols / stride + 1));
+
+  size_t count = 0;
+  for (int v = 0; v < depth_m.rows; v += stride) {
+    const auto * row = depth_m.ptr<float>(v);
+    for (int u = 0; u < depth_m.cols; u += stride) {
+      if (std::none_of(detections.begin(), detections.end(), [u, v](const auto & box) {
+            return u >= box.x1 && u < box.x2 && v >= box.y1 && v < box.y2;
+          })) continue;
+      const float z = row[u];
+      if (!std::isfinite(z) || z < depth_min_m || z > depth_max_m) continue;
+      const float x = static_cast<float>((static_cast<double>(u) - cx) * z / fx);
+      const float y = static_cast<float>((static_cast<double>(v) - cy) * z / fy);
+      auto * data = cloud->data.data() + count * cloud->point_step;
+      std::memcpy(data + cloud->fields[0].offset, &x, sizeof(x));
+      std::memcpy(data + cloud->fields[1].offset, &y, sizeof(y));
+      std::memcpy(data + cloud->fields[2].offset, &z, sizeof(z));
+      ++count;
+    }
+  }
+  cloud->width = static_cast<uint32_t>(count);
+  cloud->row_step = cloud->width * cloud->point_step;
+  cloud->data.resize(cloud->row_step);
+  return cloud;
+}
+
 }  // namespace
 
 class SdkNode : public rclcpp::Node
@@ -346,6 +387,10 @@ public:
         image_qos);
     depth_pub_ = create_publisher<sensor_msgs::msg::Image>("depth/image", image_qos);
     pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>("points", image_qos);
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    detection_pointcloud_pub_ = create_publisher<sensor_msgs::msg::PointCloud2>(
+      "points/detections", image_qos);
+#endif
 
     sl::InitParameters init_params;
     try {
@@ -618,8 +663,8 @@ private:
   template<typename MessageT>
   static bool has_subscribers(const std::shared_ptr<rclcpp::Publisher<MessageT>> & publisher)
   {
-    return publisher->get_subscription_count() > 0 ||
-           publisher->get_intra_process_subscription_count() > 0;
+    return publisher && (publisher->get_subscription_count() > 0 ||
+           publisher->get_intra_process_subscription_count() > 0);
   }
 
   static cv::Mat sl_mat_to_cv_bgra_view(const sl::Mat & mat)
@@ -669,6 +714,10 @@ private:
     const bool publish_right_info = has_subscribers(right_info_pub_);
     const bool publish_depth = has_subscribers(depth_pub_);
     const bool publish_points = publish_pointcloud_ && has_subscribers(pointcloud_pub_);
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+    const bool publish_detection_points = has_subscribers(detection_pointcloud_pub_);
+    std::vector<Detection2D> detection_boxes;
+#endif
 
     if (!publish_left && !publish_right && !publish_left_info && !publish_right_info &&
       !publish_depth && !publish_points && !publish_debug_image && !run_gpu)
@@ -724,6 +773,7 @@ private:
                   continue;
                 }
               }
+              if (publish_detection_points) detection_boxes.push_back(detection);
 #ifdef ZED2I_DRIVER_HAS_GROUND_VIDEO
 #endif
               PositionedDetection item{detection, nan_position(), PositionSource::kNone};
@@ -859,6 +909,7 @@ private:
                   continue;
                 }
               }
+              if (publish_detection_points) detection_boxes.push_back(detection);
               const auto roi = central_depth_roi(
                 detection, static_cast<float>(depth_center_ratio_), width_, height_);
               const auto depth = depth_median_gpu(
@@ -946,7 +997,11 @@ private:
       right_image_pub_->publish(mat_to_image_msg(right_bgra, "bgra8", right_frame_id_, stamp));
     }
 
-    if (publish_depth || publish_points) {
+    if (publish_depth || publish_points
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+      || publish_detection_points
+#endif
+    ) {
       sl::Mat depth;
       camera_.retrieveMeasure(depth, sl::MEASURE::DEPTH);
       // This is a non-owning view. Each requested ROS output copies it directly into its
@@ -961,13 +1016,19 @@ private:
       if (publish_depth) {
         depth_pub_->publish(mat_to_image_msg(depth_m, "32FC1", depth_frame_id_, stamp));
       }
-      if (!publish_points) {
-        return;
+      if (publish_points) {
+        pointcloud_pub_->publish(
+          depth_to_point_cloud_msg(
+            depth_m, fx_, fy_, cx_, cy_, pointcloud_stride_, depth_min_m_, depth_max_m_,
+            depth_frame_id_, stamp));
       }
-      pointcloud_pub_->publish(
-        depth_to_point_cloud_msg(
-          depth_m, fx_, fy_, cx_, cy_, pointcloud_stride_, depth_min_m_, depth_max_m_,
-          depth_frame_id_, stamp));
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+      if (publish_detection_points && !detection_boxes.empty()) {
+        detection_pointcloud_pub_->publish(depth_to_detection_point_cloud_msg(
+            depth_m, detection_boxes, fx_, fy_, cx_, cy_, pointcloud_stride_,
+            depth_min_m_, depth_max_m_, depth_frame_id_, stamp));
+      }
+#endif
     }
   }
 
@@ -1069,6 +1130,9 @@ private:
   rclcpp::Publisher<sensor_msgs::msg::CameraInfo>::SharedPtr right_info_pub_;
   rclcpp::Publisher<sensor_msgs::msg::Image>::SharedPtr depth_pub_;
   rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pointcloud_pub_;
+#ifdef ZED2I_DRIVER_HAS_GPU_PERCEPTION
+  rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr detection_pointcloud_pub_;
+#endif
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 };

@@ -23,6 +23,12 @@
           "colorMode": "colormap",
           "colorMap": "turbo"
         },
+        "/planned_path_marker": {
+          "visible": true
+        },
+        "/actual_path_marker": {
+          "visible": true
+        },
         "/initialpose": {
           "visible": false
         },
@@ -160,6 +166,9 @@
         }
       ],
       "foxglovePanelTitle": "Task 2 Opponent"
+    },
+    "KeioRoboticsAssociation.gnss-map-telemetry.lidar-mission-splat!livox-splat": {
+      "foxglovePanelTitle": "LiDAR Mission Splat"
     },
     "Tab!w8e7ra": {
       "activeTabIdx": 0,
