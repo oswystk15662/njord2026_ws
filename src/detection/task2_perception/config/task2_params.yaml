@@ -240,6 +240,10 @@ cluster_node:
 # ---------------------------------------------------------------------------
 ship_tracker_node:
   ros__parameters:
+    # Track cluster centroids in odom at the LiDAR measurement time, then
+    # publish the result back in base_link so self motion is not target motion.
+    ego_pose_compensation: true
+    ego_odom_max_age_sec: 0.15
     publish_tentative: true                    # Foxglove: show early candidates in yellow
     min_marker_speed_knots: 0.0                # candidate display only; does not affect selection
     max_marker_speed_knots: 10000.0
