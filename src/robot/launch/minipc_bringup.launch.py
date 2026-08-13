@@ -298,6 +298,13 @@ def generate_launch_description():
         name="foxglove_logger",
         # output="screen",
     )
+    cmd_vel_markers = Node(
+        package="tf_frame_arrow_publisher",
+        executable="cmd_vel_marker_publisher",
+        name="cmd_vel_marker_publisher",
+        output="screen",
+        parameters=[{"cmd_vel_topic": "/cmd_vel", "marker_topic": "/cmd_vel_markers"}],
+    )
 
     alert_lamp_launch = include_launch(
         "alert_lamp",
@@ -615,6 +622,7 @@ def generate_launch_description():
             bms_serial,
             bms_launch,
             foxglove_logger,
+            cmd_vel_markers,
             alert_lamp_launch,
             buoy_obstacle_launch,
             cardinal_wall_publisher,

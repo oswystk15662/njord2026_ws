@@ -61,6 +61,12 @@ def generate_launch_description():
         ],
         condition=IfCondition(start_waypoint_pose_publisher),
     )
+    task2_waypoint_marker_publisher = Node(
+        package="asv_trajectory_planner",
+        executable="task2_waypoint_marker_publisher",
+        name="task2_waypoint_marker_publisher",
+        output="screen",
+    )
 
     planner_node = Node(
         package="asv_trajectory_planner",
@@ -154,6 +160,7 @@ def generate_launch_description():
                 description="Ignore /other_ship/twist and plan without an opponent",
             ),
             task2_waypoint_pose_publisher,
+            task2_waypoint_marker_publisher,
             planner_node,
             follow_path_client_node,
             crm_costmap,

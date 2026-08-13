@@ -100,6 +100,13 @@ def generate_launch_description():
             ]),
         },
     )
+    waypoint_markers = Node(
+        package="asv_trajectory_planner",
+        executable="task2_waypoint_marker_publisher",
+        name="task2_waypoint_marker_publisher",
+        output="screen",
+        parameters=[{"use_sim_time": True}],
+    )
 
     return LaunchDescription([
         DeclareLaunchArgument(
@@ -129,5 +136,6 @@ def generate_launch_description():
         tf_fallback,
         perception,
         tracking,
+        waypoint_markers,
         OpaqueFunction(function=_bag_player),
     ])

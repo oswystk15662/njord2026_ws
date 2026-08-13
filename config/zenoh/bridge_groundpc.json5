@@ -28,6 +28,9 @@
         subscribers: [
           "/odom", "/odometry/filtered/global", "/sensor/vehicle_gnss/fix/raw",
           "/sensor/vehicle_gnss/compass/raw", "/tf", "/tf_static", "/mission/status",
+          "/task2/points_filtered_visual", "/task2/self_vessel_marker",
+          "/tracked_objects/markers", "/mppi/crm_costmap", "/planned_path_pruned",
+          "/task2/gps_waypoint_markers", "/actual_path_marker", "/cmd_vel_markers",
           "/buoy_detections", "/buoy_detections_3d",
           "/virtual_obstacles", "/buoy_roi", "/diagnostics",
           "/heartbeat/driver/camera/front", "/heartbeat/driver/lidar",

@@ -59,7 +59,7 @@ def generate_launch_description():
             "enable_cloud_filter": "true",
             "enable_safety_cloud": "true",
             "enable_opponent_selector": enable_ship_tracking,
-            "publish_self_marker": "false",
+            "publish_self_marker": "true",
             "motion_filter_mode": opponent_motion_mode,
         },
     )
