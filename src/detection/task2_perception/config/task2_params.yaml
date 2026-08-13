@@ -89,7 +89,7 @@ opponent_selector:
     min_width_m: 0.3                           # [m]
     max_width_m: 2.2                           # [m], includes measurement error
     min_point_count: 0                         # 0 disables this optional gate
-    stale_timeout_sec: 2.0                     # [s]
+    stale_timeout_sec: 4.0                     # [s], retain a confirmed target through short LiDAR gaps
     publish_rate_hz: 10.0                      # [Hz] output update rate
     twist_lowpass_alpha: 0.3
     # Task 2 launch selects straight_line; standard remains available.
@@ -236,3 +236,4 @@ cluster_node:
 ship_tracker_node:
   ros__parameters:
     straight_hits_to_confirm: 10               # 5 Hz -> roughly 2 s to confirm
+    max_misses_confirmed: 20                    # 5 Hz -> retain confirmed tracks for about 4 s
