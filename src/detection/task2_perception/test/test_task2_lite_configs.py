@@ -43,9 +43,12 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert selector["selected_marker_topic"] == "/task2/selected_opponent_marker"
     assert selector["straight_min_hit_count"] == 10
     assert selector["straight_coast_timeout_sec"] == 2.0
-    assert selector["min_length_m"] == 0.7
-    assert selector["max_length_m"] == 3.0
-    assert selector["max_width_m"] == 2.0
+    assert selector["min_length_m"] == 0.5
+    assert selector["max_length_m"] == 3.5
+    assert selector["min_width_m"] == 0.3
+    assert selector["max_width_m"] == 2.2
+    assert selector["min_absolute_speed_knots"] == 1.5
+    assert selector["max_absolute_speed_knots"] == 3.5
     assert selector["corridor_enabled"] is True
     assert selector["corridor_start_offset_m"] == 5.0
     assert selector["corridor_end_margin_m"] == 5.0

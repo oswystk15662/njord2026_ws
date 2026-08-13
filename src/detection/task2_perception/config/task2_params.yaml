@@ -84,10 +84,10 @@ opponent_selector:
     # At the end of the recorded run, the same vessel spans about 1.17--2.57 m
     # between scans.  Keep the gate vessel-sized while allowing that LiDAR
     # measurement variation.
-    min_length_m: 0.7                          # [m]
-    max_length_m: 3.0                          # [m]
-    min_width_m: 0.5                           # [m], expected about 0.9 m
-    max_width_m: 2.0                           # [m], includes measurement error
+    min_length_m: 0.5                          # [m]
+    max_length_m: 3.5                          # [m]
+    min_width_m: 0.3                           # [m]
+    max_width_m: 2.2                           # [m], includes measurement error
     min_point_count: 0                         # 0 disables this optional gate
     stale_timeout_sec: 2.0                     # [s]
     publish_rate_hz: 10.0                      # [Hz] output update rate
@@ -100,8 +100,8 @@ opponent_selector:
     # constant-velocity prediction.  0 disables coasting; expiry is silent.
     straight_coast_timeout_sec: 2.0            # [s]
     # Operator-facing speed gate. Twist output remains SI m/s.
-    min_absolute_speed_knots: 2.0              # [kn]
-    max_absolute_speed_knots: 3.0              # [kn]
+    min_absolute_speed_knots: 1.5              # [kn]
+    max_absolute_speed_knots: 3.5              # [kn]
     # Recognition rectangle fixed in the map frame to GPS point 5 -> 6.
     # It begins 5 m after GPS5, ends 5 m past GPS6, and is 40 m wide.
     # task2_waypoint_pose_publisher resolves the GPS points through /fromLL.
