@@ -49,14 +49,14 @@ ThrusterDriverNode::ThrusterDriverNode(const rclcpp::NodeOptions & options)
   input_mode_ = toLower(this->declare_parameter<std::string>("input_mode", "cmd_vel"));
 
   control_rate_hz_ = this->declare_parameter<double>("control.rate_hz", 50.0);
-  max_linear_x_ = this->declare_parameter<double>("input_scaling.max_linear_x", 1.0);
-  max_linear_y_ = this->declare_parameter<double>("input_scaling.max_linear_y", 1.0);
-  max_angular_z_ = this->declare_parameter<double>("input_scaling.max_angular_z", 1.0);
+  max_linear_x_ = this->declare_parameter<double>("clamp.max_linear_x", 10.0);
+  max_linear_y_ = this->declare_parameter<double>("clamp.max_linear_y", 2.0);
+  max_angular_z_ = this->declare_parameter<double>("clamp.max_angular_z", 2.0);
   if (!std::isfinite(max_linear_x_) || max_linear_x_ <= 0.0 ||
     !std::isfinite(max_linear_y_) || max_linear_y_ <= 0.0 ||
     !std::isfinite(max_angular_z_) || max_angular_z_ <= 0.0)
   {
-    throw std::runtime_error("input_scaling limits must be finite and greater than zero");
+    throw std::runtime_error("clamp limits must be finite and greater than zero");
   }
   watchdog_timeout_sec_ = this->declare_parameter<double>("safety.watchdog_timeout_sec", 0.5);
   use_velocity_feedback_ =

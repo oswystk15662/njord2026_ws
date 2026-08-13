@@ -4,10 +4,11 @@ thruster_driver_node:
 
     duty_resolution: 1000
 
-    input_scaling:
-      max_linear_x: 1.0
-      max_linear_y: 1.0
-      max_angular_z: 1.0
+    # vel max
+    clamp:
+      max_linear_x: 20.0
+      max_linear_y: 10.0
+      max_angular_z: 6.283184 # 2*pi rad/s
 
     control:
       rate_hz: 50.0
@@ -15,16 +16,24 @@ thruster_driver_node:
       feedback_timeout_sec: 0.5
       stop_on_feedback_timeout: true
       p:
-        surge: 28.29
-        sway: 28.29
-        yaw: 12.17
+        surge: 20.0
+        sway: 60.0
+        yaw: 6.0
+      i:
+        surge: 100.0
+        sway: 100.0
+        yaw: 10.0
+      d: 
+        surge: 1.0
+        sway: 2.0
+        yaw: 25.0
       # Wrench is clamped to +/-max_{surge,sway,yaw}_wrench instead of +/-1 so
       # stick/button-driven manual commands can reach a usable thrust; tuned so
       # manual_control.launch.py's default full-scale stick/button input
       # yields ~2N per thruster. See simple_manual/README.md.
-      max_surge_wrench: 145.7
-      max_sway_wrench: 145.7
-      max_yaw_wrench: 206.0
+      max_surge_wrench: 185.9
+      max_sway_wrench: 185.9
+      max_yaw_wrench: 262.64
       dob:
         enable: false
         observer_gain: 1.0

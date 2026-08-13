@@ -751,7 +751,7 @@ def generate_launch_description():
             ),
             DeclareLaunchArgument(
                 "thruster_use_velocity_feedback",
-                default_value="false",
+                default_value="true",
                 description="Use measured local odometry velocity in thruster control.",
             ),
             localization_launch,
