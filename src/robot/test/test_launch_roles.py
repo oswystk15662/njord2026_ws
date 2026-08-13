@@ -271,6 +271,13 @@ def test_task2_uses_only_follow_path_controller_and_its_readiness_owner():
     assert '"mission_gate_required": True' in adapter_source
     assert '"preprocessing.launch.py"' not in adapter_source
     assert '"planner_real.launch.py"' not in adapter_source
+    planner_real_source = (Path(_LAUNCH_DIR).parents[1] / "navigation" /
+                           "path_generator" / "mppi" / "launch" /
+                           "planner_real.launch.py").read_text()
+    assert 'executable="crm_costmap_node"' not in planner_real_source
+    assert '"/mppi/crm_costmap"' in (Path(_LAUNCH_DIR).parents[2] /
+                                       "config" / "zenoh" /
+                                       "bridge_jetson.json5").read_text()
     assert "nav2_controller" in task2_nav_source
     assert "nav2_velocity_smoother" in task2_nav_source
     assert "nav2_lifecycle_manager" in task2_nav_source
