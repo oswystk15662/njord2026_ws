@@ -100,7 +100,8 @@ class PlannerNode(Node):
         self.declare_parameter("mppi.control_cost_weight", 0.2)
         # "safe distance" in the code is the CRM bumper ellipse, expressed as
         # per-side gains in multiples of LOA, plus buoy/gate geometry.
-        self.declare_parameter("mppi.loa", 2.0)
+        self.declare_parameter("mppi.own_loa_m", 1.2)
+        self.declare_parameter("mppi.other_loa_m", 2.0)
         self.declare_parameter("mppi.safe_distance_right_loa", 3.2)
         self.declare_parameter("mppi.safe_distance_left_loa", 1.6)
         self.declare_parameter("mppi.safe_distance_fore_loa", 6.4)
@@ -168,7 +169,8 @@ class PlannerNode(Node):
             "buoy_cost_weight": float(self.get_parameter("mppi.buoy_cost_weight").value),
             "speed_cost_weight": float(self.get_parameter("mppi.speed_cost_weight").value),
             "control_cost_weight": float(self.get_parameter("mppi.control_cost_weight").value),
-            "loa": float(self.get_parameter("mppi.loa").value),
+            "own_loa_m": float(self.get_parameter("mppi.own_loa_m").value),
+            "other_loa_m": float(self.get_parameter("mppi.other_loa_m").value),
             "safe_distance_right_loa": float(
                 self.get_parameter("mppi.safe_distance_right_loa").value
             ),
@@ -457,7 +459,7 @@ class PlannerNode(Node):
             own_map_x,
             float(self.latest_own_odom.twist.twist.linear.x),
             own_heading_crm,
-            self.trajectory_generator.planner.loa,
+            self.trajectory_generator.planner.own_loa_m,
         ]
         others_crm = self._other_ship_crm_state_in_map()
 
@@ -544,7 +546,7 @@ class PlannerNode(Node):
             position.x,
             other_u,
             (-math.degrees(other_yaw)) % 360.0,
-            self.trajectory_generator.planner.loa,
+            self.trajectory_generator.planner.other_loa_m,
         ]]
 
     @staticmethod
