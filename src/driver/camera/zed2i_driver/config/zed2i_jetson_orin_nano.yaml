@@ -104,5 +104,7 @@
     # Point clouds are considerably larger, so opt in explicitly when needed.
     publish_pointcloud: false
     pointcloud_stride: 4
+    # /zed2i/points/detections is published only while Foxglove (or another
+    # subscriber) is attached; it contains ZED points inside YOLO boxes.
     num_disparities: 128
     block_size: 5
