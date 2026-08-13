@@ -235,5 +235,8 @@ cluster_node:
 # ---------------------------------------------------------------------------
 ship_tracker_node:
   ros__parameters:
+    # Standard mode still needs 3 hits to confirm, but tolerates brief gaps
+    # while the track is tentative (each missed scan decrements hits by one).
+    max_misses_tentative: 4                    # 5 Hz -> retain a tentative candidate for about 0.8 s
     straight_hits_to_confirm: 10               # 5 Hz -> roughly 2 s to confirm
     max_misses_confirmed: 20                    # 5 Hz -> retain confirmed tracks for about 4 s

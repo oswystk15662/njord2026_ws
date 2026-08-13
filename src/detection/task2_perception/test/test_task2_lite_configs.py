@@ -37,6 +37,7 @@ def test_task2_lite_pipeline_uses_latest_compact_clouds():
     assert cluster["min_cluster_size"] == 20
     assert cluster["min_cluster_size_far"] == 3
     assert cluster["far_cluster_distance_m"] == 40.0
+    assert tracker["max_misses_tentative"] == 4
     assert tracker["straight_hits_to_confirm"] == 10
     assert tracker["max_misses_confirmed"] == 20
     selector = params["opponent_selector"]["ros__parameters"]
