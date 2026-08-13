@@ -106,6 +106,17 @@ def generate_launch_description():
         ],
     )
 
+    planned_route = Node(
+        package="tf_frame_arrow_publisher",
+        executable="planned_path_marker_publisher",
+        name="planned_route_publisher",
+        output="screen",
+        parameters=[{
+            "path_topic": "/planned_path_pruned",
+            "marker_topic": "/planned_path_marker",
+        }],
+    )
+
     ground_waypoints = Node(
         package="waypoint_publisher",
         executable="ground_waypoint_geo_publisher",
@@ -185,6 +196,7 @@ def generate_launch_description():
             joy_node,
             ground_station_heartbeat,
             actual_route,
+            planned_route,
             ground_waypoints,
             ground_video_receiver_launch,
             back_cam_h26x_receiver_launch,

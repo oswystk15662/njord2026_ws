@@ -23,6 +23,12 @@
           "colorMode": "colormap",
           "colorMap": "turbo"
         },
+        "/planned_path_marker": {
+          "visible": true
+        },
+        "/actual_path_marker": {
+          "visible": true
+        },
         "/initialpose": {
           "visible": false
         },
