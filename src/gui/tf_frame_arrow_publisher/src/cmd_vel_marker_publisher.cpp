@@ -60,7 +60,8 @@ private:
     translation.color.g = 1.0;
     translation.color.b = 0.2;
     translation.points = {point(0.0, 0.0), point(
-      command->linear.x * display_seconds_, command->linear.y * display_seconds_)};
+      command->linear.x * display_seconds_ * 10.0,
+      command->linear.y * display_seconds_ * 10.0)};
     markers.markers.push_back(translation);
 
     auto circle = marker(1, visualization_msgs::msg::Marker::LINE_STRIP);
