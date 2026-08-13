@@ -104,6 +104,11 @@ class OpponentSelectorNode(Node):
             ("corridor_half_width_m", 20.0),
             ("corridor_ignore_left_side", True),
             ("corridor_left_side_margin_m", 0.0),
+            # Keep the published opponent on the forward-to-right sector of
+            # the GPS5->GPS6 route, while preserving its measured range.
+            ("clip_opponent_bearing_to_corridor", True),
+            ("opponent_bearing_min_deg", -90.0),
+            ("opponent_bearing_max_deg", 0.0),
         ])
         gp = lambda name: self.get_parameter(name).value  # noqa: E731
 
@@ -131,12 +136,21 @@ class OpponentSelectorNode(Node):
         self.corridor_half_width_m = float(gp("corridor_half_width_m"))
         self.corridor_ignore_left_side = bool(gp("corridor_ignore_left_side"))
         self.corridor_left_side_margin_m = float(gp("corridor_left_side_margin_m"))
+        self.clip_opponent_bearing_to_corridor = bool(
+            gp("clip_opponent_bearing_to_corridor"))
+        self.opponent_bearing_min_rad = math.radians(
+            float(gp("opponent_bearing_min_deg")))
+        self.opponent_bearing_max_rad = math.radians(
+            float(gp("opponent_bearing_max_deg")))
         if self.corridor_start_offset_m < 0.0 or \
                 self.corridor_end_margin_m < 0.0 or \
                 self.corridor_half_width_m <= 0.0:
             raise ValueError("Task 2 corridor dimensions must be positive")
         if self.corridor_left_side_margin_m < 0.0:
             raise ValueError("corridor_left_side_margin_m must be >= 0")
+        if not -math.pi <= self.opponent_bearing_min_rad <= \
+                self.opponent_bearing_max_rad <= math.pi:
+            raise ValueError("opponent bearing limits must be within [-180, 180] deg")
         self.corridor_start_map = None
         self.corridor_end_map = None
         self.selection_params = SelectionParams(
@@ -208,7 +222,8 @@ class OpponentSelectorNode(Node):
             f"-{self.max_absolute_speed_knots:.2f} kn, "
             f"straight_coast={self.straight_coast_timeout_sec:.1f}s, "
             f"GPS5->6 corridor={'enabled' if self.corridor_enabled else 'disabled'}, "
-            f"left_side_ignored={self.corridor_ignore_left_side}")
+            f"left_side_ignored={self.corridor_ignore_left_side}, "
+            f"bearing_clip={'enabled' if self.clip_opponent_bearing_to_corridor else 'disabled'}")
 
     # ------------------------------------------------------------------
     def tracks_callback(self, msg):
@@ -281,6 +296,17 @@ class OpponentSelectorNode(Node):
                         self.corridor_end_map,
                         self.corridor_left_side_margin_m))
 
+    def _clip_opponent_bearing(self, position_map: np.ndarray,
+                               own_position_map: np.ndarray) -> np.ndarray:
+        if not self.clip_opponent_bearing_to_corridor or \
+                self.corridor_start_map is None or self.corridor_end_map is None:
+            return position_map
+        route = self.corridor_end_map - self.corridor_start_map
+        route_yaw = math.atan2(route[1], route[0])
+        return tracking_glue.clip_position_bearing(
+            position_map, own_position_map, route_yaw,
+            self.opponent_bearing_min_rad, self.opponent_bearing_max_rad)
+
     def _publish_output(self, now, pos_map, vel_map, opponent_yaw, yaw_rate):
         """Publish one absolute target estimate and its map-frame TF."""
         smoothed = self.smoother.update(vel_map[0], vel_map[1], yaw_rate)
@@ -348,6 +374,8 @@ class OpponentSelectorNode(Node):
             if 0.0 <= elapsed <= self.straight_coast_timeout_sec:
                 pos_map = tracking_glue.predict_straight_motion(
                     coast["position_map"], coast["velocity_map"], elapsed)
+                pos_map = self._clip_opponent_bearing(
+                    pos_map, coast["own_position_map"])
                 if not self._in_task2_corridor(pos_map):
                     self.last_observation = None
                     self.selected_id = None
@@ -423,6 +451,8 @@ class OpponentSelectorNode(Node):
                 candidate.position, vel_abs_base, t_map_base)
             if not self._in_task2_corridor(candidate_pos_map):
                 continue
+            candidate_pos_map = self._clip_opponent_bearing(
+                candidate_pos_map, t_map_base[:3, 3])
             speed_knots = mps_to_knots(
                 np.hypot(candidate_vel_map[0], candidate_vel_map[1]))
             if not self.min_absolute_speed_knots <= speed_knots <= \
@@ -453,6 +483,7 @@ class OpponentSelectorNode(Node):
             "object_id": selected.object_id,
             "stamp_sec": now_sec,
             "position_map": pos_map.copy(),
+            "own_position_map": t_map_base[:3, 3].copy(),
             "velocity_map": vel_map.copy(),
             "yaw_map": opponent_yaw,
             "yaw_rate": selected.yaw_rate,

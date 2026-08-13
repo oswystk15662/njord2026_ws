@@ -223,6 +223,34 @@ def is_left_of_oriented_line(
     return lateral > float(margin_m)
 
 
+def clip_position_bearing(
+    position_map: np.ndarray,
+    origin_map: np.ndarray,
+    reference_yaw_rad: float,
+    min_bearing_rad: float,
+    max_bearing_rad: float,
+) -> np.ndarray:
+    """Keep range while limiting a map-frame bearing relative to a route yaw.
+
+    Bearings use the normal counter-clockwise-positive convention, so the
+    right side of the GPS5->GPS6 route is negative.  ``atan2(sin, cos)``
+    normalizes across the +/-pi seam before clipping, including near 0 deg.
+    """
+    if min_bearing_rad > max_bearing_rad:
+        raise ValueError("min_bearing_rad must be <= max_bearing_rad")
+    position = np.asarray(position_map, dtype=float).copy()
+    origin = np.asarray(origin_map, dtype=float)
+    offset = position[:2] - origin[:2]
+    distance = float(np.hypot(offset[0], offset[1]))
+    if distance <= 1e-6:
+        return position
+    bearing = np.arctan2(np.sin(np.arctan2(offset[1], offset[0]) - reference_yaw_rad),
+                         np.cos(np.arctan2(offset[1], offset[0]) - reference_yaw_rad))
+    yaw = reference_yaw_rad + np.clip(bearing, min_bearing_rad, max_bearing_rad)
+    position[:2] = origin[:2] + distance * np.array([np.cos(yaw), np.sin(yaw)])
+    return position
+
+
 def select_opponent(
     tracks: list[Track],
     now_sec: float,

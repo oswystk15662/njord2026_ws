@@ -155,6 +155,24 @@ class TestStaleAndGates:
         assert not tracking_glue.is_left_of_oriented_line(
             np.array([20.0, 19.9]), start, end)
 
+    def test_bearing_clip_keeps_range_on_right_to_forward_sector(self):
+        origin = np.array([1.0, 2.0, 0.0])
+        position = origin + np.array([0.0, 10.0, 0.0])
+        clipped = tracking_glue.clip_position_bearing(
+            position, origin, 0.0, -np.pi / 2.0, 0.0)
+        np.testing.assert_allclose(clipped, [11.0, 2.0, 0.0], atol=1e-12)
+
+    def test_bearing_clip_handles_zero_across_pi_wrap(self):
+        origin = np.zeros(3)
+        route_yaw = np.deg2rad(179.0)
+        position = 10.0 * np.array([
+            np.cos(np.deg2rad(-179.0)), np.sin(np.deg2rad(-179.0)), 0.0])
+        clipped = tracking_glue.clip_position_bearing(
+            position, origin, route_yaw, -np.pi / 2.0, 0.0)
+        np.testing.assert_allclose(
+            clipped[:2], 10.0 * np.array([np.cos(route_yaw), np.sin(route_yaw)]),
+            atol=1e-12)
+
     def test_straight_line_confidence_gate(self):
         short_history = make_track(
             object_id=1, hit_count=8, velocity_stddev_mps=0.10)
