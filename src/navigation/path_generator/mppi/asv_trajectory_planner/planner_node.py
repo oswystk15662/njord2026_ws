@@ -457,7 +457,9 @@ class PlannerNode(Node):
         own_crm = [
             -own_map_y,
             own_map_x,
-            float(self.latest_own_odom.twist.twist.linear.x),
+            # Match the MPPI candidate-state assumption: Task 2 evaluates
+            # collision risk at its fixed configured cruise speed (2 kn).
+            self.trajectory_generator.planner.target_speed,
             own_heading_crm,
             self.trajectory_generator.planner.own_loa_m,
         ]
