@@ -923,6 +923,26 @@ def test_foxglove_v3_telemetry_reaches_the_ground_pc():
     assert 'executable="ground_speed_publisher"' in source
 
 
+def test_zenoh_routes_selected_opponent_markers_to_ground():
+    zenoh_dir = Path(_THIS_DIR).parents[2] / "config" / "zenoh"
+    jetson = (zenoh_dir / "bridge_jetson.json5").read_text(encoding="utf-8")
+    minipc = (zenoh_dir / "bridge_minipc.json5").read_text(encoding="utf-8")
+    ground = (zenoh_dir / "bridge_groundpc.json5").read_text(encoding="utf-8")
+    jetson_publishers = jetson.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    minipc_publishers = minipc.split("publishers:", 1)[1].split("subscribers:", 1)[0]
+    minipc_subscribers = minipc.split("subscribers:", 1)[1]
+    ground_subscribers = ground.split("subscribers:", 1)[1]
+
+    for topic in (
+        '\"/task2/selected_opponent_marker\"',
+        '\"/task2/selected_opponent_velocity_marker\"',
+    ):
+        assert topic in jetson_publishers
+        assert topic in minipc_subscribers
+        assert topic in minipc_publishers
+        assert topic in ground_subscribers
+
+
 def test_zed_v4l2_q40_preview_is_the_default_jetson_backend():
     source = _read_launch_source("jetson_bringup.launch.py")
     assert '"zed_camera_backend"' in source
