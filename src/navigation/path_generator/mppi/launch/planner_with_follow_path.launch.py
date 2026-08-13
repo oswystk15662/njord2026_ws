@@ -1,8 +1,13 @@
 from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
 
 def generate_launch_description():
+    mission_gate_required = LaunchConfiguration("mission_gate_required")
+    enabled_topic = LaunchConfiguration("enabled_topic")
+    goal_reached_topic = LaunchConfiguration("goal_reached_topic")
     task2_gps_waypoint_publisher = Node(
         package="asv_trajectory_planner",
         executable="task2_gps_waypoint_publisher",
@@ -88,11 +93,17 @@ def generate_launch_description():
                 # goalを送り直しすぎるとNav2がabortしやすいので抑制
                 "send_frequency": 1.0,
                 "enable_replanning": True,
+                "mission_gate_required": mission_gate_required,
+                "enabled_topic": enabled_topic,
+                "goal_reached_topic": goal_reached_topic,
             }
         ],
     )
     return LaunchDescription(
         [
+            DeclareLaunchArgument("mission_gate_required", default_value="false"),
+            DeclareLaunchArgument("enabled_topic", default_value="/mission/task2/enabled"),
+            DeclareLaunchArgument("goal_reached_topic", default_value="/mission/task2/goal_reached"),
             task2_gps_waypoint_publisher,
             opponent_twist_from_tf_node,
             planner_node,

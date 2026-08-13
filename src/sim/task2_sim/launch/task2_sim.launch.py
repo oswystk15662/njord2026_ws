@@ -28,6 +28,10 @@ def generate_launch_description():
         "use_mppi", default_value="true",
         description="Run the MPPI to FollowPath chain",
     )
+    mission_managed = DeclareLaunchArgument(
+        "mission_managed", default_value="false",
+        description="Wait for Mission Manager to enable Task 2 FollowPath.",
+    )
     use_sim_time = DeclareLaunchArgument(
         "use_sim_time",
         default_value="false",
@@ -192,7 +196,10 @@ def generate_launch_description():
     mppi_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(pkg_mppi, "launch", "planner_with_follow_path.launch.py")
-        )
+        ),
+        launch_arguments={
+            "mission_gate_required": LaunchConfiguration("mission_managed"),
+        }.items(),
     )
 
     goal_layer_timer = TimerAction(
@@ -208,6 +215,7 @@ def generate_launch_description():
         use_cmd_vel_kinematics,
         use_nav2,
         use_mppi,
+        mission_managed,
         use_sim_time,
         params_arg,
         opponent_params_arg,

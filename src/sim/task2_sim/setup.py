@@ -9,7 +9,10 @@ setup(
     data_files=[
         ("share/ament_index/resource_index/packages", ["resource/" + package_name]),
         ("share/" + package_name, ["package.xml"]),
-        ("share/" + package_name + "/launch", ["launch/task2_sim.launch.py"]),
+        ("share/" + package_name + "/launch", [
+            "launch/task2_sim.launch.py",
+            "launch/task2_sim_bringup.launch.py",
+        ]),
         (
             "share/" + package_name + "/config",
             ["config/task2_params.yaml", "config/task2_opponent_sim.yaml"],

@@ -197,6 +197,7 @@ class MissionManager(Node):
         self.declare_parameter("waypoint_transform_anchor_longitude", 0.0)
         self.declare_parameter("waypoint_transform_rotation_rad", 0.0)
         self.declare_parameter("waypoint_transform_scale", 1.0)
+        self.declare_parameter("force_runtime_reconfigure", False)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -414,7 +415,10 @@ class MissionManager(Node):
         if request.dry_run and not task.supports_dry_run:
             return self._reject_started(decision.execution_id, ResultCode.REJECTED, "task does not support dry run")
         active_profile = self._active_nav2_profile
-        if not request.dry_run and task.task_id != "return_home" and task.nav2_profile != active_profile:
+        if (not request.dry_run and task.task_id != "return_home" and (
+            task.nav2_profile != active_profile
+            or bool(self.get_parameter("force_runtime_reconfigure").value)
+        )):
             self._machine.transition(MissionState.CONFIGURING, execution_id=decision.execution_id,
                                      stage="nav2_profile", message=f"switching Nav2 to {task.nav2_profile}")
             self._pending_runtime_start = (decision, task, request)

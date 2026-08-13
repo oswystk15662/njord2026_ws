@@ -31,6 +31,8 @@ class RuntimeManager(Node):
         self.declare_parameter("nav2_ready_timeout_sec", 30.0)
         self.declare_parameter("nav2_ready_poll_sec", 0.5)
         self.declare_parameter("nav2_lifecycle_query_timeout_sec", 3.0)
+        self.declare_parameter("runtime_mode", "nav2")
+        self.declare_parameter("restart_on_configure", False)
         self._process = None
         self._profile = ""
         self._lock = threading.Lock()
@@ -48,7 +50,9 @@ class RuntimeManager(Node):
         self._publish(Nav2RuntimeStatus.STOPPED, "")
 
     def _goal(self, goal):
-        return GoalResponse.ACCEPT if goal.parameter == "nav2_profile" and goal.value in {"task1", "task2", "task3"} else GoalResponse.REJECT
+        mode = str(self.get_parameter("runtime_mode").value)
+        profiles = {"task2"} if mode == "task2_sim" else {"task1", "task2", "task3"}
+        return GoalResponse.ACCEPT if goal.parameter == "nav2_profile" and goal.value in profiles else GoalResponse.REJECT
 
     @staticmethod
     def _cancel(_goal):
@@ -132,7 +136,7 @@ class RuntimeManager(Node):
         ).stdout.splitlines()
         nav2_member = any(
             line.lstrip().startswith(f"{pgid} ") and
-            ("task_runtime.launch.py" in line or "nav2_" in line)
+            ("task_runtime.launch.py" in line or "task2_sim.launch.py" in line or "nav2_" in line)
             for line in members
         )
         if not nav2_member:
@@ -196,6 +200,22 @@ class RuntimeManager(Node):
             f"timed out after {timeout:g}s waiting for /bt_navigator to become active: {last_output}"
         )
 
+    def _wait_for_service(self, service_name: str) -> None:
+        """Wait for the child sim's localization service before route projection."""
+        timeout = float(self.get_parameter("nav2_ready_timeout_sec").value)
+        poll = float(self.get_parameter("nav2_ready_poll_sec").value)
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._process is None or self._process.poll() is not None:
+                raise RuntimeError(f"Nav2 runtime exited before {service_name} became available")
+            result = subprocess.run(
+                ["ros2", "service", "list"], capture_output=True, text=True, check=False
+            )
+            if result.returncode == 0 and service_name in result.stdout.splitlines():
+                return
+            time.sleep(min(poll, max(0.0, deadline - time.monotonic())))
+        raise RuntimeError(f"timed out after {timeout:g}s waiting for {service_name}")
+
     def shutdown(self):
         """Stop the Nav2 process group before this manager exits.
 
@@ -212,21 +232,30 @@ class RuntimeManager(Node):
         profile = handle.request.value
         with self._lock:
             try:
+                mode = str(self.get_parameter("runtime_mode").value)
+                if mode not in {"nav2", "task2_sim"}:
+                    raise ValueError(f"unknown runtime_mode: {mode}")
                 # A child launch can be stopped externally while this manager
                 # remains alive.  Treat a dead or missing child exactly like
                 # a profile change; otherwise a later task request would be
                 # reported READY with no Nav2 action server.
                 runtime_is_alive = self._process is not None and self._process.poll() is None
-                if self._profile != profile or not runtime_is_alive:
+                if (self._profile != profile or not runtime_is_alive
+                        or bool(self.get_parameter("restart_on_configure").value)):
                     self._stop()
                     self._profile = profile
                     self._publish(Nav2RuntimeStatus.STARTING, "starting Nav2 runtime")
-                    self._process = subprocess.Popen(
-                        ["ros2", "launch", "robot", "task_runtime.launch.py", f"profile:={profile}"],
-                        start_new_session=True)
+                    command = (
+                        ["ros2", "launch", "task2_sim", "task2_sim.launch.py", "mission_managed:=true"]
+                        if mode == "task2_sim"
+                        else ["ros2", "launch", "robot", "task_runtime.launch.py", f"profile:={profile}"]
+                    )
+                    self._process = subprocess.Popen(command, start_new_session=True)
                     self._runtime_pgid_file.write_text(f"{self._process.pid}\n", encoding="utf-8")
                     if profile in {"task1", "task3"}:
                         self._wait_for_bt_navigator_active()
+                    elif mode == "task2_sim":
+                        self._wait_for_service("/fromLL")
                 self._publish(Nav2RuntimeStatus.READY, "Nav2 runtime started")
                 result = ConfigureSystem.Result(success=True, message=f"active Nav2 profile: {profile}")
                 handle.succeed()
