@@ -218,8 +218,8 @@ ground_remover_node:
 cluster_node:
   ros__parameters:
     cluster_tolerance: 1.0                     # [m] neighbouring-point link
-    min_cluster_size: 30                       # [points] near-range clutter gate
-    min_cluster_size_far: 5                    # [points] sparse returns at 40 m
+    min_cluster_size: 20                       # [points] near-range clutter gate
+    min_cluster_size_far: 3                    # [points] sparse returns at 40 m
     far_cluster_distance_m: 40.0               # [m] linear transition endpoint
     max_cluster_size: 10000                    # [points] reject large structures
     min_cluster_height: 0.2                    # [m]
