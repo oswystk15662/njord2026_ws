@@ -235,6 +235,9 @@ cluster_node:
 # ---------------------------------------------------------------------------
 ship_tracker_node:
   ros__parameters:
+    publish_tentative: true                    # Foxglove: show early candidates in yellow
+    min_marker_speed_knots: 0.0                # candidate display only; does not affect selection
+    max_marker_speed_knots: 10000.0
     # Standard mode still needs 3 hits to confirm, but tolerates brief gaps
     # while the track is tentative (each missed scan decrements hits by one).
     max_misses_tentative: 4                    # 5 Hz -> retain a tentative candidate for about 0.8 s

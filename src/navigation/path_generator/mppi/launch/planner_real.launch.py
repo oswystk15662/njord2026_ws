@@ -75,6 +75,9 @@ def generate_launch_description():
             {
                 "own_odom_topic": own_odom_topic,
                 "other_ship_twist_topic": other_ship_twist_topic,
+                "opponent_detection_topic": "/task2/opponent_detected",
+                "require_opponent_detection_status": True,
+                "opponent_input_timeout_sec": 1.5,
                 "waypoint1_topic": "/waypoint1_pose",
                 "waypoint2_topic": "/waypoint2_pose",
                 "path_topic": "/planned_path_pruned",

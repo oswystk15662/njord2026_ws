@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import math
+import time
 
 import numpy as np
 import rclpy
@@ -10,6 +11,7 @@ from rclpy.time import Time
 
 from geometry_msgs.msg import PointStamped, PoseStamped, TwistStamped
 from nav_msgs.msg import OccupancyGrid, Odometry, Path
+from std_msgs.msg import Bool
 
 from tf2_ros import Buffer, TransformListener
 
@@ -47,6 +49,9 @@ class PlannerNode(Node):
         # Topics
         self.declare_parameter("own_odom_topic", "/own_ship/odom")
         self.declare_parameter("other_ship_twist_topic", "/other_ship/twist")
+        self.declare_parameter("opponent_detection_topic", "/task2/opponent_detected")
+        self.declare_parameter("require_opponent_detection_status", False)
+        self.declare_parameter("opponent_input_timeout_sec", 1.5)
         self.declare_parameter("waypoint1_topic", "/waypoint1_pose")
         self.declare_parameter("waypoint2_topic", "/waypoint2_pose")
         self.declare_parameter("path_topic", "/planned_path")
@@ -123,6 +128,11 @@ class PlannerNode(Node):
 
         self.own_odom_topic = self.get_parameter("own_odom_topic").value
         self.other_ship_twist_topic = self.get_parameter("other_ship_twist_topic").value
+        self.opponent_detection_topic = self.get_parameter("opponent_detection_topic").value
+        self.require_opponent_detection_status = self.get_parameter(
+            "require_opponent_detection_status").value
+        self.opponent_input_timeout_sec = float(self.get_parameter(
+            "opponent_input_timeout_sec").value)
         self.waypoint1_topic = self.get_parameter("waypoint1_topic").value
         self.waypoint2_topic = self.get_parameter("waypoint2_topic").value
         self.path_topic = self.get_parameter("path_topic").value
@@ -208,6 +218,9 @@ class PlannerNode(Node):
 
         self.latest_own_odom = None
         self.latest_other_ship_twist = None
+        self.last_other_ship_twist_receipt = None
+        self.opponent_detected = False
+        self.last_opponent_status_receipt = None
         self.latest_waypoint1_pose = None
         self.latest_waypoint2_pose = None
         # (x, y, receipt time in seconds), all expressed in frame_id.
@@ -227,6 +240,12 @@ class PlannerNode(Node):
             TwistStamped,
             self.other_ship_twist_topic,
             self.other_ship_twist_callback,
+            10,
+        )
+        self.opponent_detected_sub = self.create_subscription(
+            Bool,
+            self.opponent_detection_topic,
+            self.opponent_detected_callback,
             10,
         )
 
@@ -290,6 +309,25 @@ class PlannerNode(Node):
 
     def other_ship_twist_callback(self, msg: TwistStamped):
         self.latest_other_ship_twist = msg
+        self.last_other_ship_twist_receipt = time.monotonic()
+
+    def opponent_detected_callback(self, msg: Bool):
+        self.opponent_detected = bool(msg.data)
+        self.last_opponent_status_receipt = time.monotonic()
+
+    def _opponent_input_is_fresh(self) -> bool:
+        if self.latest_other_ship_twist is None or \
+                self.last_other_ship_twist_receipt is None:
+            return False
+        if time.monotonic() - self.last_other_ship_twist_receipt > \
+                self.opponent_input_timeout_sec:
+            return False
+        if not self.require_opponent_detection_status:
+            return True
+        return self.opponent_detected and \
+            self.last_opponent_status_receipt is not None and \
+            time.monotonic() - self.last_opponent_status_receipt <= \
+            self.opponent_input_timeout_sec
 
     def waypoint1_callback(self, msg: PoseStamped):
         self.latest_waypoint1_pose = msg
@@ -344,7 +382,9 @@ class PlannerNode(Node):
 
         other_transform = None
 
-        if self.latest_other_ship_twist is None:
+        other_twist = self.latest_other_ship_twist \
+            if self._opponent_input_is_fresh() else None
+        if other_twist is None:
             if self.require_other_ship:
                 self.get_logger().debug("Waiting for other_ship_twist...")
                 return
@@ -378,7 +418,7 @@ class PlannerNode(Node):
         path = self.trajectory_generator.generate(
             own_odom=self.latest_own_odom,
             other_transform=other_transform,
-            other_twist=self.latest_other_ship_twist,
+            other_twist=other_twist,
             waypoint1_pose=self.latest_waypoint1_pose,
             waypoint2_pose=self.latest_waypoint2_pose,
             detected_buoys_map=buoy_positions if self.use_detected_buoys else [],
@@ -517,7 +557,7 @@ class PlannerNode(Node):
 
     def _other_ship_crm_state_in_map(self):
         """Return opponent CRM state from absolute TF and velocity data."""
-        if self.latest_other_ship_twist is None:
+        if not self._opponent_input_is_fresh():
             return []
         try:
             other_tf = self.tf_buffer.lookup_transform(
