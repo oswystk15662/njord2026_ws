@@ -39,6 +39,12 @@ def test_task2_mission_start_has_a_stationary_buoy_observation_hold():
     assert '"startup_hold_sec": 5.0' in adapter
 
 
+def test_task2_mission_gate_receives_the_retained_enable_state():
+    source = (Path(__file__).parents[1] / "asv_trajectory_planner" /
+              "follow_path_client_node.py").read_text(encoding="utf-8")
+    assert "Bool, self.enabled_topic, self.enabled_callback, status_qos" in source
+
+
 def test_task2_autonomy_readiness_requires_path_and_follow_path_only():
     source = (Path(__file__).parents[1] / "asv_trajectory_planner" /
               "task2_autonomy_ready_node.py").read_text(encoding="utf-8")

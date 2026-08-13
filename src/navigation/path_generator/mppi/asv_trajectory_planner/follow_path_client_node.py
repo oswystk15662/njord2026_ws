@@ -89,7 +89,7 @@ class FollowPathClientNode(Node):
             10,
         )
         self.enabled_sub = self.create_subscription(
-            Bool, self.enabled_topic, self.enabled_callback, 10
+            Bool, self.enabled_topic, self.enabled_callback, status_qos
         )
         self.final_goal_sub = self.create_subscription(
             PoseStamped, self.final_goal_pose_topic, self.final_goal_callback, 10
