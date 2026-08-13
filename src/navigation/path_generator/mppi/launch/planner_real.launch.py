@@ -133,12 +133,6 @@ def generate_launch_description():
         ],
         condition=IfCondition(start_follow_path_client),
     )
-    crm_costmap = Node(
-        package="asv_trajectory_planner", executable="crm_costmap_node",
-        name="crm_costmap", output="screen",
-        parameters=[{"own_odom_topic": own_odom_topic}],
-    )
-
     return LaunchDescription(
         [
             # GLIM publishes /odom on the real vessel (same topic as sim).
@@ -163,6 +157,5 @@ def generate_launch_description():
             task2_waypoint_marker_publisher,
             planner_node,
             follow_path_client_node,
-            crm_costmap,
         ]
     )
