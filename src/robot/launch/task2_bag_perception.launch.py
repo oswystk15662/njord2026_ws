@@ -64,6 +64,7 @@ def generate_launch_description():
             cmd=[
                 "ros2", "bag", "play", bag_path, "--clock", "--start-offset", start_offset,
                 "--topics", "/livox/lidar", "/odometry/filtered/local", "/tf",
+                "/back_cam/camera_info", "/back_cam/image_raw/compressed",
             ],
             output="screen",
         ),
