@@ -13,7 +13,7 @@ def test_task2_autonomy_launch_wires_mppi_velocity_through_arbiter():
     assert '"motion_mode": opponent_motion_mode' in text
     assert text.count('"task2_params.yaml"') == 3
     assert '"path_topic": "/planned_path_pruned"' in text
-    assert '"enable_follow_path_client": enable_nav2' in text
+    assert '"start_follow_path_client": enable_nav2' in text
     assert '"enable_safety_cloud": "true"' in text
     assert 'executable="safety_cloud_gate_node"' in text
     assert "manual_control.launch.py" in text

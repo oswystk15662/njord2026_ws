@@ -86,7 +86,7 @@ def generate_launch_description():
             "own_odom_topic": own_odom_topic,
             # In the two-machine deployment FollowPath belongs to miniPC,
             # alongside ControllerServer and the final safety monitor.
-            "enable_follow_path_client": enable_nav2,
+            "start_follow_path_client": enable_nav2,
         },
     )
     nav2 = _include(
