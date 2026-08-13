@@ -19,6 +19,7 @@ def test_cloud_filter_profile_reduces_work_without_debug_changes():
     assert cloud["process_rate_hz"] == 5.0
     assert cloud["use_water_plane_ransac"] is False
     assert cloud["publish_debug"] is False
+    assert "visual_output_topic" not in cloud
 
 
 def test_task2_lite_pipeline_uses_latest_compact_clouds():

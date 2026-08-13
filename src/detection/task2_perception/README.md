@@ -61,7 +61,7 @@ MPPI planner (asv_trajectory_planner/planner_node.py,
 
 | Node (executable) | In | Out |
 |---|---|---|
-| `task2_cloud_filter` (`task2_cloud_filter_node`) | `/livox/lidar`, TF | `/task2/points_filtered`, `/task2/points_filtered_visual` (display only), `/task2/self_vessel_marker`, `/task2/debug/*` (opt.) |
+| `task2_cloud_filter` (`task2_cloud_filter_node`) | `/livox/lidar`, TF | `/task2/points_filtered`, `/task2/self_vessel_marker`, `/task2/debug/*` (opt.) |
 | `opponent_selector` (`opponent_selector_node`) | `/tracked_objects`, `/odometry/filtered/local`, TF map->base_link | `/other_ship/twist`, TF map->opponent_vessel |
 
 認識単体のデバッグでは、以下の2つを起動します。
@@ -120,8 +120,3 @@ configured `self_crop_*` footprint. Its pointed bow faces `+X` (forward).
 Add it as a Marker in Foxglove with `base_link` (or its parent frame) as the
 fixed frame to see the own-vessel reference against the point cloud. It is
 disabled by the real-vessel autonomy overlay.
-
-`/task2/points_filtered_visual` is another visualization-only topic: it keeps
-x/y (the horizontal azimuth) unchanged and mirrors only z. Use it in a
-Foxglove panel instead of `/task2/points_filtered` when inspecting the
-upside-down LiDAR; do not connect it to perception or planning.
