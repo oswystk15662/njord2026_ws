@@ -11,6 +11,7 @@ def generate_launch_description():
         DeclareLaunchArgument("active_nav2_profile", default_value=""),
         DeclareLaunchArgument("runtime_mode", default_value="nav2", choices=["nav2", "task2_sim"]),
         DeclareLaunchArgument("force_runtime_reconfigure", default_value="false"),
+        DeclareLaunchArgument("skip_coordinate_projection", default_value="false"),
         DeclareLaunchArgument("waypoint_transform_enabled", default_value="false"),
         DeclareLaunchArgument("waypoint_transform_anchor_latitude", default_value="0.0"),
         DeclareLaunchArgument("waypoint_transform_anchor_longitude", default_value="0.0"),
@@ -46,6 +47,7 @@ def generate_launch_description():
             parameters=[{
                 "active_nav2_profile": LaunchConfiguration("active_nav2_profile"),
                 "force_runtime_reconfigure": LaunchConfiguration("force_runtime_reconfigure"),
+                "skip_coordinate_projection": LaunchConfiguration("skip_coordinate_projection"),
                 "waypoint_transform_enabled": LaunchConfiguration("waypoint_transform_enabled"),
                 "waypoint_transform_anchor_latitude": LaunchConfiguration("waypoint_transform_anchor_latitude"),
                 "waypoint_transform_anchor_longitude": LaunchConfiguration("waypoint_transform_anchor_longitude"),

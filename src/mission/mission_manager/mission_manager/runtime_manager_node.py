@@ -200,22 +200,6 @@ class RuntimeManager(Node):
             f"timed out after {timeout:g}s waiting for /bt_navigator to become active: {last_output}"
         )
 
-    def _wait_for_service(self, service_name: str) -> None:
-        """Wait for the child sim's localization service before route projection."""
-        timeout = float(self.get_parameter("nav2_ready_timeout_sec").value)
-        poll = float(self.get_parameter("nav2_ready_poll_sec").value)
-        deadline = time.monotonic() + timeout
-        while time.monotonic() < deadline:
-            if self._process is None or self._process.poll() is not None:
-                raise RuntimeError(f"Nav2 runtime exited before {service_name} became available")
-            result = subprocess.run(
-                ["ros2", "service", "list"], capture_output=True, text=True, check=False
-            )
-            if result.returncode == 0 and service_name in result.stdout.splitlines():
-                return
-            time.sleep(min(poll, max(0.0, deadline - time.monotonic())))
-        raise RuntimeError(f"timed out after {timeout:g}s waiting for {service_name}")
-
     def shutdown(self):
         """Stop the Nav2 process group before this manager exits.
 
@@ -254,8 +238,6 @@ class RuntimeManager(Node):
                     self._runtime_pgid_file.write_text(f"{self._process.pid}\n", encoding="utf-8")
                     if profile in {"task1", "task3"}:
                         self._wait_for_bt_navigator_active()
-                    elif mode == "task2_sim":
-                        self._wait_for_service("/fromLL")
                 self._publish(Nav2RuntimeStatus.READY, "Nav2 runtime started")
                 result = ConfigureSystem.Result(success=True, message=f"active Nav2 profile: {profile}")
                 handle.succeed()

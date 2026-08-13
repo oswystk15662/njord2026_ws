@@ -198,6 +198,7 @@ class MissionManager(Node):
         self.declare_parameter("waypoint_transform_rotation_rad", 0.0)
         self.declare_parameter("waypoint_transform_scale", 1.0)
         self.declare_parameter("force_runtime_reconfigure", False)
+        self.declare_parameter("skip_coordinate_projection", False)
         self._lock = threading.RLock()
         self._cb_group = ReentrantCallbackGroup()
         self._machine = MissionStateMachine()
@@ -438,7 +439,7 @@ class MissionManager(Node):
                 decision.execution_id, ResultCode.CONFIGURATION_FAILED,
                 f"registry frame {task.frame_id} differs from route frame {route.frame_id}",
             )
-        if route.projection_points():
+        if route.projection_points() and not self.get_parameter("skip_coordinate_projection").value:
             if not self._from_ll_client.service_is_ready():
                 return self._reject_started(
                     decision.execution_id, ResultCode.CONFIGURATION_FAILED,
@@ -487,7 +488,7 @@ class MissionManager(Node):
                 except RegistryError as exc:
                     self._reject_started(decision.execution_id, ResultCode.CONFIGURATION_FAILED, str(exc))
                     return
-                if route.projection_points():
+                if route.projection_points() and not self.get_parameter("skip_coordinate_projection").value:
                     if not self._from_ll_client.service_is_ready():
                         self._reject_started(
                             decision.execution_id, ResultCode.CONFIGURATION_FAILED,
